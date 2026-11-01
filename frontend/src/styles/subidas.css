@@ -1,0 +1,248 @@
+/* Lista de Subidas (UploadsPage): estilos que antes iban en línea. Prefijo `sub-`.
+   Va el último en main.tsx: el estilo en línea ganaba siempre, así que donde
+   otra regla apunta al mismo elemento (`.data-table td`, `.filters-bar .form-input`,
+   `.activity-section`, `.hud-app input...`) el selector lleva la especificidad
+   justa para seguir ganando. */
+
+/* Página */
+.sub-pagina {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sub-no-encoge {
+  flex-shrink: 0;
+}
+
+.sub-fila {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* `.filters-bar .form-input { width: auto; min-width: 200px }` (2 de especificidad) */
+.filters-bar .form-input.sub-buscar {
+  width: 160px;
+}
+
+/* `.activity-section` trae margin-bottom: 20px; aquí la tabla llena el alto. */
+.activity-section.sub-seccion {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+.sub-scroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.sub-th-titulo {
+  width: 100%;
+}
+
+.sub-th-acciones {
+  width: 1%;
+}
+
+.sub-vacio-acciones {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.sub-mas {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+/* Texto: `.data-table td { color }` (1 clase + 1 elemento) pisaría una clase suelta en una celda. */
+.sub-muted,
+.data-table td.sub-muted {
+  color: var(--text-muted);
+}
+
+.sub-t10 { font-size: 10px; }
+.sub-t11 { font-size: 11px; }
+.sub-t12 { font-size: 12px; }
+.sub-t13 { font-size: 13px; }
+
+.sub-nowrap {
+  white-space: nowrap;
+}
+
+/* Fila de la lista */
+.sub-fila-antigua {
+  opacity: 0.65;
+}
+
+.sub-celda-titulo {
+  max-width: 360px;
+}
+
+.sub-celda-peticion {
+  max-width: 240px;
+}
+
+.sub-titulo-fila {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.sub-titulo-fila-antigua {
+  padding-left: 24px;
+}
+
+.sub-poster {
+  width: 28px;
+  height: 42px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sub-poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sub-poster-icono {
+  font-size: 14px;
+  opacity: 0.35;
+}
+
+.sub-titulo-texto {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sub-titulo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.sub-enlace-emu {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* `.badge` ya es inline-flex y centrado, con gap 4px. */
+.badge.sub-badge-progreso {
+  gap: 5px;
+}
+
+.spinner.sub-spinner-10 {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
+}
+
+/* `.lib-title-link { display: inline-block }` */
+.lib-title-link.sub-toggle-reintentos {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sub-acciones-fila {
+  display: flex;
+  gap: 6px;
+}
+
+/* Modal de cancelar y de iniciar: `.modal-panel { max-width: 600px }` */
+.modal-panel.sub-modal-520 {
+  max-width: 520px;
+}
+
+.modal-panel.sub-modal-560 {
+  max-width: 560px;
+}
+
+.sub-modal-pie {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* `.detail-panel__actions` trae padding-top: 12px */
+.detail-panel__actions.sub-modal-acciones {
+  padding: 10px 16px;
+}
+
+.sub-mb-8 {
+  margin-bottom: 8px;
+}
+
+.sub-mt-8 {
+  margin-top: 8px;
+}
+
+.sub-aviso {
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
+  margin-bottom: 12px;
+}
+
+.sub-aviso-lista {
+  padding-left: 18px;
+  font-size: 0.83rem;
+  line-height: 1.6;
+}
+
+.sub-etiqueta {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.83rem;
+}
+
+.sub-resultado {
+  margin-top: 12px;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  background: color-mix(in srgb, var(--overlay-dark) 20%, transparent);
+  padding: 8px;
+  border-radius: 4px;
+}
+
+/* Campo de confirmación. `.hud-app input:not(...)x5 { background; border-color }`
+   pesa (0,6,1): se repite su cadena de :not() para ganarle a igualdad y por orden. */
+.sub-confirmar {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--overlay-light) 15%, transparent);
+  border-radius: 4px;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+input.sub-confirmar:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+  background: color-mix(in srgb, var(--overlay-light) 8%, transparent);
+  border-color: color-mix(in srgb, var(--overlay-light) 15%, transparent);
+}
+
+input.sub-confirmar.sub-confirmar-ok:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+  border-color: var(--color-available-soft);
+}

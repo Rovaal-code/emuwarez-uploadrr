@@ -288,7 +288,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   }
   const {
     batchEnvChecks, batchContentChecks, batchChecksLoading, batchChecksIndex, batchViewId, setBatchViewId,
-    mergedChecksFor, olvidar: olvidarComprobacionesTanda,
+    batchChecksError, repetir: repetirComprobacionesTanda, mergedChecksFor, olvidar: olvidarComprobacionesTanda,
   } = useComprobacionesTanda({ step, batchQueue, batchPhase, proveedorElegido })
 
   // Un único sitio donde cambia lo que se sube. Si es otra cosa que antes se
@@ -415,6 +415,8 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   // Multi-episode: generate the nomenclature for every selected episode in one
   // pass, reporting which one it's on, and cache the results so switching
   // between them afterwards is instant.
+  // Sube con «Reintentar»: vuelve a generar todos, también los que fallaron.
+  const [intentoPrecarga, setIntentoPrecarga] = useState(0)
   useEffect(() => {
     if (step !== 1 || targetIsSeason || episodeQueue.length <= 1) return
     if (cacheCubre(episodeQueue, episodeFieldsById)) return
@@ -426,9 +428,11 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
         if (!alive) return
         setSources(srcResp.sources)
         setProviders(prvResp.providers)
-        const cache = new Map<number, Awaited<ReturnType<typeof getNomenclatureFields>>>()
+        // Lo que ya se generó bien se queda (ver reintentarNomenclatura).
+        const cache = new Map(episodeFieldsById)
         for (let i = 0; i < episodeQueue.length; i++) {
           if (!alive) return
+          if (cache.has(episodeQueue[i])) continue
           setEpisodePrepIndex(i)
           try {
             cache.set(episodeQueue[i], await getNomenclatureFields(episodeQueue[i]))
@@ -446,6 +450,8 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
         setEpisodeFieldsById(cache)
         const first = cache.get(episodeQueue[0])
         if (first) applyFieldsResponse(first, ajustesPorId.get(episodeQueue[0]), episodeQueue[0])
+      } catch (e: unknown) {
+        if (alive) setError(e instanceof Error ? e.message : 'Error cargando la nomenclatura')
       } finally {
         if (alive) setEpisodePrepping(false)
       }
@@ -453,7 +459,16 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     run()
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- se genera al entrar en el paso o cambiar la tanda, no con cada ajuste
-  }, [step, targetIsSeason, episodeQueue])
+  }, [step, targetIsSeason, episodeQueue, intentoPrecarga])
+
+  // «Reintentar» del paso 1. Con varios capítulos, loadFields solo traería el que se ve: se repite la
+  // precarga, sin los que fallaron, para que no quede guardado su fallo. Los buenos no se vuelven a pedir:
+  // un fallo nuevo en uno de ellos lo dejaría bloqueado y sin sus ediciones.
+  const reintentarNomenclatura = () => {
+    if (episodeQueue.length <= 1) { void loadFields(); return }
+    setEpisodeFieldsById(prev => new Map([...prev].filter(([, r]) => !r.blocked)))
+    setIntentoPrecarga(n => n + 1)
+  }
 
   // Switching between already-generated episodes reads the cache — no refetch.
   useEffect(() => {
@@ -1007,7 +1022,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     episodeSelected, setEpisodeSelected, confirmMultiSelection, confirmEpisodeSelection, confirmSeasonWhole,
     // Paso 1
     existingJob, existingJobBlocking, cambiarElemento,
-    episodePrepping, episodePrepIndex, loading, error, loadFields,
+    episodePrepping, episodePrepIndex, loading, error, reintentarNomenclatura,
     fields, setField, titleOptions, titleWarning, sources, providers, opcionesTag, detectingProvider,
     sourceRequiresProvider, sourceWarning, avisoSource, audioWarning, preview,
     sourceComparison, setSourceComparison, showSourceCompare, setShowSourceCompare, showEngineDetail, setShowEngineDetail,
@@ -1021,7 +1036,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     checks, checksLoading, liveChecks, runChecks, canUpload, uploading, uploadMsg, doUpload,
     batchQueue, batchIsEpisodes, batchItemTitle, batchPhase, batchIndex, batchResults,
     batchViewId, setBatchViewId, batchEnvChecks, batchContentChecks, batchChecksLoading, batchChecksIndex,
-    uploadAllSeasons, uploadAllEpisodes,
+    batchChecksError, repetirComprobacionesTanda, uploadAllSeasons, uploadAllEpisodes,
     // Cerrar
     cerrarModal, confirmandoCierre, setConfirmandoCierre,
   }

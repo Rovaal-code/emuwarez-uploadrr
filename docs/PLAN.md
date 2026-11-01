@@ -37,6 +37,11 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     con tope de 15 s.
   - #120: ruff `E9,F` en la CI.
 - **Versión 0.14.0** publicada con todo lo anterior.
+- **Biblioteca, vista de pósters en negro al desplazarse deprisa:** `RejillaVirtual` repintaba sin fin si su medida
+  oscilaba (error 185 de React) y la pantalla quedaba en negro hasta F5. Las correcciones seguidas ahora tienen
+  tope, y cada página va dentro de `LimiteDeErrores`, que enseña un mensaje en vez de dejar la pantalla en negro.
+  Reproducido con un arnés de navegador forzando la oscilación; no se ha visto aún qué la provoca en la aplicación
+  real (si vuelve a fallar, la consola dirá «Error de render» con la pila de componentes).
 
 ## En curso (oleada 3)
 

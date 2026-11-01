@@ -19,6 +19,7 @@ const TOUR_SEEN_KEY = 'emuwarez_uploadrr_tour_seen'
 // Pages
 import { DashboardPage } from '../pages/DashboardPage'
 import { LibraryPage } from '../pages/LibraryPage'
+import { LimiteDeErrores } from './LimiteDeErrores'
 import { RequestsPage } from '../pages/RequestsPage'
 import { UploadsPage } from '../pages/UploadsPage'
 import { GuidePage } from '../pages/GuidePage'
@@ -132,7 +133,7 @@ function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: strin
     <>
       {visitadas.current.map(p => (
         <div key={p} style={{ display: p === page ? 'contents' : 'none' }}>
-          <SeccionVisible visible={p === page}>{unaPagina(p, onNavigate)}</SeccionVisible>
+          <LimiteDeErrores><SeccionVisible visible={p === page}>{unaPagina(p, onNavigate)}</SeccionVisible></LimiteDeErrores>
         </div>
       ))}
     </>

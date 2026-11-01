@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { planVentana, columnasAutoFill, filasDeRejilla } from '../utils/ventana'
+import { planVentana, columnasAutoFill, filasDeRejilla, medidaCorregida } from '../utils/ventana'
 
 // Lo que se pinta de más por arriba y por abajo de lo visible: unas diez filas
 // a cada lado, para que desplazarse deprisa no enseñe huecos en blanco.
@@ -130,12 +130,23 @@ export function RejillaVirtual<T>({ items, clave, minimo, hueco, contenedor, pin
 
   // Las columnas, del ancho (las mismas que pondría auto-fill); el alto de
   // fila, de la primera tarjeta, que crece o mengua con las columnas.
+  // Corre tras cada pintado y repinta si la medida cambió, así que tiene que
+  // calmarse: las correcciones seguidas están limitadas (medidaCorregida). Sin
+  // ese tope, dos medidas que se provocan una a la otra repintaban sin fin,
+  // React lo cortaba con el error 185 y Biblioteca quedaba en negro.
+  const ajustes = useRef({ clave: '', usados: 0 })
   useLayoutEffect(() => {
     const el = rejilla.current
     if (!el) return
     const columnas = columnasAutoFill(el.clientWidth, minimo, hueco)
     const alto = (el.firstElementChild as HTMLElement | null)?.offsetHeight || medida.alto
-    if (columnas !== medida.columnas || alto !== medida.alto) setMedida({ columnas, alto })
+    // Un scroll, un cambio de lista o de ancho empiezan la cuenta de nuevo.
+    const clave = `${items.length}|${minimo}|${hueco}|${vista.desde}|${vista.ancho}`
+    if (ajustes.current.clave !== clave) ajustes.current = { clave, usados: 0 }
+    const nueva = medidaCorregida(medida, { columnas, alto }, ajustes.current.usados)
+    if (!nueva) return
+    ajustes.current.usados++
+    setMedida(nueva)
   })
 
   const { columnas } = medida

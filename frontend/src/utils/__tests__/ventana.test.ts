@@ -7,7 +7,7 @@
  * la barra de scroll mentiría sobre el largo de la lista.
  */
 import { describe, it, expect } from 'vitest'
-import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo } from '../ventana'
+import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo, medidaCorregida, AJUSTES_SEGUIDOS_MAX } from '../ventana'
 
 const filas = (tramos: Tramo[]) => tramos.flatMap(t => (t.tipo === 'fila' ? [t.indice] : []))
 const altoTotal = (tramos: Tramo[], alturas: number[]) =>
@@ -127,5 +127,38 @@ describe('filasDeRejilla', () => {
 
   it('al final no se sale de la última fila, que puede ir a medias', () => {
     expect(filasDeRejilla({ ...base, desde: 1e9 })).toMatchObject({ primera: 2294, ultima: 2294 })
+  })
+})
+
+describe('medidaCorregida', () => {
+  const a = { columnas: 3, alto: 300 }
+
+  it('deja la medida como está si lo medido es lo mismo', () => {
+    expect(medidaCorregida(a, { columnas: 3, alto: 300 }, 0)).toBeNull()
+  })
+
+  it('corrige si cambió el alto o las columnas', () => {
+    expect(medidaCorregida(a, { columnas: 3, alto: 330 }, 0)).toEqual({ columnas: 3, alto: 330 })
+    expect(medidaCorregida(a, { columnas: 4, alto: 300 }, 2)).toEqual({ columnas: 4, alto: 300 })
+  })
+
+  it('una oscilación entre dos medidas se corta en el tope, en vez de repintar sin fin', () => {
+    // Cada medida provoca la otra: A mide B, y B mide A.
+    const medirDesde = (m: { alto: number; columnas: number }) => ({ columnas: 3, alto: m.alto === 300 ? 330 : 300 })
+    let medida = a
+    let usados = 0
+    let vueltas = 0
+    for (;;) {
+      const nueva = medidaCorregida(medida, medirDesde(medida), usados)
+      if (!nueva) break
+      medida = nueva
+      usados++
+      if (++vueltas > 1000) throw new Error('no termina')
+    }
+    expect(vueltas).toBe(AJUSTES_SEGUIDOS_MAX)
+  })
+
+  it('una corrección normal (columnas y luego alto) cabe de sobra en el tope', () => {
+    expect(AJUSTES_SEGUIDOS_MAX).toBeGreaterThanOrEqual(3)
   })
 })

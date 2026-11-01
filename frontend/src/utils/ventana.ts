@@ -100,3 +100,29 @@ export function filasDeRejilla({ total, columnas, paso, desde, alto, margen }: P
   const fila = (y: number) => Math.min(filas - 1, Math.max(0, Math.floor(y / paso)))
   return { filas, primera: fila(desde - margen), ultima: fila(desde + alto + margen) }
 }
+
+export interface MedidaRejilla {
+  columnas: number
+  alto: number
+}
+
+/** Cuántas veces seguidas, sin que cambie el scroll ni la lista, puede
+ *  corregirse la medida de la rejilla. Una corrección normal necesita dos o
+ *  tres (columnas y luego alto); si no se calma antes, algo oscila. */
+export const AJUSTES_SEGUIDOS_MAX = 6
+
+/**
+ * Qué medida poner a la rejilla tras medirla, o null si se queda como está.
+ *
+ * El efecto de layout que mide corre tras cada pintado y vuelve a pintar si la
+ * medida cambió. Si dos medidas se provocan una a la otra (el alto de la
+ * primera tarjeta depende de cuál sea la primera, y cuál sea depende del alto),
+ * eso nunca termina: React lo corta con el error 185 y la pantalla queda en
+ * negro. `usados` cuenta las correcciones seguidas, y pasado el máximo la
+ * medida se queda como está.
+ */
+export function medidaCorregida(actual: MedidaRejilla, medido: MedidaRejilla, usados: number): MedidaRejilla | null {
+  if (medido.columnas === actual.columnas && medido.alto === actual.alto) return null
+  if (usados >= AJUSTES_SEGUIDOS_MAX) return null
+  return medido
+}

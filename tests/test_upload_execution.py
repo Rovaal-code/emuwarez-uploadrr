@@ -469,7 +469,7 @@ def test_run_subprocess_pre_gated_does_not_double_acquire(db_conn, tmp_path):
 def test_gate_admits_waiting_jobs_in_id_order(db_conn, tmp_path):
     """Admission order must be deterministic by job_id (== creation order),
     not whichever thread happens to wake first from notify_all() — otherwise
-    upload_queue.get_queue_positions's "Esperando (2/4)" (also ordered by id)
+    upload_queue.get_queue_positions's puesto en la cola (also ordered by id)
     could lie about which job actually starts next. Uses real job rows
     because acquire() logs "esperando turno" against the job_id, which needs
     to exist for the FK on upload_job_logs."""

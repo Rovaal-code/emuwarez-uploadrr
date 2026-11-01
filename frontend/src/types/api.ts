@@ -561,7 +561,6 @@ export interface UploadJob {
   // Peticiones se borra cuando deja de estar abierta).
   request_title?: string | null
   request_url?: string | null
-  queued_until?: string | null
   queue_position?: number | null
   queue_total?: number | null
   nomenclature_snapshot?: UploadNomenclatureSnapshot | null

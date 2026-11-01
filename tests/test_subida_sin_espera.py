@@ -265,3 +265,159 @@ def test_el_frontend_ya_no_cuenta_60_segundos():
     con_plazo = [str(f.relative_to(front)) for f in front.rglob("*.ts*")
                  if "__tests__" not in f.parts and "queued_until" in f.read_text(encoding="utf-8")]
     assert con_plazo == []
+
+
+# ---------------------------------------------------------------------------
+# Arranque directo (CLI, reintento con confirmación): espera plaza en 'ready'
+# ---------------------------------------------------------------------------
+
+def _ajustes_uploadrr(conn, uploadrr_dir, python_path):
+    for k, v in {
+        "uploadrr.path": str(uploadrr_dir), "uploadrr.python_path": python_path,
+        "tmdb.api_key": "tmdb_secret_abc123", "emu.api_key": "emu_secret_xyz789",
+    }.items():
+        conn.execute("INSERT OR REPLACE INTO settings (key, value, is_secret) VALUES (?, ?, 0)", (k, v))
+    conn.commit()
+
+
+def _fila_lista(conn, preparado, stage="preflight") -> int:
+    import json
+    cmd_json = json.dumps({"category": "movie", "tmdb_id": "1", "resolution": "1080p", "title": "Peli 2024"})
+    cur = conn.execute(
+        """INSERT INTO upload_jobs (library_item_id, title, path, status, stage, source_path, prepared_path,
+                                    uploadrr_command_json, created_at, updated_at)
+           VALUES (NULL, 'Peli 2024', ?, 'ready', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+        (str(preparado), stage, str(preparado), str(preparado), cmd_json))
+    conn.commit()
+    return cur.lastrowid
+
+
+def _cmd(tmp_path):
+    return {"executable": "/usr/bin/python3", "args": [], "cwd": str(tmp_path),
+            "command_preview": "python3 upload.py"}
+
+
+def test_cancelar_un_arranque_directo_que_espera_turno_no_lo_lanza(
+        db_conn, tmp_path, puerta, fake_uploadrr_emu_dir, fake_uploadrr_python_path, monkeypatch):
+    """El arranque directo espera plaza siguiendo en 'ready', y Cancelar lo
+    rechazaba («no está en ejecución»): al liberarse la plaza, se subía igual."""
+    from unittest.mock import MagicMock
+    preparado = tmp_path / "prepared.mkv"
+    preparado.write_bytes(b"\x00")
+    _ajustes_uploadrr(db_conn, fake_uploadrr_emu_dir, fake_uploadrr_python_path)
+    jid = _fila_lista(db_conn, preparado)
+    popen = MagicMock()
+    monkeypatch.setattr("subprocess.Popen", popen)
+
+    ocupa = _fila_en_cola(db_conn)
+    assert puerta.acquire(ocupa)
+    try:
+        r = ue.start_upload_job(jid, dry_run=False, start=True, confirmation=ue.CONFIRMATION_TOKEN, conn=db_conn)
+        assert r["action"] == "started"
+        job = _estado(db_conn, jid)
+        assert (job["status"], job["stage"]) == ("ready", ue.ETAPA_ESPERANDO_TURNO)
+        assert _esperar(lambda: jid in puerta.posiciones())
+
+        assert cancel_upload_job(jid, conn=db_conn)["ok"] is True
+        # Sale de la cola al momento, sin esperar a que se libere la plaza.
+        assert _esperar(lambda: jid not in puerta._waiting, timeout=2)
+        assert puerta._active == 1
+    finally:
+        puerta.release()
+    def registro():
+        return [r["message"] for r in db_conn.execute(
+            "SELECT message FROM upload_job_logs WHERE upload_job_id = ?", (jid,))]
+    # El hilo termina sin lanzar nada: lo deja dicho en el registro.
+    assert _esperar(lambda: sum("esperaba turno" in m for m in registro()) >= 2)
+    popen.assert_not_called()
+    assert _estado(db_conn, jid)["status"] == "cancelled"
+    assert puerta._active == 0 and puerta._retirados == set()
+
+
+def test_una_fila_ready_sin_arrancar_sigue_sin_poderse_cancelar(db_conn, tmp_path):
+    jid = _fila_lista(db_conn, tmp_path / "p.mkv")
+    assert cancel_upload_job(jid, conn=db_conn)["ok"] is False
+    assert _estado(db_conn, jid)["status"] == "ready"
+
+
+def test_cancelado_antes_de_llegar_a_la_puerta_no_se_lanza(db_conn, tmp_path, puerta, monkeypatch):
+    """La carrera entre comprobar el estado y acquire(): Cancelar llega cuando
+    el hilo aún no espera, así que no hay nada que retirar en la puerta."""
+    from unittest.mock import MagicMock
+    jid = _fila_lista(db_conn, tmp_path / "p.mkv", stage=ue.ETAPA_ESPERANDO_TURNO)
+    assert cancel_upload_job(jid, conn=db_conn)["ok"] is True
+    assert puerta._retirados == set()
+    popen = MagicMock()
+    monkeypatch.setattr("subprocess.Popen", popen)
+
+    ue._run_uploadrr_subprocess(jid, _cmd(tmp_path), [])
+
+    popen.assert_not_called()
+    assert _estado(db_conn, jid)["status"] == "cancelled"
+    assert puerta._active == 0
+
+
+def test_cancelado_justo_al_tocarle_plaza_no_se_lanza(db_conn, tmp_path, puerta, monkeypatch):
+    from unittest.mock import MagicMock
+    jid = _fila_lista(db_conn, tmp_path / "p.mkv", stage=ue.ETAPA_ESPERANDO_TURNO)
+    entrar = puerta.acquire
+
+    def entrar_y_cancelar(job_id, **kw):
+        dentro = entrar(job_id, **kw)
+        assert cancel_upload_job(job_id, conn=db_conn)["ok"] is True
+        return dentro
+
+    monkeypatch.setattr(puerta, "acquire", entrar_y_cancelar)
+    popen = MagicMock()
+    monkeypatch.setattr("subprocess.Popen", popen)
+
+    ue._run_uploadrr_subprocess(jid, _cmd(tmp_path), [])
+
+    popen.assert_not_called()
+    assert _estado(db_conn, jid)["status"] == "cancelled"
+    assert puerta._active == 0
+
+
+def test_una_cancelacion_desde_otro_proceso_tambien_lo_saca_de_la_cola(db_conn, tmp_path, puerta, monkeypatch):
+    """El CLI espera plaza en su propio proceso: la web solo puede escribir la
+    fila. La espera la mira en cada vuelta."""
+    from unittest.mock import MagicMock
+    jid = _fila_lista(db_conn, tmp_path / "p.mkv", stage=ue.ETAPA_ESPERANDO_TURNO)
+    popen = MagicMock()
+    monkeypatch.setattr("subprocess.Popen", popen)
+    ocupa = _fila_en_cola(db_conn)
+    assert puerta.acquire(ocupa)
+    try:
+        hilo = threading.Thread(target=ue._run_uploadrr_subprocess, args=(jid, _cmd(tmp_path), []))
+        hilo.start()
+        assert _esperar(lambda: jid in puerta._waiting)
+        db_conn.execute("UPDATE upload_jobs SET status = 'cancelled', stage = 'cancelled' WHERE id = ?", (jid,))
+        db_conn.commit()
+        hilo.join(timeout=6)
+        assert not hilo.is_alive()
+        assert puerta._active == 1
+    finally:
+        puerta.release()
+    popen.assert_not_called()
+
+
+def test_si_entra_mientras_se_cancela_se_cancela_como_en_marcha(db_conn, tmp_path, monkeypatch):
+    """Leyó 'ready' esperando, pero antes de escribir ya estaba en marcha: la
+    escritura condicionada falla y se cancela como lo que es ahora."""
+    jid = _fila_lista(db_conn, tmp_path / "p.mkv", stage=ue.ETAPA_ESPERANDO_TURNO)
+    vieja = dict(_estado(db_conn, jid))
+    db_conn.execute("UPDATE upload_jobs SET status = 'running', stage = 'running' WHERE id = ?", (jid,))
+    db_conn.commit()
+    real = ue.get_upload_job
+    lecturas = []
+
+    def leer(job_id, conn=None):
+        lecturas.append(job_id)
+        return vieja if len(lecturas) == 1 else real(job_id, conn=conn)
+
+    monkeypatch.setattr(ue, "get_upload_job", leer)
+    r = cancel_upload_job(jid, conn=db_conn)
+
+    assert r["ok"] is True
+    assert len(lecturas) >= 2
+    assert real(jid, conn=db_conn)["status"] == "cancelled"

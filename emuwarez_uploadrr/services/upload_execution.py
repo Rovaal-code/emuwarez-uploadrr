@@ -22,7 +22,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..database import connect, init_db, row_to_dict, rows_to_dicts, get_setting_canonical
 from .upload_result_parser import classify_upload_result, extract_torrent_url, torrent_id_from_url
@@ -79,6 +79,11 @@ PROGRESS_PHASES = (
 )
 
 
+# Fase de un trabajo 'ready' lanzado directamente (CLI, reintento con
+# confirmación) mientras espera plaza en "Subidas en paralelo".
+ETAPA_ESPERANDO_TURNO = "queued"
+
+
 def compute_progress_phase(status: str, stage: str | None) -> str:
     """Map (status, stage) to one of PROGRESS_PHASES for display purposes only."""
     stage = stage or ""
@@ -107,7 +112,7 @@ def compute_progress_phase(status: str, stage: str | None) -> str:
             return "finalizing"
         return "running"
     if status == "ready":
-        return "verificacion_presubida"
+        return "queued" if stage == ETAPA_ESPERANDO_TURNO else "verificacion_presubida"
     if status in ("draft", "preflight"):
         return "verificacion_presubida"
     return "queued"
@@ -1011,8 +1016,10 @@ class _UploadConcurrencyGate:
         self._retirados: set[int] = set()
         self._liberaciones = 0
 
-    def acquire(self, job_id: int) -> bool:
+    def acquire(self, job_id: int, *, cancelada: Callable[[], bool] | None = None) -> bool:
         """True con la plaza tomada; False si se retiró mientras esperaba.
+        `cancelada` se consulta en cada vuelta de la espera: así una
+        cancelación escrita desde otro proceso (el CLI) también la saca.
         No lanza: corre antes del try de quien llama, y un fallo aquí dejaba
         el job en cola para siempre. La base se consulta fuera del candado."""
         with self._cond:
@@ -1023,6 +1030,8 @@ class _UploadConcurrencyGate:
         announced = False
         try:
             while True:
+                if cancelada is not None and _sin_fallos(cancelada):
+                    return False
                 limit = _limite_de_subidas()
                 with self._cond:
                     if job_id in self._retirados:
@@ -1052,6 +1061,9 @@ class _UploadConcurrencyGate:
         finally:
             with self._cond:
                 self._waiting.discard(job_id)
+                # Una retirada que llegó mientras esperaba ya no hace falta,
+                # salga como salga (con plaza, retirada o por `cancelada`).
+                self._retirados.discard(job_id)
                 # Los de detrás suben un puesto: que lo vean ya, sin esperar al siguiente ciclo.
                 self._liberaciones += 1
                 self._cond.notify_all()
@@ -1063,6 +1075,16 @@ class _UploadConcurrencyGate:
             self._active = max(0, self._active - 1)
             self._liberaciones += 1
             self._cond.notify_all()
+
+    def retirar_si_espera(self, job_id: int) -> None:
+        """Como retirar(), pero solo si ya está esperando: quien aún no ha
+        llegado a la puerta lo para su `cancelada` al llegar, y así no queda
+        una retirada apuntada que nadie recoja."""
+        with self._cond:
+            if job_id in self._waiting:
+                self._retirados.add(job_id)
+                self._liberaciones += 1
+                self._cond.notify_all()
 
     def retirar(self, job_id: int) -> None:
         """Saca de la cola una subida cancelada. Si su hilo aún no ha llegado
@@ -1086,6 +1108,23 @@ class _UploadConcurrencyGate:
 
 
 _upload_concurrency_gate = _UploadConcurrencyGate()
+
+
+def _sin_fallos(pregunta: Callable[[], bool]) -> bool:
+    try:
+        return bool(pregunta())
+    except Exception:
+        logger.warning("No se pudo comprobar si la subida se canceló", exc_info=True)
+        return False
+
+
+def _esta_cancelado(job_id: int) -> bool:
+    conn = _get_db_conn()
+    try:
+        row = conn.execute("SELECT status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+    finally:
+        conn.close()
+    return bool(row) and row["status"] == "cancelled"
 
 
 def _read_progress_state(job_id: int) -> dict:
@@ -1280,7 +1319,8 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str], *, pre_
     calls this on an already-"ready" job with no preprocessing to gate, so it
     still acquires here itself, right at the actual heavy work, same as before.
     """
-    if not pre_gated and not _upload_concurrency_gate.acquire(job_id):
+    if not pre_gated and not _upload_concurrency_gate.acquire(
+            job_id, cancelada=lambda: _esta_cancelado(job_id)):
         append_upload_log(job_id, "info", "Subida cancelada mientras esperaba turno; no se lanza.", stream="system")
         return
     try:
@@ -1754,6 +1794,12 @@ def start_upload_job(
         cmd = build_uploadrr_execution_command(job, conn=conn)
         secrets = _collect_secrets(conn)
 
+        if not pre_gated:
+            # Va a esperar plaza siguiendo en 'ready': la fase lo dice en la base
+            # antes de lanzar el hilo, para que Cancelar (también desde otro
+            # proceso) la encuentre desde el primer momento.
+            from .upload_states import escribir_estado
+            escribir_estado(job_id, desde={"ready"}, stage=ETAPA_ESPERANDO_TURNO, conn=conn)
         t = threading.Thread(
             target=_run_uploadrr_subprocess,
             args=(job_id, cmd, secrets),
@@ -1957,6 +2003,19 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
             from .upload_queue import retirar_de_la_cola
             retirar_de_la_cola(job_id)
             append_upload_log(job_id, "info", "Subida cancelada mientras esperaba turno en la cola.", stream="system")
+            return {"ok": True, "message": "Subida cancelada.", "job_id": job_id}
+
+        if status == "ready" and job.get("stage") == ETAPA_ESPERANDO_TURNO:
+            # Arranque directo esperando plaza: aún no hay proceso. La escritura
+            # solo cae si sigue en 'ready'; si justo entró y ya está en marcha,
+            # se cancela como lo que es ahora.
+            from .upload_states import escribir_estado
+            if not escribir_estado(job_id, desde={"ready"}, status="cancelled", stage="cancelled",
+                                   finished_at=_now(), conn=conn):
+                return cancel_upload_job(job_id, conn=conn)
+            _upload_concurrency_gate.retirar_si_espera(job_id)
+            append_upload_log(job_id, "info", "Subida cancelada mientras esperaba turno; no se lanza.",
+                              stream="system", conn=conn)
             return {"ok": True, "message": "Subida cancelada.", "job_id": job_id}
 
         if status == "staging":

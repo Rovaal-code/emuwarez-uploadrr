@@ -177,28 +177,6 @@ def check_required_secrets() -> dict:
         return _check("required_secrets", "warning", "No se pudieron verificar los secretos", {})
 
 
-def check_arr_instances_configuration() -> dict:
-    """Verifica que haya al menos una instancia de Radarr o Sonarr configurada."""
-    try:
-        config_dir = os.environ.get("CONFIG_DIR", str(Path.home() / ".config" / "emuwarez-renamer"))
-        db_path = Path(config_dir) / "emuwarez_uploadrr.db"
-        if not db_path.exists():
-            return _check("arr_instances", "warning", "BD no existe aún, instancias sin verificar", {})
-        conn = sqlite3.connect(str(db_path))
-        try:
-            row = conn.execute("SELECT COUNT(*) FROM arr_instances WHERE enabled=1").fetchone()
-            count = row[0] if row else 0
-        except Exception:
-            count = 0
-        finally:
-            conn.close()
-        if count > 0:
-            return _check("arr_instances", "ok", f"{count} instancia(s) Arr habilitada(s)", {"count": count})
-        return _check("arr_instances", "warning", "No hay instancias Radarr/Sonarr habilitadas", {"count": 0})
-    except Exception:
-        return _check("arr_instances", "warning", "No se pudieron verificar las instancias Arr", {})
-
-
 def check_arr_health_configuration() -> dict:
     """Devuelve resumen de instancias Radarr/Sonarr: count, enabled, last_sync, last_diagnostics."""
     try:
@@ -271,7 +249,6 @@ def get_runtime_diagnostics() -> dict:
         check_uploadrr_mount(),
         check_allowed_roots_setting(),
         check_required_secrets(),
-        check_arr_instances_configuration(),
         check_arr_health_configuration(),
     ]
     warnings = [c["message"] for c in checks if c["status"] == "warning"]

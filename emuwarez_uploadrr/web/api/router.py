@@ -13,7 +13,7 @@ from .requests import router as requests_router
 from .nomenclature import router as nomenclature_router
 from .season_pack import router as season_pack_router
 from .uploads import router as uploads_router
-from .placeholders import router as placeholders_router
+from .logs import router as logs_router
 from .diagnostics import router as diagnostics_router
 from .maintenance import router as maintenance_router
 from .arr_health import router as arr_health_router
@@ -44,7 +44,7 @@ api_router.include_router(requests_router)
 api_router.include_router(nomenclature_router)
 api_router.include_router(season_pack_router)
 api_router.include_router(uploads_router)
-api_router.include_router(placeholders_router)
+api_router.include_router(logs_router)
 api_router.include_router(diagnostics_router)
 api_router.include_router(maintenance_router)
 api_router.include_router(settings_router)

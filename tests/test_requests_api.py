@@ -504,18 +504,6 @@ def test_requests_mark_reviewed_found(client, auth_headers, isolated_db):
 
 
 # ---------------------------------------------------------------------------
-# POST /api/missing/{id}/create-emu-request stays BLOCKED
-# ---------------------------------------------------------------------------
-
-def test_create_emu_request_still_blocked(client, auth_headers):
-    resp = client.post("/api/missing/1/create-emu-request", headers=auth_headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["implemented"] is False
-    assert data["stub"] is True
-
-
-# ---------------------------------------------------------------------------
 # Dashboard summary includes EMU fields
 # ---------------------------------------------------------------------------
 

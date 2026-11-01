@@ -314,6 +314,11 @@ def _motivo_de_rechazo(tar: tarfile.TarFile, config_dir: Path) -> str | None:
         with tar.extractfile(base) as origen, open(ruta, "wb") as destino:
             shutil.copyfileobj(origen, destino)
         version = _version_de_base(ruta)
+        base_de_la_copia_es_sqlite = _es_sqlite(ruta)
+    viva = config_dir / _DB_NAME
+    if not base_de_la_copia_es_sqlite and viva.exists() and viva.stat().st_size > 0 and _es_sqlite(viva):
+        # _colocar_base la copiaría en crudo encima de una base que sí lo es, sin copia previa.
+        return "La copia no es válida: su base de datos no es una base SQLite y la actual sí"
     if version is not None and version > SCHEMA_VERSION:
         return (
             f"La copia es de una versión más nueva (esquema {version}) que esta aplicación "

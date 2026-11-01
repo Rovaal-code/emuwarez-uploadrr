@@ -292,6 +292,21 @@ como enlaces a `/config/Uploadrr/data/...`.
 - Detrás de un proxy inverso, sírvela en la raíz de un dominio o subdominio. El frontend pide sus ficheros a
   `/assets/…`, así que en una subruta (`https://servidor/emuwarez/`) la página sale en blanco.
 
+### Detrás de un proxy inverso, todos los accesos fallidos cuentan como uno
+
+El bloqueo tras varios intentos de acceso fallidos va por IP. uvicorn solo se fía de la cabecera
+`X-Forwarded-For` si la petición llega de una IP de `FORWARDED_ALLOW_IPS` (por defecto, solo `127.0.0.1`).
+Con el proxy en otro contenedor o en otra máquina, la app ve la IP del proxy para todo el mundo: unos
+cuantos fallos de cualquiera bloquean el acceso a todos durante un rato. Pon la IP del proxy (o su red de
+Docker) en el `docker-compose.yml`:
+
+```yaml
+    environment:
+      - FORWARDED_ALLOW_IPS=172.18.0.0/16   # la red del proxy; o su IP exacta
+```
+
+No pongas `*` si la app también es accesible sin pasar por el proxy: cualquiera podría inventarse la IP.
+
 ### Construida en Windows, el contenedor no arranca con «no such file or directory»
 
 Git ha convertido `docker-entrypoint.sh` a finales de línea CRLF. Construye desde una copia con LF:

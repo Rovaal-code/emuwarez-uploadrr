@@ -335,3 +335,17 @@ def test_resolver_copia_no_sigue_un_enlace(cfg, tmp_path):
     (cfg / "backups").mkdir(exist_ok=True)
     (cfg / "backups" / "emuwarez_config_enlace.tar.gz").symlink_to(fuera)
     assert resolver_copia("emuwarez_config_enlace.tar.gz") is None
+
+
+def test_una_base_que_no_es_sqlite_no_pisa_una_que_si_lo_es(cfg, tmp_path):
+    """_colocar_base la copiaría en crudo encima de la base viva, sin copia previa."""
+    info = tarfile.TarInfo("emuwarez_uploadrr.db")
+    datos = b"esto no es una base"
+    info.size = len(datos)
+    archivo = _tar_malo(tmp_path / "malo.tar.gz", info, datos)
+
+    assert restore_config_backup(archivo, dry_run=True)["ok"] is False
+    r = _aplicar(archivo)
+
+    assert r["ok"] is False and "no es una base SQLite" in r["error"]
+    assert _marca(cfg) == "antes"

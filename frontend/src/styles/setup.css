@@ -1,0 +1,170 @@
+/* Asistente de primera configuración (pages/SetupWizard.tsx): estilos que antes iban en línea.
+   Prefijo setup-; se importa el último en main.tsx para ganar a las reglas base de igual
+   especificidad (.alert, .btn-sm, .checkbox-label, .wizard-*). */
+
+/* Espacios */
+.setup-mt-6 { margin-top: 6px; }
+.setup-mt-8 { margin-top: 8px; }
+.setup-mt-10 { margin-top: 10px; }
+.setup-mt-14 { margin-top: 14px; }
+.setup-mb-6 { margin-bottom: 6px; }
+.setup-mb-12 { margin-bottom: 12px; }
+.setup-mb-14 { margin-bottom: 14px; }
+
+/* Texto */
+.setup-muted { color: var(--text-muted); }
+.setup-t115 { font-size: 11.5px; }
+.setup-t13 { font-size: 13px; }
+.setup-pie { font-size: 11px; margin-top: 4px; }
+.setup-resultado { font-size: 12px; }
+
+/* Cabecera del paso */
+.setup-titulo-paso {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.setup-iconos-par {
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* Lista de requisitos de la contraseña */
+.setup-reglas {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 4px;
+}
+.setup-regla {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.setup-regla.setup-regla-ok { color: var(--color-available); }
+.setup-coinciden {
+  font-size: 12.5px;
+  margin-top: 6px;
+  display: inline-block;
+  color: var(--color-error);
+}
+.setup-coinciden.setup-coinciden-ok { color: var(--color-available); }
+
+/* Etiqueta con enlace a la web donde sacar la key */
+.setup-label-enlace {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.setup-enlace-icono { display: inline-flex; }
+.setup-enlace-fila {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Fila "Probar conexión" + resultado */
+.setup-fila-prueba {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  margin-bottom: 4px;
+}
+.setup-fila-acciones {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+/* Instancias */
+.wizard-fields.setup-caja {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+.setup-caja-titulo {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.setup-dos-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.setup-tipo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  border: 1.5px solid var(--border-input);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+}
+.setup-tipo.setup-tipo-activo {
+  border-color: var(--text-accent);
+  background: var(--bg-card-hover);
+}
+.setup-tipo-nombre { font-size: 13px; font-weight: 600; }
+.setup-tipo-sub { font-size: 11px; color: var(--text-muted); }
+.setup-checks {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+.setup-raices {
+  margin: 6px 0 0 18px;
+  font-size: 12px;
+}
+.setup-raices .setup-raiz-ok { color: var(--color-available); }
+.setup-raices .setup-raiz-falta { color: var(--color-missing); }
+.checkbox-label.setup-bloque {
+  display: block;
+  margin-top: 8px;
+}
+
+/* TMDb: para qué se usa la key */
+.alert.setup-nota {
+  margin-bottom: 14px;
+  background: color-mix(in srgb, var(--text-accent) 8%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+/* Proveedores de imágenes */
+.wizard-fields.setup-gap-8 { gap: 8px; }
+.setup-host {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.setup-host-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.drag-handle.setup-asa {
+  color: var(--text-accent);
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.setup-hueco { width: 16px; }
+.btn.setup-probar {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 2px 8px;
+}

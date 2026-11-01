@@ -1214,6 +1214,22 @@ def test_el_proveedor_elegido_a_mano_para_el_pack_no_se_guarda_en_los_capitulos(
     conn.close()
 
 
+def test_sin_proveedor_elegido_para_el_pack_no_caduca_la_propuesta_del_capitulo(isolated_db, tmp_path):
+    """«Sin proveedor» también es una decisión del pack: la propuesta guardada del capítulo 1 sigue."""
+    from emuwarez_uploadrr.services.nomenclature import get_latest_nomenclature_proposal
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    _renombrar_capitulo(conn, tmp_path, 1, "S01E01.FLMN.WEB-DL.mkv")
+    build_season_pack_plan(season_id, conn=conn)
+    ep1 = conn.execute("SELECT id FROM library_items WHERE episode_number = 1").fetchone()[0]
+    antes = get_latest_nomenclature_proposal(ep1, conn=conn)
+    plan = build_season_pack_plan(season_id, conn=conn, provider_override="")
+    assert plan["provider"] is None
+    despues = get_latest_nomenclature_proposal(ep1, conn=conn)
+    assert (antes or {}).get("id") == (despues or {}).get("id")
+    conn.close()
+
+
 def test_un_proveedor_solo_en_la_carpeta_no_se_aplica(isolated_db, tmp_path):
     """Coincidencia débil: "FLMN" solo en una carpeta de la ruta, no en el nombre
     de ningún archivo. Ni el pack ni los capítulos lo llevan; se avisa."""

@@ -211,9 +211,14 @@ export function NotificationBell() {
   const bellTip = useTooltip('Notificaciones')
 
   const refresh = useCallback(async () => {
+  // Solo cuenta la última lista pedida, y un cambio local (marcar, borrar) también tira las que iban en vuelo:
+  // una respuesta anterior al cambio devolvería el aviso que acabas de borrar o el contador que acabas de poner a 0.
+  const ultimoRefresco = useRef(0)
     try {
+    const esta = ++ultimoRefresco.current
       const feed = await getNotifications({ limit: 50 })
       setItems(feed.notifications)
+      if (esta !== ultimoRefresco.current) return
       setUnread(feed.unread_count)
     } catch {
       /* non-blocking — bell just stays as-is */
@@ -262,6 +267,7 @@ export function NotificationBell() {
     }
     if (isNotificationClickable(n)) {
       setOpen(false)
+      ultimoRefresco.current++
       goToNotification(n)
     }
   }
@@ -274,18 +280,21 @@ export function NotificationBell() {
 
   const handleDelete = async (n: NotificationItem) => {
     setItems(prev => prev.filter(i => i.id !== n.id))
+    ultimoRefresco.current++
     if (!n.read) setUnread(u => Math.max(0, u - 1))
     try { await deleteNotification(n.id) } catch { /* ignore */ }
   }
 
   const handleDeleteAll = async () => {
     setItems([])
+    ultimoRefresco.current++
     setUnread(0)
     try { await deleteAllNotifications() } catch { /* ignore */ }
   }
 
   return (
     <div className="notif-bell" ref={rootRef}>
+    ultimoRefresco.current++
       <button className="topbar-btn" aria-label="Notificaciones" onClick={toggle} {...bellTip.triggerProps}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />

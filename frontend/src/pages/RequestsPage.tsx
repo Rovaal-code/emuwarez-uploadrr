@@ -763,15 +763,21 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   }, [lastInvalidatedAt])
 
   // Keeps /requests/:id in sync with whichever request's detail is open.
+  // Solo vale el detalle de la última petición abierta: la campana puede abrir dos seguidas, y la primera,
+  // si llega la última, dejaba su ficha bajo el id de la segunda.
+  const ultimoDetalle = useRef(0)
   const closeRequestDetail = () => {
+    ultimoDetalle.current++
     closeDetailPath('requests')
     setSelectedId(null)
     setDetail(null)
     setReadiness(null)
+    setDetailLoading(false)
     setShowCandidates(false)
   }
 
   const openRequestDetail = async (id: number) => {
+    const esta = ++ultimoDetalle.current
     pushDetailPath('requests', id)
     setSelectedId(id)
     setShowCandidates(false)
@@ -781,10 +787,11 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         getRequestDetail(id),
         import('../api/requestReadiness').then(m => m.getReadiness(id)).catch(() => null),
       ])
+      if (esta !== ultimoDetalle.current) return
       setDetail(d.status === 'fulfilled' ? d.value : null)
       setReadiness(rr.status === 'fulfilled' && rr.value !== null ? rr.value as RequestReadinessResponse : null)
-    } catch { setDetail(null) }
-    finally { setDetailLoading(false) }
+    } catch { if (esta === ultimoDetalle.current) setDetail(null) }
+    finally { if (esta === ultimoDetalle.current) setDetailLoading(false) }
   }
 
   const handleRowClick = async (id: number) => {

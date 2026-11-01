@@ -288,9 +288,13 @@ def retirar_copias_automaticas(conservar: int, directorio: Path | None = None) -
     return retiradas
 
 
-def crear_copia_automatica(*, conservar: int, output_dir: Path | None = None) -> dict:
-    """La copia de la tarea programada (sin claves) y, si salió bien, la retención."""
-    resultado = create_config_backup(output_dir=output_dir, automatic=True)
+def crear_copia_automatica(*, conservar: int, incluir_claves: bool = False, output_dir: Path | None = None) -> dict:
+    """La copia de la tarea programada y, si salió bien, la retención. Sin claves salvo que se pida:
+    con ellas sigue el camino de la copia manual con claves (nombre `_with_secrets`, archivo 0600)."""
+    resultado = create_config_backup(
+        output_dir=output_dir, automatic=True, include_secrets=incluir_claves,
+        confirmation=RESTORE_CONFIRMATION if incluir_claves else None,
+    )
     if resultado["ok"]:
         resultado["retiradas"] = retirar_copias_automaticas(conservar, Path(resultado["archive_path"]).parent)
     return resultado

@@ -108,14 +108,7 @@ function OpcionDeTarea({ taskKey, opcion, onChanged, onMsg }: {
   const [texto, setTexto] = useState(String(opcion.valor))
   useEffect(() => { setTexto(String(opcion.valor)) }, [opcion.valor])
 
-  async function guardar() {
-    const n = Number(texto)
-    if (texto === '' || n === opcion.valor) { setTexto(String(opcion.valor)); return }
-    if (!Number.isInteger(n) || n < opcion.minimo || n > opcion.maximo) {
-      setTexto(String(opcion.valor))
-      onMsg(`✗ ${opcion.etiqueta}: tiene que estar entre ${opcion.minimo} y ${opcion.maximo}`)
-      return
-    }
+  async function enviar(n: number) {
     onMsg(null)
     try {
       await updateScheduledTaskOptions(taskKey, { [opcion.clave]: n })
@@ -124,6 +117,28 @@ function OpcionDeTarea({ taskKey, opcion, onChanged, onMsg }: {
       setTexto(String(opcion.valor))
       onMsg(`✗ ${e instanceof Error ? e.message : 'Error al guardar la opción'}`)
     }
+  }
+
+  async function guardar() {
+    const n = Number(texto)
+    if (texto === '' || n === opcion.valor) { setTexto(String(opcion.valor)); return }
+    if (!Number.isInteger(n) || n < opcion.minimo || n > opcion.maximo) {
+      setTexto(String(opcion.valor))
+      onMsg(`✗ ${opcion.etiqueta}: tiene que estar entre ${opcion.minimo} y ${opcion.maximo}`)
+      return
+    }
+    await enviar(n)
+  }
+
+  if (opcion.minimo === 0 && opcion.maximo === 1) {
+    return (
+      <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+        <label className="checkbox-label" style={{ fontSize: 13 }}>
+          <input type="checkbox" checked={opcion.valor === 1} onChange={e => enviar(e.target.checked ? 1 : 0)} /> {opcion.etiqueta}
+        </label>
+        {opcion.nota && <span className="form-hint">{opcion.nota}</span>}
+      </div>
+    )
   }
 
   return (

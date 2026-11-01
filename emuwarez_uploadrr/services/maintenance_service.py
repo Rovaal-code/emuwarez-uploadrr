@@ -164,18 +164,22 @@ def run_database_analyze(*, dry_run: bool = True, apply: bool = False) -> dict:
 # --- Mantenimiento nocturno: limpiar lo antiguo y optimizar la base -----------------------------------------
 # Solo toca task_runs, upload_job_logs y notifications. Nunca upload_jobs ni nada que una subida enlace.
 
-# clave de ajuste -> (etiqueta, por defecto, mínimo, máximo)
-OPCIONES: dict[str, tuple[str, int, int, int]] = {
-    "mantenimiento.dias_tareas": ("Historial de tareas: conservar (días)", 90, 7, 3650),
-    "mantenimiento.dias_registros": ("Registro de subidas terminadas: recortar pasados (días)", 30, 1, 3650),
-    "mantenimiento.lineas_registro": ("Registro recortado: líneas que se dejan", 200, 20, 100000),
-    "mantenimiento.dias_avisos": ("Avisos leídos: conservar (días)", 30, 1, 3650),
-    "copias.conservar": ("Copias automáticas que se guardan", 7, 1, 365),
+# clave de ajuste -> (etiqueta, por defecto, mínimo, máximo, nota). Con rango 0-1 es un interruptor.
+OPCIONES: dict[str, tuple[str, int, int, int, str]] = {
+    "mantenimiento.dias_tareas": ("Historial de tareas: conservar (días)", 90, 7, 3650, ""),
+    "mantenimiento.dias_registros": ("Registro de subidas terminadas: recortar pasados (días)", 30, 1, 3650, ""),
+    "mantenimiento.lineas_registro": ("Registro recortado: líneas que se dejan", 200, 20, 100000, ""),
+    "mantenimiento.dias_avisos": ("Avisos leídos: conservar (días)", 30, 1, 3650, ""),
+    "copias.conservar": ("Copias automáticas que se guardan", 7, 1, 365, ""),
+    "copias.incluir_claves": (
+        "Incluir las claves en las copias automáticas", 0, 0, 1,
+        "Quien pueda leer la carpeta de backups verá las claves (los archivos son solo legibles por su dueño).",
+    ),
 }
 
 
 def valor_opcion(conn: sqlite3.Connection, clave: str) -> int:
-    _, defecto, minimo, maximo = OPCIONES[clave]
+    _, defecto, minimo, maximo, _ = OPCIONES[clave]
     try:
         valor = int(get_setting_canonical(conn, clave, str(defecto)))
     except (TypeError, ValueError):
@@ -185,7 +189,8 @@ def valor_opcion(conn: sqlite3.Connection, clave: str) -> int:
 
 def leer_opciones(conn: sqlite3.Connection, claves: Iterable[str]) -> list[dict]:
     return [
-        {"clave": c, "etiqueta": OPCIONES[c][0], "valor": valor_opcion(conn, c), "minimo": OPCIONES[c][2], "maximo": OPCIONES[c][3]}
+        {"clave": c, "etiqueta": OPCIONES[c][0], "valor": valor_opcion(conn, c), "minimo": OPCIONES[c][2],
+         "maximo": OPCIONES[c][3], "nota": OPCIONES[c][4]}
         for c in claves
     ]
 
@@ -195,7 +200,7 @@ def guardar_opciones(conn: sqlite3.Connection, valores: dict[str, int]) -> None:
     for clave, valor in valores.items():
         if clave not in OPCIONES:
             raise ValueError(f"Opción desconocida: {clave}")
-        etiqueta, _, minimo, maximo = OPCIONES[clave]
+        etiqueta, _, minimo, maximo, _ = OPCIONES[clave]
         if isinstance(valor, bool) or not isinstance(valor, int) or not minimo <= valor <= maximo:
             raise ValueError(f"{etiqueta}: tiene que estar entre {minimo} y {maximo}")
     for clave, valor in valores.items():

@@ -58,7 +58,7 @@ DEFAULT_TASKS: list[tuple[str, str, str, int, int, int, Optional[str]]] = [
     (
         TASK_BACKUP,
         "Copia de seguridad",
-        "Guarda una copia de la configuración y la base de datos, sin claves, y retira las automáticas más antiguas. Las manuales y las subidas no se tocan.",
+        "Guarda una copia de la configuración y la base de datos (sin claves, salvo que lo actives aquí) y retira las automáticas más antiguas. Las manuales y las subidas no se tocan.",
         1440, 60, 1, "03:30",
     ),
     (
@@ -71,7 +71,7 @@ DEFAULT_TASKS: list[tuple[str, str, str, int, int, int, Optional[str]]] = [
 
 # Las opciones (ajustes numéricos) que cada tarea enseña en Tareas; las define maintenance_service.
 OPCIONES_DE_TAREA: dict[str, tuple[str, ...]] = {
-    TASK_BACKUP: ("copias.conservar",),
+    TASK_BACKUP: ("copias.conservar", "copias.incluir_claves"),
     TASK_MAINTENANCE: (
         "mantenimiento.dias_tareas", "mantenimiento.dias_registros",
         "mantenimiento.lineas_registro", "mantenimiento.dias_avisos",
@@ -319,10 +319,15 @@ def _run_backup(conn: sqlite3.Connection) -> tuple[str, str]:
     from .maintenance_service import valor_opcion
 
     def trabajo() -> tuple[str, str]:
-        r = crear_copia_automatica(conservar=valor_opcion(conn, "copias.conservar"))
+        r = crear_copia_automatica(
+            conservar=valor_opcion(conn, "copias.conservar"),
+            incluir_claves=bool(valor_opcion(conn, "copias.incluir_claves")),
+        )
         if not r["ok"]:
             return "failed", r["error"]
         resumen = f"Copia {r['archive_name']} ({r['size_bytes'] / 1_048_576:.1f} MB)"
+        if r["include_secrets"]:
+            resumen += " con claves"
         if r["retiradas"]:
             resumen += f"; {len(r['retiradas'])} automática(s) antigua(s) retirada(s)"
         return "completed", resumen

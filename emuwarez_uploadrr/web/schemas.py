@@ -1470,6 +1470,7 @@ class TaskOptionResponse(BaseModel):
     valor: int
     minimo: int
     maximo: int
+    nota: str = ""
 
 
 class ScheduledTaskResponse(BaseModel):

@@ -252,7 +252,7 @@ def test_optimizar_vacia_el_wal_si_nadie_lo_impide(conn):
 def test_las_opciones_tienen_sus_valores_por_defecto(conn):
     assert [mant.valor_opcion(conn, c) for c in (
         "mantenimiento.dias_tareas", "mantenimiento.dias_registros",
-        "mantenimiento.lineas_registro", "mantenimiento.dias_avisos", "copias.conservar")] == [90, 30, 200, 30, 7]
+        "mantenimiento.lineas_registro", "mantenimiento.dias_avisos", "copias.conservar", "copias.incluir_claves")] == [90, 30, 200, 30, 7, 0]
 
 
 def test_una_opcion_guardada_manda_y_una_corrupta_vuelve_al_defecto(conn):
@@ -268,6 +268,8 @@ def test_una_opcion_guardada_manda_y_una_corrupta_vuelve_al_defecto(conn):
     {"copias.conservar": 0},
     {"copias.conservar": 366},
     {"copias.conservar": True},
+    {"copias.incluir_claves": 2},
+    {"copias.incluir_claves": -1},
     {"mantenimiento.dias_tareas": 3},
     {"no.existe": 5},
 ])

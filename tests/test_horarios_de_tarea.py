@@ -279,8 +279,11 @@ def test_la_lista_trae_la_hora_la_zona_y_las_opciones(client, auth_headers, monk
         "mantenimiento.dias_tareas", "mantenimiento.dias_registros", "mantenimiento.lineas_registro", "mantenimiento.dias_avisos"]
     assert tareas[TASK_MAINTENANCE]["opciones"][0] == {
         "clave": "mantenimiento.dias_tareas", "etiqueta": "Historial de tareas: conservar (días)",
-        "valor": 90, "minimo": 7, "maximo": 3650}
-    assert [(o["clave"], o["valor"]) for o in tareas["backup-config"]["opciones"]] == [("copias.conservar", 7)]
+        "valor": 90, "minimo": 7, "maximo": 3650, "nota": ""}
+    assert [(o["clave"], o["valor"]) for o in tareas["backup-config"]["opciones"]] == [
+        ("copias.conservar", 7), ("copias.incluir_claves", 0)]
+    claves = tareas["backup-config"]["opciones"][1]
+    assert (claves["minimo"], claves["maximo"]) == (0, 1) and "legible" in claves["nota"]
     assert tareas[TASK_LIBRARY_SYNC]["opciones"] == []
 
 

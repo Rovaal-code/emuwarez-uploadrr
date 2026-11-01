@@ -6,6 +6,8 @@ export interface TaskOption {
   valor: number
   minimo: number
   maximo: number
+  // Una línea de aviso bajo el campo; "" si no hace falta. Con rango 0-1 la opción es un interruptor.
+  nota: string
 }
 
 export interface ScheduledTask {

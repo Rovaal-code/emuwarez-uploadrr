@@ -192,7 +192,9 @@ instalación, súbelo con «Subir un backup…» y elígelo al restaurar.
 Cada día a las 03:30 (hora de `TZ`, por defecto Europe/Madrid) la tarea «Copia de seguridad», en Tareas, guarda
 una copia automática sin claves (`emuwarez_config_auto_*.tar.gz`) y deja las últimas 7; el número y la hora se
 cambian en la propia tarea. Las manuales, las que subes y las `pre-migracion-*.db` no se borran solas. Todas se
-guardan legibles solo por su dueño.
+guardan legibles solo por su dueño. Con «Incluir las claves en las copias automáticas» (apagado por defecto) las
+automáticas llevan también las claves y se llaman `…_with_secrets.tar.gz`; quien pueda leer la carpeta de backups
+las vería.
 
 La tarea «Mantenimiento» (04:00) borra del historial de tareas lo de más de 90 días, deja en las últimas 200 líneas
 el registro de las subidas terminadas sin fallo de hace más de 30 días (el de las fallidas se conserva entero),

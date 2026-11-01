@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  getScheduledTasks, updateScheduledTaskInterval, runScheduledTaskNow, getScheduledTaskLogs,
-  type ScheduledTask, type TaskRunLogEntry,
+  getScheduledTasks, updateScheduledTaskSchedule, updateScheduledTaskOptions, runScheduledTaskNow, getScheduledTaskLogs,
+  type ScheduledTask, type TaskOption, type TaskRunLogEntry,
 } from '../api/scheduledTasks'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
@@ -10,7 +10,8 @@ import { useRefrescoPorAvisos } from '../hooks/useRefrescoPorAvisos'
 import { IconoAviso } from '../components/Iconos'
 import { Modal } from '../components/Modal'
 
-const INTERVAL_OPTIONS_MINUTES = [15, 30, 45, 60, 90, 120, 180, 360, 720]
+const INTERVAL_OPTIONS_MINUTES = [15, 30, 45, 60, 90, 120, 180, 360, 720, 1440]
+const HORA_POR_DEFECTO = '04:00'
 
 const STATUS_COLOR: Record<string, string> = {
   completed: 'var(--color-available)',
@@ -100,8 +101,67 @@ function LogsModal({ taskKey, taskName, onClose }: { taskKey: string; taskName: 
   )
 }
 
+// Un ajuste numérico de la tarea (días que se conserva algo, copias que se guardan…). Se guarda al salir del campo.
+function OpcionDeTarea({ taskKey, opcion, onChanged, onMsg }: {
+  taskKey: string; opcion: TaskOption; onChanged: () => void; onMsg: (m: string | null) => void
+}) {
+  const [texto, setTexto] = useState(String(opcion.valor))
+  useEffect(() => { setTexto(String(opcion.valor)) }, [opcion.valor])
+
+  async function enviar(n: number) {
+    onMsg(null)
+    try {
+      await updateScheduledTaskOptions(taskKey, { [opcion.clave]: n })
+      onChanged()
+    } catch (e: unknown) {
+      setTexto(String(opcion.valor))
+      onMsg(`✗ ${e instanceof Error ? e.message : 'Error al guardar la opción'}`)
+    }
+  }
+
+  async function guardar() {
+    const n = Number(texto)
+    if (texto === '' || n === opcion.valor) { setTexto(String(opcion.valor)); return }
+    if (!Number.isInteger(n) || n < opcion.minimo || n > opcion.maximo) {
+      setTexto(String(opcion.valor))
+      onMsg(`✗ ${opcion.etiqueta}: tiene que estar entre ${opcion.minimo} y ${opcion.maximo}`)
+      return
+    }
+    await enviar(n)
+  }
+
+  if (opcion.minimo === 0 && opcion.maximo === 1) {
+    return (
+      <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+        <label className="checkbox-label" style={{ fontSize: 13 }}>
+          <input type="checkbox" checked={opcion.valor === 1} onChange={e => enviar(e.target.checked ? 1 : 0)} /> {opcion.etiqueta}
+        </label>
+        {opcion.nota && <span className="form-hint">{opcion.nota}</span>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="form-group" style={{ marginBottom: 0 }}>
+      <label className="form-label">{opcion.etiqueta}</label>
+      <input
+        className="form-input"
+        type="number"
+        min={opcion.minimo}
+        max={opcion.maximo}
+        value={texto}
+        onChange={e => setTexto(e.target.value)}
+        onBlur={guardar}
+      />
+      <span className="form-hint">De {opcion.minimo} a {opcion.maximo}</span>
+    </div>
+  )
+}
+
 function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => void }) {
   const [interval, setIntervalValue] = useState(task.interval_minutes)
+  const [horaFija, setHoraFija] = useState(task.run_at !== null)
+  const [hora, setHora] = useState(task.run_at ?? HORA_POR_DEFECTO)
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -114,19 +174,41 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
   }, [])
 
   useEffect(() => { setIntervalValue(task.interval_minutes) }, [task.interval_minutes])
+  useEffect(() => {
+    setHoraFija(task.run_at !== null)
+    if (task.run_at !== null) setHora(task.run_at)
+  }, [task.run_at])
 
-  async function handleIntervalChange(minutes: number) {
-    setIntervalValue(minutes)
+  async function guardarHorario(horario: { interval_minutes: number } | { run_at: string }) {
     setSaving(true)
     setMsg(null)
     try {
-      await updateScheduledTaskInterval(task.task_key, minutes)
+      await updateScheduledTaskSchedule(task.task_key, horario)
       onChanged()
     } catch (e: unknown) {
-      setMsg(`✗ ${e instanceof Error ? e.message : 'Error al guardar el intervalo'}`)
+      // El servidor no aceptó el cambio: lo mostrado vuelve a lo guardado.
+      setIntervalValue(task.interval_minutes)
+      setHoraFija(task.run_at !== null)
+      setHora(task.run_at ?? HORA_POR_DEFECTO)
+      setMsg(`✗ ${e instanceof Error ? e.message : 'Error al guardar el horario'}`)
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleIntervalChange(minutes: number) {
+    setIntervalValue(minutes)
+    guardarHorario({ interval_minutes: minutes })
+  }
+
+  function handleModoChange(aHoraFija: boolean) {
+    setHoraFija(aHoraFija)
+    guardarHorario(aHoraFija ? { run_at: hora } : { interval_minutes: interval })
+  }
+
+  // Se guarda al salir del campo, no a cada cambio: dos PUT seguidos podían llegar en orden inverso.
+  function handleHoraBlur() {
+    if (hora && hora !== task.run_at) guardarHorario({ run_at: hora })
   }
 
   async function handleRunNow() {
@@ -165,19 +247,46 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginTop: 16 }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Intervalo</label>
+          <label className="form-label">Cuándo</label>
           <select
             className="form-input form-select"
-            value={interval}
-            onChange={e => handleIntervalChange(Number(e.target.value))}
+            value={horaFija ? 'hora' : 'intervalo'}
+            onChange={e => handleModoChange(e.target.value === 'hora')}
             disabled={saving}
           >
-            {options.map(m => (
-              <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60}h`}</option>
-            ))}
+            <option value="intervalo">Cada cierto tiempo</option>
+            <option value="hora">A una hora fija</option>
           </select>
-          <span className="form-hint">Mínimo: {task.min_interval_minutes < 60 ? `${task.min_interval_minutes} min` : `${task.min_interval_minutes / 60}h`}</span>
         </div>
+
+        {horaFija ? (
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Hora</label>
+            <input
+              className="form-input"
+              type="time"
+              value={hora}
+              onChange={e => setHora(e.target.value)}
+              onBlur={handleHoraBlur}
+            />
+            <span className="form-hint">Cada día, hora de {task.timezone}</span>
+          </div>
+        ) : (
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Intervalo</label>
+            <select
+              className="form-input form-select"
+              value={interval}
+              onChange={e => handleIntervalChange(Number(e.target.value))}
+              disabled={saving}
+            >
+              {options.map(m => (
+                <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60}h`}</option>
+              ))}
+            </select>
+            <span className="form-hint">Mínimo: {task.min_interval_minutes < 60 ? `${task.min_interval_minutes} min` : `${task.min_interval_minutes / 60}h`}</span>
+          </div>
+        )}
 
         <div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Última ejecución</div>
@@ -189,6 +298,14 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
           <div style={{ fontSize: 13 }}>{formatCountdown(task.next_run_at, now)}</div>
         </div>
       </div>
+
+      {task.opciones.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginTop: 14 }}>
+          {task.opciones.map(o => (
+            <OpcionDeTarea key={o.clave} taskKey={task.task_key} opcion={o} onChanged={onChanged} onMsg={setMsg} />
+          ))}
+        </div>
+      )}
 
       {task.last_summary && (
         task.last_status === 'failed'

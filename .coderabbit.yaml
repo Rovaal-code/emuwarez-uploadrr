@@ -20,7 +20,8 @@ reviews:
   path_instructions:
     - path: "**/*"
       instructions: |
-        - Comentarios de código, commits y textos de la interfaz en castellano; comentarios de una línea.
+        - Textos de la interfaz en castellano (los usuarios hablan castellano). Comentarios de código y commits en
+          castellano o en inglés: no pidas traducirlos. Comentarios de una línea.
         - Un solo proceso de uvicorn: el bus de eventos (services/eventos.py) vive en memoria. `eventos.publicar` se
           llama desde el sitio que escribe el dato y nunca lanza.
         - Los ajustes solo se leen y escriben a través de services/settings.py o database.py; services/ no importa
@@ -70,7 +71,7 @@ reviews:
         LAT). El comprobador de nomenclatura llama al generador; no se duplica la lógica.
     - path: "frontend/src/**"
       instructions: |
-        Textos en castellano. Nada de `setInterval` nuevos (el servidor avisa por /api/eventos; lo vigila
+        Textos de la interfaz en castellano. Nada de `setInterval` nuevos (el servidor avisa por /api/eventos; lo vigila
         test_no_han_aparecido_sondeos_nuevos). Diálogos con components/Modal.tsx. Colores y tamaños con los tokens y
         clases existentes, no estilos en línea nuevos. Las copias de constantes del backend deben coincidir
         (test_copias_frontend.py).

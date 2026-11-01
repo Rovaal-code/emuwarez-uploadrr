@@ -1,4 +1,4 @@
-import { api } from './client'
+import { api, ApiClientError, clearToken, getToken } from './client'
 
 export interface MaintenanceStatus {
   ok: boolean
@@ -27,6 +27,9 @@ export interface BackupInfo {
   path: string
   size_bytes: number
   created_at: string
+  tipo: 'manual' | 'automatica' | 'subida'
+  /** null: copia subida, no se sabe si lleva claves. */
+  con_claves: boolean | null
 }
 
 export interface BackupResult {
@@ -86,6 +89,52 @@ export async function createBackup(opts: { include_secrets?: boolean; confirmati
 
 export async function listBackups(): Promise<{ ok: boolean; backups: BackupInfo[]; count: number; backup_dir: string }> {
   return api.get('/maintenance/backups')
+}
+
+// Descargar y subir van aparte del cliente JSON: el cuerpo es un archivo, y el token solo viaja en la cabecera.
+async function peticionDeArchivo(
+  path: string, init: { method: 'GET' | 'POST'; body?: File },
+): Promise<Response> {
+  const token = getToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  if (init.body) headers['Content-Type'] = 'application/gzip'
+  let resp: Response
+  try {
+    resp = await fetch(`/api${path}`, { method: init.method, body: init.body, headers })
+  } catch (err) {
+    throw new ApiClientError('No se pudo conectar con el servidor: la petición no llegó a completarse.', 0, err)
+  }
+  if (resp.status === 401) {
+    clearToken()
+    throw new ApiClientError('No autorizado', 401, null)
+  }
+  if (!resp.ok) {
+    let detalle = resp.statusText
+    try {
+      const cuerpo = await resp.json()
+      if (typeof cuerpo?.detail === 'string') detalle = cuerpo.detail
+    } catch { /* sin cuerpo JSON: vale el texto del estado */ }
+    throw new ApiClientError(detalle, resp.status, null)
+  }
+  return resp
+}
+
+export async function downloadBackup(name: string): Promise<void> {
+  const resp = await peticionDeArchivo(`/maintenance/backups/${encodeURIComponent(name)}/download`, { method: 'GET' })
+  const url = URL.createObjectURL(await resp.blob())
+  const enlace = document.createElement('a')
+  enlace.href = url
+  enlace.download = name
+  document.body.appendChild(enlace)
+  enlace.click()
+  enlace.remove()
+  URL.revokeObjectURL(url)
+}
+
+export async function uploadBackup(file: File): Promise<{ ok: boolean; name: string; size_bytes: number }> {
+  const resp = await peticionDeArchivo('/maintenance/backups/upload', { method: 'POST', body: file })
+  return resp.json()
 }
 
 export async function restoreBackup(

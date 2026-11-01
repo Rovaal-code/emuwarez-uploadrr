@@ -45,10 +45,17 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   (listas JSON, hosts de imágenes, eventos por canal) está en `FUERA_DEL_REGISTRO` de `web/api/settings.py`, y un
   test falla si aparece un campo nuevo que no esté en uno de los dos sitios. Faltan las lecturas sueltas de sí/no
   fuera de la API (p. ej. `series.ignore_specials` en `library.py`).
+- **Oleada 3, subida por pasos (#126):** `_run_queued_job` es un bucle sobre `PASOS` (`upload_queue.py`): comprobar,
+  nombre, preparar e iniciar, cada uno con su `stage` (que es su punto de cancelación), su fila de Fases y lo que
+  deja en `_Trabajo` para el siguiente. Mismo comportamiento que antes; lo fijan
+  `test_la_preparacion_recorre_los_pasos_en_orden` y `test_cancelar_para_la_preparacion_en_el_siguiente_punto`.
 
 ## Siguiente (oleada 3)
 
-1. Subida por pasos con nombre y reintento desde el paso que falló.
+1. Reintento desde el paso que falló, sobre `PASOS`. Hoy un reintento lo rehace todo, también la carpeta de
+   subidas (`carpeta_subida` la rehace si existe). Lo caro es «preparar» (pistas y copias reflink), así que lo que
+   vale es saltárselo cuando falló «iniciar» y lo preparado sigue valiendo: mismos nombres, mismos cambios de
+   pistas y el original sin tocar desde entonces.
 2. Partir `library.py`, `upload_execution.py` y `cli.py`.
 3. Partir `UploadWizardModal.tsx` y `SettingsPage.tsx`; los estilos en línea, a clases.
    Al partir el asistente: recargar «Ver nombre de todos los capítulos» y «Ver pistas» con el idioma confirmado si

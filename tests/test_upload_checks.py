@@ -96,7 +96,9 @@ def test_all_green_when_everything_passes(db_conn, tmp_path, monkeypatch):
     ids = [c["id"] for c in r["checks"]]
     assert ids == ["accesible", "carpeta_subida", "renameable", "spanish",
                    "output", "qbittorrent", "imghosts", "emuwarez"]
-    assert all(c["status"] == "ok" for c in r["checks"])
+    # Un archivo de la biblioteca no se renombra: esa no bloquea.
+    assert {c["id"]: c["status"] for c in r["checks"]}["renameable"] == "skip"
+    assert all(c["status"] == "ok" for c in r["checks"] if c["id"] != "renameable")
     assert r["ready"] is True
 
 

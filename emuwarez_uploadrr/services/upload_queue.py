@@ -5,14 +5,17 @@ synchronously in the browser request — it creates an upload_jobs row in
 status='queued' and returns immediately, so the UI can jump straight to
 Subidas and watch it. The row sits queued for QUEUE_GRACE_SECONDS (a
 cancel-if-you-regret-it window) before a background timer runs the real
-work — integrity check, nomenclature rename, track remux, then handing off
-to upload_execution.start_upload_job() — all against that SAME job row, so
-what the user is watching in Subidas is the actual job, not a stand-in.
+work — integrity check, nomenclature, tracks + link into the uploads folder,
+then handing off to upload_execution.start_upload_job() — all against that
+SAME job row, so what the user is watching in Subidas is the actual job, not a
+stand-in.
 
 SAFETY CONTRACT: same as nomenclature.py / mkv_remux.py / upload_execution.py
 — every real filesystem/subprocess step still goes through their own
 confirmation-token-gated apply functions; this module only orchestrates them
-in sequence and records progress/failure on the job row.
+in sequence and records progress/failure on the job row. El archivo de la
+biblioteca nunca cambia de nombre ni de título interno, y no se escribe en él
+si lo comparte otro enlace (ver _preparar_fichero).
 """
 from __future__ import annotations
 
@@ -501,40 +504,6 @@ def _fail(job_id: int, message: str) -> None:
     _notify_upload_failed(job_id, message)
 
 
-def _apply_mkv_title_best_effort(job_id: int, library_item_id: int, conn) -> None:
-    """Set the MKV's own internal title (mkvpropedit) on the final renamed/
-    remuxed file. Best-effort — logged either way, never fails the job over
-    it: the video itself is fine regardless of whether this secondary
-    metadata step succeeds, same principle as the Arr refresh in
-    _run_queued_job. A non-.mkv file or a missing prepared_path (both
-    reported as "blocked") is expected/skippable, not an error."""
-    from .mkv_title import apply_internal_title_update, MKV_CONFIRMATION_TOKEN
-    from .upload_execution import append_upload_log
-    try:
-        result = apply_internal_title_update(
-            library_item_id, apply=True, dry_run=False,
-            confirmation=MKV_CONFIRMATION_TOKEN, conn=conn,
-        )
-    except Exception as exc:
-        append_upload_log(
-            job_id, "warning", f"Error actualizando el título interno del MKV: {exc}",
-            stream="system", conn=conn,
-        )
-        return
-    status = result.get("status")
-    if status == "applied":
-        append_upload_log(
-            job_id, "info", f"Título interno del MKV actualizado: {result.get('internal_mkv_title')}",
-            stream="system", conn=conn,
-        )
-    elif status not in ("blocked",):
-        append_upload_log(
-            job_id, "warning",
-            f"No se pudo actualizar el título interno del MKV: {'; '.join(result.get('errors') or []) or status}",
-            stream="system", conn=conn,
-        )
-
-
 def _season_upload_preconditions(conn) -> list[str]:
     """The generic (not season-specific) preconditions
     upload_preflight.validate_upload_preconditions() checks for a single
@@ -725,60 +694,173 @@ def _check_season_integrity(job_id: int, season_id: int, conn) -> bool:
     return True
 
 
-def _run_season_remux(job_id: int, season_id: int, conn) -> tuple[bool, list[dict]]:
-    """Season equivalent of the single-file remux stage below — loops
-    build_remux_plan()/apply_remux() per available episode. No manual
-    per-track overrides for season packs (out of scope for v1): each
-    episode's own auto-computed plan is applied as-is.
+def _renombrar_si_esta_en_subidas(job_id: int, item_id: int, origen: str | None, nombre: str, conn,
+                                  renombrados: list[str], **kw) -> str | None:
+    """Renombra en su sitio un archivo que ya está en la carpeta de subidas (los de
+    la biblioteca, nunca). Devuelve la ruta con la que seguir, o None si falló
+    (el trabajo ya queda fallido)."""
+    from .carpeta_subida import ENLACES, en_carpeta_de_subidas
+    from .nomenclature import renombrar_en_subidas
+    from .upload_execution import append_upload_log
+    if not origen or not en_carpeta_de_subidas(origen) or os.path.basename(origen) == nombre:
+        return origen
+    destino = os.path.join(os.path.dirname(origen), nombre)
+    with ENLACES:
+        # Si otra subida siembra desde ahí, renombrarlo le quita el fichero a qBittorrent.
+        otra = _subida_que_lo_usa(conn, origen, job_id)
+        r = None if otra is not None else renombrar_en_subidas(item_id, origen, destino, conn=conn, **kw)
+    if r is None:
+        append_upload_log(job_id, "info", f"No se renombra «{os.path.basename(origen)}»: la subida #{otra} "
+                                          "siembra desde ahí. Se enlaza con el nombre de eMuwarez.",
+                          stream="system", conn=conn)
+        return origen
+    if r.get("status") != "applied":
+        _fail(job_id, "No se pudo aplicar la nomenclatura: "
+                      + ("; ".join(r.get("errors") or []) or r.get("message") or r.get("status") or ""))
+        return None
+    renombrados.append(destino)
+    append_upload_log(job_id, "info", f"Renombrado en la carpeta de subidas: «{nombre}».",
+                      stream="system", conn=conn)
+    return destino
 
-    Returns (ok, snapshot) — snapshot is one entry per episode with its
-    final track plan, for the job detail page's read-only remux table
-    (previously discarded; apply_remux()'s ordered_tracks never survived
-    past this loop)."""
-    from .season_pack import _get_season_episodes
-    from ..models import LocalStatus
-    from .mkv_remux import build_remux_plan, apply_remux, REMUX_CONFIRMATION_TOKEN as REMUX_TOKEN
-    from .upload_execution import update_phase_progress, append_upload_log
 
-    episodes = _get_season_episodes(season_id, conn=conn)
-    available = [e for e in episodes if e.get("local_status") == LocalStatus.AVAILABLE.value]
-    total = max(1, len(available))
-    snapshot: list[dict] = []
-    for idx, ep in enumerate(available):
-        label = f"capítulo {ep.get('episode_number')}"
-        append_upload_log(
-            job_id, "info", f"Reordenando pistas: {label} ({idx + 1}/{total})…",
-            stream="system", conn=conn,
-        )
-        try:
-            plan = build_remux_plan(ep["id"], conn=conn)
-            ordered_tracks = plan.get("ordered_tracks", [])
-            if plan.get("status") == "ready":
-                def _on_ep_progress(pct: int, _idx: int = idx) -> None:
-                    overall = int(((_idx * 100) + pct) / total)
-                    update_phase_progress(job_id, "remux", overall)
+def _subida_que_lo_usa(conn, ruta: str, job_id: int) -> int | None:
+    """La otra subida que siembra (o prepara) desde `ruta`, con el mismo criterio
+    que el borrado: quitarle el enlace o reescribirlo rompería su torrent."""
+    fila = conn.execute(
+        "SELECT id FROM upload_jobs WHERE prepared_path = ? AND id != ? "
+        "AND (status NOT IN ('cancelled', 'failed') OR torrent_subido = 1) LIMIT 1",
+        (ruta, job_id)).fetchone()
+    return fila["id"] if fila else None
 
-                remuxed = apply_remux(
-                    ep["id"], apply=True, dry_run=False,
-                    confirmation=REMUX_TOKEN, overrides=None, conn=conn,
-                    on_progress=_on_ep_progress,
-                )
-                if remuxed.get("status") != "applied":
-                    reason = "; ".join(remuxed.get("errors") or [])
-                    _fail(job_id, f"No se pudieron reordenar/renombrar las pistas del {label}: {reason}")
-                    return False, snapshot
-                ordered_tracks = remuxed.get("ordered_tracks", ordered_tracks)
-            snapshot.append({
-                "episode_id": ep["id"],
-                "title": ep.get("title"),
-                "episode_number": ep.get("episode_number"),
-                "ordered_tracks": ordered_tracks,
-            })
-        except Exception as exc:
-            _fail(job_id, f"Error reordenando/renombrando las pistas del {label}: {exc}")
-            return False, snapshot
-    update_phase_progress(job_id, "remux", 100)
-    return True, snapshot
+
+def _motivo_para_no_tocar(origen: str) -> str | None:
+    """None si se puede escribir en el original; si no, por qué no."""
+    enlaces = os.stat(origen).st_nlink
+    if enlaces > 1:
+        return f"lo comparten {enlaces} enlaces duros (un torrent que siembra o una subida anterior)"
+    if not (os.access(origen, os.W_OK) and os.access(os.path.dirname(origen), os.W_OK)):
+        return "no se puede escribir en él"
+    return None
+
+
+def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo: str, conn, *,
+                      overrides: dict | None = None, on_progress=None) -> dict:
+    """Pone `origen` en `destino` (carpeta de subidas, ya libre) sin romper nunca
+    un torrent que lo siembre.
+
+    - Las pistas se editan en el original solo si no lo comparte nadie
+      (st_nlink == 1). Reordenar uno compartido se omite: sería reescribirlo.
+    - El título interno es parte del nombre: en el original solo si además
+      está en la carpeta de subidas; en la biblioteca, nunca.
+    - Lo demás va a una copia por reflink en `destino`. Sin reflink, o si la
+      edición de la copia falla, se omite con un aviso y se enlaza tal cual.
+
+    Devuelve {metodo, original_editado, pistas (ordered_tracks o None), omitida}.
+    Lanza NoSePudoPreparar si falla la edición de las pistas del original.
+    """
+    from .carpeta_subida import NoSePudoPreparar, clonar, en_carpeta_de_subidas, enlace_simple
+    from .mkv_remux import apply_remux, build_remux_plan, toca_el_fichero, REMUX_CONFIRMATION_TOKEN
+    from .mkv_title import (apply_internal_title_update, preview_internal_title_update,
+                            titulo_actual, MKV_CONFIRMATION_TOKEN)
+    from .upload_execution import append_upload_log
+
+    nombre = os.path.basename(destino)
+    # Un archivo de la carpeta de subidas que ya está donde va: no se enlaza a sí mismo.
+    en_su_sitio = os.path.abspath(origen) == os.path.abspath(destino)
+
+    def log(level: str, texto: str) -> None:
+        append_upload_log(job_id, level, f"«{nombre}»: {texto}", stream="system", conn=conn)
+
+    def titulo(ruta: str) -> str | None:
+        r = apply_internal_title_update(item_id, apply=True, dry_run=False,
+                                        confirmation=MKV_CONFIRMATION_TOKEN, conn=conn, ruta=ruta)
+        return None if r.get("status") == "applied" else ("; ".join(r.get("errors") or []) or r.get("status"))
+
+    def fin(hecho: list[str], editado: bool, pistas, omitida, metodo: str | None = None) -> dict:
+        if metodo is None:
+            metodo = "sin enlace: ya está en la carpeta de subidas" if en_su_sitio else enlace_simple(origen, destino)
+        hecho = [*hecho, metodo] if metodo != "reflink" else hecho
+        if not editado:
+            hecho.append("el original no se ha tocado")
+        log("info", "; ".join(hecho) + ".")
+        return {"metodo": metodo, "original_editado": editado, "pistas": pistas, "omitida": omitida}
+
+    if not toca_el_fichero(modo):
+        return fin([], False, None, "Ninguno")
+    if not origen.lower().endswith(".mkv"):
+        return fin([], False, None, "no es MKV")
+
+    motivo = _motivo_para_no_tocar(origen)
+    plan = build_remux_plan(item_id, conn=conn, ruta=origen, reordenar=motivo is None)
+    omitida = None
+    if plan.get("status") == "blocked":
+        omitida = "no se leyeron las pistas"
+        log("warning", f"no se tocan las pistas: {'; '.join(plan.get('errors') or [])}")
+    if plan.get("reorden_omitido"):
+        log("warning", f"no se reordenan las pistas: el original {motivo}, y reordenar lo reescribe entero.")
+    pistas = plan.get("ordered_tracks") or None
+    pistas_en_copia = plan.get("status") == "ready"
+
+    editado, hecho = False, []
+    if pistas_en_copia and motivo is None:
+        r = apply_remux(item_id, apply=True, dry_run=False, confirmation=REMUX_CONFIRMATION_TOKEN,
+                        overrides=overrides, conn=conn, on_progress=on_progress, ruta=origen)
+        if r.get("status") != "applied":
+            raise NoSePudoPreparar(f"«{nombre}»: no se pudieron reordenar/renombrar las pistas: "
+                                   + ("; ".join(r.get("errors") or []) or r.get("status") or ""))
+        editado = bool(r.get("escrito"))
+        pistas = r.get("ordered_tracks") or pistas
+        pistas_en_copia = False
+        if editado:
+            hecho.append("pistas editadas en el original, que no comparte nadie")
+
+    # Con el nombre de eMuwarez de `destino`, no con el de la biblioteca.
+    deseado = preview_internal_title_update(item_id, conn=conn, ruta=destino).get("internal_mkv_title")
+    titulo_en_copia = bool(deseado) and titulo_actual(origen) != deseado
+    if titulo_en_copia and motivo is None and en_carpeta_de_subidas(origen):
+        fallo = titulo(origen)
+        if fallo:
+            log("warning", f"no se pudo poner el título interno: {fallo}")
+        else:
+            editado = True
+            hecho.append("título interno puesto en el archivo, que no comparte nadie")
+        titulo_en_copia = False
+
+    en_copia = [q for q, falta in (("los nombres de las pistas", pistas_en_copia),
+                                   ("el título interno", titulo_en_copia)) if falta]
+    if not en_copia:
+        return fin(hecho, editado, pistas, omitida)
+
+    def sin_copia(por_que: str, corto: str) -> dict:
+        log("warning", f"{por_que}: se omite {' y '.join(en_copia)}.")
+        # Si las pistas iban en la copia y no llegan, la tabla no puede prometerlas.
+        return fin(hecho, editado, None if pistas_en_copia else pistas,
+                   corto if pistas_en_copia else omitida)
+
+    if en_su_sitio:
+        return sin_copia("no cabe una copia donde ya está el archivo", "sin copia")
+    try:
+        clonar(origen, destino)
+    except OSError as e:
+        return sin_copia(f"sin reflink en este sistema de ficheros ({e.strerror or e})", "sin reflink")
+
+    fallo = None
+    if pistas_en_copia:
+        r = apply_remux(item_id, apply=True, dry_run=False, confirmation=REMUX_CONFIRMATION_TOKEN,
+                        overrides=overrides, conn=conn, on_progress=on_progress,
+                        ruta=destino, reordenar=False)
+        if r.get("status") == "applied":
+            pistas = r.get("ordered_tracks") or pistas
+        else:
+            fallo = "; ".join(r.get("errors") or []) or r.get("status")
+    if not fallo and titulo_en_copia:
+        fallo = titulo(destino)
+    if fallo:
+        os.unlink(destino)
+        return sin_copia(f"falló la edición de la copia ({fallo}) y se borra", "falló la edición")
+    return fin([*hecho, f"copia por reflink con {' y '.join(en_copia)}"], editado, pistas, omitida,
+               metodo="reflink")
 
 
 def _run_queued_job(job_id: int) -> None:
@@ -791,12 +873,8 @@ def _run_queued_job(job_id: int) -> None:
         _upload_concurrency_gate,
     )
     from .upload_execution import CONFIRMATION_TOKEN as START_TOKEN
-    from .nomenclature import apply_nomenclature_proposal, CONFIRMATION_TOKEN as NOM_TOKEN
-    from .mkv_remux import (
-        build_remux_plan, apply_remux, check_mkvmerge_available, read_tracks_json,
-        modo_pistas, toca_el_fichero,
-        REMUX_CONFIRMATION_TOKEN as REMUX_TOKEN,
-    )
+    from .nomenclature import build_nomenclature_apply_plan
+    from .mkv_remux import check_mkvmerge_available, read_tracks_json, modo_pistas, toca_el_fichero
     from .media_info_service import mediainfo_available, read_media_info_summary
     from .path_mapping import resolve_local_path, ruta_de_lectura
 
@@ -893,72 +971,79 @@ def _run_queued_job(job_id: int) -> None:
         if not _check_generic_upload_preconditions(job_id, item_id, is_season, conn=conn):
             return
 
-        # --- 2. Nomenclature (rename to the final eMuwarez name).
+        # --- 2. Nomenclatura: el nombre de eMuwarez de cada fichero. Uno de la
+        # biblioteca no se renombra (lo lleva su enlace en la carpeta de
+        # subidas); uno que ya está en ella, sí, en su sitio.
         if not _mark(job_id, stage="nomenclature"):
             append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
                               stream="system", conn=conn)
             return
         mark_phase_started(job_id, "nomenclature")
         append_upload_log(job_id, "info", "Aplicando nomenclatura…", stream="system", conn=conn)
+        renombrados: list[str] = []
         if is_season:
-            from .season_pack import apply_season_pack
+            from .season_pack import build_season_pack_plan
             try:
-                applied = apply_season_pack(
-                    item_id, conn=conn, job_id=job_id, **_ajustes_de_pack(season_overrides))
+                plan_pack = build_season_pack_plan(item_id, conn=conn, **_ajustes_de_pack(season_overrides))
             except Exception as exc:
                 _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {exc}")
                 return
-            if applied.get("status") != "applied":
-                reason = "; ".join(applied.get("errors") or []) or "estado desconocido"
+            if plan_pack.get("status") != "valid":
+                reason = "; ".join(plan_pack.get("errors") or []) or "estado desconocido"
                 _fail(job_id, f"No se pudo aplicar la nomenclatura del pack de temporada: {reason}")
                 return
             _write_snapshot(job_id, "nomenclature_snapshot_json", {
                 "media_type": "season",
-                "proposed_title": applied.get("season_pack_title"),
-                "proposed_torrent_name": applied.get("season_pack_title"),
-                "proposed_filename": applied.get("season_pack_title"),
-                "series_title": applied.get("series_title"),
-                "year": applied.get("year"),
-                "season_number": applied.get("season_number"),
-                "tmdb_id": applied.get("tmdb_id"),
-                "resolution": applied.get("resolution"),
-                "source": applied.get("source"),
-                "provider_final": applied.get("provider"),
-                "video_codec": applied.get("video_codec"),
-                "audio_summary": applied.get("audio_summary"),
-                "subtitle_summary": applied.get("subtitle_summary"),
-                "release_tag": applied.get("release_tag"),
+                "proposed_title": plan_pack.get("season_pack_title"),
+                "proposed_torrent_name": plan_pack.get("season_pack_title"),
+                "proposed_filename": plan_pack.get("season_pack_title"),
+                "series_title": plan_pack.get("series_title"),
+                "year": plan_pack.get("year"),
+                "season_number": plan_pack.get("season_number"),
+                "tmdb_id": plan_pack.get("tmdb_id"),
+                "resolution": plan_pack.get("resolution"),
+                "source": plan_pack.get("source"),
+                "provider_final": plan_pack.get("provider"),
+                "video_codec": plan_pack.get("video_codec"),
+                "audio_summary": plan_pack.get("audio_summary"),
+                "subtitle_summary": plan_pack.get("subtitle_summary"),
+                "release_tag": plan_pack.get("release_tag"),
             }, conn=conn)
+            ficheros = []
+            for ep in plan_pack.get("episodes", []):
+                origen, nombre = ep.get("source_path"), ep.get("nombre")
+                raw = ep.get("raw_source_path")
+                origen = _renombrar_si_esta_en_subidas(
+                    job_id, ep["episode_id"], origen, nombre, conn, renombrados,
+                    raw_destino=os.path.join(os.path.dirname(raw), nombre) if raw else None)
+                if origen is None:
+                    return
+                ficheros.append((ep["episode_id"], origen, nombre))
         else:
             try:
-                applied = apply_nomenclature_proposal(
-                    item_id, proposal_id=job.get("nomenclature_proposal_id"),
-                    apply=True, dry_run=False, confirmation=NOM_TOKEN, conn=conn,
-                )
+                plan_nombre = build_nomenclature_apply_plan(
+                    item_id, proposal_id=job.get("nomenclature_proposal_id"), conn=conn)
             except Exception as exc:
                 _fail(job_id, f"Error aplicando la nomenclatura: {exc}")
                 return
-            if applied.get("status") != "applied":
-                reason = "; ".join(applied.get("errors") or []) or applied.get("message") or "estado desconocido"
+            if plan_nombre.get("status") != "ready":
+                reason = "; ".join(plan_nombre.get("errors") or []) or "estado desconocido"
                 _fail(job_id, f"No se pudo aplicar la nomenclatura: {reason}")
                 return
-            if applied.get("proposal"):
-                _write_snapshot(job_id, "nomenclature_snapshot_json", applied["proposal"], conn=conn)
+            if plan_nombre.get("proposal"):
+                _write_snapshot(job_id, "nomenclature_snapshot_json", plan_nombre["proposal"], conn=conn)
+            origen = _renombrar_si_esta_en_subidas(
+                job_id, item_id, plan_nombre["source_path"], plan_nombre["nombre"], conn, renombrados,
+                raw_destino=plan_nombre.get("raw_destination_path"),
+                proposal_id=(plan_nombre.get("proposal") or {}).get("id"))
+            if origen is None:
+                return
+            ficheros = [(item_id, origen, plan_nombre["nombre"])]
         mark_phase_done(job_id, "nomenclature")
 
-        # Best-effort: tell Radarr/Sonarr to refresh+rescan now and wait for
-        # it, then resync just this item, so Radarr/Sonarr actually adopts
-        # the renamed file (and our own ficha reflects whatever it reports)
-        # instead of both staying stuck on the pre-rename filename until
-        # Radarr/Sonarr's own next scheduled scan. Never blocks the upload:
-        # every step is logged either way, failure or not.
-        from .library import refresh_arr_and_resync
-        refresh_arr_and_resync(
-            conn, item_id,
-            on_log=lambda level, message: append_upload_log(job_id, level, message, stream="system", conn=conn),
-        )
-
-        # --- 3. Track remux (reorder + rename audio/subs), on the final path.
+        # --- 3. Pistas, título interno y enlace en la carpeta de subidas, fichero
+        # a fichero (_preparar_fichero). Lo que Uploadrr recibe vive siempre ahí;
+        # para un pack, además, torf nombra el torrent con la carpeta.
         if not _mark(job_id, stage="remux"):
             append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
                               stream="system", conn=conn)
@@ -966,131 +1051,104 @@ def _run_queued_job(job_id: int) -> None:
         mark_phase_started(job_id, "remux")
         modo_de_pistas = modo_pistas(conn)
         if not toca_el_fichero(modo_de_pistas):
-            # "Ninguno": el archivo se sube tal cual. Se marca la fase como
-            # hecha en vez de saltársela sin más, para que el detalle del
-            # trabajo diga POR QUÉ no se tocó nada — una fase que desaparece se
-            # lee como si hubiera fallado algo.
             append_upload_log(
                 job_id, "info",
-                "Renombrar/Ordenar pistas está en Ninguno: el archivo se sube sin tocar.",
+                "Renombrar/Ordenar pistas está en Ninguno: no se tocan las pistas ni el título interno.",
                 stream="system", conn=conn,
             )
-            update_phase_progress(job_id, "remux", 100)
-        elif is_season:
-            ok, episodes_snapshot = _run_season_remux(job_id, item_id, conn=conn)
-            if not ok:
-                return
-            _write_snapshot(job_id, "remux_snapshot_json", {"episodes": episodes_snapshot}, conn=conn)
-        else:
-            try:
-                plan = build_remux_plan(item_id, conn=conn)
-                if plan.get("status") == "ready":
-                    remuxed = apply_remux(
-                        item_id, apply=True, dry_run=False,
-                        confirmation=REMUX_TOKEN, overrides=overrides, conn=conn,
-                        on_progress=lambda pct: update_phase_progress(job_id, "remux", pct),
-                    )
-                    if remuxed.get("status") != "applied":
-                        reason = "; ".join(remuxed.get("errors") or [])
-                        _fail(job_id, f"No se pudieron reordenar/renombrar las pistas: {reason}")
-                        return
-                    _write_snapshot(
-                        job_id, "remux_snapshot_json",
-                        {"ordered_tracks": remuxed.get("ordered_tracks", [])}, conn=conn,
-                    )
-                else:
-                    _write_snapshot(
-                        job_id, "remux_snapshot_json",
-                        {"ordered_tracks": plan.get("ordered_tracks", [])}, conn=conn,
-                    )
-            except Exception as exc:
-                _fail(job_id, f"Error reordenando/renombrando las pistas: {exc}")
-                return
+        fuera = next((f for _i, f, _n in ficheros if f and _fuera_de_raices(f, conn)), None)
+        if fuera:
+            _fail(job_id, f"El archivo está fuera de los allowed_roots configurados: {fuera}")
+            return
 
-        # --- Internal MKV title (mkvpropedit) — must run AFTER remux, not
-        # before/instead: mkvmerge's remux rewrites the whole container and
-        # atomically replaces the file, which would silently discard a title
-        # set beforehand. Previously this was never wired into the real
-        # pipeline at all (only reachable from Biblioteca's separate
-        # "Adaptar nomenclatura" modal) — every real upload kept the
-        # source release's own embedded title untouched (confirmed in
-        # production: Chappie, 2026-07-30, still showed "Chappie
-        # [www.newpct1.com]"). Best-effort like the Arr refresh above: logged
-        # either way, never blocks an otherwise-successful upload over this
-        # secondary metadata step. For a season, applied to every episode
-        # individually (each has its own MKV file).
-        append_upload_log(job_id, "info", "Aplicando título interno del MKV…", stream="system", conn=conn)
+        from .carpeta_subida import (ENLACES, RAIZ_SUBIDAS, preparar_carpeta_de_pack,
+                                     preparar_fichero_suelto)
         if is_season:
-            from ..models import LocalStatus
-            from .season_pack import _get_season_episodes
-            for ep in _get_season_episodes(item_id, conn=conn):
-                if ep.get("local_status") == LocalStatus.AVAILABLE.value:
-                    _apply_mkv_title_best_effort(job_id, ep["id"], conn=conn)
+            from .season_pack import _sanitize_pack_folder_name
+            carpeta_pack = _sanitize_pack_folder_name(plan_pack.get("season_pack_title") or "")
+            destino_uploadrr = os.path.join(RAIZ_SUBIDAS, carpeta_pack)
         else:
-            _apply_mkv_title_best_effort(job_id, item_id, conn=conn)
+            destino_uploadrr = os.path.join(RAIZ_SUBIDAS, ficheros[0][2])
+        # La ruta se apunta ANTES de crearla: así un borrado de otra subida la ve en uso.
+        with ENLACES:
+            otra = _subida_que_lo_usa(conn, destino_uploadrr, job_id)
+            if otra is None:
+                conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
+                             (destino_uploadrr, _now_iso(), job_id))
+                conn.commit()
+        if otra is not None:
+            _fail(job_id, f"«{os.path.basename(destino_uploadrr)}» es de la subida #{otra}, que lo siembra "
+                          "o lo tiene en qBittorrent: no se rehace para no romper ese torrent. "
+                          "Bórrala antes si quieres volver a subirlo.")
+            return
 
+        por_nombre = {n: i for i, _f, n in ficheros}
+        resultados: list[dict] = []
+        total = len(ficheros)
+
+        def preparar(origen: str, destino: str) -> str:
+            idx = len(resultados)
+            fid = por_nombre[os.path.basename(destino)]
+
+            def progreso(pct: int) -> None:
+                update_phase_progress(job_id, "remux", int((idx * 100 + pct) / total))
+
+            r = _preparar_fichero(job_id, fid, origen, destino, modo_de_pistas, conn,
+                                  overrides=None if is_season else overrides, on_progress=progreso)
+            resultados.append({**r, "item_id": fid})
+            update_phase_progress(job_id, "remux", int((idx + 1) * 100 / total))
+            return r["metodo"]
+
+        if is_season:
+            preparada = preparar_carpeta_de_pack(carpeta_pack, [(f, n) for _i, f, n in ficheros],
+                                                 preparar=preparar)
+            que = f"{preparada.get('cuantos', 0)} capítulo(s)"
+        else:
+            preparada = preparar_fichero_suelto(ficheros[0][1], ficheros[0][2], preparar=preparar)
+            que = "el archivo"
+        if preparada["status"] != "ready":
+            _fail(job_id, "No se pudo preparar la subida en la carpeta de subidas: "
+                          + "; ".join(preparada["errors"]))
+            return
+
+        from .nomenclature import marcar_nombre_aplicado
+        for r, (_i, _f, n) in zip(resultados, ficheros):
+            ruta = os.path.join(destino_uploadrr, n) if is_season else destino_uploadrr
+            marcar_nombre_aplicado(r["item_id"], ruta, conn=conn,
+                                   proposal_id=None if is_season else (plan_nombre.get("proposal") or {}).get("id"))
+
+        def foto(r: dict) -> dict:
+            return {"omitida": r["omitida"]} if r["omitida"] else {"ordered_tracks": r["pistas"] or []}
+        if not toca_el_fichero(modo_de_pistas):
+            _write_snapshot(job_id, "remux_snapshot_json", {"omitida": "Ninguno"}, conn=conn)
+        elif is_season:
+            episodios = {ep["episode_id"]: ep for ep in plan_pack.get("episodes", [])}
+            _write_snapshot(job_id, "remux_snapshot_json", {"episodes": [
+                {"episode_id": r["item_id"], "title": episodios[r["item_id"]].get("title"),
+                 "episode_number": episodios[r["item_id"]].get("episode_number"), **foto(r)}
+                for r in resultados]}, conn=conn)
+        else:
+            _write_snapshot(job_id, "remux_snapshot_json", foto(resultados[0]), conn=conn)
+        update_phase_progress(job_id, "remux", 100)
         mark_phase_done(job_id, "remux")
 
-        # --- 3b. Lo que se le entrega a Uploadrr: enlaces en la carpeta de
-        # subidas. TODO pasa por aquí, pack o fichero suelto, para que lo que
-        # subes esté siempre en el mismo sitio y la biblioteca no aparezca en
-        # ninguna ruta de subida.
-        #
-        # AQUÍ y no antes: el remux de arriba reescribe cada fichero y lo
-        # sustituye con os.replace, así que un enlace creado antes seguiría
-        # apuntando a los datos viejos. Este es el primer punto en que los
-        # ficheros ya son los definitivos.
-        #
-        # Para un PACK hace falta además por el nombre: torf toma el nombre del
-        # torrent del nombre de la carpeta, y esa es la carpeta que recibe quien
-        # se descargue el release — entregando la de Sonarr se llamaría
-        # "Season 1". Un fichero suelto ya salía bien (torf usa su nombre, que
-        # la nomenclatura dejó correcto), así que ahí esto es solo por tenerlo
-        # todo junto.
-        from .carpeta_subida import ENLACES, preparar_carpeta_de_pack, preparar_fichero_suelto
-        with ENLACES:
-            if is_season:
-                from .season_pack import _sanitize_pack_folder_name, build_season_pack_plan
-                plan_final = build_season_pack_plan(item_id, conn=conn, **_ajustes_de_pack(season_overrides))
-                ficheros = [resolve_local_path(ep.get("destination_path") or ep.get("source_path"), conn=conn)
-                            or ep.get("source_path")
-                            for ep in plan_final.get("episodes", [])]
-                # Otra vez: la resincronización con Arr de arriba puede haber cambiado las rutas.
-                fuera = next((f for f in ficheros if f and _fuera_de_raices(f, conn)), None)
-                if fuera:
-                    _fail(job_id, f"El archivo está fuera de los allowed_roots configurados: {fuera}")
-                    return
-                preparada = preparar_carpeta_de_pack(
-                    _sanitize_pack_folder_name(plan_final.get("season_pack_title") or ""), ficheros)
-                destino_uploadrr = preparada.get("carpeta")
-                que = f"{preparada.get('cuantos', 0)} capítulo(s) enlazado(s)"
-            else:
-                # Se relee: la nomenclatura y el remux de arriba han cambiado
-                # prepared_path, y el `item` de antes es de antes de eso.
-                item_final = row_to_dict(
-                    conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()) or {}
-                elegida = ruta_de_lectura(item_final, conn=conn)
-                fichero = resolve_local_path(elegida, conn=conn) or elegida
-                if fichero and _fuera_de_raices(fichero, conn):
-                    _fail(job_id, f"El archivo está fuera de los allowed_roots configurados: {fichero}")
-                    return
-                preparada = preparar_fichero_suelto(fichero)
-                destino_uploadrr = preparada.get("ruta")
-                que = "el archivo enlazado"
-
-            if preparada["status"] != "ready":
-                _fail(job_id, "No se pudo preparar la subida en la carpeta de subidas: "
-                              + "; ".join(preparada["errors"]))
-                return
-            conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
-                         (destino_uploadrr, _now_iso(), job_id))
-            conn.commit()
+        editados = sum(1 for r in resultados if r["original_editado"])
         append_upload_log(
             job_id, "info",
             f"Preparado para subir: {que} en «{os.path.basename(destino_uploadrr)}» "
-            f"(enlace {'/'.join(preparada['enlaces'])}). El original no se ha tocado.",
+            f"({', '.join(preparada['metodos'])}). "
+            + (f"Se editaron {editados} original(es) que no compartía nadie."
+               if editados else "Los originales no se han tocado."),
             stream="system", conn=conn,
         )
+
+        # Radarr/Sonarr solo tiene algo que releer si se renombró o se escribió en el original.
+        if editados or renombrados:
+            from .library import refresh_arr_and_resync
+            refresh_arr_and_resync(
+                conn, item_id,
+                on_log=lambda level, message: append_upload_log(job_id, level, message, stream="system", conn=conn),
+            )
 
         # --- 4. Final preflight (fresh preconditions + command preview,
         # against the now-final renamed/remuxed file) then start. This is

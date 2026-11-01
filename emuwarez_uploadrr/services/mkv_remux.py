@@ -13,7 +13,9 @@ Default priority order (audio AND subtitles, independently): Español
 
 SAFETY CONTRACT:
 - dry_run=True by default; apply_remux() requires confirmation=REMUX_CONFIRMATION_TOKEN.
-- Only operates on prepared_path (same convention as mkv_title.py), never source_path.
+- Nunca escribe en un fichero con más de un enlace duro: sería escribir también
+  en el torrent que lo siembra. La cola edita entonces una copia por reflink en
+  la carpeta de subidas (upload_queue._preparar_fichero).
 - Output is written to a temp file in the SAME directory as the original (same
   filesystem — works over SSHFS/NFS where a cross-device write would fail),
   then atomically replaces the original with os.replace(). If mkvmerge fails,
@@ -29,8 +31,8 @@ import re
 import shutil
 import signal
 import subprocess
-import tempfile
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -288,12 +290,14 @@ def _resolution_label(pixel_dimensions: str | None) -> str | None:
 # Los dos costes son muy distintos, y por eso interesa poder elegirlos por
 # separado:
 #
-#   renombrar   mkvpropedit edita la cabecera EN EL SITIO. No copia los datos,
-#               conserva el inodo y por tanto los hardlinks con el cliente de
-#               torrent. Es casi instantáneo por grande que sea el fichero.
+#   renombrar   mkvpropedit edita la cabecera EN EL SITIO, sin copiar los
+#               datos. Casi instantáneo por grande que sea el fichero.
 #   reordenar   obliga a rehacer el contenedor con mkvmerge y a sustituir el
-#               fichero (os.replace): rompe los hardlinks y tarda en
-#               proporción al tamaño.
+#               fichero (os.replace), y tarda en proporción al tamaño.
+#
+# Los dos escriben en el fichero, así que solo se hacen en uno que no comparte
+# nadie (st_nlink == 1). Si lo comparte un torrent, renombrar va a una copia
+# por reflink y reordenar se omite (ver upload_queue._preparar_fichero).
 MODO_REORDENAR_Y_RENOMBRAR = "reordenar_y_renombrar"
 MODO_SOLO_RENOMBRAR = "solo_renombrar"
 MODO_SOLO_REORDENAR = "solo_reordenar"
@@ -315,8 +319,8 @@ ETIQUETAS_MODO_PISTAS = {
     MODO_NINGUNO: "Ninguno",
 }
 
-# Sigue siendo el de antes: reordenar rompe hardlinks y cuesta tiempo, así que
-# de fábrica solo se renombra.
+# Sigue siendo el de antes: reordenar reescribe el fichero entero, así que de
+# fábrica solo se renombra.
 MODO_PISTAS_POR_DEFECTO = MODO_SOLO_RENOMBRAR
 
 
@@ -751,12 +755,15 @@ def _get_known_resolution(library_item_id: int, conn) -> str | None:
     return (row["resolution"] or None) if row else None
 
 
-def build_remux_plan(library_item_id: int, conn=None) -> dict:
+def build_remux_plan(library_item_id: int, conn=None, *, ruta: str | None = None,
+                     reordenar: bool = True) -> dict:
+    """`ruta`: el fichero que se mira, si no es el del elemento. `reordenar=False`:
+    aunque el modo reordene, el orden no se toca (fichero compartido)."""
     own = conn is None
     conn = conn or connect()
     try:
         mkvmerge_check = check_mkvmerge_available()
-        prepared_path, using_prepared_copy = _get_target_path(library_item_id, conn)
+        prepared_path, using_prepared_copy = (ruta, False) if ruta else _get_target_path(library_item_id, conn)
         base = {
             "library_item_id": library_item_id,
             "prepared_path": prepared_path,
@@ -784,8 +791,11 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
 
         modo = modo_pistas(conn)
         plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn),
-                                reorder=reordena(modo), rename=renombra(modo),
+                                reorder=reordena(modo) and reordenar, rename=renombra(modo),
                                 mark_default=toca_el_fichero(modo))
+        # Si el modo reordena y aquí no se puede, para avisar de lo que se omite.
+        reorden_omitido = bool(reordena(modo) and not reordenar
+                               and build_track_plan(read["data"], reorder=True)["order_changed"])
         if not plan["tracks"]:
             return {**base, "status": "blocked", "errors": ["mkvmerge no encontró pistas en el archivo."]}
 
@@ -811,6 +821,7 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
             # de Ver Pistas usa `track_mode` para decir en qué modo está y para
             # saber si la columna de nombre se puede editar.
             "track_mode": modo,
+            "reorden_omitido": reorden_omitido,
             "reorder_enabled": reordena(modo),
             "rename_enabled": renombra(modo),
             "command_preview": _preview_command(args),
@@ -829,6 +840,8 @@ def apply_remux(
     overrides: dict[int, dict] | None = None,
     conn=None,
     on_progress: Callable[[int], None] | None = None,
+    ruta: str | None = None,
+    reordenar: bool = True,
 ) -> dict:
     """Apply or preview the track reorder/rename.
 
@@ -844,11 +857,14 @@ def apply_remux(
     `--gui-mode` output reports a new percentage — lets the caller surface
     real remux progress (e.g. a job's progress_json) instead of a binary
     0/100 state.
+
+    `ruta`/`reordenar`: como en build_remux_plan. El resultado dice si se
+    escribió en el fichero (`escrito`) y con qué pistas quedó (`ordered_tracks`).
     """
     own = conn is None
     conn = conn or connect()
     try:
-        preview = build_remux_plan(library_item_id, conn=conn)
+        preview = build_remux_plan(library_item_id, conn=conn, ruta=ruta, reordenar=reordenar)
 
         if preview["status"] == "blocked":
             return {**preview, "dry_run": True, "apply": False}
@@ -887,7 +903,7 @@ def apply_remux(
                      "errors": [f"mkvmerge -J falló: {read.get('error')}"]}
         modo = modo_pistas(conn)
         plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn),
-                                reorder=reordena(modo), rename=renombra(modo),
+                                reorder=reordena(modo) and reordenar, rename=renombra(modo),
                                 mark_default=toca_el_fichero(modo))
         # Sin renombrar, la columna del nombre sale bloqueada en la tarjeta y
         # aquí se descarta lo que traiga: un nombre escrito ANTES de cambiar el
@@ -910,16 +926,22 @@ def apply_remux(
                 on_progress(100)
             return {
                 **preview, "status": "applied", "dry_run": False, "apply": True,
-                "applied_at": now, "exit_code": 0,
+                "applied_at": now, "exit_code": 0, "escrito": False,
+                "ordered_tracks": plan["ordered_tracks"],
             }
+
+        # Un enlace duro es el MISMO fichero: escribir aquí cambiaría también el
+        # torrent que lo siembra, y sus piezas dejarían de cuadrar.
+        enlaces = p.stat().st_nlink
+        if enlaces > 1:
+            return {**preview, "status": "blocked", "dry_run": False, "apply": False,
+                    "errors": [f"No se edita {p.name}: lo comparten {enlaces} enlaces duros "
+                               "(un torrent que siembra o una subida anterior)."]}
 
         if not plan["order_changed"]:
             # Solo cambian nombres y banderas: eso se edita EN LA CABECERA con
-            # mkvpropedit, sin reescribir el contenedor. Evita leer y escribir
-            # el fichero entero (20 GB en una película) y, sobre todo, evita
-            # sustituirlo por uno nuevo: el inodo se conserva, así que un
-            # hardlink compartido con el cliente de torrent sobrevive y no se
-            # duplica el espacio en disco.
+            # mkvpropedit, sin reescribir el contenedor ni leer el fichero
+            # entero (20 GB en una película).
             #
             # mkvmerge se reserva para cuando de verdad hay que mover pistas,
             # que es lo único que obliga a rehacer el contenedor.
@@ -945,14 +967,19 @@ def apply_remux(
                 on_progress(100)
             return {
                 **preview, "status": "applied", "dry_run": False, "apply": True,
-                "applied_at": now, "exit_code": 0,
+                "applied_at": now, "exit_code": 0, "escrito": True,
+                "ordered_tracks": plan["ordered_tracks"],
             }
 
         # Write to a temp file in the SAME directory (same filesystem — works
-        # over SSHFS/NFS), then atomically replace the original.
-        fd, tmp_path = tempfile.mkstemp(suffix=".mkv.part", dir=str(p.parent))
-        os.close(fd)
-        os.remove(tmp_path)  # mkvmerge must create the file itself
+        # over SSHFS/NFS), then atomically replace the original. Nombre fijo:
+        # un reintento pisa el que dejó un intento matado en vez de sumar otro.
+        tmp_path = str(p.with_name(p.stem + _SUFIJO_PARTE))
+        _barrer_restos(p.parent, tmp_path)
+        falta = _falta_espacio(p)
+        if falta:
+            return {**preview, "status": "error", "dry_run": False, "apply": True, "errors": [falta]}
+        antes = _huella(p)
 
         args = build_mkvmerge_args(tmp_path, prepared_path, plan, gui_mode=True)
         # Lanzar y apuntar, bajo el candado con que se apaga el servidor: una vez
@@ -1009,6 +1036,15 @@ def apply_remux(
             logger.warning("Reordenar/renombrar pistas falló (item %s): %s", library_item_id, err[:300])
             return {**preview, "status": "error", "dry_run": False, "apply": True, "errors": [err[:2000]]}
 
+        # Si mientras tanto Radarr/Sonarr lo sustituyó (o lo borró), o alguien lo enlazó, no se pisa.
+        try:
+            cambio = _huella(p) != antes
+        except OSError:
+            cambio = True
+        if cambio:
+            _cleanup(tmp_path)
+            return {**preview, "status": "error", "dry_run": False, "apply": True,
+                    "errors": [f"{p.name} cambió mientras se reordenaba; no se sustituye."]}
         os.replace(tmp_path, prepared_path)
         now = datetime.now(timezone.utc).isoformat()
         _update_status(conn, library_item_id, "aplicado", None, applied_at=now)
@@ -1018,11 +1054,51 @@ def apply_remux(
 
         return {
             **preview, "status": "applied", "dry_run": False, "apply": True,
-            "applied_at": now, "exit_code": returncode,
+            "applied_at": now, "exit_code": returncode, "escrito": True,
+            "ordered_tracks": plan["ordered_tracks"],
         }
     finally:
         if own:
             conn.close()
+
+
+# El temporal de un reordenado; el patrón viejo es el de tempfile.mkstemp.
+_SUFIJO_PARTE = ".remux.mkv.part"
+_PARTE_VIEJA = re.compile(r"^tmp[a-z0-9_]{8}\.mkv\.part$")
+# Más que el timeout de mkvmerge: lo que pase de aquí ya no lo escribe nadie.
+_RESTO_ABANDONADO_S = 1800 + 300
+
+
+def _barrer_restos(carpeta: Path, propio: str) -> None:
+    """Borra los .mkv.part que dejó un reordenado matado (docker restart, OOM)."""
+    limite = time.time() - _RESTO_ABANDONADO_S
+    try:
+        for f in carpeta.iterdir():
+            if str(f) == propio or (
+                    (f.name.endswith(_SUFIJO_PARTE) or _PARTE_VIEJA.match(f.name))
+                    and f.stat().st_mtime < limite):
+                _cleanup(str(f))
+    except OSError:
+        logger.warning("No se pudieron barrer los restos de %s", carpeta, exc_info=True)
+
+
+def _gb(n: int) -> str:
+    return f"{n / 1e9:.1f} GB"
+
+
+def _falta_espacio(p: Path) -> str | None:
+    """Reordenar escribe el fichero entero otra vez antes de sustituirlo."""
+    necesario = p.stat().st_size * 102 // 100
+    libre = shutil.disk_usage(p.parent).free
+    if libre >= necesario:
+        return None
+    return (f"No hay espacio para reordenar {p.name}: hacen falta {_gb(necesario)} "
+            f"y quedan {_gb(libre)} libres en {p.parent}.")
+
+
+def _huella(p: Path) -> tuple:
+    st = p.stat()
+    return (st.st_ino, st.st_size, st.st_mtime_ns, st.st_nlink)
 
 
 def detener_remuxes() -> None:

@@ -15,9 +15,14 @@ import os
 import pytest
 
 from emuwarez_uploadrr.services.carpeta_subida import (asegurar_raiz, borrar_carpeta_de_pack,
-                                                       borrar_de_subidas, comprobar_enlace,
+                                                       borrar_de_subidas, clonar, comprobar_enlace,
                                                        preparar_carpeta_de_pack,
                                                        preparar_fichero_suelto)
+
+
+def _pares(ficheros):
+    """(ruta, nombre en la carpeta del pack); aquí el nombre de siempre."""
+    return [(f, os.path.basename(f)) for f in ficheros]
 
 
 @pytest.fixture
@@ -36,7 +41,7 @@ def biblioteca(tmp_path):
 
 def test_prepara_la_carpeta_con_el_nombre_del_release(biblioteca):
     r = preparar_carpeta_de_pack("Serie S01 2020 1080p WEB-DL x264",
-                                 biblioteca["ficheros"], raiz=biblioteca["uploads"])
+                                 _pares(biblioteca["ficheros"]), raiz=biblioteca["uploads"])
     assert r["status"] == "ready"
     assert os.path.basename(r["carpeta"]) == "Serie S01 2020 1080p WEB-DL x264"
     assert r["cuantos"] == 2
@@ -45,7 +50,7 @@ def test_prepara_la_carpeta_con_el_nombre_del_release(biblioteca):
 def test_no_toca_la_carpeta_original(biblioteca):
     """Lo que motivó todo el cambio."""
     antes = sorted(p.name for p in biblioteca["temporada"].iterdir())
-    preparar_carpeta_de_pack("Serie S01", biblioteca["ficheros"], raiz=biblioteca["uploads"])
+    preparar_carpeta_de_pack("Serie S01", _pares(biblioteca["ficheros"]), raiz=biblioteca["uploads"])
     assert biblioteca["temporada"].is_dir()
     assert biblioteca["temporada"].name == "Season 1"
     assert sorted(p.name for p in biblioteca["temporada"].iterdir()) == antes
@@ -53,39 +58,39 @@ def test_no_toca_la_carpeta_original(biblioteca):
 
 def test_no_duplica_los_datos(biblioteca):
     """Un enlace duro es otro nombre para los mismos datos: mismo inodo."""
-    r = preparar_carpeta_de_pack("Serie S01", biblioteca["ficheros"], raiz=biblioteca["uploads"])
+    r = preparar_carpeta_de_pack("Serie S01", _pares(biblioteca["ficheros"]), raiz=biblioteca["uploads"])
     for original in biblioteca["ficheros"]:
         enlace = os.path.join(r["carpeta"], os.path.basename(original))
         assert os.stat(enlace).st_ino == os.stat(original).st_ino
 
 
 def test_los_nombres_de_los_capitulos_se_conservan(biblioteca):
-    r = preparar_carpeta_de_pack("Serie S01", biblioteca["ficheros"], raiz=biblioteca["uploads"])
+    r = preparar_carpeta_de_pack("Serie S01", _pares(biblioteca["ficheros"]), raiz=biblioteca["uploads"])
     assert sorted(os.listdir(r["carpeta"])) == sorted(
         os.path.basename(f) for f in biblioteca["ficheros"])
 
 
 def test_rehacerla_no_arrastra_capitulos_viejos(biblioteca, tmp_path):
     """Un reintento tiene que dejarla como si fuera nueva."""
-    preparar_carpeta_de_pack("Serie S01", biblioteca["ficheros"], raiz=biblioteca["uploads"])
+    preparar_carpeta_de_pack("Serie S01", _pares(biblioteca["ficheros"]), raiz=biblioteca["uploads"])
     sobra = tmp_path / "Serie" / "Season 1" / "Serie S01E99.mkv"
     sobra.write_bytes(b"viejo")
-    r = preparar_carpeta_de_pack("Serie S01", biblioteca["ficheros"] + [str(sobra)],
+    r = preparar_carpeta_de_pack("Serie S01", _pares(biblioteca["ficheros"] + [str(sobra)]),
                                  raiz=biblioteca["uploads"])
     assert len(os.listdir(r["carpeta"])) == 3
-    r2 = preparar_carpeta_de_pack("Serie S01", biblioteca["ficheros"], raiz=biblioteca["uploads"])
+    r2 = preparar_carpeta_de_pack("Serie S01", _pares(biblioteca["ficheros"]), raiz=biblioteca["uploads"])
     assert len(os.listdir(r2["carpeta"])) == 2
 
 
 def test_un_capitulo_que_no_existe_la_bloquea(biblioteca):
-    r = preparar_carpeta_de_pack("Serie S01", biblioteca["ficheros"] + ["/no/existe.mkv"],
+    r = preparar_carpeta_de_pack("Serie S01", _pares(biblioteca["ficheros"] + ["/no/existe.mkv"]),
                                  raiz=biblioteca["uploads"])
     assert r["status"] == "blocked"
     assert any("/no/existe.mkv" in e for e in r["errors"])
 
 
 def test_sin_capitulos_la_bloquea(biblioteca):
-    assert preparar_carpeta_de_pack("Serie S01", [], raiz=biblioteca["uploads"])["status"] == "blocked"
+    assert preparar_carpeta_de_pack("Serie S01", _pares([]), raiz=biblioteca["uploads"])["status"] == "blocked"
 
 
 # --- Borrado -----------------------------------------------------------------
@@ -93,7 +98,7 @@ def test_sin_capitulos_la_bloquea(biblioteca):
 def test_borrarla_no_toca_los_ficheros_de_verdad(biblioteca):
     """La razón de ser de los enlaces: borrar la carpeta de subida deja los
     capítulos exactamente donde estaban."""
-    r = preparar_carpeta_de_pack("Serie S01", biblioteca["ficheros"], raiz=biblioteca["uploads"])
+    r = preparar_carpeta_de_pack("Serie S01", _pares(biblioteca["ficheros"]), raiz=biblioteca["uploads"])
     assert borrar_carpeta_de_pack(r["carpeta"], raiz=biblioteca["uploads"]) is True
     assert not os.path.exists(r["carpeta"])
     for f in biblioteca["ficheros"]:
@@ -183,7 +188,7 @@ def test_un_fichero_que_no_existe_lo_bloquea(biblioteca):
 def test_borrar_de_subidas_sirve_para_las_dos_formas(biblioteca):
     """El borrado es uno solo: un pack es una carpeta y una película un
     fichero, y al borrar la subida no se sabe cuál era."""
-    pack = preparar_carpeta_de_pack("Serie S01", biblioteca["ficheros"], raiz=biblioteca["uploads"])
+    pack = preparar_carpeta_de_pack("Serie S01", _pares(biblioteca["ficheros"]), raiz=biblioteca["uploads"])
     suelto = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])
     assert borrar_de_subidas(pack["carpeta"], raiz=biblioteca["uploads"]) is True
     assert borrar_de_subidas(suelto["ruta"], raiz=biblioteca["uploads"]) is True
@@ -328,3 +333,116 @@ def test_borrar_no_quita_el_enlace_de_una_subida_en_marcha(biblioteca, monkeypat
 
     assert delete_upload_job(fallida, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
     assert os.path.lexists(enlace)
+
+
+# --- Nombres de eMuwarez, salvaguardas y reflink -----------------------------
+
+def test_cada_capitulo_lleva_su_nombre_de_emuwarez(biblioteca):
+    """El de la biblioteca no cambia: el de eMuwarez lo lleva el enlace."""
+    pares = [(f, f"Serie.S01E0{i}.1080p.WEB-DL.mkv") for i, f in enumerate(biblioteca["ficheros"], 1)]
+    r = preparar_carpeta_de_pack("Serie S01 1080p WEB-DL", pares, raiz=biblioteca["uploads"])
+    assert sorted(os.listdir(r["carpeta"])) == ["Serie.S01E01.1080p.WEB-DL.mkv", "Serie.S01E02.1080p.WEB-DL.mkv"]
+    assert sorted(p.name for p in biblioteca["temporada"].iterdir()) == ["Serie S01E01.mkv", "Serie S01E02.mkv"]
+    assert r["metodos"] == ["enlace duro"]
+
+
+def test_un_fichero_suelto_lleva_el_nombre_que_se_le_da(biblioteca):
+    r = preparar_fichero_suelto(biblioteca["ficheros"][0], "Serie.S01E01.1080p.mkv", raiz=biblioteca["uploads"])
+    assert r["ruta"] == os.path.join(biblioteca["uploads"], "Serie.S01E01.1080p.mkv")
+    assert os.path.isfile(biblioteca["ficheros"][0])
+
+
+def test_un_titulo_de_pack_vacio_no_borra_la_carpeta_de_subidas(biblioteca):
+    """Con un título vacío el destino era la propia raíz, y se rehacía entera."""
+    preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])
+    for nombre in ("", " . ", ".."):
+        r = preparar_carpeta_de_pack(nombre, _pares(biblioteca["ficheros"]), raiz=biblioteca["uploads"])
+        assert r["status"] == "blocked"
+    assert os.listdir(biblioteca["uploads"]) == ["Serie S01E01.mkv"]
+
+
+def test_borrar_no_toca_una_carpeta_hermana_con_el_mismo_prefijo(tmp_path):
+    """Con startswith, /x/uploads-old pasaba por /x/uploads (F14)."""
+    hermana = tmp_path / "uploads-old" / "Serie S01"
+    hermana.mkdir(parents=True)
+    (hermana / "cap.mkv").write_bytes(b"x")
+    (tmp_path / "uploads").mkdir()
+    assert borrar_carpeta_de_pack(str(hermana), raiz=str(tmp_path / "uploads")) is False
+    assert (hermana / "cap.mkv").exists()
+
+
+def test_un_fallo_al_preparar_un_capitulo_no_deja_la_carpeta_a_medias(biblioteca):
+    from emuwarez_uploadrr.services.carpeta_subida import NoSePudoPreparar, enlace_simple
+    llamadas = []
+
+    def preparar(origen, destino):
+        llamadas.append(destino)
+        if len(llamadas) == 2:
+            raise NoSePudoPreparar("«cap 2»: falló mkvpropedit")
+        return enlace_simple(origen, destino)
+
+    r = preparar_carpeta_de_pack("Serie S01", _pares(biblioteca["ficheros"]),
+                                 raiz=biblioteca["uploads"], preparar=preparar)
+    assert r["status"] == "blocked" and r["errors"] == ["«cap 2»: falló mkvpropedit"]
+    assert not os.path.exists(os.path.join(biblioteca["uploads"], "Serie S01"))
+
+
+def test_un_fichero_que_ya_esta_en_su_sitio_no_se_borra(biblioteca):
+    """Un archivo de la carpeta de subidas con su nombre final: quitar "lo de un
+    intento anterior" sería borrar el propio archivo."""
+    os.makedirs(biblioteca["uploads"])
+    propio = os.path.join(biblioteca["uploads"], "Peli.2020.mkv")
+    with open(propio, "wb") as fh:
+        fh.write(b"datos")
+    r = preparar_fichero_suelto(propio, "Peli.2020.mkv", raiz=biblioteca["uploads"],
+                                preparar=lambda o, d: "sin enlace")
+    assert r["status"] == "ready"
+    with open(propio, "rb") as fh:
+        assert fh.read() == b"datos"
+
+
+def test_clonar_da_un_inodo_propio_o_falla_sin_dejar_nada(biblioteca):
+    """En btrfs/XFS es un reflink; en tmpfs, ext4 u overlay lanza OSError y
+    nunca cae a una copia entera."""
+    os.makedirs(biblioteca["uploads"])
+    origen = biblioteca["ficheros"][0]
+    destino = os.path.join(biblioteca["uploads"], "copia.mkv")
+    try:
+        clonar(origen, destino)
+    except OSError:
+        assert not os.path.lexists(destino)
+        return
+    assert os.stat(destino).st_ino != os.stat(origen).st_ino
+    with open(destino, "rb") as a, open(origen, "rb") as b:
+        assert a.read() == b.read()
+
+
+def test_clonar_no_pisa_lo_que_ya_existe(biblioteca):
+    os.makedirs(biblioteca["uploads"])
+    destino = os.path.join(biblioteca["uploads"], "copia.mkv")
+    with open(destino, "wb") as fh:
+        fh.write(b"de otro")
+    with pytest.raises(OSError):
+        clonar(biblioteca["ficheros"][0], destino)
+    with open(destino, "rb") as fh:
+        assert fh.read() == b"de otro"
+
+
+@pytest.mark.parametrize("nombre", ["../fuera.mkv", "sub/cap.mkv", ".."])
+def test_un_nombre_con_carpetas_no_sale_de_la_de_subidas(biblioteca, tmp_path, nombre):
+    """Con "/" o "..", el enlace (y el borrado del de un intento anterior) caía fuera."""
+    victima = tmp_path / "fuera.mkv"
+    victima.write_bytes(b"no tocar")
+    r = preparar_fichero_suelto(biblioteca["ficheros"][0], nombre, raiz=biblioteca["uploads"])
+    assert r["status"] == "blocked"
+    r = preparar_carpeta_de_pack("Serie S01", [(biblioteca["ficheros"][0], nombre)], raiz=biblioteca["uploads"])
+    assert r["status"] == "blocked"
+    assert victima.read_bytes() == b"no tocar"
+
+
+def test_un_nombre_absoluto_no_borra_nada_fuera(biblioteca, tmp_path):
+    victima = tmp_path / "victima.mkv"
+    victima.write_bytes(b"no tocar")
+    r = preparar_fichero_suelto(biblioteca["ficheros"][0], str(victima), raiz=biblioteca["uploads"])
+    assert r["status"] == "blocked"
+    assert victima.read_bytes() == b"no tocar"

@@ -109,17 +109,16 @@ def test_blank_title_override_falls_back_to_the_stored_title(season):
     assert plan["season_pack_title"].startswith("Los Tudor S02")
 
 
-def test_override_reaches_the_renamed_files(season, monkeypatch):
-    """The whole point of routing it through season_overrides: the files on
-    disk must end up named after the chosen title, not just the preview."""
-    from emuwarez_uploadrr.services.season_pack import apply_season_pack
+def test_override_reaches_the_file_names(season, monkeypatch):
+    """The whole point of routing it through season_overrides: the files in the
+    uploads folder must end up named after the chosen title, not just the preview."""
+    from emuwarez_uploadrr.services.season_pack import build_season_pack_plan
     conn, season_id = season
-    result = apply_season_pack(season_id, conn=conn, title_override="The Tudors")
+    result = build_season_pack_plan(season_id, conn=conn, title_override="The Tudors")
     assert result["status"] != "blocked", result.get("errors")
-    import os
     # Filenames are dotted, the pack title is spaced — both must carry the pick.
-    renamed = [os.path.basename(e["destination_path"]) for e in result["episodes"]]
-    assert renamed and all(n.startswith("The.Tudors.S02E0") for n in renamed), renamed
+    nombres = [e["nombre"] for e in result["episodes"]]
+    assert nombres and all(n.startswith("The.Tudors.S02E0") for n in nombres), nombres
     assert result["season_pack_title"].startswith("The Tudors S02")
 
 

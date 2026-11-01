@@ -280,118 +280,6 @@ def test_run_queued_job_stage_is_nomenclature_before_nomenclature_starts(db_conn
     assert captured["stage"] == "nomenclature"
 
 
-# ---------------------------------------------------------------------------
-# Internal MKV title (mkvpropedit) — previously never wired into the real
-# pipeline at all (only reachable from Biblioteca's separate "Adaptar
-# nomenclatura" modal), so no real upload ever actually changed the file's
-# own embedded title. Confirmed in production: Chappie, 2026-07-30, still
-# showed "Chappie [www.newpct1.com]" (the source release's own title) after
-# a real upload.
-# ---------------------------------------------------------------------------
-
-def test_apply_mkv_title_best_effort_logs_success(db_conn, monkeypatch):
-    iid = _movie_with_path(db_conn, "/x/movie.mkv")
-    job_id = _queued_job_row(db_conn, iid, path="/x/movie.mkv")
-
-    import emuwarez_uploadrr.services.mkv_title as mkv_title_mod
-    monkeypatch.setattr(
-        mkv_title_mod, "apply_internal_title_update",
-        lambda *a, **k: {"status": "applied", "internal_mkv_title": "Movie.2024-TAG"},
-    )
-
-    uq._apply_mkv_title_best_effort(job_id, iid, conn=db_conn)
-
-    from emuwarez_uploadrr.services.upload_execution import get_upload_job_logs
-    logs = get_upload_job_logs(job_id, conn=db_conn)
-    assert any("Título interno del MKV actualizado" in log["message"] for log in logs["logs"])
-
-
-def test_apply_mkv_title_best_effort_skips_silently_when_blocked(db_conn, monkeypatch):
-    """A non-.mkv file or a missing prepared_path ("blocked") is expected/
-    skippable, not something worth alarming the user about in the log."""
-    iid = _movie_with_path(db_conn, "/x/movie.mkv")
-    job_id = _queued_job_row(db_conn, iid, path="/x/movie.mkv")
-
-    import emuwarez_uploadrr.services.mkv_title as mkv_title_mod
-    monkeypatch.setattr(
-        mkv_title_mod, "apply_internal_title_update",
-        lambda *a, **k: {"status": "blocked", "errors": ["no es .mkv"]},
-    )
-
-    uq._apply_mkv_title_best_effort(job_id, iid, conn=db_conn)
-
-    from emuwarez_uploadrr.services.upload_execution import get_upload_job_logs
-    logs = get_upload_job_logs(job_id, conn=db_conn)
-    assert not any("MKV" in log["message"] for log in logs["logs"])
-
-
-def test_apply_mkv_title_best_effort_logs_warning_on_real_failure(db_conn, monkeypatch):
-    """A genuine mkvpropedit failure must be visible (unlike "blocked" above)
-    but must NOT fail the job — the video itself is fine either way."""
-    iid = _movie_with_path(db_conn, "/x/movie.mkv")
-    job_id = _queued_job_row(db_conn, iid, path="/x/movie.mkv")
-
-    import emuwarez_uploadrr.services.mkv_title as mkv_title_mod
-    monkeypatch.setattr(
-        mkv_title_mod, "apply_internal_title_update",
-        lambda *a, **k: {"status": "error", "errors": ["mkvpropedit exit 1"]},
-    )
-
-    uq._apply_mkv_title_best_effort(job_id, iid, conn=db_conn)
-
-    from emuwarez_uploadrr.services.upload_execution import get_upload_job, get_upload_job_logs
-    logs = get_upload_job_logs(job_id, conn=db_conn)
-    assert any("No se pudo actualizar el título interno del MKV" in log["message"] for log in logs["logs"])
-    # Confirms this really is best-effort: no status column touched.
-    assert get_upload_job(job_id, conn=db_conn)["status"] == "queued"
-
-
-def test_apply_mkv_title_best_effort_survives_exception(db_conn, monkeypatch):
-    iid = _movie_with_path(db_conn, "/x/movie.mkv")
-    job_id = _queued_job_row(db_conn, iid, path="/x/movie.mkv")
-
-    import emuwarez_uploadrr.services.mkv_title as mkv_title_mod
-
-    def _raise(*a, **k):
-        raise RuntimeError("boom")
-    monkeypatch.setattr(mkv_title_mod, "apply_internal_title_update", _raise)
-
-    uq._apply_mkv_title_best_effort(job_id, iid, conn=db_conn)  # must not raise
-
-    from emuwarez_uploadrr.services.upload_execution import get_upload_job_logs
-    logs = get_upload_job_logs(job_id, conn=db_conn)
-    assert any("Error actualizando el título interno del MKV" in log["message"] for log in logs["logs"])
-
-
-def test_run_queued_job_season_applies_mkv_title_per_episode(db_conn, tmp_path, monkeypatch):
-    """The user's explicit requirement: for a season, the internal title
-    must be applied to EVERY episode individually, not just once for the
-    season as a whole (each episode is its own separate MKV file)."""
-    season_id, episode_ids = _seed_season_with_episodes(db_conn, n=3)
-    job_id = _queued_job_row(db_conn, season_id, path="")
-
-    monkeypatch.setattr(uq, "_check_season_integrity", lambda *a, **k: True)
-    monkeypatch.setattr(uq, "_check_generic_upload_preconditions", lambda *a, **k: True)
-
-    import emuwarez_uploadrr.services.season_pack as season_pack_mod
-    monkeypatch.setattr(
-        season_pack_mod, "apply_season_pack",
-        lambda *a, **k: {"status": "applied", "episodes": [], "season_pack_title": "Serie X S01"},
-    )
-    monkeypatch.setattr(uq, "_run_season_remux", lambda job_id, season_id, conn: (True, []))
-
-    calls = []
-    import emuwarez_uploadrr.services.mkv_title as mkv_title_mod
-    monkeypatch.setattr(
-        mkv_title_mod, "apply_internal_title_update",
-        lambda library_item_id, **k: calls.append(library_item_id) or {"status": "blocked"},
-    )
-
-    uq._run_queued_job(job_id)
-
-    assert sorted(calls) == sorted(episode_ids)
-
-
 def test_run_queued_job_skipped_when_job_not_queued_anymore(db_conn, tmp_path, monkeypatch):
     """Simulates the cancel-race: if the job's status isn't 'queued' anymore
     by the time the timer fires (e.g. cancelled a moment earlier), the
@@ -513,7 +401,7 @@ def test_queue_retry_for_job_not_found(db_conn):
 
 
 # ---------------------------------------------------------------------------
-# _write_snapshot / _run_season_remux — persisted nomenclature/remux data for
+# _write_snapshot — persisted nomenclature/remux data for
 # the job detail page (previously discarded once nomenclature.py/mkv_remux.py
 # returned).
 # ---------------------------------------------------------------------------
@@ -594,11 +482,9 @@ def test_season_overrides_column_survives_schema_version_short_circuit(db_conn):
     uq.cancel_queued_timer(result["job"]["id"])
 
 
-def test_run_queued_job_season_forwards_stored_overrides_to_apply(db_conn, tmp_path, monkeypatch):
-    """Regression: apply_season_pack() previously ignored any override —
-    even one the Automático source-disparity gate had already resolved by
-    hand — recomputing the pack from scratch with no override at all, so the
-    real renamed files never reflected the user's choice."""
+def test_run_queued_job_season_forwards_stored_overrides_to_the_plan(db_conn, tmp_path, monkeypatch):
+    """Regression: the pack used to be recomputed with no override at all, so
+    the files never reflected the user's choice."""
     season_id, episode_ids = _seed_season_with_episodes(db_conn, n=1)
     f = tmp_path / "S01E01.mkv"
     f.write_bytes(b"x" * 100)
@@ -619,16 +505,16 @@ def test_run_queued_job_season_forwards_stored_overrides_to_apply(db_conn, tmp_p
     captured = {}
     import emuwarez_uploadrr.services.season_pack as season_pack_mod
 
-    def fake_apply_season_pack(season_id_arg, conn, *, job_id=None,
-                                source_override=None, provider_override=None, tag_override=None,
-                                title_override=None):
+    def fake_plan(season_id_arg, conn=None, *,
+                  source_override=None, provider_override=None, tag_override=None,
+                  title_override=None):
         captured["source_override"] = source_override
         captured["provider_override"] = provider_override
         captured["tag_override"] = tag_override
         captured["title_override"] = title_override
         return {"status": "blocked", "errors": ["stop here on purpose"], "episodes": []}
 
-    monkeypatch.setattr(season_pack_mod, "apply_season_pack", fake_apply_season_pack)
+    monkeypatch.setattr(season_pack_mod, "build_season_pack_plan", fake_plan)
 
     uq._run_queued_job(job_id)
 
@@ -665,37 +551,6 @@ def _seed_season_with_episodes(conn, n=2):
         episode_ids.append(cur.lastrowid)
     conn.commit()
     return season_id, episode_ids
-
-
-def test_run_season_remux_accumulates_per_episode_snapshot(db_conn, monkeypatch):
-    season_id, episode_ids = _seed_season_with_episodes(db_conn, n=2)
-    job_id = _queued_job_row(db_conn, episode_ids[0], path="")
-
-    fake_tracks = [{"id": 0, "type": "audio", "new_name": "Español", "default_after": True}]
-
-    def fake_build_remux_plan(item_id, conn=None):
-        return {"status": "ready", "ordered_tracks": fake_tracks}
-
-    def fake_apply_remux(item_id, *, apply, dry_run, confirmation, overrides, conn, on_progress=None):
-        if on_progress:
-            on_progress(50)
-            on_progress(100)
-        return {"status": "applied", "ordered_tracks": fake_tracks}
-
-    import emuwarez_uploadrr.services.mkv_remux as mkv_remux_mod
-    monkeypatch.setattr(mkv_remux_mod, "build_remux_plan", fake_build_remux_plan)
-    monkeypatch.setattr(mkv_remux_mod, "apply_remux", fake_apply_remux)
-
-    ok, snapshot = uq._run_season_remux(job_id, season_id, conn=db_conn)
-
-    assert ok is True
-    assert len(snapshot) == 2
-    assert all(ep["ordered_tracks"] == fake_tracks for ep in snapshot)
-
-    row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
-    state = json.loads(row["progress_json"])
-    by_key = {p["key"]: p for p in state["phases"]}
-    assert by_key["remux"]["pct"] == 100
 
 
 # ---------------------------------------------------------------------------
@@ -958,8 +813,7 @@ def test_the_reconciliation_actually_runs_when_the_app_boots(db_conn, isolated_d
 # Lo que recibe Uploadrr: el enlace de la carpeta de subidas
 # ---------------------------------------------------------------------------
 
-def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=True,
-                                 resincronizar=lambda *a, **k: None):
+def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=True, origen=None):
     """Pasa un trabajo por toda la cola (con los pasos pesados simulados) y
     devuelve lo que hay en la fila justo cuando se arranca Uploadrr."""
     import errno
@@ -988,6 +842,8 @@ def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=
     db_conn.commit()
 
     visto = {}
+    plan = {"status": "ready", "source_path": str(origen or f), "nombre": "Movie.2024.1080p.mkv",
+            "proposal": None}
 
     def arrancar(job_id, **kw):
         from emuwarez_uploadrr.services.upload_execution import validate_upload_job_start
@@ -997,11 +853,8 @@ def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=
         return {"error": None}
 
     with patch("emuwarez_uploadrr.services.upload_execution.start_upload_job", arrancar), \
-         patch("emuwarez_uploadrr.services.nomenclature.apply_nomenclature_proposal", lambda *a, **k: {"status": "applied"}), \
-         patch("emuwarez_uploadrr.services.library.refresh_arr_and_resync", resincronizar), \
-         patch("emuwarez_uploadrr.services.mkv_remux.modo_pistas", lambda c: "ninguno"), \
-         patch("emuwarez_uploadrr.services.mkv_remux.toca_el_fichero", lambda m: False), \
-         patch("emuwarez_uploadrr.services.upload_queue._apply_mkv_title_best_effort", lambda *a, **k: None):
+         patch("emuwarez_uploadrr.services.nomenclature.build_nomenclature_apply_plan", lambda *a, **k: plan), \
+         patch("emuwarez_uploadrr.services.mkv_remux.modo_pistas", lambda c: "ninguno"):
         uq._run_queued_job(jid)
     # La cola cede su plaza al hilo de Uploadrr, que aquí no existe.
     from emuwarez_uploadrr.services.upload_execution import _upload_concurrency_gate
@@ -1015,27 +868,25 @@ def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=
 @pytest.mark.usefixtures("ficheros_de_mentira")
 def test_uploadrr_recibe_el_enlace_de_la_carpeta_de_subidas(db_conn, tmp_path, monkeypatch):
     """_populate_ready escribía en prepared_path la ruta de la biblioteca justo
-    después de que el paso anterior dejara ahí el enlace."""
+    después de que el paso anterior dejara ahí el enlace. El enlace lleva el
+    nombre de eMuwarez y el original conserva el suyo."""
     visto = _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch)
     assert visto["status"] == "ready"
-    assert Path(visto["prepared_path"]).is_relative_to(visto["uploads"])
+    assert visto["prepared_path"] == str(Path(visto["uploads"]) / "Movie.2024.1080p.mkv")
     assert visto["errores"] == []
+    assert [p.name for p in Path(visto["biblioteca"]).parent.iterdir()] == ["Movie.2024.mkv"]
 
 
 @pytest.mark.usefixtures("ficheros_de_mentira")
-def test_la_resincronizacion_no_cuela_un_fichero_fuera_de_allowed_roots(db_conn, tmp_path, monkeypatch):
-    """La comprobación de integridad es anterior a la resincronización con Arr,
-    que puede cambiar la ruta: el enlace se vuelve a comprobar."""
+def test_no_se_enlaza_un_fichero_fuera_de_allowed_roots(db_conn, tmp_path, monkeypatch):
+    """La ruta que se enlaza se vuelve a comprobar: no tiene por qué ser la
+    misma que pasó la comprobación de integridad."""
     from emuwarez_uploadrr.services import uploadrr_contract
     monkeypatch.setattr(uploadrr_contract, "DEFAULT_ALLOWED_ROOTS", [str(tmp_path / "lib")])
     fuera = tmp_path / "fuera.mkv"
     fuera.write_bytes(b"x" * 100)
 
-    def resincronizar(*a, **k):
-        db_conn.execute("UPDATE library_items SET path = ?, prepared_path = ?", (str(fuera), str(fuera)))
-        db_conn.commit()
-
-    visto = _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, resincronizar=resincronizar)
+    visto = _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, origen=fuera)
     assert "status" not in visto  # Uploadrr no llega a arrancar
     job = db_conn.execute("SELECT status, error_message FROM upload_jobs").fetchone()
     assert job["status"] == "failed" and "allowed_roots" in job["error_message"]
@@ -1051,3 +902,50 @@ def test_un_enlace_simbolico_en_la_carpeta_de_subidas_vale_para_subir(db_conn, t
     assert os.path.islink(visto["prepared_path"])
     assert Path(visto["prepared_path"]).is_relative_to(visto["uploads"])
     assert visto["errores"] == []
+
+
+# ---------------------------------------------------------------------------
+# La fase de nomenclatura falla con el motivo, sin tocar nada
+# ---------------------------------------------------------------------------
+
+@pytest.mark.usefixtures("ficheros_de_mentira")
+@pytest.mark.parametrize("respuesta, esperado", [
+    (RuntimeError("boom"), "Error aplicando la nomenclatura: boom"),
+    ({"status": "blocked", "errors": ["propuesta bloqueada"]}, "No se pudo aplicar la nomenclatura: propuesta bloqueada"),
+])
+def test_un_fallo_al_calcular_el_nombre_para_la_subida(db_conn, tmp_path, monkeypatch, respuesta, esperado):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    job_id = _queued_job_row(db_conn, iid, path=str(f))
+    monkeypatch.setattr(uq, "_check_generic_upload_preconditions", lambda *a, **k: True)
+
+    def plan(*a, **k):
+        if isinstance(respuesta, Exception):
+            raise respuesta
+        return respuesta
+    monkeypatch.setattr("emuwarez_uploadrr.services.nomenclature.build_nomenclature_apply_plan", plan)
+
+    uq._run_queued_job(job_id)
+
+    job = db_conn.execute("SELECT status, error_message FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+    assert job["status"] == "failed" and esperado in job["error_message"]
+    assert [p.name for p in tmp_path.iterdir() if p.suffix == ".mkv"] == ["movie.mkv"]
+
+
+def test_un_fallo_al_calcular_el_pack(db_conn, monkeypatch):
+    season_id, _ids = _seed_season_with_episodes(db_conn, n=1)
+    job_id = _queued_job_row(db_conn, season_id, path="")
+    monkeypatch.setattr(uq, "_check_season_integrity", lambda *a, **k: True)
+    monkeypatch.setattr(uq, "_check_generic_upload_preconditions", lambda *a, **k: True)
+
+    def plan(*a, **k):
+        raise RuntimeError("boom")
+    import emuwarez_uploadrr.services.season_pack as season_pack_mod
+    monkeypatch.setattr(season_pack_mod, "build_season_pack_plan", plan)
+
+    uq._run_queued_job(job_id)
+
+    job = db_conn.execute("SELECT status, error_message FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+    assert job["status"] == "failed"
+    assert "Error aplicando la nomenclatura del pack de temporada: boom" in job["error_message"]

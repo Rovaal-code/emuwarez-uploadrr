@@ -11,11 +11,9 @@ already supports this exact shape (season set, episode=None -> only
 `-season Sxx`, never `-episode`) — nothing there needs to change.
 
 A pack requires every available episode to already live in the same
-directory (the common Sonarr/Radarr convention: one folder per season) —
-that shared folder becomes the pack folder and each episode is renamed in
-place there, same technique nomenclature.py uses for a single file. There
-is no way to unify episodes scattered across different folders into one
-pack; the folder they already share IS the pack folder.
+directory (the common Sonarr/Radarr convention: one folder per season). Nada
+se renombra ahí: upload_queue enlaza cada capítulo, con su nombre de eMuwarez,
+en una carpeta con el título del pack dentro de la de subidas.
 
 The whole season is required to be consistent (same video/audio codec,
 audio languages, resolution, source across every available episode) and
@@ -25,24 +23,17 @@ release. Subtitles are the one exception: they may differ between episodes,
 and aren't required at all when the audio is already in Castilian (see
 _spanish_errors).
 
-SAFETY CONTRACT: identical to filesystem_apply.py — this module never
-moves/deletes a source file, only renames it in place. It only calls the
-existing generic build_safe_rename_plan()/apply_rename_plan() primitives
-once per episode. Confirmation-token gating for a REAL apply happens once,
-server-side, in services/upload_queue.py (same as the single-file
-nomenclature step) — this module has no confirmation token of its own.
+SAFETY CONTRACT: this module never writes to the filesystem: it only plans.
 """
 from __future__ import annotations
 
 import os
 import re
 import threading
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 from ..database import connect, row_to_dict
 from ..models import LocalStatus
-from .filesystem_apply import apply_rename_plan, build_safe_rename_plan
 from .mkv_title import to_filesystem_name
 from .nomenclature import (
     _build_proposed_filename,
@@ -571,11 +562,8 @@ def build_season_pack_plan(
             empty["errors"] = errors
             return empty
 
-        # A season pack needs ONE shared destination folder: every available
-        # episode must already live in the same directory (the common
-        # Sonarr/Radarr convention: one folder per season) — that shared
-        # folder becomes the pack folder and each episode is renamed in
-        # place there, same technique the single-file path uses.
+        # Every available episode must already live in the same directory
+        # (the common Sonarr/Radarr convention: one folder per season).
         # Radarr/Sonarr-reported paths (raw convention, e.g. /data/media/…)
         # need mapping to where this app actually reaches the file (e.g. an
         # SSHFS/NFS mount) for every real filesystem check/operation — same
@@ -597,10 +585,6 @@ def build_season_pack_plan(
             empty["errors"] = errors
             return empty
         common_dir = next(iter(dirs))
-        if not os.access(common_dir, os.W_OK):
-            errors.append(f"La carpeta de los episodios no es escribible: {common_dir}")
-            empty["errors"] = errors
-            return empty
 
         # Per-episode proposals — reused as-is, already compute real
         # codec/audio/provider (Phases 6A/6E), not recomputed here. Progress
@@ -676,8 +660,7 @@ def build_season_pack_plan(
             **pack_fields,
         )
 
-        # Rename-in-place: the episodes' own shared folder IS the pack folder,
-        # nothing gets copied anywhere.
+        # La carpeta de Sonarr: la del pack se crea aparte, en la de subidas.
         pack_folder = common_dir
 
         episodes_out = []
@@ -697,31 +680,21 @@ def build_season_pack_plan(
             ext = ""
             if source_path and os.path.isfile(source_path):
                 ext = os.path.splitext(source_path)[1]
-            destination_path = os.path.join(pack_folder, proposed_filename + ext)
-            # Same raw dirname as the original (Radarr/Sonarr-reported) path —
-            # what library_items.path should be updated to after the in-place
-            # rename, mirroring nomenclature.py's raw_destination_path
-            # convention for a single file, so future path-mapping stays
-            # consistent.
-            raw_destination_path = (
-                os.path.join(os.path.dirname(raw_source_path), proposed_filename + ext)
-                if raw_source_path else None
-            )
             episodes_out.append({
                 "episode_id": ep["id"],
                 "title": ep.get("title"),
                 "episode_number": ep.get("episode_number"),
                 "source_path": source_path,
                 "raw_source_path": raw_source_path,
-                "raw_destination_path": raw_destination_path,
-                "destination_path": destination_path,
+                # Cómo se llama dentro de la carpeta del pack, en la de subidas.
+                "nombre": proposed_filename + ext,
                 "proposed_filename": proposed_filename,
             })
 
         # Un nombre de más de 255 bytes no se puede crear: que se vea ahora, no
         # a mitad de la subida con la mitad de los capítulos renombrados.
         from .nomenclature import error_de_longitud
-        for nombre in [os.path.basename(e["destination_path"]) for e in episodes_out] + [
+        for nombre in [e["nombre"] for e in episodes_out] + [
                 _sanitize_pack_folder_name(season_pack_title)]:
             largo = error_de_longitud(nombre)
             if largo:
@@ -786,120 +759,6 @@ def _sanitize_pack_folder_name(name: str) -> str:
     filesystems reject at the edges of a name."""
     limpio = re.sub(r'[/\\<>:"|?*]', " ", name)
     return re.sub(r"\s+", " ", limpio).strip(" .")
-
-
-def apply_season_pack(
-    season_id: int, conn, *, job_id: int | None = None,
-    source_override: str | None = None, provider_override: str | None = None,
-    tag_override: str | None = None, title_override: str | None = None,
-) -> dict[str, Any]:
-    """Rename every available episode in place to its final pack filename AND
-    record each episode's prepared_path on its own library_items row —
-    mirrors what nomenclature.py::apply_nomenclature_proposal does for a
-    single file right after its own apply_rename_plan() call. Without this
-    UPDATE, mkv_remux._get_target_path (which reads library_items.
-    prepared_path) can't find the file at its new path, and the remux step
-    that runs right after this one in upload_queue.py would either touch the
-    original source file (breaks the never-touch-the-original contract) or
-    fail to find anything to remux.
-
-    No confirmation-token gate here — the caller (upload_queue.py) already
-    gates the whole prep sequence once, same as it does for a single file's
-    apply_nomenclature_proposal call.
-
-    `source_override`/`provider_override`/`tag_override`/`title_override`: the
-    job's stored field overrides (upload_jobs.season_overrides_json), if the
-    user edited Título/Source/Proveedor/Tag by hand in the wizard — previously
-    this function silently ignored them and recomputed everything from scratch,
-    so a chosen override never actually reached the real renamed files."""
-    plan = build_season_pack_plan(
-        season_id, conn=conn,
-        source_override=source_override, provider_override=provider_override,
-        tag_override=tag_override, title_override=title_override,
-    )
-    if plan["status"] != "valid":
-        return {
-            "status": "blocked", "errors": plan["errors"], "episodes": [],
-            "pack_folder": plan.get("pack_folder"),
-            "season_pack_title": plan.get("season_pack_title"),
-        }
-
-    now = datetime.now(timezone.utc).isoformat()
-    episode_results = []
-    any_failed = False
-    total = len(plan["episodes"])
-    for idx, ep in enumerate(plan["episodes"]):
-        if job_id is not None:
-            from .upload_execution import append_upload_log
-            append_upload_log(
-                job_id, "info",
-                f"Aplicando nomenclatura: capítulo {ep.get('episode_number')} ({idx + 1}/{total})…",
-                stream="system", conn=conn,
-            )
-        file_plan = build_safe_rename_plan(ep["source_path"] or "", ep["destination_path"])
-        result = apply_rename_plan(file_plan, dry_run=False)
-        episode_results.append({
-            "episode_id": ep["episode_id"],
-            "title": ep["title"],
-            "destination_path": ep["destination_path"],
-            "status": result["status"],
-            "message": result.get("message"),
-            "errors": result.get("errors", []),
-        })
-        if result["status"] == "applied":
-            # The original file was moved (renamed in place) — `path` must
-            # follow it too (raw convention), same as nomenclature.py's
-            # single-file rename branch.
-            raw_dst = ep.get("raw_destination_path") or ep["destination_path"]
-            conn.execute(
-                "UPDATE library_items SET path = ?, prepared_path = ?, "
-                "nomenclature_applied_at = ?, nomenclature_status = 'Correcta' WHERE id = ?",
-                (raw_dst, ep["destination_path"], now, ep["episode_id"]),
-            )
-        else:
-            any_failed = True
-    conn.commit()
-
-    # La carpeta de Sonarr NO se toca. Antes se renombraba al título del
-    # release, porque torf toma el nombre del torrent del nombre de la carpeta
-    # y esa es la carpeta que recibe quien se descargue el release. Funcionaba,
-    # pero tocaba la biblioteca del usuario —Sonarr es quien gestiona esa
-    # carpeta— y dejaba rutas guardadas apuntando a un sitio que ya no existía,
-    # de donde salían nombres calculados con datos de Radarr/Sonarr en vez de
-    # con el fichero (2026-08-03: "…AAC.cat.spa.jpn.cat.cat.spa.spa").
-    #
-    # Lo que se le entrega a Uploadrr es una carpeta de enlaces creada APARTE
-    # (services/carpeta_subida.py). No se crea aquí sino después del remux
-    # (upload_queue.py): el remux reescribe cada fichero y lo sustituye con
-    # os.replace, así que un enlace creado antes seguiría apuntando a los datos
-    # viejos.
-    pack_folder = plan["pack_folder"]
-    folder_rename_errors: list[str] = []
-
-    generic_errors = folder_rename_errors or (
-        ["Algunos episodios fallaron al renombrar. Ver episodes."] if any_failed else []
-    )
-    return {
-        "status": "failed" if any_failed else "applied",
-        "errors": generic_errors,
-        "episodes": episode_results,
-        "pack_folder": pack_folder,
-        "season_pack_title": plan.get("season_pack_title"),
-        # Full field breakdown, for the job detail page's nomenclature
-        # snapshot — mirrors what apply_nomenclature_proposal()'s "proposal"
-        # already carries for a single file.
-        "series_title": plan.get("series_title"),
-        "year": plan.get("year"),
-        "season_number": plan.get("season_number"),
-        "tmdb_id": plan.get("tmdb_id"),
-        "resolution": plan.get("resolution"),
-        "source": plan.get("source"),
-        "provider": plan.get("provider"),
-        "video_codec": plan.get("video_codec"),
-        "audio_summary": plan.get("audio_summary"),
-        "subtitle_summary": plan.get("subtitle_summary"),
-        "release_tag": plan.get("release_tag"),
-    }
 
 
 def _episode_display_title(conn, ep: dict) -> str:

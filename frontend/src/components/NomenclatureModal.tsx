@@ -97,6 +97,8 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
   const statusClass = proposal ? (STATUS_CLASS[proposal.status] || 'badge req-unknown') : ''
   const canApply = proposal && proposal.status !== 'blocked'
   const alreadyApplied = applyResult?.status === 'applied'
+  // Un archivo de la biblioteca no se renombra nunca: solo los de la carpeta de subidas.
+  const noRenombrable = applyResult?.renombrable === false
 
   return (
     <Modal titulo="Nomenclatura eMuwarez" onClose={onClose}>
@@ -188,14 +190,16 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                   Aplicar nomenclatura
                 </div>
                 {!showApplySection ? (
-                  <button className="btn btn-secondary" onClick={() => setShowApplySection(true)}>
+                  <button className="btn btn-secondary" onClick={() => { setShowApplySection(true); handleDryRun() }}>
                     Mostrar opciones de aplicación
                   </button>
+                ) : noRenombrable ? (
+                  <p className="form-hint">{applyResult?.message}</p>
                 ) : (
                   <>
                     <p style={{ fontSize: '0.85rem', marginBottom: 8, color: 'var(--text-secondary)' }}>
-                      Se renombrará el archivo original con el nombre propuesto (mismo directorio).
-                      Uploadrr no se ejecuta.
+                      El archivo está en la carpeta de subidas: se renombrará con el nombre propuesto
+                      (mismo directorio). Uploadrr no se ejecuta.
                     </p>
                     <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                       <button
@@ -247,7 +251,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                     {applyError}
                   </p>
                 )}
-                {applyResult && (
+                {applyResult && !noRenombrable && (
                   <div style={{ marginTop: 8 }}>
                     <div style={{ marginBottom: 4 }}>
                       <span
@@ -293,7 +297,8 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
         )}
 
         <div className="detail-panel__section" style={{ marginTop: 16, padding: '8px 12px', background: 'color-mix(in srgb, var(--color-warning-soft) 8%, transparent)', borderRadius: 6, fontSize: '0.85rem' }}>
-          Seguridad: el archivo original nunca se renombra. Uploadrr y mkvpropedit no se ejecutan.
+          Seguridad: los archivos de la biblioteca nunca se renombran, solo los de la carpeta de subidas.
+          Uploadrr y mkvpropedit no se ejecutan.
         </div>
       </div>
       <div className="detail-panel__actions" style={{ padding: '12px 16px' }}>

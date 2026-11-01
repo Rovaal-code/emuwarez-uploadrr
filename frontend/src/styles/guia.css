@@ -1,0 +1,150 @@
+/* Guía (GuidePage): estilos que antes iban en línea. Prefijo guia-.
+   Se importa el último en main.tsx. Las reglas que retocan una celda de
+   `.data-table` o el `.btn.btn-ghost` de las pestañas llevan el selector tan
+   específico como la regla base (`.data-table td`, `.hud-app .btn-ghost` y su
+   :hover ganarían a una clase suelta). */
+
+/* Página */
+.guia-pagina {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.guia-cabecera { flex-shrink: 0; }
+.guia-resumen {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+/* Fila de pestañas: una celda por sección */
+.detail-card.guia-tira {
+  border-radius: 10px;
+  overflow-x: auto;
+  margin-top: 20px;
+  flex-shrink: 0;
+}
+.data-table.guia-tira-tabla {
+  table-layout: fixed;
+  width: 100%;
+}
+.data-table td.guia-tira-celda {
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+.btn.guia-pestana {
+  width: 100%;
+  height: 100%;
+  min-height: 64px;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  padding: 12px 14px;
+  white-space: normal;
+  border-bottom: 2px solid transparent;
+}
+/* El :hover de `.hud-app .btn-ghost` repinta todo el borde: se repite aquí
+   para que la raya inferior no cambie al pasar el ratón. */
+.btn.guia-pestana:hover:not(:disabled) { border-bottom-color: transparent; }
+.btn.guia-pestana.guia-pestana-activa,
+.btn.guia-pestana.guia-pestana-activa:hover:not(:disabled) {
+  font-weight: 700;
+  background: var(--bg-card);
+  color: var(--text-accent);
+  border-bottom-color: var(--text-accent);
+}
+
+/* Panel con el contenido de la sección */
+.detail-card.guia-panel {
+  border-radius: 10px;
+  margin-top: 16px;
+  padding: 16px 18px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.guia-panel-titulo {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+.guia-panel-cuerpo {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Contenido de las secciones */
+.guia-mono-bloque {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: color-mix(in srgb, var(--overlay-dark) 20%, transparent);
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.guia-desborde-x { overflow-x: auto; }
+.data-table.guia-tabla { font-size: 12.5px; }
+.guia-mono { font-family: var(--font-mono); }
+.guia-nowrap { white-space: nowrap; }
+.guia-campo { font-weight: 600; white-space: nowrap; }
+.guia-rejilla { display: grid; gap: 6px; }
+
+.guia-texto { font-size: 12.5px; }
+.guia-texto-inicio { margin-top: 0; }
+.guia-texto-tras-bloque { margin-top: 10px; margin-bottom: 0; }
+.guia-texto-pie { margin-top: 18px; margin-bottom: 0; }
+.guia-subtitulo {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+.guia-nota {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+.guia-h4 { font-size: 13px; margin: 0 0 6px; }
+.guia-h4-sep { margin-top: 18px; }
+.guia-lista {
+  font-size: 12.5px;
+  margin-top: 0;
+  padding-left: 18px;
+}
+.guia-lista-reglas {
+  margin: 0;
+  line-height: 1.8;
+}
+.guia-ejemplos-audio {
+  font-size: 12px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Veredicto de una condición de subida */
+.guia-veredicto {
+  font-weight: 600;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.guia-veredicto-ok { color: var(--color-available); }
+.guia-veredicto-blocked { color: var(--color-error); }
+.guia-veredicto-warn { color: var(--color-warning); }

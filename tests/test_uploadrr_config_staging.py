@@ -648,3 +648,50 @@ def test_una_subida_que_se_une_no_reescribe_si_los_ajustes_no_cambiaron(tmp_path
     assert len(escrituras) == 1
     ue._release_staged_config(1, primera)
     ue._release_staged_config(2, segunda)
+
+
+# --- La imagen trae config.yaml y config.yaml.bak como enlaces a /config -----------
+
+def _config_con_enlaces(tmp_path):
+    """Como la imagen: data/ con enlaces hacia otro directorio. El .bak empieza roto."""
+    estado = tmp_path / "estado"
+    estado.mkdir()
+    (estado / "config.yaml").write_text("DEFAULT:\n  tmdb: ''\nSCREENS:\n  per_episode: 3\n", encoding="utf-8")
+    data = tmp_path / "Uploadrr" / "data"
+    data.mkdir(parents=True)
+    (data / "config.yaml").symlink_to(estado / "config.yaml")
+    (data / "config.yaml.bak").symlink_to(estado / "config.yaml.bak")
+    return data / "config.yaml", estado
+
+
+def test_preparar_y_restaurar_el_config_escribe_en_el_destino_del_enlace(tmp_path):
+    """Sustituir el enlace con os.replace falla con EPERM para un usuario normal
+    (directorio con sticky, enlace de root): se escribe en el fichero real."""
+    config, estado = _config_con_enlaces(tmp_path)
+    original = (estado / "config.yaml").read_bytes()
+
+    write_staged_config(config, ["DEFAULT:", "  tmdb: 'CLAVE'"])
+
+    assert config.is_symlink() and config.with_suffix(".yaml.bak").is_symlink()
+    assert b"CLAVE" in (estado / "config.yaml").read_bytes()
+    assert (estado / "config.yaml.bak").read_bytes() == original
+
+    assert restore_config_from_backup(config) is True
+
+    assert config.is_symlink()
+    assert (estado / "config.yaml").read_bytes() == original
+    assert sorted(p.name for p in estado.iterdir()) == ["config.yaml", "config.yaml.bak"]
+    assert sorted(p.name for p in config.parent.iterdir()) == ["config.yaml", "config.yaml.bak"]
+
+
+def test_restaurar_lo_que_dejo_una_subida_muerta_tambien_respeta_el_enlace(tmp_path):
+    config, estado = _config_con_enlaces(tmp_path)
+    backup_config(config)
+    original = (estado / "config.yaml").read_bytes()
+    (estado / "config.yaml").write_text("DEFAULT:\n  tmdb: 'CLAVE_REAL'\n", encoding="utf-8")
+
+    from emuwarez_uploadrr.services.uploadrr_config_staging import restore_stale_config
+    assert restore_stale_config(config) is True
+
+    assert config.is_symlink()
+    assert (estado / "config.yaml").read_bytes() == original

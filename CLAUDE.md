@@ -107,5 +107,6 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 
 ## Plan
 
-The full code review and the phased improvement plan live in `tmp/analisi/` (gitignored, on Gabriel's PC
-only): `PLA.md` for the plan, `ESTAT.md` for what is done and what is next.
+The phased improvement plan, what is done and what comes next live in `docs/PLAN.md`. Read it before starting plan
+work and update it in the same PR that finishes a step. The older detailed review notes are in `tmp/analisi/`
+(gitignored, on Gabriel's PC only).

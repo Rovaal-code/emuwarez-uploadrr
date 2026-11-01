@@ -36,11 +36,11 @@ const PASSWORD_RULES: { label: string; test: (p: string) => boolean }[] = [
 
 function PasswordChecklist({ password }: { password: string }) {
   return (
-    <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', display: 'grid', gap: 4 }}>
+    <ul className="setup-reglas">
       {PASSWORD_RULES.map(rule => {
         const ok = rule.test(password)
         return (
-          <li key={rule.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: ok ? 'var(--color-available)' : 'var(--text-muted)' }}>
+          <li key={rule.label} className={ok ? 'setup-regla setup-regla-ok' : 'setup-regla'}>
             <span>{ok ? '✓' : '○'}</span>
             <span>{rule.label}</span>
           </li>
@@ -75,12 +75,13 @@ function StepTitleIcon({ step }: { step: string }) {
     // icon (pages/ajustes/config/AccountCard.tsx) — this step IS that same card (creating/
     // naming the admin account), so it should read as the same thing, not
     // as the general Configuración gear.
+    // IconoUsuario solo admite el color como objeto de estilo.
     return <IconoUsuario size={20} style={{ color: 'var(--text-accent)' }} />
   }
   if (step === 'emu') return <ServiceIcon type="emu" size={20} />
   if (step === 'instances') {
     return (
-      <span style={{ display: 'inline-flex', gap: 6 }}>
+      <span className="setup-iconos-par">
         <ServiceIcon type="radarr" size={20} />
         <ServiceIcon type="sonarr" size={20} />
       </span>
@@ -491,14 +492,14 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       <div className="setup-wizard">
         <div className="wizard-logo">
           <ServiceIcon type="emu" size={40} />
-          <div className="wizard-logo-title" style={{ marginTop: 8 }}>eMuwarez Uploadrr</div>
+          <div className="wizard-logo-title setup-mt-8">eMuwarez Uploadrr</div>
           <div className="wizard-logo-sub">Asistente de configuración inicial</div>
         </div>
 
         <StepsBar current={step} steps={SETUP_STEPS} />
 
         <div className="wizard-card">
-          <div className="wizard-step-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="wizard-step-title setup-titulo-paso">
             <StepTitleIcon step={step} />
             {stepIdx + 1}. {SETUP_STEP_LABELS[step]}
           </div>
@@ -506,7 +507,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {/* Welcome step */}
           {step === 'welcome' && (
             <>
-              <div className="wizard-step-desc" style={{ marginBottom: 12 }}>
+              <div className="wizard-step-desc setup-mb-12">
                 eMuwarez Uploadrr es una aplicación que:
               </div>
               <div className="wizard-feature-grid">
@@ -535,7 +536,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 Crea la cuenta de administrador local. La contraseña debe tener al menos 12 caracteres,
                 una mayúscula, una minúscula, un número y un símbolo.
               </div>
-              {adminCreated && <div className="alert alert-success" style={{ marginBottom: 14 }}>Admin creado. Iniciando sesión…</div>}
+              {adminCreated && <div className="alert alert-success setup-mb-14">Admin creado. Iniciando sesión…</div>}
               <div className="wizard-fields">
                 <div className="form-group">
                   <label className="form-label">Usuario</label>
@@ -550,13 +551,13 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <label className="form-label">Confirmar contraseña</label>
                   <input className="form-input" type="password" placeholder="Repite la contraseña" value={adminPass2} onChange={e => setAdminPass2(e.target.value)} />
                   {adminPass2 && (
-                    <span style={{ fontSize: 12.5, color: adminPass === adminPass2 ? 'var(--color-available)' : 'var(--color-error)', marginTop: 6, display: 'inline-block' }}>
+                    <span className={adminPass === adminPass2 ? 'setup-coinciden setup-coinciden-ok' : 'setup-coinciden'}>
                       {adminPass === adminPass2 ? '✓ Las contraseñas coinciden' : '✗ Las contraseñas no coinciden'}
                     </span>
                   )}
                 </div>
               </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleAdmin} disabled={loading || !adminUser || !adminPasswordValid || adminPass !== adminPass2}>
@@ -572,13 +573,12 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-step-desc">Credenciales de eMuwarez.</div>
               <div className="wizard-fields">
                 <div className="form-group">
-                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <label className="form-label setup-label-enlace">
                     API key eMuwarez
                     <a
                       href={EMU_URL}
-                      target="_blank" rel="noreferrer" className="hover-link"
+                      target="_blank" rel="noreferrer" className="hover-link setup-enlace-icono"
                       title="Abrir eMuwarez"
-                      style={{ display: 'inline-flex' }}
                     >
                       <ExternalLinkButtonIcon />
                     </a>
@@ -596,19 +596,19 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <span className="form-hint">El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario).</span>
                 </div>
               </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
+              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              <div className="setup-fila-prueba">
                 <button className="btn btn-secondary btn-sm" onClick={handleTestEmu} disabled={emuTesting || loading || emuCooldown.active} type="button">
                   {emuTesting ? 'Probando…' : emuCooldown.active ? `Espera ${emuCooldown.remaining}s` : 'Probar conexión'}
                 </button>
                 {emuTestResult && (
-                  <span style={{ fontSize: 12, color: testResultColor(emuTestResult) }}>
+                  <span className="setup-resultado" style={{ color: testResultColor(emuTestResult) }}>
                     {testResultLabel(emuTestResult)}
                   </span>
                 )}
               </div>
               {!emuCanContinue && (
-                <div className="alert alert-error" style={{ marginTop: 10 }}>
+                <div className="alert alert-error setup-mt-10">
                   Necesitas una key de eMuwarez válida para continuar: pulsa “Probar conexión” y espera a
                   que confirme que funciona.
                 </div>
@@ -627,7 +627,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
             <>
               <div className="wizard-step-desc">Añade tus instancias Radarr y/o Sonarr.</div>
               {instances.length > 0 && (
-                <div style={{ marginBottom: 14 }}>
+                <div className="setup-mb-14">
                   {instances.map(inst => (
                     <div key={inst.id} className="wizard-instance">
                       <div className="instance-card-info">
@@ -645,31 +645,26 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   ))}
                 </div>
               )}
-              <div className="wizard-fields" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
-                <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+              <div className="wizard-fields setup-caja">
+                <div className="setup-caja-titulo">
                   Añadir instancia
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                <div className="setup-dos-col setup-mb-12">
                   {(['radarr', 'sonarr'] as const).map(t => (
                     <div
                       key={t}
                       onClick={() => setInstDraft(p => ({ ...p, type: t }))}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                        border: `1.5px solid ${instDraft.type === t ? 'var(--text-accent)' : 'var(--border-input)'}`,
-                        borderRadius: 8, padding: '10px 12px',
-                        background: instDraft.type === t ? 'var(--bg-card-hover)' : 'var(--bg-input)',
-                      }}
+                      className={instDraft.type === t ? 'setup-tipo setup-tipo-activo' : 'setup-tipo'}
                     >
                       <ServiceIcon type={t} size={24} />
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{t === 'radarr' ? 'Radarr' : 'Sonarr'}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t === 'radarr' ? 'Películas' : 'Series'}</div>
+                        <div className="setup-tipo-nombre">{t === 'radarr' ? 'Radarr' : 'Sonarr'}</div>
+                        <div className="setup-tipo-sub">{t === 'radarr' ? 'Películas' : 'Series'}</div>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="setup-dos-col">
                   <div className="form-group">
                     <label className="form-label">Nombre</label>
                     <input className="form-input" placeholder={instDraft.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={instDraft.name ?? ''} onChange={e => setInstDraft(p => ({ ...p, name: e.target.value }))} />
@@ -683,7 +678,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                     <input className="form-input" type="password" placeholder="API key" value={instDraft.api_key ?? ''} onChange={e => setInstDraft(p => ({ ...p, api_key: e.target.value }))} />
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+                <div className="setup-checks">
                   <label className="checkbox-label">
                     <input type="checkbox" checked={instDraft.is_4k ?? false} onChange={e => setInstDraft(p => ({ ...p, is_4k: e.target.checked }))} /> 4K
                   </label>
@@ -691,8 +686,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                     <input type="checkbox" checked={instDraft.is_anime ?? false} onChange={e => setInstDraft(p => ({ ...p, is_anime: e.target.checked }))} /> Anime
                   </label>
                 </div>
-                {instError && <div className="form-error" style={{ marginTop: 8 }}>{instError}</div>}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                {instError && <div className="form-error setup-mt-8">{instError}</div>}
+                <div className="setup-fila-acciones">
                   <button className="btn btn-secondary btn-sm" onClick={addInstance} disabled={instTesting} type="button">
                     {instTesting ? 'Comprobando…' : '+ Añadir instancia'}
                   </button>
@@ -700,38 +695,38 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                     {instTesting ? 'Probando…' : 'Probar conexión'}
                   </button>
                   {instTestResult && (
-                    <span style={{ fontSize: 12, color: testResultColor(instTestResult) }}>
+                    <span className="setup-resultado" style={{ color: testResultColor(instTestResult) }}>
                       {testResultLabel(instTestResult)}
                     </span>
                   )}
                 </div>
                 {instTestResult?.ok && instTestResult.details?.content_visible === false && (
-                  <div className="alert alert-error" style={{ marginTop: 10 }}>
+                  <div className="alert alert-error setup-mt-10">
                     ⚠ La conexión funciona, pero eMuwarez Uploadrr <strong>no puede ver el contenido</strong> de
                     esta instancia: sus carpetas raíz no están accesibles desde aquí (probablemente el volumen de
                     medios no está montado igual que en Radarr/Sonarr).
                     {Array.isArray(instTestResult.details?.root_folders) && (
-                      <ul style={{ margin: '6px 0 0 18px', fontSize: 12 }}>
+                      <ul className="setup-raices">
                         {(instTestResult.details.root_folders as { path: string; exists: boolean }[]).map((r, i) => (
-                          <li key={i} style={{ color: r.exists ? 'var(--color-available)' : 'var(--color-missing)' }}>
+                          <li key={i} className={r.exists ? 'setup-raiz-ok' : 'setup-raiz-falta'}>
                             {r.exists ? '✓' : '✗'} {r.path}
                           </li>
                         ))}
                       </ul>
                     )}
-                    <div style={{ marginTop: 6 }}>Sin acceso a los ficheros no se podrá leer el mediainfo ni subir.</div>
-                    <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
+                    <div className="setup-mt-6">Sin acceso a los ficheros no se podrá leer el mediainfo ni subir.</div>
+                    <label className="checkbox-label setup-bloque">
                       <input type="checkbox" checked={instPathAckSkip} onChange={e => setInstPathAckSkip(e.target.checked)} /> Entiendo, continuar igualmente
                     </label>
                   </div>
                 )}
               </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
               {!instancesCanContinue && (
-                <div className="alert alert-error" style={{ marginTop: 10 }}>
+                <div className="alert alert-error setup-mt-10">
                   Todavía no has añadido ninguna instancia. Si continúas sin añadir ninguna, la biblioteca
                   no tendrá contenido que cruzar hasta que la corrijas más tarde en Configuración.
-                  <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
+                  <label className="checkbox-label setup-bloque">
                     <input type="checkbox" checked={instAckSkip} onChange={e => setInstAckSkip(e.target.checked)} /> Entiendo, continuar sin añadir instancias
                   </label>
                 </div>
@@ -749,11 +744,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {step === 'tmdb' && (
             <>
               <div className="wizard-step-desc">Los títulos y pósters vienen de Radarr/Sonarr, no de aquí. La API key de TMDb se usa para tres cosas concretas:</div>
-              <div className="alert" style={{ marginBottom: 14, background: 'color-mix(in srgb, var(--text-accent) 8%, transparent)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
-                <div style={{ marginBottom: 6 }}>
+              <div className="alert setup-nota">
+                <div className="setup-mb-6">
                   <strong>1. Traducir títulos de series al español:</strong> según la guía de eMuwarez, si el título existe en español debe usarse en español. Sonarr toma los títulos de TVDB, a menudo en inglés («Los Serrano» → «The Serrano»); con la key se traducen, como ya hace Radarr con las películas.
                 </div>
-                <div style={{ marginBottom: 6 }}>
+                <div className="setup-mb-6">
                   <strong>2. Detectar el proveedor al subir:</strong> si se detecta que el Source es <strong>WEB-DL</strong> sin proveedor, se consulta en TMDb (según la región) y se propone el de mayor prioridad.
                 </div>
                 <div>
@@ -762,20 +757,19 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               <div className="wizard-fields">
                 <div className="form-group">
-                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <label className="form-label setup-label-enlace">
                     API key TMDb
                     <a
                       href="https://www.themoviedb.org/settings/api"
-                      target="_blank" rel="noreferrer" className="hover-link"
+                      target="_blank" rel="noreferrer" className="hover-link setup-enlace-icono"
                       title="Abrir la página de API de TMDb"
-                      style={{ display: 'inline-flex' }}
                     >
                       <ExternalLinkButtonIcon />
                     </a>
                   </label>
                   <input className="form-input" value={tmdbKey} onChange={e => { setTmdbKey(e.target.value); setTmdbTestResult(null) }} placeholder="API key de TMDb" />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                    <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer" className="hover-link" style={{ fontSize: 11.5 }}>
+                  <div className="setup-enlace-fila">
+                    <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer" className="hover-link setup-t115">
                       Cómo obtener una API KEY en TMDB
                     </a>
                     <InfoIcon text="1. Crea una cuenta gratuita en themoviedb.org. 2. Ve a Configuración → API (el enlace de arriba). 3. Solicita una key de tipo 'Developer' rellenando el formulario (uso personal/no comercial). 4. Copia la 'Clave de API (v3 auth)' y pégala aquí." />
@@ -786,24 +780,24 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <select className="form-input form-select" value={tmdbRegion} onChange={e => setTmdbRegion(e.target.value)}>
                     {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
                   </select>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  <div className="setup-pie setup-muted">
                     Región usada para detectar en qué plataforma (proveedor) está disponible cada título.
                   </div>
                 </div>
               </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
+              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              <div className="setup-fila-prueba">
                 <button className="btn btn-secondary btn-sm" onClick={handleTestTmdb} disabled={tmdbTesting || loading} type="button">
                   {tmdbTesting ? 'Probando…' : 'Probar conexión'}
                 </button>
                 {tmdbTestResult && (
-                  <span style={{ fontSize: 12, color: testResultColor(tmdbTestResult) }}>
+                  <span className="setup-resultado" style={{ color: testResultColor(tmdbTestResult) }}>
                     {testResultLabel(tmdbTestResult)}
                   </span>
                 )}
               </div>
               {!tmdbCanContinue && (
-                <div className="alert alert-error" style={{ marginTop: 10 }}>
+                <div className="alert alert-error setup-mt-10">
                   Necesitas una key de TMDb válida para continuar: pulsa “Probar conexión” y espera a
                   que confirme que funciona. Esta integración es obligatoria, así que aquí no se puede
                   saltar el paso.
@@ -842,17 +836,17 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <input type="password" className="form-input" value={qbitPass} onChange={e => setQbitPass(e.target.value)} placeholder="Contraseña del WebUI" autoComplete="new-password" />
                 </div>
               </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
+              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              <div className="setup-fila-prueba">
                 <button className="btn btn-secondary btn-sm" onClick={handleTestQbit} disabled={qbitTesting || loading || !qbitUrl.trim()} type="button">
                   {qbitTesting ? 'Probando…' : 'Probar conexión'}
                 </button>
                 {qbitTestResult && (
-                  <span style={{ fontSize: 12, color: testResultColor(qbitTestResult) }}>{testResultLabel(qbitTestResult)}</span>
+                  <span className="setup-resultado" style={{ color: testResultColor(qbitTestResult) }}>{testResultLabel(qbitTestResult)}</span>
                 )}
               </div>
               {!qbitUrl.trim() && (
-                <div className="alert alert-error" style={{ marginTop: 10 }}>
+                <div className="alert alert-error setup-mt-10">
                   Sin qBittorrent configurado, los torrents no se añadirán automáticamente a su cola tras
                   subir: tendrás que hacerlo a mano. Podrás configurarlo más tarde en Configuración.
                 </div>
@@ -876,7 +870,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 icono para reconocerlo de un vistazo.
               </div>
               <ProviderPriorityPicker order={nomProviderOrder} onChange={handleNomProviderOrderChange} linkIcons={false} />
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleProviders} disabled={loading}>
@@ -898,36 +892,37 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               const isDefault = h.id === 'imgbox'
               const t = imgTest[h.id]
               return (
-                <div style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="setup-host">
+                  <div className="setup-host-fila">
                     {asa ? (
                       <HoverTitle
                         as="span"
                         tip="Arrastra para reordenar, o usa las flechas del teclado"
                         {...asa}
-                        className="drag-handle"
-                        style={{ ...asa.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                        className="drag-handle setup-asa"
+                        style={asa.style}
                       ><DragHandleIcon /></HoverTitle>
-                    ) : <span style={{ width: 16 }} />}
+                    ) : <span className="setup-hueco" />}
                     <input type="checkbox" aria-label={`Usar ${h.label}`} checked={enabled || isDefault} disabled={isDefault}
                       onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [h.id, ...p])} />
                     <Favicon domain={domainOf(h.url)} src={h.favicon} size={14} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={14} />} />
-                    <span style={{ fontSize: 13 }}>{h.label}</span>
+                    <span className="setup-t13">{h.label}</span>
                     {isDefault && <span className="badge status-available">por defecto</span>}
                     {h.needs_key && <span className="badge nom-na">API key</span>}
                     {(enabled || isDefault) && (
-                      <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
+                      <button className="btn btn-secondary btn-sm setup-probar"
                         onClick={() => handleTestImghost(h.id)} disabled={imgTesting === h.id} type="button">
                         {imgTesting === h.id ? 'Probando…' : 'Probar'}
                       </button>
                     )}
                   </div>
                   {h.needs_key && enabled && (
-                    <input type="password" className="form-input" style={{ marginTop: 6 }} autoComplete="new-password"
+                    <input type="password" className="form-input setup-mt-6" autoComplete="new-password"
                       value={imgKeys[h.id] ?? ''} onChange={e => setImgKeys(p => ({ ...p, [h.id]: e.target.value }))}
                       placeholder={`API key de ${h.label}`} />
                   )}
-                  {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+                  {/* El color lo da el resultado de la prueba. */}
+                  {t && <div className="setup-pie" style={{ color: testResultColor(t) }}>{testResultLabel(t)}</div>}
                 </div>
               )
             }
@@ -936,12 +931,12 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-step-desc">
                 Dónde suben las capturas que acompañan al torrent. Se prueban en este orden: arrastra los activos para reordenarlos, o usa las flechas desde su asa. <strong>imgbox</strong>, sin key, va siempre el último.
               </div>
-              <div className="wizard-fields" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="wizard-fields setup-gap-8">
                 <SortableList etiqueta={id => imgAvailable.find(h => h.id === id)?.label ?? id} ids={activos} onChange={setImgEnabled} gap={8}
                   renderRow={(id, _idx, { handleProps }) => fila(id, handleProps)} />
                 {resto.map(h => <div key={h.id}>{fila(h.id)}</div>)}
               </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleImghosts} disabled={loading}>
@@ -963,7 +958,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 desde Configuración. Si has añadido instancias Radarr/Sonarr, la primera sincronización se
                 ejecutará desde el dashboard.
               </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleComplete} disabled={loading}>

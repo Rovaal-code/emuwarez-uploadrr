@@ -428,9 +428,11 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
         if (!alive) return
         setSources(srcResp.sources)
         setProviders(prvResp.providers)
-        const cache = new Map<number, Awaited<ReturnType<typeof getNomenclatureFields>>>()
+        // Lo que ya se generó bien se queda (ver reintentarNomenclatura).
+        const cache = new Map(episodeFieldsById)
         for (let i = 0; i < episodeQueue.length; i++) {
           if (!alive) return
+          if (cache.has(episodeQueue[i])) continue
           setEpisodePrepIndex(i)
           try {
             cache.set(episodeQueue[i], await getNomenclatureFields(episodeQueue[i]))
@@ -460,10 +462,11 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   }, [step, targetIsSeason, episodeQueue, intentoPrecarga])
 
   // «Reintentar» del paso 1. Con varios capítulos, loadFields solo traería el que se ve: se repite la
-  // precarga de todos, sin la caché, para que no quede guardado el capítulo que falló.
+  // precarga, sin los que fallaron, para que no quede guardado su fallo. Los buenos no se vuelven a pedir:
+  // un fallo nuevo en uno de ellos lo dejaría bloqueado y sin sus ediciones.
   const reintentarNomenclatura = () => {
     if (episodeQueue.length <= 1) { void loadFields(); return }
-    setEpisodeFieldsById(new Map())
+    setEpisodeFieldsById(prev => new Map([...prev].filter(([, r]) => !r.blocked)))
     setIntentoPrecarga(n => n + 1)
   }
 

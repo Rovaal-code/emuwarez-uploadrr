@@ -530,6 +530,8 @@ describe('fallos de red y respuestas tardías', () => {
       await elegir(selectorCapitulo(), '21')
       await esperar(() => texto().includes('Serie WEB-DL AMZN [G21]'))
       expect(texto()).not.toContain('Sin conexión')
+      // El que salió bien no se vuelve a pedir: un fallo nuevo lo dejaría bloqueado.
+      expect(m(nom.getNomenclatureFields).mock.calls.filter(c => c[0] === 22)).toHaveLength(1)
     })
 
     // El entorno falla la primera vez y responde bien después.

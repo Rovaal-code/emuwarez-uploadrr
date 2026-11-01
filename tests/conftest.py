@@ -87,10 +87,17 @@ def _sin_manifiesto_de_version(monkeypatch):
 def ficheros_de_mentira(monkeypatch):
     """Para las pruebas que crean un .mkv con bytes cualquiera. Con mkvmerge y
     mediainfo instalados (la imagen de Docker), un fichero así ya no pasa la
-    comprobación de integridad; aquí se lee como en CI, sin mkvmerge y con un
-    MediaInfo que no encuentra nada."""
-    from emuwarez_uploadrr.services import media_info_service, mkv_remux
+    comprobación de integridad; aquí se lee sin mkvmerge y con un MediaInfo
+    que no encuentra nada (lo que contesta el real a esos bytes), esté o no
+    instalado."""
+    from emuwarez_uploadrr.services import media_info_service, media_probe, mkv_remux
     monkeypatch.setattr(mkv_remux, "check_mkvmerge_available", lambda: {"available": False, "path": None})
+    monkeypatch.setattr(media_info_service, "mediainfo_available", lambda: True)
+
+    def _mediainfo_sin_pistas(path):
+        return {"media": {"@ref": str(path), "track": [{"@type": "General", "FileSize": str(path.stat().st_size)}]}}
+
+    monkeypatch.setattr(media_probe, "run_mediainfo_json", _mediainfo_sin_pistas)
     monkeypatch.setattr(media_info_service, "read_media_info_summary", lambda path: {
         "video_codec": None, "audio_codec": None, "audio_languages": None, "subtitle_languages": None})
 

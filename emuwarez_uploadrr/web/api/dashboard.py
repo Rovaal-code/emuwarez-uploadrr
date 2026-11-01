@@ -51,14 +51,6 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
         except Exception:
             pass
 
-        # Phase 8C: operational queue counts
-        try:
-            from emuwarez_uploadrr.services.operational_queue import get_dashboard_queue_counts
-            queue_counts = get_dashboard_queue_counts(conn)
-            summary.update(queue_counts)
-        except Exception:
-            pass
-
     return DashboardSummaryResponse(**summary)
 
 

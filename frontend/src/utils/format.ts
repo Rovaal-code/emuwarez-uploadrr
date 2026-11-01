@@ -69,19 +69,6 @@ export function formatDateTimeSeconds(dateStr: string | null | undefined): strin
   }
 }
 
-export function formatDateShort(dateStr: string | null | undefined): string {
-  if (!dateStr) return SIN_DATO
-  try {
-    return parseServerDate(dateStr).toLocaleString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  } catch {
-    return dateStr
-  }
-}
-
 // Relative "hace X" label in Spanish (for the requests table).
 export function timeAgo(dateStr: string | null | undefined): string {
   if (!dateStr) return SIN_DATO

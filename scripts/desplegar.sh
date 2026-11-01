@@ -209,6 +209,8 @@ if [[ "$PRUEBA" -eq 1 ]]; then
   exit 0
 fi
 subir "$COMMIT"
+# Otra vez: si durante la construcción salió una versión más nueva, :latest y :edge no vuelven atrás.
+"$PYTHON" scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
 # Como el workflow: la etiqueta de git antes que :X.Y.Z y :latest, y el manifiesto lo último.
 etiquetar
 subir "$VERSION"

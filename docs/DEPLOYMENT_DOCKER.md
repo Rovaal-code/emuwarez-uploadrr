@@ -85,7 +85,7 @@ no compila nada. Lo que hay que mirar:
 
 | Clave | En el repo | Para qué |
 |---|---|---|
-| `image` | `ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}` | `latest` es la última imagen publicada. Para quedarte en una versión o volver atrás, `EMUWAREZ_UPLOADRR_TAG` acepta también `X.Y.Z` o el SHA de un commit de `master`: ver [Versiones y volver atrás](../README.md#versiones-y-volver-atrás). |
+| `image` | `ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}` | `latest` es la última imagen publicada. Para quedarte en una versión o volver atrás, `EMUWAREZ_UPLOADRR_TAG` acepta también `X.Y.Z` o el SHA del commit de una versión: ver [Versiones y volver atrás](../README.md#versiones-y-volver-atrás). |
 | `init` | `true` | Un init como proceso 1 recoge los procesos que quedan sueltos al cancelar una subida (ffmpeg, mkbrr...). |
 | `ports` | `${EMUWAREZ_UPLOADRR_PORT:-9494}:9494` | Interfaz web y API. |
 | `user` | `${PUID:-1000}:${PGID:-1000}` | El usuario con el que corre todo (sección 3). |

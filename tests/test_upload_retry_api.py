@@ -108,7 +108,7 @@ def test_retry_endpoint_dry_run_no_execution(client, auth_headers, isolated_db):
     jid = _insert_job_db(conn, status="failed")
     conn.close()
 
-    with patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen") as mock_popen:
+    with patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen") as mock_popen:
         resp = client.post(f"/api/uploads/{jid}/retry", headers=auth_headers,
                            json={"dry_run": True, "start": False, "confirmation": None})
 
@@ -143,7 +143,7 @@ def test_retry_endpoint_with_confirmation_mocked(client, auth_headers, isolated_
     conn.close()
 
     mock_proc = _make_mock_proc(returncode=0)
-    patcher = patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen", return_value=mock_proc)
+    patcher = patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen", return_value=mock_proc)
     patcher.start()
     try:
         resp = client.post(f"/api/uploads/{jid}/retry", headers=auth_headers,

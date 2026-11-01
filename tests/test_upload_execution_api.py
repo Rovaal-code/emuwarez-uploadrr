@@ -136,7 +136,7 @@ def test_start_wrong_confirmation_returns_400(client, auth_headers, db_conn):
     assert resp.status_code == 400
 
 
-@patch("emuwarez_uploadrr.services.upload_execution._run_uploadrr_subprocess")
+@patch("emuwarez_uploadrr.services.upload_execution.ejecucion._run_uploadrr_subprocess")
 def test_start_real_with_correct_confirmation_calls_runner(mock_run, client, auth_headers, db_conn, tmp_path):
     uploadrr_path = tmp_path / "Uploadrr"
     uploadrr_path.mkdir()

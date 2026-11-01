@@ -372,7 +372,7 @@ def test_stage_per_episode_screens_leaves_only_the_first_episode_by_default():
 
 def test_stage_uploadrr_config_screenshots_only_the_first_episode_unless_asked(tmp_path, monkeypatch):
     from emuwarez_uploadrr.database import connect, init_db
-    from emuwarez_uploadrr.services import upload_execution as ue
+    from emuwarez_uploadrr.services.upload_execution import config as ue
     from emuwarez_uploadrr.services.settings import set_setting
     from emuwarez_uploadrr.services.uploadrr_yaml import get_block_key
     config = tmp_path / "Uploadrr" / "data" / "config.yaml"
@@ -548,7 +548,7 @@ def _per_episode(config):
 def test_tras_un_corte_la_siguiente_subida_parte_del_backup(tmp_path, monkeypatch):
     """Una subida muerta dejaba el config stageado (per_episode: 0), y la
     siguiente, que quería todos los capítulos, «dejaba el valor del config»: el suyo."""
-    from emuwarez_uploadrr.services import upload_execution as ue
+    from emuwarez_uploadrr.services.upload_execution import config as ue
     config = _config_falso(tmp_path)
     monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
     cwd = str(tmp_path / "Uploadrr")
@@ -584,7 +584,7 @@ def test_escribir_y_restaurar_no_dejan_ficheros_temporales(tmp_path):
 
 
 def test_al_arrancar_se_restaura_el_config_que_dejo_una_subida_muerta(tmp_path):
-    from emuwarez_uploadrr.services import upload_execution as ue
+    from emuwarez_uploadrr.services.upload_execution import config as ue
     config = _config_falso(tmp_path)
     backup_config(config)
     original = config.read_bytes()
@@ -597,7 +597,7 @@ def test_al_arrancar_se_restaura_el_config_que_dejo_una_subida_muerta(tmp_path):
 
 
 def test_la_siguiente_subida_restaura_el_config_aunque_no_pueda_stagear(tmp_path, monkeypatch):
-    from emuwarez_uploadrr.services import upload_execution as ue
+    from emuwarez_uploadrr.services.upload_execution import config as ue
     config = _config_falso(tmp_path)
     backup_config(config)
     original = config.read_bytes()
@@ -613,7 +613,7 @@ def test_la_siguiente_subida_restaura_el_config_aunque_no_pueda_stagear(tmp_path
 # --- EJEC-5: una subida que se une a otra ya en curso relee Ajustes ------------
 
 def test_una_subida_que_se_une_a_otra_recoge_los_ajustes_nuevos(tmp_path, monkeypatch):
-    from emuwarez_uploadrr.services import upload_execution as ue
+    from emuwarez_uploadrr.services.upload_execution import config as ue
     config = _config_falso(tmp_path)
     original = config.read_bytes()
     monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
@@ -633,7 +633,7 @@ def test_una_subida_que_se_une_a_otra_recoge_los_ajustes_nuevos(tmp_path, monkey
 
 
 def test_una_subida_que_se_une_no_reescribe_si_los_ajustes_no_cambiaron(tmp_path, monkeypatch):
-    from emuwarez_uploadrr.services import upload_execution as ue
+    from emuwarez_uploadrr.services.upload_execution import config as ue
     _config_falso(tmp_path)
     monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
     ue._config_stage_refcount.clear()

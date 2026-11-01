@@ -357,6 +357,32 @@ def test_un_primer_recorrido_con_una_serie_rota_sigue_siendo_el_primero(conn, ar
     assert len(list_notifications(conn)) == 1
 
 
+def test_un_primer_recorrido_sin_capitulos_sigue_siendo_el_primero(conn, arr):
+    """`sync` del CLI sin --episodes: los capítulos que llegan en el siguiente recorrido no son «nuevos faltantes»."""
+    for s in (20, 30):
+        arr["series"].append(_serie(s))
+        arr["capitulos"][s] = [_capitulo(s, 1, con_archivo=False), _capitulo(s, 2, con_archivo=False)]
+    _sincroniza(conn, SONARR, include_episodes=False)
+    _sincroniza(conn, SONARR, include_episodes=True)
+    assert list_notifications(conn) == []
+
+    arr["series"].append(_serie(40))
+    arr["capitulos"][40] = [_capitulo(40, 1, con_archivo=False), _capitulo(40, 2, con_archivo=False)]
+    _sincroniza(conn, SONARR, include_episodes=True)
+    assert len(list_notifications(conn)) == 1
+
+
+def test_un_recorrido_sin_capitulos_no_apaga_los_avisos_de_una_instancia_ya_sincronizada(conn, arr):
+    _con_serie(arr, 20, [1])
+    _sincroniza(conn, SONARR, include_episodes=True)
+
+    arr["series"].append(_serie(30))
+    arr["capitulos"][30] = [_capitulo(30, 1, con_archivo=False)]
+    _sincroniza(conn, SONARR, include_episodes=False)
+    _sincroniza(conn, SONARR, include_episodes=True)
+    assert len(list_notifications(conn)) == 1
+
+
 def test_la_sincronizacion_web_de_una_instancia_con_una_serie_rota_cuenta_lo_demas(conn, arr, client, auth_headers):
     _con_serie(arr, 20, [1])
     _con_serie(arr, 30, [1])

@@ -481,7 +481,10 @@ def build_nomenclature_proposal(
                     resolution = mi_report["resolution"]
                     warnings = [w for w in warnings if w != _AVISO_SIN_RESOLUCION]
                 video_codec = emu_by_field.get("Códec de vídeo") or video_codec
-                audio_summary = mi_report.get("audio_summary") or audio_summary
+                # Con pistas sin idioma manda MediaInfo aunque no quede ninguna:
+                # lo de Radarr/Sonarr colaría el idioma que el aviso dice omitir.
+                audio_summary = (mi_report.get("audio_summary") if mi_report.get("pistas_sin_idioma")
+                                 else mi_report.get("audio_summary") or audio_summary)
                 subtitle_summary = emu_by_field.get("Subtítulos") or subtitle_summary
                 dynamic_range = emu_by_field.get("HDR/DV") or dynamic_range
                 # Sin idioma no bloquea: avisa y el nombre sale sin esa pista.

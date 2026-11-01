@@ -55,6 +55,11 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   nombre, preparar e iniciar, cada uno con su `stage` (que es su punto de cancelación), su fila de Fases y lo que
   deja en `_Trabajo` para el siguiente. Mismo comportamiento que antes; lo fijan
   `test_la_preparacion_recorre_los_pasos_en_orden` y `test_cancelar_para_la_preparacion_en_el_siguiente_punto`.
+- **Oleada 3, partir cli.py:** `cli.py` queda como punto de entrada (`main`, `modern_main` y el despacho); los comandos
+  viven en el paquete `comandos/`: `parser.py` (`build_parser`), `comunes.py` (tabla, traducción de filtros, conexión),
+  `biblioteca.py` (instancias, sync, biblioteca, peticiones, faltantes, *arr), `nomenclatura.py` (nomenclatura y título
+  MKV), `subida.py` (subida, tareas, logs), `web.py` (comandos `web`) y `mantenimiento.py` (mantenimiento y demo).
+  `emuwarez_uploadrr.cli:main` sigue siendo el entry point; el código se movió sin cambios (`--help` idéntico).
 - **Oleada 3, Configuración partida:** `pages/SettingsPage.tsx` queda en el marco (pestañas, aviso y botón de
   guardar) y lo demás vive en `pages/ajustes/`: una pestaña por fichero (`ConfigTab`, `NotificationsTab`,
   `DiagnosticsTab`, `BackupTab`) y una tarjeta por fichero en `config/` y `diagnostico/`. El formulario de la pestaña
@@ -69,7 +74,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
    subidas (`carpeta_subida` la rehace si existe). Lo caro es «preparar» (pistas y copias reflink), así que lo que
    vale es saltárselo cuando falló «iniciar» y lo preparado sigue valiendo: mismos nombres, mismos cambios de
    pistas y el original sin tocar desde entonces.
-2. Partir `library.py`, `upload_execution.py` y `cli.py`.
+2. Partir `library.py` y `upload_execution.py`.
 3. Partir `UploadWizardModal.tsx` y ~~`SettingsPage.tsx`~~; los estilos en línea, a clases.
    Al partir el asistente: recargar «Ver nombre de todos los capítulos» y «Ver pistas» con el idioma confirmado si
    estaban abiertos al cambiar el idioma del pack (hoy se quedan vacíos hasta reabrirlos).

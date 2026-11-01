@@ -162,11 +162,11 @@ def test_se_sigue_sirviendo_con_un_solo_proceso():
 
     Si algún día hace falta escalar a varios workers, hay que sacar el bus
     fuera (Redis o similar) ANTES, y este test es el que avisa."""
-    fuente = (RAIZ / "emuwarez_uploadrr" / "cli.py").read_text()
+    fuente = (RAIZ / "emuwarez_uploadrr" / "comandos" / "web.py").read_text()
     llamada = re.search(r"uvicorn\.run\((.*?)\n    \)", fuente, re.S)
-    assert llamada, "no encuentro la llamada a uvicorn.run en cli.py"
+    assert llamada, "no encuentro la llamada a uvicorn.run en comandos/web.py"
     assert "workers" not in llamada.group(1), (
-        "cli.py ahora arranca uvicorn con varios workers, y services/eventos.py "
+        "comandos/web.py ahora arranca uvicorn con varios workers, y services/eventos.py "
         "es un bus EN MEMORIA: los avisos publicados en un proceso no llegan a "
         "los clientes conectados a otro. Saca el bus fuera antes de esto."
     )

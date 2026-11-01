@@ -19,7 +19,7 @@ import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/d
 import { hayMasPorCargar } from '../utils/paginarSubidas'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
-  progressCounter, queuedWaitText, useTicker,
+  progressCounter, queuedWaitText,
 } from '../utils/uploadStatus'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { useAlSalir, useSeccionVisible } from '../context/SeccionVisible'
@@ -451,7 +451,6 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // 30 s no se nota.
   useRefrescoPorAvisos(AVISOS_SUBIDA, () => load({ silent: true }),
     { cadaSinCanal: hasLiveJob ? 2500 : 30_000, soloVisible: AVISOS_SUBIDA_PROGRESO })
-  useTicker(jobs.some(j => j.status === 'queued'))
 
   // Cancelar mientras se preparan ficheros no interrumpe nada a media faena,
   // así que se avisa antes: lo que pasa de verdad no es obvio desde el botón.
@@ -466,12 +465,10 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try { await cancelUploadJob(jobId); await load() } catch { /* ignore */ }
   }
 
-  // No confirmation — retrying only ever creates a brand new 'queued' job
-  // row (same 60s grace period as a fresh "Subir a eMuwarez"); the original
-  // failed/cancelled job is never touched. Jumps straight to the new job's
-  // detail page so its countdown is visible immediately. Errors are surfaced
-  // (not swallowed) — a silent failure here looked exactly like the button
-  // "doing nothing".
+  // Sin confirmación: reintentar solo crea un trabajo nuevo en cola (el mismo camino que
+  // «Subir a eMuwarez») y no toca el original, fallido o cancelado. Salta a la ficha del
+  // trabajo nuevo para ver su progreso en el momento. Los errores se enseñan, no se tragan:
+  // un fallo silencioso aquí parecía un botón que no hacía nada.
   const [retryError, setRetryError] = useState<string | null>(null)
   const handleRetryQueued = async (job: UploadJob) => {
     setRetryError(null)

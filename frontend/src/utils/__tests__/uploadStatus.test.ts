@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   latestInChain, phaseLabel, formatSecondsHM, currentPhaseInfo,
-  ACTIVE_JOB_STATUSES, statusLabel,
+  ACTIVE_JOB_STATUSES, statusLabel, queuedWaitText,
 } from '../uploadStatus'
 import type { UploadJob, UploadProgressPhase } from '../../types/api'
 
@@ -129,5 +129,25 @@ describe('el vocabulario de estados', () => {
       expect(statusLabel(s)).toBeTruthy()
       expect(statusLabel(s)).not.toBe(s)
     }
+  })
+})
+
+describe('el texto de una subida en cola', () => {
+  it('sin puesto todavía, espera turno (sin segundos que contar)', () => {
+    expect(queuedWaitText(job({ status: 'queued' }))).toBe('Esperando turno')
+  })
+
+  it('la única en la cola es la siguiente en entrar', () => {
+    expect(queuedWaitText(job({ status: 'queued', queue_position: 1, queue_total: 1 }))).toBe('Siguiente en entrar')
+  })
+
+  it('con varias, su puesto y cuántas esperan', () => {
+    expect(queuedWaitText(job({ status: 'queued', queue_position: 2, queue_total: 3 }))).toBe('Puesto 2 de 3')
+  })
+
+  it('un plazo antiguo de 60 s ya no se cuenta hacia atrás', () => {
+    const plazo = new Date(Date.now() + 60_000).toISOString()
+    const conPlazo = { status: 'queued', queued_until: plazo } as unknown as Partial<UploadJob>
+    expect(queuedWaitText(job(conPlazo))).toBe('Esperando turno')
   })
 })

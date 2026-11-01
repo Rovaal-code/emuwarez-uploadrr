@@ -123,9 +123,8 @@ export async function startUploadJob(
   return api.post<UploadStartResult>(`/uploads/${jobId}/start`, body)
 }
 
-// Retries straight into the same queued/60s-countdown flow queueUpload()
-// uses — no confirmation token, since it only ever creates a brand new job
-// row (the original failed/cancelled job is never touched).
+// Reintenta por el mismo camino en cola que queueUpload(), sin token de
+// confirmación: solo crea un trabajo nuevo y no toca el original (fallido o cancelado).
 export async function retryUploadJobQueued(jobId: number): Promise<UploadQueueResult> {
   return api.post<UploadQueueResult>(`/uploads/${jobId}/retry-queued`, {})
 }

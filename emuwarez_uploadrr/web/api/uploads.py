@@ -187,7 +187,6 @@ def _job_to_detail(
         runtime_type=_extract_runtime_type(j),
         command_preview=_extract_command_preview(j),
         progress_phase=compute_progress_phase(j.get("status", ""), j.get("stage")),
-        queued_until=j.get("queued_until"),
         queue_position=queue_position,
         queue_total=queue_total,
         nomenclature_snapshot=_extract_json_dict(j, "nomenclature_snapshot_json"),
@@ -284,8 +283,9 @@ def queue_upload(
     """Queue "Subir a eMuwarez": creates the upload_jobs row in status='queued'
     and returns immediately (the caller navigates to Subidas right after).
     The real work — integrity check, nomenclature rename, track remux, then
-    the actual Uploadrr start — runs server-side after a grace period during
-    which the job can still be cancelled (see services/upload_queue.py)."""
+    the actual Uploadrr start — runs server-side at once, or as soon as a
+    "Subidas en paralelo" slot frees up; it can be cancelled at any step
+    (see services/upload_queue.py)."""
     from ...services.upload_queue import queue_upload_for_item
     overrides = None
     if body.remux_overrides:
@@ -332,9 +332,9 @@ def get_uploads(
         "library_item_id": library_item_id,
         "request_item_id": request_item_id,
     }
+    queue_positions = get_queue_positions()
     with _get_conn() as conn:
         jobs = exec_list_jobs(filters=filters, conn=conn)
-        queue_positions = get_queue_positions(conn)
         # Las fichas de todas las subidas en una sola consulta.
         from ...services.library import library_display_fields
         fichas = library_display_fields({j.get("library_item_id") for j in jobs}, conn)
@@ -376,7 +376,7 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
         job = exec_get_job(job_id, conn=conn)
         if not job:
             raise HTTPException(status_code=404, detail="Job no encontrado.")
-        queue_position, queue_total = get_queue_positions(conn).get(job_id, (None, None))
+        queue_position, queue_total = get_queue_positions().get(job_id, (None, None))
         from ...services.library import library_display_fields_one
         row = library_display_fields_one(job["library_item_id"], conn) if job.get("library_item_id") else None
         display_title = content_display_title(conn, row) if row else None
@@ -527,8 +527,7 @@ def retry_upload(
 
 @router.post("/uploads/{job_id}/retry-queued", response_model=UploadQueueResponse)
 def retry_upload_queued(job_id: int, current_user: dict = Depends(require_auth)):
-    """Retry straight into the same queued/60s-countdown flow "Subir a
-    eMuwarez" uses — no confirmation token, since it only ever creates a
+    """Retry straight into the same queued flow "Subir a eMuwarez" uses — no confirmation token, since it only ever creates a
     brand new job row (the original failed/cancelled job is never touched)."""
     from ...services.upload_queue import queue_retry_for_job
     with _get_conn() as conn:

@@ -229,7 +229,7 @@ PROVIDER_DOMAINS: dict[str, str] = {
     "HIDIVE": "hidive.com",
     "VRV": "vrv.co",
     "BILI": "bilibili.com",
-    "ANIMEBOX": "animebox.es",
+    "ANIMEBOX": "anime-box.com",
     "A3P": "atresplayer.com",
     "SKST": "skyshowtime.com",
     "FLMN": "filmin.es",

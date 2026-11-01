@@ -499,3 +499,22 @@
   line-height: inherit;
   margin: 0;
 }
+
+/* `.placeholder-card h3 { margin-bottom: 12px }` (2 de especificidad) pisa los márgenes de los h3 de las tarjetas. */
+.placeholder-card h3.aj-m-0 {
+  margin: 0;
+}
+.placeholder-card h3.aj-mb-6 {
+  margin-bottom: 6px;
+}
+.placeholder-card h3.aj-mb-8 {
+  margin-bottom: 8px;
+}
+.placeholder-card h3.aj-mb-14 {
+  margin-bottom: 14px;
+}
+
+/* `.data-table td { color }` pisa el color de las celdas descriptivas. */
+.data-table td.aj-muted-12 {
+  color: var(--text-muted);
+}

@@ -11,6 +11,7 @@ import { idiomasParaServidor, type IdiomasPorPosicion } from '../../utils/idioma
 
 export function useDetallesTemporada({
   targetId, targetIsSeason, objetivoActual, versionDatosPack, fields, proveedorElegido, idiomasPorTemporada,
+  pistasAbiertas,
 }: {
   targetId: number | null
   targetIsSeason: boolean
@@ -21,6 +22,8 @@ export function useDetallesTemporada({
   fields: NomenclatureFields
   proveedorElegido: ProveedoresElegidos
   idiomasPorTemporada: ReadonlyMap<number, IdiomasPorPosicion>
+  // «Ver Pistas» abierto (su estado lo comparte con el de un fichero suelto).
+  pistasAbiertas: boolean
 }) {
   // Season target — per-episode final names ("Ver nombre de todos los
   // capítulos"), on demand.
@@ -114,12 +117,21 @@ export function useDetallesTemporada({
   }, [targetIsSeason, fields.source, fields.provider, fields.tag])
 
   // Los nombres y las pistas por capítulo ya no valen tras cambiar el idioma
-  // del pack: se piden otra vez al abrirlos.
+  // del pack: cerrados se piden al abrirlos; abiertos, en el efecto de abajo.
+  const [idiomaCambiado, setIdiomaCambiado] = useState(0)
   const olvidarPorIdioma = () => {
     versionDatosPack.current++
     setSeasonNames(null); setSeasonNamesLoading(false)
     setSeasonRemux(null); setSeasonRemuxLoading(false)
+    setIdiomaCambiado(n => n + 1)
   }
+  // Tras el render con el idioma confirmado, para que la carga ya lo lleve.
+  useEffect(() => {
+    if (!idiomaCambiado) return
+    if (showSeasonNamesCard) loadSeasonNames()
+    if (pistasAbiertas) loadSeasonRemux()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idiomaCambiado])
 
   return {
     seasonNames, seasonNamesLoading, showSeasonNamesCard, setShowSeasonNamesCard,

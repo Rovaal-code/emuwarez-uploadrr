@@ -585,6 +585,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
 
   const detalles = useDetallesTemporada({
     targetId, targetIsSeason, objetivoActual, versionDatosPack, fields, proveedorElegido, idiomasPorTemporada,
+    pistasAbiertas: showRemuxCard,
   })
 
   // Auto-detect the provider via TMDB when Source is WEB-DL and none was

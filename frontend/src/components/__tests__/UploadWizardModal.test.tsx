@@ -312,6 +312,49 @@ describe('pack de temporada', () => {
     await esperar(() => texto().includes('Serie S01E02 [GRP]'))
   })
 
+  describe('abiertos mientras se recalcula el idioma del pack', () => {
+    // Se puede abrir «Ver nombre…» o «Ver Pistas» con el recálculo en vuelo: lo que piden entonces lleva el
+    // idioma de antes y se descarta al confirmarse el nuevo. Tienen que volver a pedirse solos, no quedarse vacíos.
+    async function cambiarIdiomaYAbrir(nombreBoton: string) {
+      const audio = diferida<unknown>()
+      m(temporada.getSeasonPackAudio).mockReturnValue(audio.promesa as never)
+      await abrir(TEMPORADA, { preselect: { season: 1 } })
+      await pulsar(await esperar(() => boton('Continuar')))
+      await esperar(() => boton('Ver nombre de todos los capítulos'))
+      await elegir(campo('Pista de audio 1'), 'spa')
+      await pulsar(boton(nombreBoton))
+      await esperar(() => texto().includes('del capítulo viejo'))
+      audio.resolver({
+        audio_summary: 'Castellano DD 5.1', custom: false, audio_warning: null, pistas_sin_idioma: [],
+        idiomas_audio: { 1: 'spa' },
+      })
+    }
+
+    it('«Ver nombre de todos los capítulos» se recarga con el idioma confirmado', async () => {
+      m(temporada.getSeasonEpisodeNames).mockImplementation(async (_id, ov) => ({ episodes: [{
+        episode_id: 21, display_title: 'E01', internal_mkv_title: 'Serie.S01E01',
+        torrent_name: ov?.idiomas ? 'Serie S01E01 Castellano del capítulo nuevo' : 'Serie S01E01 del capítulo viejo',
+      }] }) as never)
+      await cambiarIdiomaYAbrir('Ver nombre de todos los capítulos')
+      await esperar(() => texto().includes('Serie S01E01 Castellano del capítulo nuevo'))
+      expect(temporada.getSeasonEpisodeNames).toHaveBeenLastCalledWith(
+        20, { source: 'WEB-DL', provider: 'AMZN', tag: 'GRP', idiomas: { 1: 'spa' } })
+    })
+
+    it('«Ver Pistas» se recarga con el idioma confirmado', async () => {
+      m(temporada.getSeasonEpisodeRemuxPreview).mockImplementation(async (_id, idiomas) => ({ episodes: [{
+        episode_id: 21, display_title: 'E01',
+        plan: { status: 'preview', errors: [], warnings: [], ordered_tracks: [{
+          id: 1, type: 'audio', language: 'spa', current_name: '', default_after: true,
+          new_name: idiomas ? 'Castellano del capítulo nuevo' : 'Pista del capítulo viejo',
+        }] },
+      }] }) as never)
+      await cambiarIdiomaYAbrir('Ver Pistas')
+      await esperar(() => texto().includes('Castellano del capítulo nuevo'))
+      expect(temporada.getSeasonEpisodeRemuxPreview).toHaveBeenLastCalledWith(20, { 1: 'spa' })
+    })
+  })
+
   it('un plan bloqueado por proveedores distintos deja elegir uno y lo vuelve a pedir', async () => {
     m(temporada.previewSeasonPack)
       .mockResolvedValueOnce(plan({ status: 'blocked', errors: ['Proveedores distintos.'], provider_conflict: ['AMZN', 'NF'] }))

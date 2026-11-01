@@ -1247,6 +1247,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         applyTrackRemux(id, { dryRun: true, overrides: nuevas }),
       ])
       if (objetivoActual.current !== id || version !== versionIdioma.current) return
+      // La vista previa vieja tiene el audio de antes: se quita y «Continuar» (que la exige)
+      // espera a la que salga con los campos nuevos.
+      setPreview(null)
       setFields(prev => ({ ...prev, audio_summary: campos.fields?.audio_summary }))
       setAudioWarning(campos.audio_warning ?? null)
       setRemuxPreview(plan)

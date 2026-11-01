@@ -761,7 +761,7 @@ def build_season_pack_plan(
 
         errors.extend(_consistency_errors(episode_entries))
         errors.extend(_spanish_errors(episode_entries))
-        warnings: list[str] = []
+        # Se suman a los avisos de la decisión del proveedor, no los sustituyen.
         aviso_fuente = _fuente_del_pack(episode_entries)[1]
         if aviso_fuente:
             warnings.append(aviso_fuente)

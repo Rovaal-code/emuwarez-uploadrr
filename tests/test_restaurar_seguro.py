@@ -314,7 +314,7 @@ def test_resolver_copia_solo_devuelve_las_de_la_carpeta(cfg, tmp_path):
     assert resolver_copia("pre-migracion-1-v1.db") is None
 
 
-@pytest.mark.parametrize("nombre", ["./emuwarez_uploadrr.db", "x/../emuwarez_uploadrr.db", "a//b.txt"])
+@pytest.mark.parametrize("nombre", ["./emuwarez_uploadrr.db", "x/../emuwarez_uploadrr.db", "/emuwarez_uploadrr.db", "a//b.txt"])
 def test_un_nombre_no_canonico_se_rechaza_sin_tocar_la_base(cfg, tmp_path, nombre):
     """«./emuwarez_uploadrr.db» se saltaba la comprobación del esquema y caía encima de la base."""
     info = tarfile.TarInfo(nombre)

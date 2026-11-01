@@ -251,6 +251,7 @@ def queue_upload_for_item(
     provider_override: str | None = None,
     tag_override: str | None = None,
     title_override: str | None = None,
+    idiomas_audio: dict | None = None,
     conn=None,
 ) -> dict:
     own = conn is None
@@ -277,11 +278,17 @@ def queue_upload_for_item(
 
         season_overrides = None
         # provider_override "" ("Sin proveedor" elegido a mano) también cuenta.
-        if is_season and (source_override or provider_override is not None or tag_override or title_override):
+        from .mkv_remux import idiomas_por_posicion
+        idiomas = idiomas_por_posicion(idiomas_audio) if is_season else {}
+        if is_season and (source_override or provider_override is not None or tag_override or title_override
+                          or idiomas):
             season_overrides = {
                 "source": source_override, "provider": provider_override,
                 "tag": tag_override, "title": title_override,
             }
+            if idiomas:
+                # Claves en texto: el trabajo lo guarda en JSON.
+                season_overrides["idiomas"] = {str(k): v for k, v in idiomas.items()}
 
         request_title, request_url = _foto_de_la_peticion(conn, request_item_id)
         return _insert_and_start_queued_job(
@@ -592,7 +599,20 @@ def _ajustes_de_pack(season_overrides: dict | None) -> dict:
     """Lo editado a mano para un pack en el asistente, como argumentos de
     build_season_pack_plan() y apply_season_pack()."""
     ajustes = season_overrides or {}
-    return {f"{k}_override": ajustes.get(k) for k in ("source", "provider", "tag", "title")}
+    salida = {f"{k}_override": ajustes.get(k) for k in ("source", "provider", "tag", "title")}
+    # El idioma elegido para las pistas de audio sin idioma, por posición.
+    salida["idiomas_audio"] = ajustes.get("idiomas") or None
+    return salida
+
+
+def _overrides_de_pack(origen: str | None, season_overrides: dict | None) -> dict | None:
+    """Los overrides de remux de UN capítulo del pack: los idiomas elegidos por
+    posición de audio, pasados a los ids de pista de su fichero. Los mismos
+    idiomas que build_season_pack_plan puso en el nombre, así que el nombre y
+    las pistas dicen lo mismo."""
+    from .season_pack import idiomas_de_fichero
+    idiomas = idiomas_de_fichero(origen, (season_overrides or {}).get("idiomas"))
+    return {tid: {"language": codigo} for tid, codigo in idiomas.items()} or None
 
 
 def _populate_ready(job_id: int, item_id: int, conn, season_overrides: dict | None = None) -> bool:
@@ -1136,8 +1156,10 @@ def _run_queued_job(job_id: int) -> None:
             def progreso(pct: int) -> None:
                 update_phase_progress(job_id, "remux", int((idx * 100 + pct) / total))
 
+            # En un pack, solo los idiomas elegidos para las pistas sin idioma, por capítulo.
             r = _preparar_fichero(job_id, fid, origen, destino, modo_de_pistas, conn,
-                                  overrides=None if is_season else overrides, on_progress=progreso)
+                                  overrides=_overrides_de_pack(origen, season_overrides) if is_season
+                                  else overrides, on_progress=progreso)
             resultados.append({**r, "item_id": fid})
             update_phase_progress(job_id, "remux", int((idx + 1) * 100 / total))
             return r["metodo"]

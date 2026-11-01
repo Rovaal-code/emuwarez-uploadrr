@@ -34,6 +34,7 @@ from typing import Any, Optional
 
 from ..database import connect, row_to_dict
 from ..models import LocalStatus
+from .mkv_remux import opciones_de_idioma
 from .mkv_title import to_filesystem_name
 from .nomenclature import (
     _build_proposed_filename,
@@ -312,7 +313,8 @@ def _hdr_de(proposal: dict) -> Optional[str]:
     return format_hdr(crudo)
 
 
-def _aggregate_pack_fields(episode_entries: list[dict], conn=None) -> dict:
+def _aggregate_pack_fields(episode_entries: list[dict], conn=None,
+                           idiomas_audio: dict[int, str] | None = None) -> dict:
     """Los valores que describen al PACK, sacados de sus capítulos.
 
     Resolución, códec de vídeo, source y HDR/DV tienen que coincidir (lo
@@ -338,7 +340,7 @@ def _aggregate_pack_fields(episode_entries: list[dict], conn=None) -> dict:
             return unico or None
         return None
 
-    audio, custom = _aggregate_pack_audio(episode_entries, conn)
+    audio, custom = _aggregate_pack_audio(episode_entries, conn, idiomas_audio)
 
     return {
         "resolution": comun(lambda e: e["proposal"].get("resolution")),
@@ -351,17 +353,19 @@ def _aggregate_pack_fields(episode_entries: list[dict], conn=None) -> dict:
     }
 
 
-def _episode_audio_by_language(ep: dict, conn) -> dict:
+def _episode_audio_by_language(ep: dict, conn, idiomas_audio: dict[int, str] | None = None) -> dict:
     """La mejor pista de cada idioma de UN capítulo: {"ESP": "DD+ 5.1", ...}.
 
     Sale del informe de MediaInfo, que ya está cacheado por fichero desde que
-    lo leyó la nomenclatura de este mismo capítulo."""
+    lo leyó la nomenclatura de este mismo capítulo. `idiomas_audio`: el idioma
+    elegido para las pistas sin idioma, por posición (solo cuenta en esas)."""
     from .media_info_service import build_mediainfo_report
     from .path_mapping import resolve_local_path
     from .emu_format import _split_languages
     path = ep.get("path")
     if path:
-        report = build_mediainfo_report(resolve_local_path(path, conn=conn) or path)
+        report = build_mediainfo_report(resolve_local_path(path, conn=conn) or path,
+                                        idiomas_audio=idiomas_audio)
         por_idioma = report.get("audio_by_language") or {}
         if por_idioma:
             return {lang: f"{v['codec']} {v['channels']}".strip()
@@ -376,7 +380,8 @@ def _episode_audio_by_language(ep: dict, conn) -> dict:
     return {lang: codec for lang in _split_languages(ep.get("audio_languages"))}
 
 
-def _aggregate_pack_audio(episode_entries: list[dict], conn=None) -> tuple[Optional[str], bool]:
+def _aggregate_pack_audio(episode_entries: list[dict], conn=None,
+                          idiomas_audio: dict[int, str] | None = None) -> tuple[Optional[str], bool]:
     """El audio del pack y si hay que marcarlo CUSTOM.
 
     La regla es "no mentir": una pista solo puede nombrarse si TODOS los
@@ -397,7 +402,7 @@ def _aggregate_pack_audio(episode_entries: list[dict], conn=None) -> tuple[Optio
     from .emu_format import (build_audio_string, audio_track_quality,
                              format_audio_codec, format_channels)
 
-    por_capitulo = [_episode_audio_by_language(e["episode"], conn) for e in episode_entries]
+    por_capitulo = [_episode_audio_by_language(e["episode"], conn, idiomas_audio) for e in episode_entries]
     por_capitulo = [d for d in por_capitulo if d]
     if not por_capitulo:
         return None, False
@@ -482,17 +487,84 @@ def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]
     return build_title_options(spanish, original)
 
 
-def _capitulos_con_audio_sin_idioma(episode_entries: list[dict], conn) -> list:
-    """Los capítulos con alguna pista de audio sin idioma (el informe ya está en caché)."""
+def _capitulos_con_audio_sin_idioma(episode_entries: list[dict], conn,
+                                    idiomas_audio: dict[int, str] | None = None) -> list:
+    """Los capítulos con alguna pista de audio sin idioma, contando ya con los
+    idiomas elegidos (el informe ya está en caché)."""
     from .media_info_service import build_mediainfo_report
     salida = []
     for e in episode_entries:
         path = e["episode"].get("path")
         # build_mediainfo_report ya aplica los mappings: se le pasa la ruta guardada,
         # sin mapear, para no aplicarlos dos veces.
-        if path and build_mediainfo_report(path).get("pistas_sin_idioma"):
+        if path and build_mediainfo_report(path, idiomas_audio=idiomas_audio).get("pistas_sin_idioma"):
             salida.append(e["episode"].get("episode_number"))
     return salida
+
+
+def aviso_audio_sin_idioma_del_pack(capitulos: list) -> Optional[str]:
+    """El aviso del plan para los capítulos que aún tienen una pista de audio sin idioma."""
+    if not capitulos:
+        return None
+    return (f"Capítulo(s) {', '.join(str(n) for n in capitulos)}: una pista de audio no tiene idioma y "
+            "el nombre del pack no la incluye. Elige su idioma junto al campo Audio.")
+
+
+def _pistas_sin_idioma_del_pack(episode_entries: list[dict], idiomas_audio: dict[int, str] | None) -> list[dict]:
+    """Las posiciones de audio que vienen sin idioma en algún capítulo, para el
+    selector del asistente: [{posicion, pista, capitulos, idioma}]. Se mira sin
+    los idiomas elegidos (si no, la pista ya elegida desaparecería y no se
+    podría cambiar) y `idioma` dice lo elegido para ella. Una elección por
+    posición vale para todos los capítulos en los que esa pista no trae idioma."""
+    from .media_info_service import build_mediainfo_report
+    por_posicion: dict[int, dict] = {}
+    for e in episode_entries:
+        path = e["episode"].get("path")
+        if not path:
+            continue
+        informe = build_mediainfo_report(path)
+        filas = {r.get("field"): r for r in informe.get("rows") or []}
+        for posicion in informe.get("pistas_sin_idioma") or []:
+            entrada = por_posicion.setdefault(posicion, {
+                "posicion": posicion,
+                # "UND DD 5.1" -> "DD 5.1": lo que la distingue en el selector.
+                "pista": re.sub(r"^UND\s*", "", (filas.get(f"Audio {posicion}") or {}).get("emu") or "") or None,
+                "capitulos": [],
+                "idioma": (idiomas_audio or {}).get(posicion),
+            })
+            entrada["capitulos"].append(e["episode"].get("episode_number"))
+    return [por_posicion[p] for p in sorted(por_posicion)]
+
+
+def _idiomas_del_pack(idiomas_audio: dict | None) -> dict[int, str] | None:
+    """Los idiomas elegidos, limpios (claves en número, solo opciones válidas)."""
+    from .mkv_remux import idiomas_por_posicion
+    return idiomas_por_posicion(idiomas_audio) or None
+
+
+def recalcular_audio_del_pack(season_id: int, idiomas_audio: dict | None = None, conn=None) -> dict:
+    """Solo el audio del pack con los idiomas elegidos, sin rehacer el plan
+    entero (sin propuestas por capítulo ni TMDb): respalda el selector de idioma
+    del asistente. Es el MISMO cálculo que build_season_pack_plan, así que lo
+    que se enseña es lo que se sube."""
+    own = conn is None
+    conn = conn or connect()
+    try:
+        idiomas = _idiomas_del_pack(idiomas_audio)
+        entries = [{"episode": e} for e in _get_season_episodes(season_id, conn=conn)
+                   if e.get("local_status") == LocalStatus.AVAILABLE.value]
+        audio, custom = _aggregate_pack_audio(entries, conn, idiomas)
+        return {
+            "audio_summary": audio,
+            "custom": custom,
+            "audio_warning": aviso_audio_sin_idioma_del_pack(
+                _capitulos_con_audio_sin_idioma(entries, conn, idiomas)),
+            "pistas_sin_idioma": _pistas_sin_idioma_del_pack(entries, idiomas),
+            "idiomas_audio": idiomas or {},
+        }
+    finally:
+        if own:
+            conn.close()
 
 
 def _spanish_errors(episode_entries: list[dict]) -> list[str]:
@@ -617,6 +689,7 @@ def build_season_pack_plan(
     season_id: int, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
     tag_override: str | None = None, title_override: str | None = None,
+    idiomas_audio: dict | None = None,
 ) -> dict[str, Any]:
     """Build a dry-run plan for a season-pack upload. Never modifies the
     filesystem. Blocks (status="blocked") on: season not found, no episode
@@ -632,7 +705,13 @@ def build_season_pack_plan(
 
     `title_override` is the Título dropdown's pick (Spanish by default, or the
     original). A season has no nomenclature proposal row of its own to save it
-    into, unlike a movie/episode, so it travels with the other overrides."""
+    into, unlike a movie/episode, so it travels with the other overrides.
+
+    `idiomas_audio` ({posición de audio: código}): el idioma elegido en el
+    asistente para las pistas sin idioma. Una elección por posición vale para
+    todos los capítulos: entra en el nombre del pack, en el de cada capítulo y,
+    al subir, en el remux de cada uno (upload_queue, mismas posiciones)."""
+    idiomas_audio = _idiomas_del_pack(idiomas_audio)
     own = conn is None
     conn = conn or connect()
     try:
@@ -745,8 +824,9 @@ def build_season_pack_plan(
                 source_override=source_override, provider_override=impuesto or provider_override,
                 tag_override=tag_override, title_override=title_override,
                 # Lo que impone el pack (detectado o elegido a mano, también «Sin proveedor») no se
-                # guarda como propuesta del capítulo: no es suya, y la caducaría.
-                guardar=impuesto is None and provider_override is None,
+                # guarda como propuesta del capítulo: no es suya, y la caducaría. Los idiomas, igual.
+                guardar=impuesto is None and provider_override is None and not idiomas_audio,
+                idiomas_audio=idiomas_audio,
             )
             if ((provider or provider_override is not None)
                     and (proposal.get("provider_final") or None) != provider):
@@ -755,6 +835,7 @@ def build_season_pack_plan(
                     ep["id"], conn=conn, source_override=source_override,
                     provider_override=provider or "",
                     tag_override=tag_override, title_override=title_override, guardar=False,
+                    idiomas_audio=idiomas_audio,
                 )
             episode_entries.append({"episode": ep, "proposal": proposal})
         _set_season_plan_progress(season_id, done=total, total=total, current_title=None)
@@ -765,10 +846,10 @@ def build_season_pack_plan(
         aviso_fuente = _fuente_del_pack(episode_entries)[1]
         if aviso_fuente:
             warnings.append(aviso_fuente)
-        sin_idioma = _capitulos_con_audio_sin_idioma(episode_entries, conn)
-        if sin_idioma:
-            warnings.append(f"Capítulo(s) {', '.join(str(n) for n in sin_idioma)}: una pista de audio no "
-                            "tiene idioma y el nombre del pack no la incluye.")
+        # Va aparte de `warnings`: el asistente lo enseña junto al selector de
+        # idioma y lo quita en cuanto se elige, sin rehacer el plan.
+        audio_warning = aviso_audio_sin_idioma_del_pack(
+            _capitulos_con_audio_sin_idioma(episode_entries, conn, idiomas_audio))
 
         # Internal Source Tool comparison (name vs Radarr/Sonarr vs
         # MediaInfo-bitrate), computed once from the first available episode
@@ -777,13 +858,15 @@ def build_season_pack_plan(
         # the wizard show the same "blinking" alert + comparison link a
         # movie/episode gets right next to the season's own Source field.
         from .source_assistant import build_editable_nomenclature_fields
-        source_comparison = build_editable_nomenclature_fields(
-            available_episodes[0]["id"], conn=conn,
-        ).get("source_comparison")
+        campos_primero = build_editable_nomenclature_fields(available_episodes[0]["id"], conn=conn)
+        source_comparison = campos_primero.get("source_comparison")
+        aviso_source = campos_primero.get("source_mismatch_warning")
+        if aviso_source:
+            aviso_source = f"Capítulo {available_episodes[0].get('episode_number')}: {aviso_source}"
 
         # Del conjunto de capítulos, no del primero: ya no tienen por qué
         # coincidir en todo (ver _aggregate_pack_fields).
-        pack_fields = _aggregate_pack_fields(episode_entries, conn)
+        pack_fields = _aggregate_pack_fields(episode_entries, conn, idiomas_audio)
         season_pack_title = _build_season_pack_title(
             title=series_title,
             year=year,
@@ -874,6 +957,13 @@ def build_season_pack_plan(
             "title_options": _season_title_options(series, season, conn),
             "year": year,
             "source_comparison": source_comparison,
+            # MediaInfo apunta a otro source que el nombre o Radarr/Sonarr (no bloquea).
+            "source_mismatch_warning": aviso_source,
+            # Pistas de audio sin idioma, para el selector del asistente, y lo elegido.
+            "audio_warning": audio_warning,
+            "pistas_sin_idioma": _pistas_sin_idioma_del_pack(episode_entries, idiomas_audio),
+            "idiomas_audio": idiomas_audio or {},
+            "idiomas_elegibles": opciones_de_idioma(),
         }
     except SeasonPlanCancelled:
         # Not an error: the user closed the wizard, so there is nothing to
@@ -916,7 +1006,7 @@ def _episode_display_title(conn, ep: dict) -> str:
 def get_season_episode_names(
     season_id: int, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
-    tag_override: str | None = None,
+    tag_override: str | None = None, idiomas_audio: dict | None = None,
 ) -> dict:
     """Per-episode final torrent name + internal MKV title — backs the
     wizard's "Ver nombre de todos los capítulos" button (a season pack has
@@ -926,7 +1016,9 @@ def get_season_episode_names(
     Source/Proveedor/Tag fields, if the user edited them by hand — applied
     uniformly to every episode, same as build_season_pack_plan(). Without
     this, each episode kept showing its own auto-detected values even after
-    overriding the season pack's title, so they visibly disagreed."""
+    overriding the season pack's title, so they visibly disagreed. Lo mismo con
+    `idiomas_audio`, los idiomas elegidos para las pistas sin idioma."""
+    idiomas_audio = _idiomas_del_pack(idiomas_audio)
     own = conn is None
     conn = conn or connect()
     try:
@@ -939,7 +1031,7 @@ def get_season_episode_names(
             fields = build_editable_nomenclature_fields(
                 ep["id"], conn=conn,
                 source_override=source_override, provider_override=provider_override,
-                tag_override=tag_override,
+                tag_override=tag_override, idiomas_audio=idiomas_audio,
             )
             blocked = bool(fields.get("blocked"))
             out.append({
@@ -1015,11 +1107,14 @@ def get_season_episode_mediainfo(season_id: int, conn=None) -> dict:
             conn.close()
 
 
-def get_season_episode_remux_previews(season_id: int, conn=None) -> dict:
+def get_season_episode_remux_previews(season_id: int, conn=None, idiomas_audio: dict | None = None) -> dict:
     """Per-episode track remux plan — backs the wizard's "Ver Pistas"
     dropdown for a season target. Read-only preview only: manual per-track
     overrides aren't offered for season packs (each episode gets its own
-    auto-computed plan applied as-is during the queued upload)."""
+    auto-computed plan applied as-is during the queued upload), salvo el
+    idioma de las pistas sin idioma (`idiomas_audio`, por posición), que se
+    elige una vez para todo el pack."""
+    idiomas_audio = _idiomas_del_pack(idiomas_audio)
     own = conn is None
     conn = conn or connect()
     try:
@@ -1029,7 +1124,8 @@ def get_season_episode_remux_previews(season_id: int, conn=None) -> dict:
         available = [e for e in all_episodes if e.get("local_status") == LocalStatus.AVAILABLE.value]
         out = []
         for ep in available:
-            plan = build_remux_plan(ep["id"], conn=conn)
+            plan = build_remux_plan(ep["id"], conn=conn,
+                                    idiomas=idiomas_de_fichero(_ruta_del_remux(ep["id"], conn), idiomas_audio))
             out.append({
                 "episode_id": ep["id"],
                 "episode_number": ep.get("episode_number"),
@@ -1041,3 +1137,22 @@ def get_season_episode_remux_previews(season_id: int, conn=None) -> dict:
     finally:
         if own:
             conn.close()
+
+
+def _ruta_del_remux(item_id: int, conn) -> Optional[str]:
+    """El fichero que mira build_remux_plan para este capítulo."""
+    from .mkv_remux import _get_target_path
+    return _get_target_path(item_id, conn)[0]
+
+
+def idiomas_de_fichero(ruta: Optional[str], idiomas_audio: dict | None) -> dict[int, str]:
+    """Los idiomas elegidos para el pack ({posición de audio: código}) pasados a
+    los ids de pista de UN fichero ({id de pista: código}), como los quiere el
+    remux. Vacío si no hay nada elegido o el fichero no se puede leer."""
+    from .mkv_remux import idiomas_elegidos, overrides_de_idiomas, read_tracks_json
+    if not idiomas_audio or not ruta or not ruta.lower().endswith(".mkv") or not os.path.isfile(ruta):
+        return {}
+    leido = read_tracks_json(ruta)
+    if not leido.get("ok"):
+        return {}
+    return idiomas_elegidos(overrides_de_idiomas(leido["data"], idiomas_audio))

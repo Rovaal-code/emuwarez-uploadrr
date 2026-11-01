@@ -1,4 +1,5 @@
 import type { Ajustes } from './seleccionSubida'
+import { idiomasParaServidor, type IdiomasPorPosicion } from './idiomasPack'
 
 /**
  * De dónde sale el proveedor de un pack de temporada, para enseñarlo bajo el
@@ -40,13 +41,19 @@ export function proveedorParaServidor(elegidos: ProveedoresElegidos, id: number)
   return elegidos.get(id) ?? SIN_PROVEEDOR
 }
 
-/** Los ajustes de una temporada tal como viajan a la cola, con el Proveedor de proveedorParaServidor. */
+/**
+ * Los ajustes de una temporada tal como viajan a la cola, con el Proveedor de
+ * proveedorParaServidor y, si se eligió alguno, el idioma de las pistas de
+ * audio sin idioma (por posición, para todos los capítulos).
+ */
 export function ajustesDeTemporada(
   ajustes: Ajustes | undefined,
   elegidos: ProveedoresElegidos,
   id: number,
+  idiomas?: IdiomasPorPosicion,
 ): Ajustes | undefined {
   const provider = proveedorParaServidor(elegidos, id)
-  if (!ajustes && provider === undefined) return undefined
-  return { ...(ajustes ?? {}), provider }
+  const conIdiomas = idiomasParaServidor(idiomas)
+  if (!ajustes && provider === undefined && !conIdiomas) return undefined
+  return { ...(ajustes ?? {}), provider, ...(conIdiomas ? { idiomas: conIdiomas } : {}) }
 }

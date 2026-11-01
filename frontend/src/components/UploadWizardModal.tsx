@@ -19,7 +19,7 @@ import { CheckStatusIcon } from './DetailCard'
 import { SourceComparisonModal } from './SourceComparisonModal'
 import {
   previewSeasonPack, getSeasonPlanProgress, getSeasonEpisodeNames, cancelSeasonPackPreview,
-  getSeasonEpisodeMediaInfo, getSeasonEpisodeRemuxPreview, previewSeasonPackFields,
+  getSeasonEpisodeMediaInfo, getSeasonEpisodeRemuxPreview, previewSeasonPackFields, getSeasonPackAudio,
   type SeasonPlanProgress, type SeasonEpisodeName, type SeasonEpisodeMediaInfo, type SeasonEpisodeRemux,
 } from '../api/seasonPack'
 import type { LibraryItemResponse, SeasonPackPlanResponse, UploadJob } from '../types/api'
@@ -40,6 +40,10 @@ import {
   cacheCubre, conAjustes, peticionCubre, type Seleccion, type Ajustes,
 } from '../utils/seleccionSubida'
 import { IconoAviso } from './Iconos'
+import {
+  SIN_IDIOMAS, conIdioma, etiquetaPistaSinIdioma, idiomasDelServidor, idiomasParaServidor, type IdiomasPorPosicion,
+} from '../utils/idiomasPack'
+import { avisoSourceVisible } from '../utils/avisoSource'
 import { Modal } from './Modal'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
@@ -436,6 +440,7 @@ const FIELD_INFO = {
   audio: 'Se lee con MediaInfo del archivo real (por pista).',
   subs: 'Se genera con MediaInfo del archivo real: «SUBS» si tiene pistas de subtítulos.',
   tag: 'Por defecto, el grupo de release del archivo (columna Grupo de Biblioteca); si no lo tiene, el de Ajustes. Puedes elegir otro de los guardados.',
+  idioma_pista_pack: 'Esta pista de audio no trae idioma, así que el nombre del pack no la incluye. El idioma que elijas vale para todos los capítulos: entra en el nombre del pack, en el de cada capítulo y se escribe en la pista al subir.',
 }
 
 // Monospace one-liner (torrent name / internal title) that shrinks its font so
@@ -572,6 +577,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [titleOptions, setTitleOptions] = useState<{ value: string; kind: string; label: string }[]>([])
   const [sourceWarning, setSourceWarning] = useState<string | null>(null)
   const [audioWarning, setAudioWarning] = useState<string | null>(null)
+  // MediaInfo apunta a otro source que el nombre o Radarr/Sonarr (lo redacta el servidor).
+  const [sourceMismatch, setSourceMismatch] = useState<string | null>(null)
   const [sourceComparison, setSourceComparison] = useState<SourceComparison | null>(null)
   const [showSourceCompare, setShowSourceCompare] = useState(false)
   // The detailed 9-candidate engine breakdown (SourceEngineDetail) only
@@ -607,10 +614,17 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // Los idiomas con los que el nombre se recalculó bien por última vez, por pista. Si un recálculo
   // falla, TODAS las pistas vuelven a esto: no solo la última elegida.
   const idiomasConfirmados = useRef<Record<number, string | undefined>>({})
+  // Pack: el idioma elegido para las pistas de audio sin idioma, por temporada y
+  // por posición. Solo lo CONFIRMADO (el nombre ya se recalculó con ello): es lo
+  // que viaja a la cola, así el nombre y el remux del servidor dicen lo mismo.
+  const [idiomasPorTemporada, setIdiomasPorTemporada] = useState<ReadonlyMap<number, IdiomasPorPosicion>>(new Map())
+  // Lo elegido mientras se recalcula; null cuando no hay nada en vuelo.
+  const [idiomasPackEnVuelo, setIdiomasPackEnVuelo] = useState<IdiomasPorPosicion | null>(null)
   useEffect(() => {
     versionIdioma.current++
     setRecalculandoIdioma(false)
     idiomasConfirmados.current = {}
+    setIdiomasPackEnVuelo(null)
   }, [targetId])
   const [showRemuxCard, setShowRemuxCard] = useState(false)
 
@@ -904,6 +918,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     setSourceWarning(resp.source_warning ?? null)
     setAudioWarning(resp.audio_warning ?? null)
     setSourceComparison(resp.source_comparison ?? null)
+    setSourceMismatch(resp.source_mismatch_warning ?? null)
   }, [sharedTitle])
 
   // --- Step 1: load nomenclature for the resolved target ---
@@ -996,6 +1011,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (proveedor) elegirProveedor(targetId, proveedor)
     const yaElegido = proveedorElegido.has(targetId)
     const proveedorPedido = proveedor ?? proveedorParaServidor(proveedorElegido, targetId)
+    // Lo ya elegido para esta temporada (al volver a ella desde el desplegable).
+    const idiomasPedidos = idiomasPorTemporada.get(targetId)
     const pedido = ++planPedido.current
     setSeasonPlanLoading(true); setSeasonPlanError(null)
     buildingPlanFor.current = targetId
@@ -1008,7 +1025,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       'plan-temporada-progreso', a => a.season_id === targetId, pedirPlan, 400)
     try {
       const [plan, srcResp, prvResp] = await Promise.all([
-        previewSeasonPack(targetId, proveedorPedido), getEmuSources(), getEmuProviders(),
+        previewSeasonPack(targetId, proveedorPedido, idiomasParaServidor(idiomasPedidos)), getEmuSources(), getEmuProviders(),
       ])
       if (pedido !== planPedido.current) return
       setSeasonPlan(plan)
@@ -1041,6 +1058,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       })
       setInitialTag(saved?.tag || plan.release_tag || 'EMUWAREZ')
       setSourceComparison(plan.source_comparison ?? null)
+      setSourceMismatch(plan.source_mismatch_warning ?? null)
+      setAudioWarning(null)
+      // Lo que el servidor aplicó de verdad: lo que no era una opción válida se cae.
+      setIdiomasPorTemporada(prev => new Map(prev).set(targetId, idiomasDelServidor(plan.idiomas_audio)))
       // 'cancelled' isn't a failure: the user closed the wizard mid-build and
       // the server stopped. Showing it as an error would flash a red message
       // over a modal that's already going away.
@@ -1058,7 +1079,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         setSeasonPlanLoading(false)
       }
     }
-  }, [targetId, ajustesPorId, proveedorElegido])
+  }, [targetId, ajustesPorId, proveedorElegido, idiomasPorTemporada])
 
   // Closing the wizard while a season plan is being built has to stop the
   // server too: it runs one real nomenclature proposal per episode, so a 24
@@ -1098,13 +1119,14 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     try {
       const overrides = {
         source: fields.source, provider: proveedorParaServidor(proveedorElegido, id) ?? fields.provider, tag: fields.tag,
+        idiomas: idiomasParaServidor(idiomasPorTemporada.get(id)),
       }
       const r = await getSeasonEpisodeNames(id, overrides)
       if (objetivoActual.current === id) setSeasonNames(r.episodes)
     }
     catch { if (objetivoActual.current === id) setSeasonNames(null) }
     finally { if (objetivoActual.current === id) setSeasonNamesLoading(false) }
-  }, [targetId, fields.source, fields.provider, fields.tag, proveedorElegido])
+  }, [targetId, fields.source, fields.provider, fields.tag, proveedorElegido, idiomasPorTemporada])
 
   const loadSeasonMi = useCallback(async () => {
     const id = targetId
@@ -1125,14 +1147,14 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (id == null) return
     setSeasonRemuxLoading(true); setSeasonRemuxError(null)
     try {
-      const r = await getSeasonEpisodeRemuxPreview(id)
+      const r = await getSeasonEpisodeRemuxPreview(id, idiomasParaServidor(idiomasPorTemporada.get(id)))
       if (objetivoActual.current === id) setSeasonRemux(r.episodes)
     }
     catch (e: unknown) {
       if (objetivoActual.current === id) { setSeasonRemux(null); setSeasonRemuxError(e instanceof Error ? e.message : 'Error calculando el remux') }
     }
     finally { if (objetivoActual.current === id) setSeasonRemuxLoading(false) }
-  }, [targetId])
+  }, [targetId, idiomasPorTemporada])
 
   // Reset all per-target state (both single-file and season) whenever the
   // resolved target changes — a different item means unrelated data.
@@ -1283,6 +1305,45 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     }
   }
 
+  // Pack: idioma de una pista de audio sin idioma, para todos los capítulos (una
+  // elección por posición). Mismas reglas que elegirIdioma: Continuar espera al
+  // recálculo, solo vale la última respuesta, y si falla vuelve a lo último que
+  // se recalculó bien. A la cola solo viaja lo confirmado (idiomasPorTemporada).
+  const elegirIdiomaPack = async (posicion: number, codigo: string) => {
+    const id = targetId
+    if (id == null) return
+    editado.current = true
+    const base = idiomasPackEnVuelo ?? idiomasPorTemporada.get(id) ?? SIN_IDIOMAS
+    const nuevas = conIdioma(base, posicion, codigo)
+    setIdiomasPackEnVuelo(nuevas)
+    setRecalculandoIdioma(true)
+    const version = ++versionIdioma.current
+    try {
+      const r = await getSeasonPackAudio(id, nuevas)
+      if (objetivoActual.current !== id || version !== versionIdioma.current) return
+      setIdiomasPorTemporada(prev => new Map(prev).set(id, idiomasDelServidor(r.idiomas_audio)))
+      setFields(prev => ({ ...prev, audio_summary: r.audio_summary ?? undefined }))
+      setSeasonPlan(prev => prev && {
+        ...prev, audio_summary: r.audio_summary, custom: r.custom,
+        audio_warning: r.audio_warning, pistas_sin_idioma: r.pistas_sin_idioma,
+      })
+      setAudioWarning(null)
+      // Los nombres y las pistas por capítulo ya no valen: se piden otra vez al abrirlos.
+      setSeasonNames(null)
+      setSeasonRemux(null)
+    } catch {
+      if (objetivoActual.current !== id || version !== versionIdioma.current) return
+      setAudioWarning('No se pudo recalcular el nombre con ese idioma; se queda lo que había. Vuelve a elegirlo.')
+    } finally {
+      // Solo la última elección apaga la espera y suelta lo que estaba en vuelo
+      // (si falló, el selector vuelve a lo confirmado).
+      if (version === versionIdioma.current) {
+        setIdiomasPackEnVuelo(null)
+        setRecalculandoIdioma(false)
+      }
+    }
+  }
+
   // Debounced live preview of the final torrent name + internal title.
   useEffect(() => {
     if (targetIsSeason) return
@@ -1346,6 +1407,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   }
 
   const sourceRequiresProvider = PROVIDER_SOURCES.has(fields.source || '')
+  // Se oculta en cuanto Source ya dice lo mismo que MediaInfo.
+  const avisoSource = avisoSourceVisible(sourceMismatch, sourceComparison?.from_mediainfo, fields.source)
 
   // Entering step 2 only stores the edited fields and runs the read-only
   // checks. It does NOT apply the nomenclature nor create an upload job — a job
@@ -1390,7 +1453,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         targetId, edicionesFinales(), checks, remuxSnapshot,
         targetIsSeason
           ? ajustesDeTemporada(
-              { source: fields.source, tag: fields.tag, title: fields.title }, proveedorElegido, targetId)
+              { source: fields.source, tag: fields.tag, title: fields.title }, proveedorElegido, targetId,
+              idiomasPorTemporada.get(targetId))
           : undefined,
         requestId,
       )
@@ -1445,7 +1509,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           results.push({ seasonId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(seasonId, undefined, checksResult, null, ajustesDeTemporada(overridesMap.get(seasonId), proveedorElegido, seasonId), s && peticionCubre(preselect, s) ? requestId : undefined)
+        const r = await queueUpload(seasonId, undefined, checksResult, null, ajustesDeTemporada(overridesMap.get(seasonId), proveedorElegido, seasonId, idiomasPorTemporada.get(seasonId)), s && peticionCubre(preselect, s) ? requestId : undefined)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {
@@ -1794,6 +1858,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           {sourceWarning && (
             <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {sourceWarning}</span>
           )}
+          {avisoSource && (
+            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {avisoSource}</span>
+          )}
         </label>
         {showSourceCompare && sourceComparison && (
           <SourceComparisonModal
@@ -1870,6 +1937,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const avisosDelPlan = seasonPlan?.warnings?.map((w, i) => (
     <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}><IconoAviso /> {w}</p>
   ))
+  const idiomasPackActuales: IdiomasPorPosicion =
+    idiomasPackEnVuelo ?? (targetId != null ? idiomasPorTemporada.get(targetId) : undefined) ?? SIN_IDIOMAS
   const origenProveedor = textoOrigenProveedor(
     seasonPlan?.provider, seasonPlan?.provider_source_detail, fields.provider)
 
@@ -1937,6 +2006,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           onClose={() => setShowSourceCompare(false)}
         />
       )}
+      {avisoSource && (
+        <p className="text-warning" style={{ gridColumn: '1 / -1', fontSize: 12, margin: 0 }}><IconoAviso /> {avisoSource}</p>
+      )}
       {sourceRequiresProvider && (
         <label><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
           <select className="form-input form-select" value={fields.provider || ''} onChange={e => setField('provider', e.target.value || null)}>
@@ -1950,8 +2022,32 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         <input className="form-input" value={seasonPlan?.video_codec || ''} disabled />
       </label>
       <label><FieldLabel label="Audio" info={FIELD_INFO.audio} />
-        <input className="form-input" value={seasonPlan?.audio_summary || ''} disabled />
+        <input className="form-input" value={fields.audio_summary ?? seasonPlan?.audio_summary ?? ''} disabled />
+        {seasonPlan?.audio_warning && (
+          <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {seasonPlan.audio_warning}</span>
+        )}
+        {audioWarning && (
+          <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {audioWarning}</span>
+        )}
       </label>
+      {(seasonPlan?.pistas_sin_idioma?.length ?? 0) > 0 && (
+        <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {(seasonPlan?.pistas_sin_idioma ?? []).map(p => (
+            <label key={p.posicion}>
+              <FieldLabel label={etiquetaPistaSinIdioma(p.posicion, p.pista, p.capitulos)} info={FIELD_INFO.idioma_pista_pack} />
+              <select
+                className="form-input form-select"
+                value={idiomasPackActuales[p.posicion] ?? ''}
+                onChange={e => elegirIdiomaPack(p.posicion, e.target.value)}
+              >
+                <option value="">— Sin idioma (no entra en el nombre) —</option>
+                {(seasonPlan?.idiomas_elegibles ?? []).map(o => <option key={o.code} value={o.code}>{o.label}</option>)}
+              </select>
+            </label>
+          ))}
+          {recalculandoIdioma && <span className="form-hint"><span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} /> Recalculando el nombre del pack…</span>}
+        </div>
+      )}
       <label><FieldLabel label="Subtítulos" info={FIELD_INFO.subs} />
         <input className="form-input" value={seasonPlan?.subtitle_summary || ''} disabled />
       </label>
@@ -2223,7 +2319,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 {needsSelection
                   ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
                   : <span />}
-                <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || seasonPlan.status !== 'valid' || existingJobBlocking}>
+                <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || recalculandoIdioma || seasonPlan.status !== 'valid' || existingJobBlocking}>
                   {preparing ? 'Preparando…' : 'Continuar'}
                 </button>
               </div>
@@ -2474,7 +2570,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   <button
                     className="btn btn-primary"
                     onClick={batchIsEpisodes ? uploadAllEpisodes : uploadAllSeasons}
-                    disabled={batchChecksLoading || !envReady || blocked.length === batchQueue.length}
+                    disabled={batchChecksLoading || recalculandoIdioma || !envReady || blocked.length === batchQueue.length}
                     type="button"
                   >
                     {batchIsEpisodes ? 'Subir todos' : 'Subir todas'}

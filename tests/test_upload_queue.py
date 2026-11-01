@@ -575,7 +575,7 @@ def test_run_queued_job_season_forwards_stored_overrides_to_the_plan(db_conn, tm
     db_conn.execute(
         "UPDATE upload_jobs SET season_overrides_json = ? WHERE id = ?",
         (json.dumps({"source": "BluRay", "provider": None, "tag": "MYTAG",
-                     "title": "The Tudors"}), job_id),
+                     "title": "The Tudors", "idiomas": {"2": "spa"}}), job_id),
     )
     db_conn.commit()
 
@@ -587,8 +587,9 @@ def test_run_queued_job_season_forwards_stored_overrides_to_the_plan(db_conn, tm
 
     def fake_plan(season_id_arg, conn=None, *,
                   source_override=None, provider_override=None, tag_override=None,
-                  title_override=None):
+                  title_override=None, idiomas_audio=None):
         captured["source_override"] = source_override
+        captured["idiomas_audio"] = idiomas_audio
         captured["provider_override"] = provider_override
         captured["tag_override"] = tag_override
         captured["title_override"] = title_override
@@ -603,6 +604,8 @@ def test_run_queued_job_season_forwards_stored_overrides_to_the_plan(db_conn, tm
         # The Título dropdown's pick has to survive the round trip through
         # season_overrides_json too — a season has no proposal row to hold it.
         "title_override": "The Tudors",
+        # El idioma elegido para la pista sin idioma llega al plan del pack.
+        "idiomas_audio": {"2": "spa"},
     }
 
 

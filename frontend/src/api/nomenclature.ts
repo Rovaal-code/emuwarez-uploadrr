@@ -129,6 +129,8 @@ export async function getNomenclatureFields(itemId: number, idiomas?: Record<num
   // Una pista de audio sin idioma: el nombre no la incluye hasta elegirlo.
   audio_warning?: string | null
   source_comparison?: SourceComparison | null
+  // MediaInfo apunta a otro source que el nombre o Radarr/Sonarr. Solo avisa.
+  source_mismatch_warning?: string | null
   source_bitrate_table?: SourceBitrateRow[] | null
   // Set when the file isn't accessible / MediaInfo can't read it: no name is
   // generated and `error` explains why.

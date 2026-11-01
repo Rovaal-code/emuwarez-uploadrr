@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   getNotifications,
   markNotificationRead,
@@ -13,6 +13,7 @@ import { useTooltip } from './Tooltip'
 import { useRefrescoPorAvisos } from '../hooks/useRefrescoPorAvisos'
 import { IconoPelicula } from './Iconos'
 import { guardedLeave } from '../utils/unsavedGuard'
+import { accionesOptimistas } from '../utils/accionesOptimistas'
 
 const POLL_MS = 30000
 
@@ -221,25 +222,14 @@ export function NotificationBell() {
   const botonRef = useRef<HTMLButtonElement>(null)
   const bellTip = useTooltip('Notificaciones')
 
-  // Solo cuenta la última lista pedida, y un cambio local (marcar, borrar) también tira las que iban en vuelo:
-  // una respuesta anterior al cambio devolvería el aviso que acabas de borrar o el contador que acabas de poner a 0.
-  // Acciones optimistas en marcha. Mientras haya alguna, ninguna consulta pisa la lista (traería de
-  // vuelta lo que otra aún está borrando): se apunta y se consulta una vez cuando terminan todas.
-  const enCurso = useRef(0)
-  const recargarAlAcabar = useRef(false)
-  const ultimoRefresco = useRef(0)
-  const refresh = useCallback(async () => {
-    if (enCurso.current > 0) { recargarAlAcabar.current = true; return }
-    const esta = ++ultimoRefresco.current
-    try {
-      const feed = await getNotifications({ limit: 50 })
-      if (esta !== ultimoRefresco.current) return
-      setItems(feed.notifications)
-      setUnread(feed.unread_count)
-    } catch {
-      /* non-blocking — bell just stays as-is */
-    }
-  }, [])
+  // Marcar y borrar se ven al momento y la lista se reconcilia con el servidor
+  // después; las reglas (qué consulta vale, el tope de 15 s por acción) están en
+  // utils/accionesOptimistas.ts. setItems/setUnread son estables: se crea una vez.
+  const [acciones] = useState(() => accionesOptimistas(
+    () => getNotifications({ limit: 50 }),
+    feed => { setItems(feed.notifications); setUnread(feed.unread_count) },
+  ))
+  const refresh = acciones.refrescar
 
   useEffect(() => { refresh() }, [refresh])
   // La campana sondeaba cada 30 segundos, así que una notificación podía tardar
@@ -280,19 +270,7 @@ export function NotificationBell() {
     }
   }
 
-  const accion = async (optimista: () => void, llamada: () => Promise<unknown>) => {
-    ultimoRefresco.current++
-    optimista()
-    enCurso.current++
-    // Si falla, la lista ya no coincide con el servidor: se consulta al terminar.
-    try { await llamada() } catch { recargarAlAcabar.current = true } finally {
-      enCurso.current--
-      if (enCurso.current === 0 && recargarAlAcabar.current) {
-        recargarAlAcabar.current = false
-        refresh()
-      }
-    }
-  }
+  const accion = acciones.accion
 
   const handleItemClick = async (n: NotificationItem) => {
     if (!n.read) {

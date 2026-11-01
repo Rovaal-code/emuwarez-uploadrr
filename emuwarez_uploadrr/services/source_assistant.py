@@ -161,6 +161,36 @@ def source_values_agree(*values: str | None) -> bool:
     return len(set(known)) <= 1
 
 
+def aviso_source_discrepante(comparacion: dict | None) -> str | None:
+    """El aviso del asistente cuando la Internal Source Tool (MediaInfo) apunta
+    a otro source que el nombre del archivo o Radarr/Sonarr: qué dice cada lado
+    y que se puede cambiar en Source. No bloquea la subida: el source que se usa
+    sigue saliendo del nombre y de Radarr/Sonarr, y la herramienta puede
+    equivocarse (por bitrate, un WEB-DL recomprimido se parece a un BluRay).
+
+    None si no hay comparación, si MediaInfo no dice nada o si coincide con los
+    otros dos (un lado sin valor no cuenta como desacuerdo, igual que en
+    source_values_agree)."""
+    if not comparacion:
+        return None
+    mediainfo = comparacion.get("from_mediainfo")
+    if not mediainfo:
+        return None
+    lados = []
+    nombre = comparacion.get("from_name")
+    radarr = comparacion.get("from_radarr")
+    if nombre and nombre != mediainfo:
+        lados.append(f"el nombre del archivo dice {nombre}")
+    if radarr and radarr != mediainfo:
+        lados.append(f"Radarr/Sonarr dice {radarr}")
+    if not lados:
+        return None
+    segun = ("MediaInfo indica" if comparacion.get("mediainfo_confirmed")
+             else "MediaInfo (por el bitrate y el audio) sugiere")
+    return (f"{segun} {mediainfo}, pero {' y '.join(lados)}. Si el bueno es {mediainfo}, "
+            "cámbialo en Source; si no, déjalo como está. No bloquea la subida.")
+
+
 def list_emu_sources() -> list[dict]:
     return list(EMU_SOURCES)
 
@@ -688,6 +718,8 @@ def build_editable_nomenclature_fields(
             # Name vs Radarr/Sonarr vs MediaInfo-bitrate cross-check for the
             # Source field's alert icon.
             "source_comparison": source_comparison,
+            # Lo mismo en una frase, cuando MediaInfo dice otra cosa (no bloquea).
+            "source_mismatch_warning": aviso_source_discrepante(source_comparison),
             # Reference table: every eMuwarez source code, the bitrate range
             # that maps to it at this file's resolution, and why — opened from
             # a link in the comparison table's "MediaInfo (bitrate)" cell.

@@ -438,6 +438,26 @@ export interface SeasonPackPlanResponse {
   custom?: boolean
   release_tag?: string | null
   source_comparison?: import('../api/nomenclature').SourceComparison | null
+  // MediaInfo apunta a otro source que el nombre o Radarr/Sonarr (capítulo
+  // representativo). Solo avisa.
+  source_mismatch_warning?: string | null
+  // Capítulos que siguen con una pista de audio sin idioma; null si ninguno.
+  audio_warning?: string | null
+  // Las pistas de audio sin idioma, para elegir su idioma una vez para todo el pack.
+  pistas_sin_idioma?: PistaSinIdiomaPack[]
+  // Lo elegido y aplicado ({"1": "spa"}) y las opciones del selector.
+  idiomas_audio?: Record<string, string>
+  idiomas_elegibles?: { code: string; label: string }[]
+}
+
+export interface PistaSinIdiomaPack {
+  // Posición entre las pistas de audio, desde 1: la misma en todos los capítulos.
+  posicion: number
+  // Códec y canales ("DD 5.1"), para reconocerla.
+  pista?: string | null
+  capitulos: (number | null)[]
+  // El idioma elegido para ella, si hay.
+  idioma?: string | null
 }
 
 

@@ -227,6 +227,43 @@ def idiomas_elegidos(overrides: dict | None) -> dict[int, str]:
             if ov.get("language") in IDIOMAS_ELEGIBLES}
 
 
+def idiomas_por_posicion(idiomas: dict | None) -> dict[int, str]:
+    """{posición de la pista de audio, desde 1: código} limpio: las claves que
+    vuelven del JSON del trabajo en texto pasan a número y lo que no es una
+    opción de IDIOMAS_ELEGIBLES se descarta."""
+    salida: dict[int, str] = {}
+    for clave, codigo in (idiomas or {}).items():
+        try:
+            posicion = int(clave)
+        except (TypeError, ValueError):
+            continue
+        if posicion > 0 and codigo in IDIOMAS_ELEGIBLES:
+            salida[posicion] = codigo
+    return salida
+
+
+def overrides_de_idiomas(mkv_json: dict | None, idiomas: dict | None) -> dict[int, dict]:
+    """Los overrides de remux ({id de pista: {"language": código}}) de UN fichero
+    para los idiomas elegidos por posición de audio, la misma posición que usan
+    el asistente y build_mediainfo_report. Solo para pistas sin idioma: un pack
+    elige una vez para todos sus capítulos, y en uno que sí trae el idioma no se
+    pisa (build_track_plan tampoco lo haría)."""
+    elegidos = idiomas_por_posicion(idiomas)
+    if not elegidos or not mkv_json:
+        return {}
+    audio = [t for t in (mkv_json.get("tracks") or []) if t.get("type") == "audio"]
+    salida: dict[int, dict] = {}
+    for posicion, codigo in elegidos.items():
+        if posicion > len(audio):
+            continue
+        pista = audio[posicion - 1]
+        props = pista.get("properties") or {}
+        if resolve_language(props.get("language"), props.get("language_ietf"),
+                            props.get("track_name")) == "UND":
+            salida[pista["id"]] = {"language": codigo}
+    return salida
+
+
 def lang_priority(lang: str | None, lang_ietf: str | None = None, existing_name: str | None = None) -> int:
     codigo = resolve_language(lang, lang_ietf, existing_name)
     if codigo == "ESP":

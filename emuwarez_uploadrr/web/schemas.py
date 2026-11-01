@@ -1012,6 +1012,16 @@ class SeasonPackPlanResponse(BaseModel):
     # blinking "compare source" link/modal a movie/episode's Source field
     # gets. None when the engine couldn't run at all.
     source_comparison: Optional[dict] = None
+    # La misma comparación en una frase, cuando MediaInfo apunta a otro source
+    # que el nombre o Radarr/Sonarr. Solo avisa.
+    source_mismatch_warning: Optional[str] = None
+    # Pistas de audio sin idioma en algún capítulo ([{posicion, pista,
+    # capitulos, idioma}]), el aviso de las que siguen sin idioma, lo elegido
+    # ({posición: código}) y las opciones del selector.
+    audio_warning: Optional[str] = None
+    pistas_sin_idioma: list[dict] = []
+    idiomas_audio: Dict[int, str] = {}
+    idiomas_elegibles: list[dict] = []
 
 
 # ---------------------------------------------------------------------------
@@ -1337,6 +1347,9 @@ class UploadQueueBody(BaseModel):
     provider: Optional[str] = None
     tag: Optional[str] = None
     title: Optional[str] = None
+    # Solo pack: el idioma elegido para cada pista de audio sin idioma, por su
+    # posición entre las de audio ({"2": "spa"}). Vale para todos los capítulos.
+    idiomas: Optional[Dict[str, str]] = None
 
 
 class UploadQueueResponse(BaseModel):

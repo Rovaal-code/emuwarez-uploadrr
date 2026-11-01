@@ -1,14 +1,38 @@
 import { api } from './client'
-import type { SeasonPackPlanResponse } from '../types/api'
+import type { PistaSinIdiomaPack, SeasonPackPlanResponse } from '../types/api'
 import type { MediaInfoReport } from './library'
 import type { TrackRemuxPreview, SourceComparison } from './nomenclature'
 
 // `provider`: el Proveedor elegido a mano (utils/origenProveedor.ts::
 // proveedorParaServidor; '' es "Sin proveedor"). Con él, capítulos con
 // proveedores distintos en el nombre ya no bloquean el pack.
-export function previewSeasonPack(seasonId: number, provider?: string): Promise<SeasonPackPlanResponse> {
-  const qs = provider !== undefined ? `?provider=${encodeURIComponent(provider)}` : ''
-  return api.get<SeasonPackPlanResponse>(`/library/season/${seasonId}/pack-preview${qs}`)
+// `idiomas`: el idioma elegido para cada pista de audio sin idioma, por posición
+// (utils/idiomasPack.ts); vale para todos los capítulos.
+export function previewSeasonPack(
+  seasonId: number, provider?: string, idiomas?: Record<number, string>,
+): Promise<SeasonPackPlanResponse> {
+  const qs = new URLSearchParams()
+  if (provider !== undefined) qs.set('provider', provider)
+  if (idiomas && Object.keys(idiomas).length) qs.set('idiomas', JSON.stringify(idiomas))
+  const query = qs.toString()
+  return api.get<SeasonPackPlanResponse>(`/library/season/${seasonId}/pack-preview${query ? `?${query}` : ''}`)
+}
+
+export interface SeasonPackAudio {
+  audio_summary: string | null
+  // Los capítulos no traen el mismo audio: el título lleva CUSTOM.
+  custom: boolean
+  // Capítulos que siguen con una pista de audio sin idioma; null si ninguno.
+  audio_warning: string | null
+  pistas_sin_idioma: PistaSinIdiomaPack[]
+  idiomas_audio: Record<string, string>
+}
+
+// Solo el audio del pack con los idiomas elegidos, sin rehacer el plan entero
+// (sin propuestas por capítulo ni TMDb): respalda el selector de idioma.
+export function getSeasonPackAudio(seasonId: number, idiomas: Record<number, string>): Promise<SeasonPackAudio> {
+  const qs = Object.keys(idiomas).length ? `?idiomas=${encodeURIComponent(JSON.stringify(idiomas))}` : ''
+  return api.get<SeasonPackAudio>(`/library/season/${seasonId}/pack-audio${qs}`)
 }
 
 export interface SeasonPackFieldsPreviewFields {
@@ -77,9 +101,10 @@ export interface SeasonEpisodeName {
 // season pack's own title instead of its own auto-detected values.
 export function getSeasonEpisodeNames(
   seasonId: number,
-  overrides?: { source?: string | null; provider?: string | null; tag?: string | null },
+  overrides?: { source?: string | null; provider?: string | null; tag?: string | null; idiomas?: Record<number, string> },
 ): Promise<{ episodes: SeasonEpisodeName[] }> {
   const qs = new URLSearchParams()
+  if (overrides?.idiomas && Object.keys(overrides.idiomas).length) qs.set('idiomas', JSON.stringify(overrides.idiomas))
   if (overrides?.source) qs.set('source', overrides.source)
   // '' es "Sin proveedor" elegido a mano: también se manda.
   if (overrides?.provider != null) qs.set('provider', overrides.provider)
@@ -116,7 +141,11 @@ export interface SeasonEpisodeRemux {
 }
 
 // Read-only per-episode preview — no manual per-track overrides for season
-// packs (each episode's own auto-computed plan is applied as-is).
-export function getSeasonEpisodeRemuxPreview(seasonId: number): Promise<{ episodes: SeasonEpisodeRemux[] }> {
-  return api.get<{ episodes: SeasonEpisodeRemux[] }>(`/library/season/${seasonId}/episode-remux-preview`)
+// packs (each episode's own auto-computed plan is applied as-is), salvo el
+// idioma elegido para las pistas de audio sin idioma (`idiomas`, por posición).
+export function getSeasonEpisodeRemuxPreview(
+  seasonId: number, idiomas?: Record<number, string>,
+): Promise<{ episodes: SeasonEpisodeRemux[] }> {
+  const qs = idiomas && Object.keys(idiomas).length ? `?idiomas=${encodeURIComponent(JSON.stringify(idiomas))}` : ''
+  return api.get<{ episodes: SeasonEpisodeRemux[] }>(`/library/season/${seasonId}/episode-remux-preview${qs}`)
 }

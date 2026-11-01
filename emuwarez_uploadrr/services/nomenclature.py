@@ -381,7 +381,7 @@ def build_nomenclature_proposal(
     item_id: int, *, force_refresh: bool = False, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
     tag_override: str | None = None, title_override: str | None = None,
-    guardar: bool = True,
+    guardar: bool = True, idiomas_audio: dict[int, str] | None = None,
 ) -> dict:
     """Generate a nomenclature proposal for a library item. Never modifies the
     filesystem. `guardar=False` la calcula sin guardarla ni reutilizar la
@@ -397,12 +397,17 @@ def build_nomenclature_proposal(
     `title_override` is the Título dropdown's pick. A season pack passes it to
     EVERY episode so the files inside end up named after the same title as the
     pack itself — without it the torrent read "The Tudors S02" while the files
-    inside stayed "Los.Tudor.S02E01"."""
+    inside stayed "Los.Tudor.S02E01".
+
+    `idiomas_audio` ({posición de la pista de audio: código}): el idioma elegido
+    en el asistente para las pistas sin idioma (el pack lo aplica a todos sus
+    capítulos). Como los demás overrides, fuerza una propuesta nueva."""
     own = conn is None
     conn = conn or connect()
     try:
         if (source_override is not None or provider_override is not None
-                or tag_override is not None or title_override is not None or not guardar):
+                or tag_override is not None or title_override is not None or not guardar
+                or idiomas_audio):
             force_refresh = True
         item = get_library_item_for_nomenclature(item_id, conn=conn)
         if not force_refresh and item:
@@ -500,7 +505,7 @@ def build_nomenclature_proposal(
             from .path_mapping import resolve_local_path
             from .media_info_service import build_mediainfo_report
             local_path = resolve_local_path(path, conn=conn) or path
-            mi_report = build_mediainfo_report(local_path)
+            mi_report = build_mediainfo_report(local_path, idiomas_audio=idiomas_audio)
             if mi_report.get("available"):
                 emu_by_field = {
                     r["field"]: (None if r["emu"] in (None, "—", "") else r["emu"])

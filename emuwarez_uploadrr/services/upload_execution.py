@@ -1998,8 +1998,13 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
         if status == "queued":
             # En cola: aún no se ha tocado ningún fichero. Primero la fila, y
             # luego se saca de la cola; si justo le tocaba plaza, su hilo ve
-            # el 'cancelled' al empezar y la suelta sin hacer nada.
-            _update_job_status(job_id, "cancelled", stage="cancelled", finished_at=_now())
+            # el 'cancelled' al empezar y la suelta sin hacer nada. La escritura
+            # solo cae si sigue en 'queued': si avanzó entre la lectura y aquí,
+            # se cancela como lo que es ahora (un 'running' necesita matar el proceso).
+            from .upload_states import escribir_estado
+            if not escribir_estado(job_id, desde={"queued"}, status="cancelled", stage="cancelled",
+                                   finished_at=_now(), conn=conn):
+                return cancel_upload_job(job_id, conn=conn)
             from .upload_queue import retirar_de_la_cola
             retirar_de_la_cola(job_id)
             append_upload_log(job_id, "info", "Subida cancelada mientras esperaba turno en la cola.", stream="system")

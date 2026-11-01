@@ -421,3 +421,30 @@ def test_si_entra_mientras_se_cancela_se_cancela_como_en_marcha(db_conn, tmp_pat
     assert r["ok"] is True
     assert len(lecturas) >= 2
     assert real(jid, conn=db_conn)["status"] == "cancelled"
+
+
+def test_si_sale_de_la_cola_mientras_se_cancela_no_se_pisa_el_running(db_conn, tmp_path, monkeypatch):
+    """Leyó 'queued', pero antes de escribir ya estaba en marcha: la escritura
+    condicionada falla y se cancela como un trabajo en marcha (matando el proceso)."""
+    jid = _fila_lista(db_conn, tmp_path / "q.mkv")
+    db_conn.execute("UPDATE upload_jobs SET status = 'queued', stage = 'queued' WHERE id = ?", (jid,))
+    db_conn.commit()
+    vieja = dict(_estado(db_conn, jid))
+    db_conn.execute("UPDATE upload_jobs SET status = 'running', stage = 'running' WHERE id = ?", (jid,))
+    db_conn.commit()
+    real = ue.get_upload_job
+    lecturas = []
+
+    def leer(job_id, conn=None):
+        lecturas.append(job_id)
+        return vieja if len(lecturas) == 1 else real(job_id, conn=conn)
+
+    retiradas = []
+    import emuwarez_uploadrr.services.upload_queue as uq
+    monkeypatch.setattr(uq, "retirar_de_la_cola", lambda j: retiradas.append(j))
+    monkeypatch.setattr(ue, "get_upload_job", leer)
+    r = cancel_upload_job(jid, conn=db_conn)
+
+    assert r["ok"] is True and len(lecturas) >= 2
+    assert retiradas == []  # no se trató como uno en cola
+    assert real(jid, conn=db_conn)["status"] == "cancelled"

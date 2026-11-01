@@ -216,3 +216,17 @@ def test_save_fields_creates_proposal(client, auth_headers):
     assert row["proposed_torrent_name"] == data["torrent_name"]
     assert row["proposed_torrent_name"].startswith("SaveTest 2024 ")
     assert row["proposed_filename"].startswith("SaveTest.2024.")
+
+
+def test_get_fields_pasa_el_idioma_elegido_para_una_pista(client, auth_headers):
+    """?idiomas={"2":"spa"}: lo elegido en Ver Pistas; lo que no es una opción se descarta."""
+    visto = {}
+
+    def _campos(item_id, conn=None, idiomas_audio=None, **_):
+        visto["idiomas"] = idiomas_audio
+        return {"library_item_id": item_id, "fields": {}}
+    with patch("emuwarez_uploadrr.web.api.nomenclature.build_editable_nomenclature_fields", side_effect=_campos):
+        r = client.get('/api/library/1/nomenclature/fields?idiomas={"2":"spa","3":"xx"}', headers=auth_headers)
+        assert r.status_code == 200 and visto["idiomas"] == {2: "spa"}
+        client.get("/api/library/1/nomenclature/fields?idiomas=no-es-json", headers=auth_headers)
+        assert visto["idiomas"] is None

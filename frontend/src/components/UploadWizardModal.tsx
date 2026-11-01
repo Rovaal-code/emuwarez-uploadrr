@@ -7,6 +7,7 @@ import {
   previewNomenclatureFields,
   saveNomenclatureFields,
   previewTrackRemux,
+  applyTrackRemux,
 } from '../api/nomenclature'
 import {
   queueUpload, getExistingJobForItem,
@@ -224,7 +225,7 @@ function AvisoModoPistas({ plan }: { plan?: { track_mode?: string } | null }) {
 // Track reorder/rename table — the single-file "Ver Pistas" card renders it
 // editable (inputs); the season target's per-episode accordion renders it
 // read-only (editable=false — no manual per-track overrides for seasons).
-export function RemuxTable({ plan, editable, nameEditable, edits, onEdit }: {
+export function RemuxTable({ plan, editable, nameEditable, edits, onEdit, onIdioma }: {
   plan: TrackRemuxPreview
   /** Si se puede tocar la casilla "Predet.". */
   editable: boolean
@@ -236,6 +237,8 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit }: {
   nameEditable?: boolean
   edits?: Record<number, TrackRemuxOverride>
   onEdit?: (trackId: number, patch: TrackRemuxOverride) => void
+  /** Elegir el idioma de una pista de audio que no trae ninguno. */
+  onIdioma?: (trackId: number, code: string) => void
 }) {
   return (
     <>
@@ -276,7 +279,17 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit }: {
                         latino del castellano. Enseñando solo `language`, esta
                         columna decía "cat" para una pista en valenciano. */}
                     <td style={{ padding: '6px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
-                      {t.language_ietf || t.language || '—'}
+                      {t.sin_idioma && onIdioma && plan.idiomas_elegibles?.length ? (
+                        <select
+                          className="form-input form-select"
+                          style={{ fontSize: 12, padding: '4px 6px' }}
+                          value={edits?.[t.id]?.language ?? t.language_after ?? ''}
+                          onChange={e => onIdioma(t.id, e.target.value)}
+                        >
+                          <option value="">— Sin idioma —</option>
+                          {plan.idiomas_elegibles.map(o => <option key={o.code} value={o.code}>{o.label}</option>)}
+                        </select>
+                      ) : (t.language_ietf || t.language || '—')}
                     </td>
                     <td style={{ padding: '6px 10px', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{t.current_name || '—'}</td>
                     <td style={{ padding: '5px 8px' }}>
@@ -558,6 +571,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [titleWarning, setTitleWarning] = useState<string | null>(null)
   const [titleOptions, setTitleOptions] = useState<{ value: string; kind: string; label: string }[]>([])
   const [sourceWarning, setSourceWarning] = useState<string | null>(null)
+  const [audioWarning, setAudioWarning] = useState<string | null>(null)
   const [sourceComparison, setSourceComparison] = useState<SourceComparison | null>(null)
   const [showSourceCompare, setShowSourceCompare] = useState(false)
   // The detailed 9-candidate engine breakdown (SourceEngineDetail) only
@@ -582,6 +596,22 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [remuxLoading, setRemuxLoading] = useState(false)
   const [remuxError, setRemuxError] = useState<string | null>(null)
   const [remuxEdits, setRemuxEdits] = useState<Record<number, TrackRemuxOverride>>({})
+  // Para elegirIdioma: lo último elegido, y qué respuesta es la de la última elección.
+  const edicionesActuales = useRef(remuxEdits)
+  edicionesActuales.current = remuxEdits
+  const versionIdioma = useRef(0)
+  // Mientras se recalcula el nombre con el idioma elegido, Continuar y Subir esperan: si no, se
+  // guardaría el nombre con el audio de antes y el remux aplicaría el idioma nuevo.
+  const [recalculandoIdioma, setRecalculandoIdioma] = useState(false)
+  // Cambiar de elemento invalida las respuestas pendientes del anterior, aunque se vuelva a él.
+  // Los idiomas con los que el nombre se recalculó bien por última vez, por pista. Si un recálculo
+  // falla, TODAS las pistas vuelven a esto: no solo la última elegida.
+  const idiomasConfirmados = useRef<Record<number, string | undefined>>({})
+  useEffect(() => {
+    versionIdioma.current++
+    setRecalculandoIdioma(false)
+    idiomasConfirmados.current = {}
+  }, [targetId])
   const [showRemuxCard, setShowRemuxCard] = useState(false)
 
   // Step 1 (season target only) — the pack plan: consistency across
@@ -872,6 +902,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     setTitleWarning(resp.title_warning ?? null)
     setTitleOptions(resp.title_options ?? [])
     setSourceWarning(resp.source_warning ?? null)
+    setAudioWarning(resp.audio_warning ?? null)
     setSourceComparison(resp.source_comparison ?? null)
   }, [sharedTitle])
 
@@ -1199,6 +1230,57 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const setRemuxEdit = (trackId: number, patch: TrackRemuxOverride) => {
     editado.current = true
     setRemuxEdits(prev => ({ ...prev, [trackId]: { ...prev[trackId], ...patch } }))
+  }
+
+  // Idioma de una pista de audio sin idioma: cuenta para el nombre del release
+  // (se pide el audio de nuevo) y para el nombre y la etiqueta de la pista.
+  const elegirIdioma = async (trackId: number, code: string) => {
+    const id = targetId
+    if (id == null) return
+    editado.current = true
+    setRecalculandoIdioma(true)
+    const previas = edicionesActuales.current
+    const nuevas = { ...previas, [trackId]: { ...previas[trackId], language: code || undefined } }
+    edicionesActuales.current = nuevas
+    setRemuxEdits(nuevas)
+    // Solo vale la respuesta de la última elección: una anterior que llegue tarde no la pisa.
+    const version = ++versionIdioma.current
+    const audio = (remuxPreview?.tracks ?? []).filter(t => t.type === 'audio')
+    const idiomas: Record<number, string> = {}
+    audio.forEach((t, i) => { const c = nuevas[t.id]?.language; if (c) idiomas[i + 1] = c })
+    try {
+      const [campos, plan] = await Promise.all([
+        getNomenclatureFields(id, idiomas),
+        applyTrackRemux(id, { dryRun: true, overrides: nuevas }),
+      ])
+      if (objetivoActual.current !== id || version !== versionIdioma.current) return
+      // La vista previa vieja tiene el audio de antes: se quita y «Continuar» (que la exige)
+      // espera a la que salga con los campos nuevos.
+      setPreview(null)
+      setFields(prev => ({ ...prev, audio_summary: campos.fields?.audio_summary }))
+      setAudioWarning(campos.audio_warning ?? null)
+      setRemuxPreview(plan)
+      idiomasConfirmados.current = Object.fromEntries(
+        Object.entries(nuevas).map(([pista, ed]) => [Number(pista), ed?.language]))
+    } catch {
+      // Sin recálculo, el nombre no lleva esos idiomas: todas las pistas vuelven a los del último
+      // recálculo bueno (las demás ediciones de la tabla se quedan), para que el remux no aplique
+      // un idioma que el nombre no dice. Solo si nadie ha elegido otra cosa después.
+      if (objetivoActual.current !== id || version !== versionIdioma.current) return
+      const revertidas = { ...edicionesActuales.current }
+      for (const pista of Object.keys(revertidas).map(Number)) {
+        const ed = { ...revertidas[pista], language: idiomasConfirmados.current[pista] }
+        if (ed.language === undefined) delete ed.language
+        if (Object.keys(ed).length) revertidas[pista] = ed
+        else delete revertidas[pista]
+      }
+      edicionesActuales.current = revertidas
+      setRemuxEdits(revertidas)
+      setAudioWarning('No se pudo recalcular el nombre con ese idioma; la pista sigue sin idioma. Vuelve a elegirlo.')
+    } finally {
+      // Solo la última elección apaga la espera; una anterior que acabe antes no la quita.
+      if (version === versionIdioma.current) setRecalculandoIdioma(false)
+    }
   }
 
   // Debounced live preview of the final torrent name + internal title.
@@ -1739,6 +1821,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         </label>
         <label><FieldLabel label="Audio" info={FIELD_INFO.audio} />
           <input className="form-input" value={fields.audio_summary || ''} disabled />
+          {audioWarning && (
+            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {audioWarning}</span>
+          )}
         </label>
         <label><FieldLabel label="Subtítulos" info={FIELD_INFO.subs} />
           <input className="form-input" value={fields.subs || ''} disabled />
@@ -1998,6 +2083,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 estos campos confirman que todos coinciden. Source, Proveedor y Tag se pueden corregir
                 a mano si el detectado no es correcto (se aplica a todos los capítulos por igual).
               </p>
+              {seasonPlan.warnings?.map((w, i) => (
+                <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}><IconoAviso /> {w}</p>
+              ))}
               {seasonFieldBox}
               {avisosDelPlan}
               {seasonSummaryBox}
@@ -2288,6 +2376,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                           nameEditable={!esTanda(seleccion) && renombra(normalizarModo(remuxPreview.track_mode))}
                           edits={remuxEdits}
                           onEdit={setRemuxEdit}
+                          onIdioma={esTanda(seleccion) ? undefined : elegirIdioma}
                         />
                       </>
                     )}
@@ -2299,7 +2388,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 {needsSelection
                   ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
                   : <span />}
-                <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || !preview || existingJobBlocking}>
+                <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || recalculandoIdioma || !preview || existingJobBlocking}>
                   {preparing ? 'Preparando…' : 'Continuar'}
                 </button>
               </div>
@@ -2497,7 +2586,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             <button
               className="btn btn-primary"
               onClick={doUpload}
-              disabled={!canUpload || uploading || checksLoading}
+              disabled={!canUpload || uploading || checksLoading || recalculandoIdioma}
               {...uploadBtnTip.triggerProps}
             >
               {uploading ? 'Subiendo…' : 'Subir a eMuwarez'}

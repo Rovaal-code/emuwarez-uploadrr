@@ -311,6 +311,32 @@ def test_un_nombre_de_mas_de_255_bytes_bloquea_la_propuesta(db_conn):
     assert any("255" in e for e in json.loads(result["errors_json"]))
 
 
+def test_una_pista_sin_idioma_avisa_y_no_bloquea(db_conn, tmp_path):
+    from unittest.mock import patch
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"x")
+    item_id = _insert_item(db_conn, path=str(f))
+    informe = {"available": True, "rows": [], "audio_summary": "ESP DD 5.1", "pistas_sin_idioma": [2, 3]}
+    with patch("emuwarez_uploadrr.services.media_info_service.build_mediainfo_report", return_value=informe):
+        prop = build_nomenclature_proposal(item_id, conn=db_conn, guardar=False)
+    assert prop["status"] != "blocked"
+    assert "Las pistas de audio 2, 3 no tienen idioma" in prop["warnings_json"]
+    assert "UND" not in prop["proposed_torrent_name"]
+
+
+def test_si_ninguna_pista_tiene_idioma_no_se_cuela_el_de_radarr(db_conn, tmp_path):
+    """El aviso dice que el nombre omite la pista: no puede salir ESP de Radarr."""
+    from unittest.mock import patch
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"x")
+    item_id = _insert_item(db_conn, path=str(f))
+    db_conn.execute("UPDATE library_items SET audio_codec='AC3', audio_languages='spa' WHERE id=?", (item_id,))
+    informe = {"available": True, "rows": [], "audio_summary": None, "pistas_sin_idioma": [1]}
+    with patch("emuwarez_uploadrr.services.media_info_service.build_mediainfo_report", return_value=informe):
+        prop = build_nomenclature_proposal(item_id, conn=db_conn, guardar=False)
+    assert prop["audio_summary"] is None and "ESP" not in prop["proposed_torrent_name"]
+
+
 def test_un_proveedor_solo_en_una_carpeta_es_debil_y_no_se_aplica():
     from emuwarez_uploadrr.services.nomenclature import detectar_proveedor
     item = {"path": "/series/Serie FLMN/Season 1/Serie.S01E01.1080p.WEB-DL.mkv"}

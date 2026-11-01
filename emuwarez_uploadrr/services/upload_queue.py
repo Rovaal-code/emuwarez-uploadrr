@@ -273,8 +273,7 @@ def queue_upload_for_item(
         is_season = item.get("item_type") == "season"
         proposal = None
         if not is_season:
-            from .nomenclature import get_latest_nomenclature_proposal
-            proposal = get_latest_nomenclature_proposal(item_id, conn=conn)
+            proposal = _propuesta_vigente(item_id, conn)
 
         season_overrides = None
         # provider_override "" ("Sin proveedor" elegido a mano) también cuenta.
@@ -340,8 +339,9 @@ def queue_retry_for_job(original_job_id: int, conn=None) -> dict:
             request_url=original.get("request_url"),
             retry_of_job_id=original_job_id,
             retry_count=(original.get("retry_count") or 0) + 1,
-            nomenclature_proposal_id=original.get("nomenclature_proposal_id"),
-            nomenclature_snapshot=_load_json("nomenclature_snapshot_json"),
+            # Si la propuesta fijada era automática y de reglas viejas, ya caducó:
+            # el reintento fija la vigente (la editada a mano se conserva tal cual).
+            **_propuesta_del_reintento(original, item_id, conn, _load_json),
             remux_overrides=_load_json("remux_overrides_json"),
             remux_snapshot=_load_json("remux_snapshot_json"),
             checks=_load_json("checks_snapshot_json"),
@@ -489,6 +489,40 @@ def _fail(job_id: int, message: str) -> None:
     _notify_upload_failed(job_id, message)
 
 
+def _propuesta_vigente(item_id: int, conn) -> dict | None:
+    """La propuesta de nomenclatura que vale ahora para este elemento.
+
+    build_nomenclature_proposal() devuelve la guardada si es editada a mano o si
+    su huella (fichero y versión de las reglas) sigue siendo la actual, y si no
+    la rehace y la guarda. Así una automática de reglas viejas no llega a la subida."""
+    from .nomenclature import build_nomenclature_proposal, get_latest_nomenclature_proposal
+    # Sin ninguna guardada no se crea aquí: la hace el paso de nomenclatura del trabajo.
+    if not get_latest_nomenclature_proposal(item_id, conn=conn):
+        return None
+    propuesta = build_nomenclature_proposal(item_id, conn=conn)
+    return propuesta if propuesta and propuesta.get("id") else None
+
+
+def _propuesta_del_reintento(original: dict, item_id: int, conn, cargar) -> dict:
+    """La propuesta que fija un reintento: la del trabajo original si sigue
+    vigente, o la que la sustituye. Un trabajo automático no fijaba ninguna y
+    el reintento tampoco."""
+    if not original.get("nomenclature_proposal_id"):
+        return {"nomenclature_proposal_id": None,
+                "nomenclature_snapshot": cargar("nomenclature_snapshot_json")}
+    fijada = conn.execute("SELECT fields_json FROM nomenclature_proposals WHERE id = ?",
+                          (original["nomenclature_proposal_id"],)).fetchone()
+    if fijada and fijada["fields_json"]:
+        # Editada a mano: lo que el usuario escribió no lo sustituye otra propuesta posterior.
+        return {"nomenclature_proposal_id": original["nomenclature_proposal_id"],
+                "nomenclature_snapshot": cargar("nomenclature_snapshot_json")}
+    propuesta = _propuesta_vigente(item_id, conn)
+    if not propuesta or propuesta["id"] == original["nomenclature_proposal_id"]:
+        return {"nomenclature_proposal_id": original["nomenclature_proposal_id"],
+                "nomenclature_snapshot": cargar("nomenclature_snapshot_json")}
+    return {"nomenclature_proposal_id": propuesta["id"], "nomenclature_snapshot": propuesta}
+
+
 def _season_upload_preconditions(conn) -> list[str]:
     """The generic (not season-specific) preconditions
     upload_preflight.validate_upload_preconditions() checks for a single
@@ -525,12 +559,28 @@ def _check_generic_upload_preconditions(job_id: int, item_id: int, is_season: bo
     command preview) still run later, unchanged, in _populate_ready()."""
     errors = _season_upload_preconditions(conn)
     if not is_season:
-        proposal_row = conn.execute(
-            "SELECT status FROM nomenclature_proposals WHERE library_item_id = ? AND status != 'expired' "
-            "ORDER BY created_at DESC LIMIT 1",
-            (item_id,),
-        ).fetchone()
-        if proposal_row and proposal_row["status"] == "blocked":
+        # La vigente, no la última guardada: una automática bloqueada con reglas
+        # viejas (p. ej. UND, que antes bloqueaba) haría fallar cada intento.
+        fijada = conn.execute(
+            "SELECT p.* FROM upload_jobs j JOIN nomenclature_proposals p ON p.id = j.nomenclature_proposal_id "
+            "WHERE j.id = ?", (job_id,)).fetchone()
+        manual_fijada = bool(fijada and fijada["fields_json"])
+        if manual_fijada:
+            # Editada a mano y fijada por el trabajo (p. ej. un reintento): es la que se aplicará,
+            # así que es la que se comprueba, aunque haya otra posterior.
+            proposal = dict(fijada)
+        else:
+            proposal = _propuesta_vigente(item_id, conn)
+        if proposal and not manual_fijada:
+            # Si el trabajo fijaba una propuesta y se ha rehecho, fija la nueva: la vieja ya está
+            # caducada y aplicarla pondría el nombre de antes.
+            conn.execute(
+                "UPDATE upload_jobs SET nomenclature_proposal_id = ?, nomenclature_snapshot_json = ? "
+                "WHERE id = ? AND nomenclature_proposal_id IS NOT NULL AND nomenclature_proposal_id != ?",
+                (proposal["id"], json.dumps(proposal, ensure_ascii=False, default=str), job_id, proposal["id"]),
+            )
+            conn.commit()
+        if proposal and proposal.get("status") == "blocked":
             errors.append("Hay errores en la propuesta de nomenclatura que bloquean la subida.")
     if errors:
         _fail(job_id, "; ".join(errors))
@@ -748,7 +798,8 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
     Lanza NoSePudoPreparar si falla la edición de las pistas del original.
     """
     from .carpeta_subida import NoSePudoPreparar, clonar, enlace_simple
-    from .mkv_remux import apply_remux, build_remux_plan, toca_el_fichero, REMUX_CONFIRMATION_TOKEN
+    from .mkv_remux import (apply_remux, build_remux_plan, idiomas_elegidos, toca_el_fichero,
+                            REMUX_CONFIRMATION_TOKEN)
     from .mkv_title import (apply_internal_title_update, preview_internal_title_update,
                             titulo_actual, MKV_CONFIRMATION_TOKEN)
     from .upload_execution import append_upload_log
@@ -780,7 +831,9 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
         return fin([], False, None, "no es MKV")
 
     motivo = _motivo_para_no_tocar(origen)
-    plan = build_remux_plan(item_id, conn=conn, ruta=origen, reordenar=motivo is None)
+    # Con el idioma elegido para una pista sin idioma: si solo cambia eso, también hay que escribirlo.
+    plan = build_remux_plan(item_id, conn=conn, ruta=origen, reordenar=motivo is None,
+                            idiomas=idiomas_elegidos(overrides))
     omitida = None
     if plan.get("status") == "blocked":
         omitida = "no se leyeron las pistas"

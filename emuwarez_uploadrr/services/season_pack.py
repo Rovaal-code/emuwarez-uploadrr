@@ -204,10 +204,10 @@ _CONSISTENCY_FIELDS: list[tuple[str, str, Any]] = [
 ]
 
 # Campos que el NOMBRE del pack dice una sola vez y que por eso también tienen
-# que coincidir: un pack no es BluRay y WEB-DL, ni HDR y SDR, a la vez. No van
-# en la regla del rollup porque la biblioteca no los guarda por temporada.
+# que coincidir: un pack no es HDR y SDR a la vez. No van en la regla del
+# rollup porque la biblioteca no los guarda por temporada. El source no está:
+# si difiere solo avisa (_fuente_del_pack).
 _PACK_NAME_FIELDS: list[tuple[str, str, Any, str]] = [
-    ("source", "source", lambda ep, prop: prop.get("source"), "desconocido"),
     ("dynamic_range", "HDR/DV", lambda ep, prop: _hdr_de(prop), "sin HDR"),
 ]
 
@@ -277,6 +277,30 @@ def _consistency_errors(episode_entries: list[dict]) -> list[str]:
     return errors
 
 
+def _fuente_del_pack(episode_entries: list[dict]) -> tuple[Optional[str], Optional[str]]:
+    """(source del pack, aviso). Con capítulos de fuentes distintas el pack se
+    sube igual y avisa: el título lleva la de más capítulos (si empatan, la
+    del primero), y lo que se deje en Source del asistente manda sobre ella."""
+    por_fuente: dict[str, list] = {}
+    for e in episode_entries:
+        fuente = e["proposal"].get("source") or "sin fuente"
+        por_fuente.setdefault(fuente, []).append(e["episode"].get("episode_number"))
+    conocidas = {f: caps for f, caps in por_fuente.items() if f != "sin fuente"}
+    if not conocidas:
+        return None, None
+    # max() se queda con la primera en caso de empate: el orden es el de los capítulos.
+    elegida = max(conocidas, key=lambda f: len(conocidas[f]))
+    if len(por_fuente) == 1:
+        return elegida, None
+    detalle = ", ".join(f"{f} ({', '.join(str(c) for c in caps)})" for f, caps in por_fuente.items())
+    empate = sum(1 for caps in conocidas.values() if len(caps) == len(conocidas[elegida])) > 1
+    motivo = "la primera de las que empatan" if empate else "la de más capítulos"
+    # El aviso se calcula con la fuente automática y la vista previa del asistente
+    # no lo recalcula al elegir otra en Source: por eso dice «propone», no «usa».
+    return elegida, (f"Los capítulos no vienen todos de la misma fuente: {detalle}. Se propone "
+                     f"{elegida}, {motivo}; si no es esa, cámbiala en Source.")
+
+
 def _hdr_de(proposal: dict) -> Optional[str]:
     """El token DV/HDR de un capítulo, sacado de su propuesta."""
     import json
@@ -318,7 +342,7 @@ def _aggregate_pack_fields(episode_entries: list[dict], conn=None) -> dict:
 
     return {
         "resolution": comun(lambda e: e["proposal"].get("resolution")),
-        "source": comun(lambda e: e["proposal"].get("source")),
+        "source": _fuente_del_pack(episode_entries)[0],
         "video_codec": comun(lambda e: e["proposal"].get("video_codec")),
         "dynamic_range": comun(lambda e: _hdr_de(e["proposal"])),
         "audio_summary": audio,
@@ -456,6 +480,19 @@ def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]
             (series or {}).get("original_title") or season.get("original_title"),
         )
     return build_title_options(spanish, original)
+
+
+def _capitulos_con_audio_sin_idioma(episode_entries: list[dict], conn) -> list:
+    """Los capítulos con alguna pista de audio sin idioma (el informe ya está en caché)."""
+    from .media_info_service import build_mediainfo_report
+    salida = []
+    for e in episode_entries:
+        path = e["episode"].get("path")
+        # build_mediainfo_report ya aplica los mappings: se le pasa la ruta guardada,
+        # sin mapear, para no aplicarlos dos veces.
+        if path and build_mediainfo_report(path).get("pistas_sin_idioma"):
+            salida.append(e["episode"].get("episode_number"))
+    return salida
 
 
 def _spanish_errors(episode_entries: list[dict]) -> list[str]:
@@ -724,6 +761,14 @@ def build_season_pack_plan(
 
         errors.extend(_consistency_errors(episode_entries))
         errors.extend(_spanish_errors(episode_entries))
+        # Se suman a los avisos de la decisión del proveedor, no los sustituyen.
+        aviso_fuente = _fuente_del_pack(episode_entries)[1]
+        if aviso_fuente:
+            warnings.append(aviso_fuente)
+        sin_idioma = _capitulos_con_audio_sin_idioma(episode_entries, conn)
+        if sin_idioma:
+            warnings.append(f"Capítulo(s) {', '.join(str(n) for n in sin_idioma)}: una pista de audio no "
+                            "tiene idioma y el nombre del pack no la incluye.")
 
         # Internal Source Tool comparison (name vs Radarr/Sonarr vs
         # MediaInfo-bitrate), computed once from the first available episode

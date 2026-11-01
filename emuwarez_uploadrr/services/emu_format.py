@@ -255,7 +255,8 @@ def _split_languages(raw: Optional[str]) -> list[str]:
     langs: list[str] = []
     for p in parts:
         code = format_language(p)
-        if code and code not in langs:
+        # UND no es un idioma del tracker: no entra en ningún nombre.
+        if code and code != "UND" and code not in langs:
             langs.append(code)
     langs.sort(key=lambda c: (0 if c == "ESP" else 1))
     return langs

@@ -113,7 +113,9 @@ export async function getEmuProviders(): Promise<{ providers: EmuProvider[] }> {
   return api.get<{ providers: EmuProvider[] }>('/nomenclature/providers')
 }
 
-export async function getNomenclatureFields(itemId: number): Promise<{
+// `idiomas`: {posición de la pista de audio: código}, lo elegido en Ver Pistas
+// para las pistas que no traen idioma.
+export async function getNomenclatureFields(itemId: number, idiomas?: Record<number, string>): Promise<{
   fields: NomenclatureFields
   torrent_name: string
   internal_mkv_title: string
@@ -124,6 +126,8 @@ export async function getNomenclatureFields(itemId: number): Promise<{
   // retitled in Spanish looks like.
   title_options?: { value: string; kind: 'spanish' | 'english'; label: string }[]
   source_warning?: string | null
+  // Una pista de audio sin idioma: el nombre no la incluye hasta elegirlo.
+  audio_warning?: string | null
   source_comparison?: SourceComparison | null
   source_bitrate_table?: SourceBitrateRow[] | null
   // Set when the file isn't accessible / MediaInfo can't read it: no name is
@@ -131,7 +135,9 @@ export async function getNomenclatureFields(itemId: number): Promise<{
   blocked?: boolean
   error?: string
 }> {
-  return api.get(`/library/${itemId}/nomenclature/fields`)
+  const query = idiomas && Object.keys(idiomas).length
+    ? `?idiomas=${encodeURIComponent(JSON.stringify(idiomas))}` : ''
+  return api.get(`/library/${itemId}/nomenclature/fields${query}`)
 }
 
 // `conProveedores: false` salta la consulta a TMDb de los proveedores: el
@@ -181,6 +187,9 @@ export interface TrackRemuxTrack {
   default_after: boolean
   forced: boolean
   changed: boolean
+  /** Audio sin idioma: Ver Pistas deja elegirlo. */
+  sin_idioma?: boolean
+  language_after?: string | null
 }
 
 export interface TrackRemuxPreview {
@@ -202,6 +211,8 @@ export interface TrackRemuxPreview {
   command_preview?: string | null
   errors?: string[]
   warnings?: string[]
+  /** Lo que se puede elegir para una pista de audio sin idioma. */
+  idiomas_elegibles?: { code: string; label: string }[]
 }
 
 export async function previewTrackRemux(itemId: number): Promise<TrackRemuxPreview> {
@@ -211,6 +222,27 @@ export async function previewTrackRemux(itemId: number): Promise<TrackRemuxPrevi
 export interface TrackRemuxOverride {
   new_name?: string
   default_after?: boolean
+  /** El idioma elegido para una pista de audio sin idioma (uno de idiomas_elegibles). */
+  language?: string
+}
+
+export async function applyTrackRemux(
+  itemId: number,
+  options: {
+    dryRun?: boolean
+    apply?: boolean
+    confirmation?: string | null
+    /** Ediciones a mano de la tabla del asistente, por id de pista. */
+    overrides?: Record<number, TrackRemuxOverride>
+  } = {},
+): Promise<TrackRemuxPreview> {
+  const { dryRun = true, apply = false, confirmation = null, overrides } = options
+  const overridesPayload = overrides && Object.keys(overrides).length > 0
+    ? Object.fromEntries(Object.entries(overrides).map(([id, ov]) => [String(id), ov]))
+    : undefined
+  return api.post(`/library/${itemId}/track-remux/apply`, {
+    dry_run: dryRun, apply, confirmation, overrides: overridesPayload,
+  })
 }
 
 export async function previewNomenclature(itemId: number, forceRefresh = false): Promise<NomenclatureProposal> {

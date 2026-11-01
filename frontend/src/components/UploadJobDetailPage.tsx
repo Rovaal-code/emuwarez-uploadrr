@@ -542,7 +542,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
     if (!showActividad) return
     setLoadingLogs(true)
     loadLogs()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar de subida o al abrir Actividad; loadLogs se recrea en cada pintado
   }, [jobId, showActividad])
   // El registro se recarga cuando el servidor avisa de que hay líneas nuevas.
   // El aviso NO trae las líneas —el proceso escupe cientos por segundo— y va

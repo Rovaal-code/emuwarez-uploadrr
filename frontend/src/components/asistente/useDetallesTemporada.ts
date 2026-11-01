@@ -130,7 +130,7 @@ export function useDetallesTemporada({
     if (!idiomaCambiado) return
     if (showSeasonNamesCard) loadSeasonNames()
     if (pistasAbiertas) loadSeasonRemux()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo reacciona al cambio de idioma (idiomaCambiado)
   }, [idiomaCambiado])
 
   return {

@@ -276,7 +276,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
       }
     }
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- la preselección solo vale al abrir; recargar con ella pisaría lo que elijas
   }, [item.id, isSeries, needsSelection])
 
   // La tanda activa: capítulos sueltos o temporadas, nunca las dos.
@@ -401,7 +401,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     } finally {
       if (objetivoActual.current === id) setLoading(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ajustesPorId a propósito fuera (ver abajo)
   }, [targetId])   // NOT ajustesPorId: it changes on every switch, and
                    // depending on it would reload the fields on top of the
                    // edits it was just asked to restore.
@@ -452,7 +452,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     }
     run()
     return () => { alive = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- se genera al entrar en el paso o cambiar la tanda, no con cada ajuste
   }, [step, targetIsSeason, episodeQueue])
 
   // Switching between already-generated episodes reads the cache — no refetch.
@@ -461,7 +461,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     if (episodeQueue.length <= 1 || episodePrepping) return
     const cached = episodeFieldsById.get(targetId)
     if (cached) applyFieldsResponse(cached, ajustesPorId.get(targetId), targetId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar de capítulo: lee la caché y los ajustes de ese momento
   }, [targetId, episodePrepping])
 
   // --- Step 1 (season target): build the pack plan, polling progress while

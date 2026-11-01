@@ -76,7 +76,7 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
     }
     const cancel = waitForRect(step.selector, setRect)
     return cancel
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar de paso, no con cada pintado
   }, [active, stepIndex])
 
   useEffect(() => {

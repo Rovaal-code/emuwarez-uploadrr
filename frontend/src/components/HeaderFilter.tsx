@@ -124,7 +124,6 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
       document.removeEventListener('mousedown', onDoc)
       document.removeEventListener('keydown', onEsc)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const toggle = () => {
@@ -158,7 +157,6 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
       top: Math.max(8, Math.min(btnRect.bottom + 4, maxTop)),
     })
     menu.querySelector<HTMLElement>('input, button')?.focus({ preventScroll: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   return (

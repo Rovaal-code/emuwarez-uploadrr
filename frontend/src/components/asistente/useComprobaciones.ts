@@ -101,7 +101,7 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
     }
     run()
     return () => { alive = false; setBatchChecksLoading(false) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- se relanza al cambiar la tanda o su fase, no con cada elección
   }, [step, batchQueue.length, batchPhase])
 
   // Otra selección: lo comprobado para la anterior ya no vale.

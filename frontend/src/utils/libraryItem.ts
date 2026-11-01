@@ -123,12 +123,6 @@ export function seasonNotReadyReason(item: LibraryItemResponse): string | null {
   return null
 }
 
-export function titleMismatchesFilename(item: LibraryItemResponse): boolean {
-  if (!item.original_title) return false
-  const norm = (s: string) => s.trim().toLowerCase()
-  return norm(item.title) !== norm(item.original_title)
-}
-
 // Narrower than LibraryItemResponse on purpose — UploadJob carries these same
 // 4 fields (from its linked library item) to build the identical Origen deep
 // link Biblioteca's own column uses, without needing a full library item.

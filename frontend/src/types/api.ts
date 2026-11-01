@@ -201,37 +201,6 @@ export interface LibraryListResponse {
   offset: number
 }
 
-export interface MissingItemResponse {
-  id: number
-  item_type: string
-  title: string
-  year: number | null
-  instance_type: string | null
-  instance_name: string | null
-  tmdb_id: string | null
-  imdb_id: string | null
-  local_status: string
-  request_status: string
-  updated_at: string | null
-  // Phase 8A
-  arr_queue_status: string | null
-  arr_queue_progress: number | null
-  arr_queue_timeleft: string | null
-  arr_queue_error: string | null
-  arr_history_error: string | null
-  file_exists: boolean | null
-  diagnostic_status: string | null
-  recommended_action: string | null
-  recommendation_reasons: string[] | null
-}
-
-export interface MissingListResponse {
-  items: MissingItemResponse[]
-  total: number
-  limit: number
-  offset: number
-}
-
 export interface SyncResponse {
   ok: boolean
   imported: number
@@ -244,11 +213,6 @@ export interface SyncResponse {
 export interface OkResponse {
   ok: boolean
   message: string
-}
-
-export interface ApiError {
-  detail: string
-  status_code?: number
 }
 
 // Phase 5B — Requests
@@ -349,13 +313,6 @@ export interface RequestReadinessResponse {
   updated_at: string | null
 }
 
-export interface RequestReadinessListResponse {
-  items: RequestReadinessResponse[]
-  total: number
-  limit: number
-  offset: number
-}
-
 export interface RequestCandidateResponse {
   id: number
   request_item_id: number
@@ -430,12 +387,6 @@ export interface NomenclatureProposal {
   errors: string[]
   created_at?: string
   updated_at?: string
-}
-
-export interface NomenclatureExistsResponse {
-  exists: boolean
-  message?: string
-  proposal?: NomenclatureProposal
 }
 
 // Phase 6 (Series/Season/Episode hierarchy) — season pack: one release for
@@ -617,30 +568,6 @@ export interface UploadJob {
   remux_snapshot?: UploadRemuxSnapshot | null
   checks_snapshot?: UploadChecksSnapshot | null
   progress?: UploadProgressState | null
-}
-
-// Phase 6D — Artifacts
-
-export interface UploadArtifact {
-  id?: number
-  upload_job_id: number
-  artifact_type: string
-  name: string | null
-  path: string | null
-  url: string | null
-  value: string | null
-  created_at: string
-}
-
-export interface UploadArtifactsResponse {
-  job_id: number
-  artifacts: UploadArtifact[]
-}
-
-export interface UploadRetryRequest {
-  dry_run: boolean
-  start: boolean
-  confirmation: string | null
 }
 
 // Phase 6C — Upload execution

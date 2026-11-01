@@ -4,7 +4,6 @@ import type {
   RequestDetailResponse,
   RequestSyncResponse,
   RequestSyncStatusResponse,
-  OkResponse,
 } from '../types/api'
 
 export interface RequestsFilter {
@@ -65,12 +64,4 @@ export async function getRequestsSyncProgress(): Promise<RequestsSyncProgress> {
 
 export async function getRequestDetail(id: number): Promise<RequestDetailResponse> {
   return api.get(`/requests/${id}`)
-}
-
-export async function rematchRequest(id: number): Promise<RequestDetailResponse> {
-  return api.post(`/requests/${id}/match`, {})
-}
-
-export async function markRequestReviewed(id: number): Promise<OkResponse> {
-  return api.post(`/requests/${id}/mark-reviewed`, {})
 }

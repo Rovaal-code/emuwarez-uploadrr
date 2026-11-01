@@ -1,0 +1,317 @@
+/* Peticiones (RequestsPage): estilos que antes iban en línea. Prefijo `pet-`.
+   Va el último en main.tsx: las clases que retocan un `.btn`, un `.form-input`
+   o una celda de `.data-table` se apoyan en ir después. El estilo en línea
+   ganaba siempre, así que donde otra regla apunta al mismo elemento el
+   selector lleva la especificidad justa para seguir ganando. */
+
+/* Lista */
+.pet-pagina {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.pet-cargando {
+  padding: 24px;
+}
+
+.pet-fila {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* `.filters-bar .form-input { min-width: 200px }` (2 de especificidad). */
+.filters-bar .form-input.pet-buscar {
+  min-width: 220px;
+}
+
+/* `.activity-section` trae margin-bottom: 20px; aquí la tabla llena el alto. */
+.activity-section.pet-seccion {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+.pet-scroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.pet-scroll-x {
+  overflow-x: auto;
+}
+
+.pet-titulo-fila {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.pet-min-0 {
+  min-width: 0;
+}
+
+.pet-paginacion {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.pet-paginacion-n {
+  font-size: 13px;
+  color: var(--text-secondary);
+  align-self: center;
+}
+
+/* Celdas y cabeceras: `.data-table th { text-align }` y `.data-table td { color }` */
+.pet-nowrap {
+  white-space: nowrap;
+}
+
+.pet-t12 {
+  font-size: 12px;
+}
+
+.pet-negrita {
+  font-weight: 600;
+}
+
+.pet-centro,
+.data-table th.pet-centro {
+  text-align: center;
+}
+
+.pet-muted,
+.data-table td.pet-muted {
+  color: var(--text-muted);
+}
+
+.data-table td.pet-creada {
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.pet-nombre {
+  max-width: 320px;
+}
+
+/* Miniatura del póster: el tamaño y la fuente del icono dependen del tamaño y van en línea */
+.pet-poster {
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pet-poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pet-poster-icono {
+  opacity: 0.35;
+}
+
+.pet-svg-medio {
+  vertical-align: middle;
+}
+
+/* Valores sueltos */
+.pet-mio {
+  color: var(--color-available);
+  font-weight: 600;
+}
+
+.pet-marca {
+  display: inline-flex;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.pet-badges {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* `.detail-row > span:last-child { color }` (3 de especificidad) pisa el color de la celda. */
+.pet-muted-11,
+.detail-row > span.pet-muted-11 {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.pet-estado-11 {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.detail-row > span.pet-accion {
+  font-size: 12px;
+  color: var(--color-uploading);
+}
+
+/* Candidatos locales (modal) */
+.modal-panel.pet-modal-candidatos {
+  max-width: 520px;
+}
+
+.pet-cand-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.detail-card.pet-cand {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.pet-cand-titulo {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.pet-cand-datos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+  color: var(--text-secondary);
+}
+
+.pet-cand-bloq {
+  margin-top: 4px;
+  color: var(--color-missing);
+  font-size: 11px;
+}
+
+/* Ficha de la petición */
+.pet-detalle {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pet-barra {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.pet-grupo {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pet-no-encoge {
+  flex-shrink: 0;
+}
+
+/* `a:hover { text-decoration: underline }` */
+.btn.pet-sin-subrayado,
+.btn.pet-sin-subrayado:hover {
+  text-decoration: none;
+}
+
+.pet-mb-20 {
+  margin-bottom: 20px;
+}
+
+.pet-ficha {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.pet-ficha-col {
+  flex: 1;
+  min-width: 300px;
+}
+
+/* El alto mínimo (DETAIL_CARD_HEIGHT) va en línea. */
+.pet-ficha-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* Petición frente a tu biblioteca */
+.pet-comparar {
+  margin-top: 17px;
+}
+
+.pet-comparar-titulo {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 15px;
+}
+
+.detail-card.pet-comparar-card {
+  border-radius: 10px;
+  padding: 21px 19px;
+}
+
+.pet-sin-coincidencia {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* `.data-table { font-size: 13px }` (1 de especificidad) */
+.data-table.pet-tabla-comparar {
+  font-size: 12.5px;
+}
+
+.pet-th-flex {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pet-fila-lib {
+  background: color-mix(in srgb, var(--color-available) 6%, transparent);
+}
+
+.pet-aviso {
+  font-size: 12.5px;
+  margin: 10px 0 0;
+  color: var(--color-warning);
+}
+
+/* Preparación de subida */
+.pet-preparacion {
+  margin-top: 20px;
+  max-width: 640px;
+}
+
+.pet-mt-8 {
+  margin-top: 8px;
+}
+
+.pet-bloq-titulo {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.pet-bloq {
+  font-size: 11px;
+  color: var(--color-missing);
+}

@@ -254,3 +254,15 @@ def test_las_categorias_de_la_peticion_coinciden():
     m = re.search(r"CATEGORY_IDS[^=]*=\s*\{(.*?)\}", fuente, re.S)
     assert m, "no se encontró CATEGORY_IDS"
     assert set(map(int, re.findall(r"'(\d+)'", m.group(1)))) == set(EMU_CATEGORIAS)
+
+
+def test_los_dominios_de_proveedor_coinciden():
+    """El icono y el enlace de cada proveedor salen del dominio de components/ProviderIcon.tsx, copia de
+    PROVIDER_DOMAINS. Animebox apuntaba a animebox.es, una app de imágenes que no tiene nada que ver."""
+    from emuwarez_uploadrr.services.source_assistant import PROVIDER_DOMAINS
+
+    fuente = _texto("components/ProviderIcon.tsx")
+    m = re.search(r"const DOMAINS[^=]*=\s*\{(.*?)\n\}", fuente, re.S)
+    assert m, "no se encontró DOMAINS"
+    delFront = dict(re.findall(r"'?([\w+]+)'?:\s*'([^']+)'", m.group(1)))
+    assert delFront == {k.lower(): v for k, v in PROVIDER_DOMAINS.items()}

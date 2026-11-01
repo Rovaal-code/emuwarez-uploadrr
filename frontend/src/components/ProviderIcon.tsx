@@ -29,7 +29,7 @@ const DOMAINS: Record<string, string> = {
   mubi: 'mubi.com', nf: 'netflix.com', rktn: 'rakuten.tv', sl: 'sonyliv.com', snxt: 'sunnxt.com',
   viu: 'viu.com', rtve: 'rtve.es', hbo: 'hbo.com', cr: 'crunchyroll.com',
   adn: 'animationdigitalnetwork.com', hidive: 'hidive.com', vrv: 'vrv.co', bili: 'bilibili.com',
-  animebox: 'animebox.es', a3p: 'atresplayer.com', skst: 'skyshowtime.com', flmn: 'filmin.es',
+  animebox: 'anime-box.com', a3p: 'atresplayer.com', skst: 'skyshowtime.com', flmn: 'filmin.es',
   flixole: 'flixole.com', mgmp: 'mgmplus.com', strp: 'starplus.com', stz: 'starz.com', cnlp: 'canalplus.com',
 }
 

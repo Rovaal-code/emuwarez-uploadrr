@@ -219,3 +219,65 @@ def test_el_endpoint_con_un_filtro_de_columna_tambien_pagina_en_sql(api_con_bibl
     # Las series que salen traen su resumen calculado, no el de la fila cruda.
     serie = next(i for i in todo["items"] if i["item_type"] == "series")
     assert serie["local_status"] == "Faltante"
+
+
+# --- Filtros que ocultan («!valor»), con la paginación en SQL ------------------------------------
+
+@pytest.fixture
+def api_con_grupos(client):
+    c = connect(db_path())
+    init_db(c)
+
+    def poner(titulo, item_type="movie", parent=None, grupo=None, estado="Disponible", season=None, ep=None):
+        return c.execute(
+            "INSERT INTO library_items (item_type, title, local_status, release_group, parent_id, season_number, "
+            "episode_number, updated_at) VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
+            (item_type, titulo, estado, grupo, parent, season, ep)).lastrowid
+
+    poner("A", grupo="G1")
+    poner("B", grupo="G2")
+    poner("C", grupo=None)
+    poner("D", grupo="G1", estado="Faltante")
+    # Todos sus capítulos son de G2: la serie enseña G2 y se oculta con ella.
+    sx = poner("Serie X", "series", estado="Parcial")
+    tx = poner("Serie X - T1", "season", sx, season=1)
+    poner("Serie X - T1E1", "episode", tx, grupo="G2", season=1, ep=1)
+    poner("Serie X - T1E2", "episode", tx, grupo="G2", season=1, ep=2)
+    # Mezcla de grupos: no enseña ninguno, así que no hay nada que ocultar y sale por sus capítulos.
+    sy = poner("Serie Y", "series", estado="Parcial")
+    ty = poner("Serie Y - T1", "season", sy, season=1)
+    poner("Serie Y - T1E1", "episode", ty, grupo="G1", season=1, ep=1)
+    poner("Serie Y - T1E2", "episode", ty, grupo="G2", season=1, ep=2)
+    c.commit()
+    c.close()
+    return client
+
+
+def _titulos(client, headers, query):
+    r = _pedir(client, headers, query)
+    return [i["title"] for i in r["items"]], r["total"]
+
+
+def test_ocultar_un_grupo_pagina_en_sql_y_el_total_cuenta_lo_que_queda(api_con_grupos, auth_headers):
+    todos, total = _titulos(api_con_grupos, auth_headers, "release_group=!G2&sort=title_asc&limit=50")
+    assert todos == ["A", "C", "D", "Serie Y"] and total == 4
+    primera, total1 = _titulos(api_con_grupos, auth_headers, "release_group=!G2&sort=title_asc&limit=3&offset=0")
+    segunda, total2 = _titulos(api_con_grupos, auth_headers, "release_group=!G2&sort=title_asc&limit=3&offset=3")
+    assert primera == ["A", "C", "D"] and segunda == ["Serie Y"]
+    # «Mostrando 3 de 4»: el total es el de todo lo que cumple, no el de la página.
+    assert total1 == total2 == 4
+
+
+def test_ocultar_se_combina_con_un_filtro_que_va_por_sql(api_con_grupos, auth_headers):
+    titulos, total = _titulos(api_con_grupos, auth_headers, "release_group=!G2&status=Faltante&sort=title_asc&limit=50")
+    assert titulos == ["D"] and total == 1
+
+
+def test_ocultar_se_combina_con_elegir_otro_valor_de_la_misma_columna(api_con_grupos, auth_headers):
+    titulos, total = _titulos(api_con_grupos, auth_headers, "release_group=G1&release_group=!G2&sort=title_asc&limit=50")
+    assert titulos == ["A", "D", "Serie Y"] and total == 3
+
+
+def test_ocultar_y_ordenar_por_tamano_no_cambia_el_total(api_con_grupos, auth_headers):
+    _, total = _titulos(api_con_grupos, auth_headers, "release_group=!G2&sort=size_desc&limit=1&offset=3")
+    assert total == 4

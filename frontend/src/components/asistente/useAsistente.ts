@@ -541,7 +541,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
         setSeasonPlanLoading(false)
       }
     }
-  }, [targetId, ajustesPorId, proveedorElegido, idiomasPorTemporada])
+  }, [targetId, ajustesPorId, proveedorElegido, idiomasPorTemporada, sharedTitle])
 
   // Closing the wizard while a season plan is being built has to stop the
   // server too: it runs one real nomenclature proposal per episode, so a 24
@@ -602,7 +602,8 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
       setDetectingProvider(true)
       try {
         const res = await suggestProvider(targetId)
-        if (res.suggested) setField('provider', res.suggested, false)
+        // Como setField('provider', …, false) fuera de una temporada, sin depender de él: se recrea en cada pintado.
+        if (res.suggested) setFields(prev => ({ ...prev, provider: res.suggested }))
       } catch { /* non-blocking — leave "Sin provider" */ }
       finally { setDetectingProvider(false) }
     }, 500)

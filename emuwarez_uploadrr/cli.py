@@ -194,7 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_arr_refresh.add_argument("--no-history", action="store_true", help="Omitir lectura de historial")
     p_arr_refresh.add_argument("--history-size", type=int, default=100, help="Número de entradas de historial (default: 100)")
 
-    p_nomenclature = sub.add_parser("nomenclature", help="Previsualización de nomenclatura eMuwarez (no modifica archivos)")
+    p_nomenclature = sub.add_parser("nomenclature", help="Nomenclatura eMuwarez: `apply` renombra el archivo original, el resto no modifica archivos")
     nom_sub = p_nomenclature.add_subparsers(dest="nomenclature_command", required=True)
     p_nom_preview = nom_sub.add_parser("preview", help="Generar propuesta de nomenclatura para un item")
     p_nom_preview.add_argument("id", type=int, help="ID del library_item")

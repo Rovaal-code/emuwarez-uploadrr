@@ -36,6 +36,16 @@ def _argumentos(parser: argparse.ArgumentParser) -> str:
     return " ".join(partes)
 
 
+def _descripcion(ayuda: str, parser: argparse.ArgumentParser) -> str:
+    """La ayuda del comando y la de cada argumento (ahí está, p. ej., el token de `--confirm`)."""
+    args = []
+    for a in parser._actions:
+        if isinstance(a, (argparse._HelpAction, argparse._SubParsersAction)) or not a.help:
+            continue
+        args.append(f"`{a.option_strings[0] if a.option_strings else a.dest}`: {a.help}")
+    return ayuda + (". " + "; ".join(args) if args else "")
+
+
 def _filas(parser: argparse.ArgumentParser, prefijo: str, ayudas: dict[str, str]) -> list[tuple[str, str]]:
     filas = []
     for nombre, hijo in _subcomandos(parser).items():
@@ -45,7 +55,7 @@ def _filas(parser: argparse.ArgumentParser, prefijo: str, ayudas: dict[str, str]
             filas += _filas(hijo, ruta, ayudas)
         else:
             args = _argumentos(hijo)
-            filas.append((f"{ruta} {args}".strip(), ayudas.get(ruta, "")))
+            filas.append((f"{ruta} {args}".strip(), _descripcion(ayudas.get(ruta, ""), hijo)))
     return filas
 
 
@@ -81,7 +91,8 @@ def generar() -> str:
     for nombre, hijo in _subcomandos(parser).items():
         salida += [f"## `{nombre}` — {ayudas.get(nombre, '')}", "", "| Comando | Qué hace |", "|---|---|"]
         subs = _subcomandos(hijo)
-        filas = _filas(hijo, nombre, ayudas) if subs else [(f"{nombre} {_argumentos(hijo)}".strip(), ayudas.get(nombre, ""))]
+        filas = _filas(hijo, nombre, ayudas) if subs else [
+            (f"{nombre} {_argumentos(hijo)}".strip(), _descripcion(ayudas.get(nombre, ""), hijo))]
         for comando, ayuda in filas:
             salida.append(f"| `{comando}` | {ayuda.replace('|', '/')} |")
         salida.append("")

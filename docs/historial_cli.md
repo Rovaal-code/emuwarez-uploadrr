@@ -489,7 +489,7 @@ permitidas, claves e instancias, sin mostrar secretos.
 
 ### Guía de despliegue completa
 
-Ver: [docs/DEPLOYMENT_DOCKER.md](docs/DEPLOYMENT_DOCKER.md)
+Ver: [DEPLOYMENT_DOCKER.md](DEPLOYMENT_DOCKER.md)
 
 ---
 

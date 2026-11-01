@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime
 import fnmatch
 import os
+import posixpath
 import shutil
 import sqlite3
 import tarfile
@@ -260,7 +261,25 @@ def _motivo_de_rechazo(tar: tarfile.TarFile, config_dir: Path) -> str | None:
             tarfile.data_filter(miembro, str(config_dir))
         except tarfile.FilterError as exc:
             return f"La copia no es segura ({miembro.name}): {exc}"
-    base = next((m for m in miembros if m.name == _DB_NAME and m.isfile()), None)
+    # Lo que el filtro no ve porque mira cada miembro por separado: un nombre repetido (la segunda base se
+    # colocaría sin haberse mirado), la base como algo que no es un fichero, o un fichero que es a la vez carpeta
+    # (la extracción fallaría con la base ya cambiada). Las copias de la aplicación nunca lo tienen.
+    nombres = [posixpath.normpath(m.name) for m in miembros]
+    visto: set[str] = set()
+    for nombre in nombres:
+        if nombre in visto:
+            return f"La copia no es válida: repite «{nombre}»"
+        visto.add(nombre)
+    ficheros = {n for m, n in zip(miembros, nombres) if not m.isdir()}
+    for nombre in nombres:
+        padre = posixpath.dirname(nombre)
+        while padre:
+            if padre in ficheros:
+                return f"La copia no es válida: «{padre}» es a la vez un fichero y una carpeta"
+            padre = posixpath.dirname(padre)
+    if any(n == _DB_NAME and not m.isfile() for m, n in zip(miembros, nombres)):
+        return "La copia no es válida: su base de datos no es un fichero normal"
+    base = next((m for m in miembros if m.name == _DB_NAME), None)
     if base is None:
         return None
     with tempfile.TemporaryDirectory() as tmp:

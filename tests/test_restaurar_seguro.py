@@ -106,6 +106,87 @@ def test_un_miembro_malo_tras_la_base_no_deja_la_base_cambiada(cfg, tmp_path):
     assert not (tmp_path / "escapado.txt").exists()
 
 
+def _base_en_bytes(cfg, tmp_path, version: int | None = None, marca: str | None = None) -> bytes:
+    """Una copia de la base viva, con otro esquema y/u otra marca."""
+    copia = tmp_path / f"base-{version}-{marca}.db"
+    conn = sqlite3.connect(str(cfg / "emuwarez_uploadrr.db"))
+    dst = sqlite3.connect(str(copia))
+    conn.backup(dst)
+    conn.close()
+    if version is not None:
+        dst.execute("UPDATE app_state SET value = ? WHERE key = 'schema_version'", (str(version),))
+    if marca is not None:
+        dst.execute("UPDATE app_state SET value = ? WHERE key = 'marca'", (marca,))
+    dst.commit()
+    dst.close()
+    return copia.read_bytes()
+
+
+def _anadir(tar: tarfile.TarFile, nombre: str, datos: bytes = b"x", tipo=tarfile.REGTYPE, enlace: str = "") -> None:
+    info = tarfile.TarInfo(nombre)
+    info.type = tipo
+    info.linkname = enlace
+    info.size = len(datos) if tipo == tarfile.REGTYPE else 0
+    tar.addfile(info, io.BytesIO(datos) if tipo == tarfile.REGTYPE else None)
+
+
+def test_una_segunda_base_con_otro_esquema_no_se_cuela(cfg, tmp_path):
+    """El esquema se miraba en la primera: la segunda, más nueva, se colocaba sin mirarla."""
+    archivo = tmp_path / "doble.tar.gz"
+    with tarfile.open(archivo, "w:gz") as tar:
+        _anadir(tar, "emuwarez_uploadrr.db", _base_en_bytes(cfg, tmp_path, marca="una"))
+        _anadir(tar, "emuwarez_uploadrr.db", _base_en_bytes(cfg, tmp_path, version=SCHEMA_VERSION + 1, marca="dos"))
+
+    r = _aplicar(str(archivo))
+
+    assert r["ok"] is False and "repite" in r["error"]
+    assert _marca(cfg) == "antes"
+    with db() as conn:
+        assert get_state(conn, "schema_version") == str(SCHEMA_VERSION)
+
+
+def test_la_base_que_es_un_enlace_no_se_restaura(cfg, tmp_path):
+    archivo = tmp_path / "enlace.tar.gz"
+    with tarfile.open(archivo, "w:gz") as tar:
+        _anadir(tar, "emuwarez_uploadrr.db", tipo=tarfile.SYMTYPE, enlace="otra.db")
+
+    r = _aplicar(str(archivo))
+
+    assert r["ok"] is False and "no es un fichero normal" in r["error"]
+    assert not (cfg / "emuwarez_uploadrr.db").is_symlink()
+    assert _marca(cfg) == "antes"
+
+
+def test_un_fichero_que_a_la_vez_es_carpeta_se_rechaza_antes_de_tocar_la_base(cfg, tmp_path):
+    """La extracción fallaba al crear el hijo, con la base ya cambiada: una restauración a medias."""
+    archivo = tmp_path / "choque.tar.gz"
+    with tarfile.open(archivo, "w:gz") as tar:
+        _anadir(tar, "emuwarez_uploadrr.db", _base_en_bytes(cfg, tmp_path, marca="otra"))
+        _anadir(tar, "settings.json", b"{}")
+        _anadir(tar, "settings.json/hijo", b"x")
+
+    r = _aplicar(str(archivo))
+
+    assert r["ok"] is False and "a la vez un fichero y una carpeta" in r["error"]
+    assert _marca(cfg) == "antes"
+    assert not (cfg / "settings.json").exists()
+
+
+def test_una_carpeta_con_ficheros_dentro_no_es_un_choque(cfg, tmp_path):
+    archivo = tmp_path / "bien.tar.gz"
+    with tarfile.open(archivo, "w:gz") as tar:
+        _anadir(tar, "emuwarez_uploadrr.db", _base_en_bytes(cfg, tmp_path, marca="otra"))
+        _anadir(tar, "Uploadrr", tipo=tarfile.DIRTYPE)
+        _anadir(tar, "Uploadrr/data/a.txt", b"a")
+        _anadir(tar, "Uploadrr/data/b.txt", b"b")
+
+    r = _aplicar(str(archivo))
+
+    assert r["ok"] is True, r
+    assert _marca(cfg) == "otra"
+    assert (cfg / "Uploadrr" / "data" / "b.txt").read_text() == "b"
+
+
 # ---------------------------------------------------------------------------
 # Una copia con la base de un esquema más nuevo
 # ---------------------------------------------------------------------------

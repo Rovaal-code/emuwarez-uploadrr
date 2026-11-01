@@ -148,7 +148,7 @@ def test_al_terminar_una_sync_de_biblioteca_se_avisa(monkeypatch):
     from emuwarez_uploadrr.services import library
 
     avisos: list[tuple] = []
-    monkeypatch.setattr(library, "publicar",
+    monkeypatch.setattr(library.sync, "publicar",
                         lambda tipo, datos=None: avisos.append((tipo, datos)) or 0)
 
     with library._lib_sync_guard():
@@ -166,7 +166,7 @@ def test_se_avisa_tambien_cuando_la_sync_falla(monkeypatch):
     from emuwarez_uploadrr.services import library
 
     avisos: list[tuple] = []
-    monkeypatch.setattr(library, "publicar",
+    monkeypatch.setattr(library.sync, "publicar",
                         lambda tipo, datos=None: avisos.append((tipo, datos)) or 0)
 
     with pytest.raises(RuntimeError):

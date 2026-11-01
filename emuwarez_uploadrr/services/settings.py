@@ -18,22 +18,28 @@ tests/test_una_sola_puerta_a_settings.py.
 from __future__ import annotations
 
 import sqlite3
-from typing import Optional
+from typing import Any, Optional
 
+from ..database import CANONICAL_SETTING_ALIASES
 from ..database import get_setting_canonical as _get_setting_canonical
-from .ajustes_registro import bool_de, es_secreto as _es_secreto
+from .ajustes_registro import AJUSTES, CLAVES_SECRETAS, a_texto, desde_texto
+
+# Las claves secretas que expone Configuración están en el registro
+# (services/ajustes_registro.py). Lo que también es una clave aunque no salga
+# allí: emu.endpoint_url (lleva la clave en la query), los alias antiguos con
+# guion bajo de los secretos del registro y las API keys de los hosts de
+# imágenes (una por host, imghost.key.<id>).
+_OTROS_SECRETOS: frozenset[str] = frozenset(
+    ["emu.endpoint_url"]
+    + [CANONICAL_SETTING_ALIASES[k] for k in CLAVES_SECRETAS if k in CANONICAL_SETTING_ALIASES]
+)
+_PREFIJOS_SECRETOS: tuple[str, ...] = ("imghost.key.",)
 
 
 def es_secreto(key: str) -> bool:
-    """Si el ajuste guarda una clave (lo dice el registro de ajustes). Lo usa
-    también la copia de configuración (services/backup_service.py), que las
-    deja vacías si no se piden."""
-    return _es_secreto(key)
-
-
-def leer_bool(conn: sqlite3.Connection, key: str) -> bool:
-    """Un ajuste de sí/no, con el valor por defecto que declara el registro."""
-    return bool_de(key, _get_setting_canonical(conn, key))
+    """Si el ajuste guarda una clave. Lo usa también la copia de configuración
+    (services/backup_service.py), que las deja vacías si no se piden."""
+    return key in CLAVES_SECRETAS or key in _OTROS_SECRETOS or key.startswith(_PREFIJOS_SECRETOS)
 
 
 def _is_secret(key: str) -> int:
@@ -138,3 +144,24 @@ def setting_exists(conn: sqlite3.Connection, key: str) -> bool:
     """Si la clave EXACTA está en la tabla. No mira el alias antiguo: quien
     pregunta esto está decidiendo entre INSERT y UPDATE, no leyendo un valor."""
     return conn.execute("SELECT 1 FROM settings WHERE key = ?", (key,)).fetchone() is not None
+
+
+def leer_ajuste(conn: sqlite3.Connection, campo: str) -> Any:
+    """El valor de un ajuste del registro, ya convertido y con su valor por
+    defecto. `campo` es su nombre en el API (ajustes_registro.AJUSTES)."""
+    ajuste = AJUSTES[campo]
+    return desde_texto(ajuste, _get_setting_canonical(conn, ajuste.clave))
+
+
+def escribir_ajuste(conn: sqlite3.Connection, campo: str, valor: Any) -> None:
+    """Guarda un valor ya validado (ajustes_registro.error_de). Does NOT commit."""
+    ajuste = AJUSTES[campo]
+    set_setting(conn, ajuste.clave, a_texto(ajuste, valor))
+
+
+def estado_secreto(conn: sqlite3.Connection, campo: str) -> tuple[bool, Optional[str]]:
+    """Si un secreto del registro está puesto, y enmascarado si lo está."""
+    value = _get_setting_canonical(conn, AJUSTES[campo].clave)
+    if value and value.strip():
+        return True, mask_secret(value)
+    return False, None

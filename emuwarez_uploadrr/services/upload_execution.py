@@ -25,6 +25,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..database import connect, init_db, row_to_dict, rows_to_dicts, get_setting_canonical
+from .ajustes_registro import (
+    UPLOAD_MAX_CONCURRENT_CHOICES, UPLOAD_MAX_CONCURRENT_DEFAULT, UPLOAD_MAX_CONCURRENT_SETTING_KEY,
+)
 from .upload_result_parser import classify_upload_result, extract_torrent_url, torrent_id_from_url
 from .upload_states import PREPARATORY_STATUSES
 from .uploadrr_progress import (
@@ -963,9 +966,8 @@ def _release_staged_config(job_id: int, config_path: Path | None) -> None:
 # normal "Subir a eMuwarez" flow, a retry, or the legacy direct-start
 # endpoints). El trabajo encolado toma la plaza antes de preparar los ficheros
 # (upload_queue._run_queued_job) y la pasa al subproceso. 0 = sin límite.
-UPLOAD_MAX_CONCURRENT_SETTING_KEY = "uploads.max_concurrent"
-UPLOAD_MAX_CONCURRENT_CHOICES = tuple(range(0, 11))  # 0, 1, 2, … 10
-UPLOAD_MAX_CONCURRENT_DEFAULT = 1
+# La clave (UPLOAD_MAX_CONCURRENT_SETTING_KEY), los valores que admite y el de
+# por defecto viven en el registro de ajustes (services/ajustes_registro.py).
 
 
 def get_upload_max_concurrent(conn=None) -> int:

@@ -37,9 +37,11 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     con tope de 15 s.
   - #120: ruff `E9,F` en la CI.
 - **Versión 0.14.0** publicada con todo lo anterior.
-- **Oleada 3, registro de ajustes:** `services/ajustes_registro.py` declara cada ajuste (clave, tipo, defecto,
-  valores permitidos, secreto). De él salen qué claves son secretas y la lectura y escritura de los sí/no de la API.
-  Falta pasar al registro el resto de ajustes (textos, enteros con opciones, JSON) y las lecturas sueltas de sí/no
+- **Oleada 3, registro de ajustes:** `services/ajustes_registro.py` declara cada ajuste sencillo de Configuración
+  (campo del API, clave, tipo, defecto, opciones o mínimo, secreto). De él salen los defectos y la conversión del
+  GET, la validación y la escritura del PUT, el enmascarado y `es_secreto`. Lo que no cabe en un tipo sencillo
+  (listas JSON, hosts de imágenes, eventos por canal) está en `FUERA_DEL_REGISTRO` de `web/api/settings.py`, y un
+  test falla si aparece un campo nuevo que no esté en uno de los dos sitios. Faltan las lecturas sueltas de sí/no
   fuera de la API (p. ej. `series.ignore_specials` en `library.py`).
 
 ## En curso (oleada 3)

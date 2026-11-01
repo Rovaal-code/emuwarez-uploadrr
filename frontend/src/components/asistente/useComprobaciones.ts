@@ -107,13 +107,18 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
         const env = batchEnvChecks?.ready ? batchEnvChecks : await runUploadChecks(batchQueue[0], 'environment')
         if (!alive) return
         setBatchEnvChecks(env)
+        // Lo que ya no vale se quita de entrada: si una petición falla, no queda a la vista como bueno.
         const acc = new Map([...batchContentChecks].filter(([id]) => sigueValiendo(id)))
+        setBatchContentChecks(new Map(acc))
         for (let i = 0; i < batchQueue.length; i++) {
           if (!alive) return
           if (acc.has(batchQueue[i])) continue
           setBatchChecksIndex(i)
           const proveedor = proveedorParaServidor(proveedorElegido, batchQueue[i])
-          acc.set(batchQueue[i], await runUploadChecks(batchQueue[i], 'content', proveedor))
+          const resultado = await runUploadChecks(batchQueue[i], 'content', proveedor)
+          // Una pasada abandonada que responde tarde no pisa a la que la sustituyó.
+          if (!alive) return
+          acc.set(batchQueue[i], resultado)
           proveedorComprobado.current.set(batchQueue[i], proveedor)
           setBatchContentChecks(new Map(acc))
         }

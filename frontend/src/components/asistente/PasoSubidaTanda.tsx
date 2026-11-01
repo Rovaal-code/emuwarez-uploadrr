@@ -97,7 +97,7 @@ export function PasoSubidaTanda({ a }: { a: Asistente }) {
               <button
                 className="btn btn-primary"
                 onClick={batchIsEpisodes ? uploadAllEpisodes : uploadAllSeasons}
-                disabled={batchChecksLoading || recalculandoIdioma || !completas || !envReady || blocked.length === batchQueue.length}
+                disabled={batchChecksLoading || recalculandoIdioma || !!batchChecksError || !completas || !envReady || blocked.length === batchQueue.length}
                 type="button"
               >
                 {batchIsEpisodes ? 'Subir todos' : 'Subir todas'}

@@ -463,6 +463,49 @@ describe('varias temporadas de una serie', () => {
     ])
   })
 
+  it('si falla la comprobación con el Proveedor nuevo, no se sube con la del anterior', async () => {
+    m(subidas.runUploadChecks).mockImplementation(async (id, alcance, proveedor) => {
+      if (alcance === 'environment') return ENTORNO as never
+      if (id === 31 && proveedor === 'NF') throw new Error('Sin conexión')
+      return LISTO as never
+    })
+    await abrir(SERIE, { preselect: { season: 1 } })
+    await pulsar(await esperar(() => boton('Temporada 2')))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ 2 capítulo(s) listos'))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ Todo listo: 2 temporadas'))
+    await pulsar(boton('Volver'))
+    await elegir(await esperar(() => campo<HTMLSelectElement>('Proveedor')), 'NF')
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('Sin conexión'))
+    expect(boton('Subir todas')!.disabled).toBe(true)
+  })
+
+  it('una pasada abandonada que responde tarde no pisa la nueva', async () => {
+    const vieja = diferida<unknown>()
+    let veces = 0
+    m(subidas.runUploadChecks).mockImplementation(async (id, alcance) => {
+      if (alcance === 'environment') return ENTORNO as never
+      if (id === 32 && veces++ === 0) return vieja.promesa as never
+      return LISTO as never
+    })
+    await abrir(SERIE, { preselect: { season: 1 } })
+    await pulsar(await esperar(() => boton('Temporada 2')))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ 2 capítulo(s) listos'))
+    await pulsar(boton('Continuar'))
+    await esperar(() => veces === 1)
+    await pulsar(boton('Volver'))
+    await pulsar(await esperar(() => boton('Continuar')))
+    await esperar(() => texto().includes('✓ Todo listo: 2 temporadas'))
+    await act(async () => {
+      vieja.resolver({ ready: false, checks: [{ id: 'season_pack', label: 'Pack', status: 'fail', message: 'Respuesta vieja' }] })
+    })
+    expect(texto()).toContain('✓ Todo listo: 2 temporadas')
+    expect(texto()).not.toContain('Respuesta vieja')
+  })
+
   it('sin marcar ninguna no avanza', async () => {
     await abrir(SERIE)
     await esperar(() => boton('Temporada 1'))

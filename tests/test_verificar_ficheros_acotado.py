@@ -116,6 +116,26 @@ def test_cada_caso_de_ruta_da_su_aviso(conn, isolated_db, monkeypatch):
         assert errores["no_regular"] == "la ruta existe pero no es un archivo regular"
 
 
+def test_si_la_ruta_cambia_mientras_se_mira_el_disco_no_se_guarda_el_resultado_viejo(conn, isolated_db, monkeypatch):
+    viejo = _fila(conn, "Cambia", str(isolated_db / "viejo.mkv"))
+    quieto = _fila(conn, "Quieto", str(isolated_db / "quieto.mkv"))
+    original = lv.safe_stat
+
+    def stat(path, mappings=None):
+        # La sincronización renombra el fichero justo cuando se está inspeccionando la ruta de antes.
+        if path.endswith("viejo.mkv"):
+            conn.execute("UPDATE library_items SET path = ? WHERE id = ?", (str(isolated_db / "nuevo.mkv"), viejo))
+            conn.commit()
+        return original(path, mappings)
+
+    monkeypatch.setattr(lv, "safe_stat", stat)
+    resumen = lv.verify_library_files(conn)
+    filas = {r["id"]: r for r in conn.execute("SELECT id, path, file_verified_at FROM library_items")}
+    assert filas[viejo]["file_verified_at"] is None and filas[viejo]["path"].endswith("nuevo.mkv")
+    assert filas[quieto]["file_verified_at"] is not None
+    assert resumen["items_checked"] == 2
+
+
 def test_el_filtro_de_estado_sigue_funcionando(conn, isolated_db):
     _fila(conn, "A", str(isolated_db / "a.mkv"), estado="Disponible")
     _fila(conn, "B", str(isolated_db / "b.mkv"), estado="Faltante")

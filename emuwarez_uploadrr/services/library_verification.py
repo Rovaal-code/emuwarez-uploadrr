@@ -82,7 +82,7 @@ _SQL_ESTADO_DEL_FICHERO = """
         file_verified_at = ?,
         file_verification_error = ?,
         updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
+    WHERE id = ? AND path IS ?
 """
 
 
@@ -94,6 +94,8 @@ def _valores_del_estado(item_id: int, result: dict[str, Any]) -> tuple:
         result.get("verified_at"),
         result.get("file_verification_error"),
         item_id,
+        # Si la sincronización cambió la ruta mientras se miraba el disco, este resultado ya no es de la fila.
+        result.get("path"),
     )
 
 

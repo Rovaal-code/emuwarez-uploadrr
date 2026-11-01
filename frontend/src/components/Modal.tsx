@@ -65,7 +65,7 @@ export function Modal({ titulo, onClose, className, style, tituloStyle, children
         return suPanel ? devolvia.get(suPanel) : null
       })?.focus()
     }
-  }, [])
+  }, [antes])
 
   return (
     <div className="modal-overlay" onMouseDown={e => { if (e.button === 0) onClose() }}>

@@ -160,7 +160,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
         onClose: () => localStorage.setItem(TOUR_SEEN_KEY, '1'),
       })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- el tour se ofrece una sola vez, al abrir la aplicación
   }, [])
 
   const navigate = useCallback((page: string) => {

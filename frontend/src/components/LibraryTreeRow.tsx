@@ -101,7 +101,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   expandedRef.current = expanded
   useEffect(() => () => {
     if (expandedRef.current) onExpandedChange?.(item.id, false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al desmontar; lee expanded por la ref
   }, [])
 
   const isSeries = item.item_type === 'series'
@@ -149,7 +149,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   paginaDeHijos.current = childOffset
   useEffect(() => {
     if (expandedRef.current && expandable) loadChildren(paginaDeHijos.current, true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo cuando llega la fila nueva; expanded y la página van por refs
   }, [item])
 
   function toggle() {

@@ -122,6 +122,7 @@ export function App() {
       montada.current = false
       if (reintento.current) clearTimeout(reintento.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- arranque único; bootstrap se recrea en cada render y solo usa refs y setters
   }, [])
 
   function handleLoginSuccess() {

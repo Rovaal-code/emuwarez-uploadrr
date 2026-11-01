@@ -63,7 +63,7 @@ export function FilasVirtuales<T>({ items, clave, alturaEstimada, columnas, cont
     if (fijas?.size) items.forEach((it, i) => { if (fijas.has(clave(it))) indicesFijos.add(i) })
     return planVentana({ alturas, desde: vista.desde, alto: vista.alto, margen: MARGEN_PX, fijas: indicesFijos })
     // `version` cuenta como dependencia: es lo que avisa de que hay medidas nuevas.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- version avisa de medidas nuevas (ver arriba)
   }, [items, clave, fijas, vista, version])
 
   // Con table-layout automático el ancho de cada columna sale de las filas
@@ -142,6 +142,7 @@ export function RejillaVirtual<T>({ items, clave, minimo, hueco, contenedor, pin
   // (otro orden o contenido de la misma longitud también es otra lista). Los
   // repintados de este componente no la tocan: la medida es estado propio.
   const lista = useRef({ items, version: 0 })
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sin dependencias a propósito: mide tras cada pintado y el tope de medidaCorregida lo calma
   useLayoutEffect(() => {
     const el = rejilla.current
     if (!el) return

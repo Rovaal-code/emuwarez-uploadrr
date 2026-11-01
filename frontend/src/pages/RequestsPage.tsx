@@ -749,7 +749,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   // start empty), so there's no separate loadFacets() call needed here.
   useEffect(() => {
     loadItems(0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar un filtro o el orden
   }, [debouncedSearch, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, instanceFilter, sortBy])
 
   // Reload table + facets whenever what's loaded stops being valid: a global
@@ -759,7 +759,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       loadItems(0)
       if (!isUnfiltered) loadFacets()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo cuando algo invalida la lista
   }, [lastInvalidatedAt])
 
   // Keeps /requests/:id in sync with whichever request's detail is open.
@@ -838,7 +838,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     }
     window.addEventListener('emuwarez:open-request', onOpenRequest)
     return () => window.removeEventListener('emuwarez:open-request', onOpenRequest)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- un solo oyente; handleRowClick se recrea en cada pintado
   }, [])
 
   // Deep link: /requests/:id. On mount this only OPENS (never force-closes on
@@ -858,7 +858,6 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const displayItems = items

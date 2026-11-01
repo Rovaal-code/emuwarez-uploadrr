@@ -96,6 +96,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       - run: npm test -- --reporter=default --reporter=junit --outputFile.junit=junit.xml
       # Con el token, vite build sube el tamaño del bundle a Codecov (vite.config.ts).
       - run: npx vite build

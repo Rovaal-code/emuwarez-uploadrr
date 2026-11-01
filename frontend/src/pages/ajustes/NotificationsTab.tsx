@@ -115,7 +115,7 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
-  }, [])
+  }, [setMsg])
 
   function toggleEvent(setter: React.Dispatch<React.SetStateAction<string[]>>, code: string, checked: boolean) {
     setter(prev => (checked ? [...new Set([...prev, code])] : prev.filter(c => c !== code)))

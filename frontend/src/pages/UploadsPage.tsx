@@ -99,25 +99,25 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
   }
 
   return (
-    <Modal titulo={<>Iniciar Uploadrr: job {jobId}</>} onClose={onClose} style={{ maxWidth: 560 }}>
+    <Modal titulo={<>Iniciar Uploadrr: job {jobId}</>} onClose={onClose} className="sub-modal-560">
       <div className="modal-body">
-        <p style={{ marginBottom: 8 }}><strong>{job.title || '—'}</strong></p>
-        <div style={{ padding: '10px 14px', background: 'color-mix(in srgb, var(--color-error) 8%, transparent)', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)', marginBottom: 12 }}>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.83rem', lineHeight: 1.6 }}>
+        <p className="sub-mb-8"><strong>{job.title || '—'}</strong></p>
+        <div className="sub-aviso">
+          <ul className="sub-aviso-lista">
             <li>Esta acción puede publicar/subir contenido a eMuwarez.</li>
             <li>No se crearán peticiones automáticamente.</li>
             <li>No se modificará el archivo original ni el título MKV.</li>
           </ul>
         </div>
-        <label style={{ display: 'block', marginBottom: 6, fontSize: '0.83rem' }}>
+        <label className="sub-etiqueta">
           Escribe <strong>{CONFIRMATION_TOKEN}</strong> para confirmar:
         </label>
         <input type="text" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder={CONFIRMATION_TOKEN}
-          style={{ width: '100%', padding: '6px 10px', background: 'color-mix(in srgb, var(--overlay-light) 8%, transparent)', border: `1px solid ${confirm === CONFIRMATION_TOKEN ? 'var(--color-available-soft)' : 'color-mix(in srgb, var(--overlay-light) 15%, transparent)'}`, borderRadius: 4, color: 'inherit', fontFamily: 'var(--font-mono)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
-        {message && <pre style={{ marginTop: 12, fontSize: '0.78rem', whiteSpace: 'pre-wrap', background: 'color-mix(in srgb, var(--overlay-dark) 20%, transparent)', padding: 8, borderRadius: 4 }}>{message}</pre>}
-        {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
+          className={`sub-confirmar${confirm === CONFIRMATION_TOKEN ? ' sub-confirmar-ok' : ''}`} />
+        {message && <pre className="sub-resultado">{message}</pre>}
+        {error && <p className="error-text sub-mt-8">{error}</p>}
       </div>
-      <div className="detail-panel__actions" style={{ padding: '10px 16px', gap: 8, display: 'flex' }}>
+      <div className="detail-panel__actions sub-modal-acciones">
         <button className="btn btn-secondary" onClick={handleDryRun} disabled={loading}>Dry-run</button>
         <button className="btn btn-primary" onClick={handleStart} disabled={confirm !== CONFIRMATION_TOKEN || loading}>{loading ? 'Iniciando…' : 'Iniciar subida'}</button>
         <button className="btn btn-secondary" onClick={onClose}>Cerrar</button>
@@ -159,39 +159,38 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
     : 'Solo se puede borrar una subida terminada: completada, cancelada o fallida')
   const cancelBtnTip = useTooltip(canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo')
   return (
-    <tr style={indent ? { opacity: 0.65 } : undefined}>
-      <td style={{ maxWidth: 360 }}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0, paddingLeft: indent ? 24 : undefined }}>
-          <div className="poster-thumb" style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <tr className={indent ? 'sub-fila-antigua' : undefined}>
+      <td className="sub-celda-titulo">
+        <div className={`sub-titulo-fila${indent ? ' sub-titulo-fila-antigua' : ''}`}>
+          <div className="poster-thumb sub-poster">
             {job.poster_url ? (
               <img
                 src={posterUrl(job.poster_url, 'w154')}
                 alt=""
                 loading="lazy"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                className="sub-poster-img"
                 onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
               />
             ) : (
-              <span style={{ fontSize: 14, opacity: 0.35 }}>
+              <span className="sub-poster-icono">
                 <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
-            {indent && <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>↳</span>}
+          <div className="sub-titulo-texto">
+            {indent && <span className="sub-muted sub-no-encoge">↳</span>}
             <span
-              className="lib-title-link"
-              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+              className="lib-title-link sub-titulo"
               onClick={onOpen}
               {...titleTip}
             >
               {job.title || '—'}
               {titleTooltip}
             </span>
-            {job.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>({job.year})</span> : null}
+            {job.year ? <span className="sub-muted sub-t11 sub-no-encoge">({job.year})</span> : null}
             {job.result_url && (
-              <a className="hover-link" href={job.result_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-                style={{ display: 'inline-flex', flexShrink: 0, alignSelf: 'center' }} aria-label="Ver en eMuwarez" {...emuTip}>
+              <a className="hover-link sub-enlace-emu" href={job.result_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                aria-label="Ver en eMuwarez" {...emuTip}>
                 <ExternalLinkButtonIcon />
                 {emuTooltip}
               </a>
@@ -199,21 +198,21 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
           </div>
         </div>
       </td>
-      <td style={{ whiteSpace: 'nowrap' }}>
+      <td className="sub-nowrap">
         {job.media_type
           ? <PlainValue icon={<TypeValueIcon />}>{UPLOAD_TYPE_LABEL[job.media_type] ?? job.media_type}</PlainValue>
-          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+          : <span className="sub-muted">—</span>}
       </td>
-      <td style={{ whiteSpace: 'nowrap' }}>
+      <td className="sub-nowrap">
         {job.instance_type
           ? (
             deepLink
               ? <ValueChip linkable><a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...originTip}><ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} />{originTooltip}</a></ValueChip>
               : <ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} />
           )
-          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+          : <span className="sub-muted">—</span>}
       </td>
-      <td className="col-prioridad-baja" style={{ whiteSpace: 'nowrap', maxWidth: 240 }}>
+      <td className="col-prioridad-baja sub-nowrap sub-celda-peticion">
         <PeticionDeSubida job={job} />
       </td>
       <td>
@@ -229,44 +228,43 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
           </span>
         )}
       </td>
-      <td style={{ whiteSpace: 'nowrap' }}>
+      <td className="sub-nowrap">
         {job.status === 'staging' ? (
-          <span className="badge status-queued" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} />
+          <span className="badge status-queued sub-badge-progreso">
+            <span className="spinner sub-spinner-10" />
             Generando nomenclatura
           </span>
         ) : job.status === 'queued' ? (
-          <span className="badge status-queued" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} />
+          <span className="badge status-queued sub-badge-progreso">
+            <span className="spinner sub-spinner-10" />
             {queuedWaitText(job)}
           </span>
         ) : (job.status === 'preparing' || job.status === 'running') ? (
-          <span className="badge status-queued" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} />
+          <span className="badge status-queued sub-badge-progreso">
+            <span className="spinner sub-spinner-10" />
             {phaseLabelText}{phaseInfo?.counterText ? ` (${phaseInfo.counterText})` : ''}{phaseElapsedText ? ` · ${phaseElapsedText}` : ''}
           </span>
         ) : '—'}
       </td>
-      <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDateTimeSeconds(job.created_at ?? null)}</td>
-      <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDateTimeSeconds(job.finished_at ?? null)}</td>
-      <td className="col-prioridad-baja" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+      <td className="sub-muted sub-t11 sub-nowrap">{formatDateTimeSeconds(job.created_at ?? null)}</td>
+      <td className="sub-muted sub-t11 sub-nowrap">{formatDateTimeSeconds(job.finished_at ?? null)}</td>
+      <td className="col-prioridad-baja sub-muted sub-t12">
         {job.duration_seconds != null ? `${job.duration_seconds}s` : '—'}
       </td>
-      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+      <td className="sub-muted sub-t12">
         {retryToggle ? (
           <span
-            className="lib-title-link"
+            className="lib-title-link sub-toggle-reintentos"
             onClick={retryToggle.onClick}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}
             {...retryToggleTip.triggerProps}
           >
-            x{job.retry_count} <span style={{ fontSize: 10 }}>{retryToggle.expanded ? '▾' : '▸'}</span>
+            x{job.retry_count} <span className="sub-t10">{retryToggle.expanded ? '▾' : '▸'}</span>
             {retryToggleTip.tooltipNode}
           </span>
         ) : (job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '—'}
       </td>
       <td className="col-actions">
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div className="sub-acciones-fila">
           <button
             type="button"
             className="btn btn-primary btn-sm"
@@ -578,22 +576,22 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const modals = (
     <>
       {confirmCancel && (
-        <Modal titulo="Cancelar una subida que se está preparando" onClose={() => setConfirmCancel(null)} style={{ maxWidth: 520 }}>
+        <Modal titulo="Cancelar una subida que se está preparando" onClose={() => setConfirmCancel(null)} className="sub-modal-520">
           <div className="modal-body">
-            <p style={{ fontSize: 13, marginTop: 0 }}>
+            <p className="sub-t13">
               <strong>«{confirmCancel.title}»</strong> está preparando ficheros: puede estar renombrando
               o reordenando pistas. Eso no se puede interrumpir a mitad sin dejar un archivo a medias.
             </p>
-            <p style={{ fontSize: 13 }}>
+            <p className="sub-t13">
               Se marcará como <strong>cancelada</strong> y se detendrá al terminar el paso en curso, no
               al instante. Si el proceso ya no existe (por ejemplo, porque se paró la aplicación), queda
               cancelada directamente.
             </p>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            <p className="sub-muted sub-t13">
               En ambos casos podrás <strong>reintentarla</strong> después. Revisa el archivo antes de
               hacerlo, por si quedó algo a medio renombrar.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <div className="sub-modal-pie">
               <button className="btn btn-secondary" type="button" onClick={() => setConfirmCancel(null)}>
                 Dejarla seguir
               </button>
@@ -619,7 +617,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // selected, instead of the old JobProgressPanel modal.
   if (selectedJobWithTitle) {
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div className="sub-pagina">
         <UploadJobDetailPage
           job={selectedJobWithTitle}
           onBack={closeUpload}
@@ -636,28 +634,27 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }
 
   return (
-    <div data-tour="uploads-content" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div data-tour="uploads-content" className="sub-pagina">
       {modals}
 
-      <div className="page-header" style={{ flexShrink: 0 }}>
+      <div className="page-header sub-no-encoge">
         <div>
           <div className="page-title">Subidas</div>
           <div className="page-subtitle">
             {visibleJobs.length} subidas{total != null && jobs.length < total ? ` · ${jobs.length} de ${total} cargadas` : ''}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {hasLiveJob && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>● actualizando en vivo</span>}
+        <div className="sub-fila">
+          {hasLiveJob && <span className="sub-muted sub-t11">● actualizando en vivo</span>}
         </div>
       </div>
 
-      <div className="filters-bar" style={{ flexShrink: 0 }}>
+      <div className="filters-bar sub-no-encoge">
         <input
-          className="form-input"
+          className="form-input sub-buscar"
           placeholder="Buscar título…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ width: 160 }}
         />
         <select className="form-input form-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
           <option value="created_desc">Orden: Reciente primero</option>
@@ -672,12 +669,12 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       {loading && jobs.length === 0 && !filtrando ? <LoadingState label="Cargando Subidas…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 && !filtrando ? (
         <EmptyState icon={<IconoSubida />} title="No hay trabajos de subida." body="Usa el botón 'Subir' desde Biblioteca para generar un preflight." />
       ) : (
-        <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
-          <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+        <div className="activity-section sub-seccion">
+          <div className="sub-scroll">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: '100%' }}>Título</th>
+                  <th className="sub-th-titulo">Título</th>
                   <th><HeaderFilter label="Tipo" value={typeFilter} onChange={setTypeFilter} options={[
                     { value: '', label: 'Todos' }, { value: 'movie', label: 'Película' }, { value: 'series', label: 'Serie' }, { value: 'season', label: 'Temporada' }, { value: 'episode', label: 'Episodio' },
                   ]} /></th>
@@ -691,7 +688,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   <th>Finalizado</th>
                   <th className="col-prioridad-baja">Duración</th>
                   <th>Reintentos</th>
-                  <th className="col-actions" style={{ width: '1%' }}>Acciones</th>
+                  <th className="col-actions sub-th-acciones">Acciones</th>
                 </tr>
               </thead>
               {visibleJobs.length === 0 && filtrando && (
@@ -703,7 +700,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     ? 'No hay subidas cargadas que coincidan con los filtros. Quedan más sin cargar.'
                     : 'No hay subidas que coincidan con los filtros.'}
                   action={
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                    <div className="sub-vacio-acciones">
                       <button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>
                       {hayMas && <button className="btn btn-secondary btn-sm" onClick={cargarMas}>Cargar más</button>}
                     </div>
@@ -735,8 +732,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
             </table>
           </div>
           {hayMas && (
-            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '10px 0' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            <div className="sub-mas">
+              <span className="sub-muted sub-t12">
                 {total != null ? `${jobs.length} de ${total} subidas cargadas` : `${jobs.length} subidas cargadas`}
               </span>
               <button type="button" className="btn btn-secondary btn-sm" onClick={cargarMas}>Cargar más</button>

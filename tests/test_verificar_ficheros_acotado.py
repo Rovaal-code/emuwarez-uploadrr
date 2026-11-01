@@ -7,6 +7,8 @@ atendiendo.
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from emuwarez_uploadrr.database import connect, db_path, init_db
@@ -84,6 +86,34 @@ def test_con_limite_se_miran_primero_los_que_hace_mas_que_no_se_comprueban(conn,
     # La siguiente vuelta sigue por el que quedó.
     lv.verify_library_files(conn, limit=1)
     assert conn.execute("SELECT file_verified_at FROM library_items WHERE id = ?", (nuevo,)).fetchone()[0] != "2026-10-31T10:00:00"
+
+
+def test_cada_caso_de_ruta_da_su_aviso(conn, isolated_db, monkeypatch):
+    (isolated_db / "texto.txt").write_bytes(b"x")
+    ids = {
+        "extension": _fila(conn, "Texto", str(isolated_db / "texto.txt")),
+        "directorio": _fila(conn, "Carpeta", str(isolated_db)),
+        "falla": _fila(conn, "Falla", str(isolated_db / "x.mkv")),
+    }
+    if hasattr(os, "mkfifo"):
+        os.mkfifo(isolated_db / "tuberia.mkv")
+        ids["no_regular"] = _fila(conn, "Tubería", str(isolated_db / "tuberia.mkv"))
+    original = lv.safe_stat
+
+    def stat(path, mappings=None):
+        if path.endswith("x.mkv"):
+            raise OSError("disco caído")
+        return original(path, mappings)
+
+    monkeypatch.setattr(lv, "safe_stat", stat)
+    lv.verify_library_files(conn)
+    errores = {k: conn.execute("SELECT file_verification_error FROM library_items WHERE id = ?", (i,)).fetchone()[0]
+               for k, i in ids.items()}
+    assert errores["extension"] == "extensión no reconocida como vídeo: .txt"
+    assert "directorio" in errores["directorio"]
+    assert errores["falla"] == "error al inspeccionar: disco caído"
+    if "no_regular" in errores:
+        assert errores["no_regular"] == "la ruta existe pero no es un archivo regular"
 
 
 def test_el_filtro_de_estado_sigue_funcionando(conn, isolated_db):

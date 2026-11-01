@@ -1,13 +1,14 @@
 import type { PasoSubida } from '../types/api'
 
 // Los pasos con nombre de una subida y cómo se reintenta (el servidor los manda: services/subida_pasos.py).
+// `clave` da la clase `dsub-paso-<clave>` (styles/detalle-subida.css), que fija el color de cada estado.
 
-export const ESTADO_PASO: Record<string, { simbolo: string; texto: string; color: string }> = {
-  hecho: { simbolo: '✓', texto: 'Hecho', color: 'var(--color-available)' },
-  en_curso: { simbolo: '●', texto: 'En curso', color: 'var(--color-available)' },
-  fallido: { simbolo: '✕', texto: 'Falló aquí', color: 'var(--color-error-pale)' },
-  cancelado: { simbolo: '■', texto: 'Cancelada aquí', color: 'var(--text-muted)' },
-  pendiente: { simbolo: '○', texto: 'Pendiente', color: 'var(--text-muted)' },
+export const ESTADO_PASO: Record<string, { clave: string; simbolo: string; texto: string }> = {
+  hecho: { clave: 'hecho', simbolo: '✓', texto: 'Hecho' },
+  en_curso: { clave: 'en_curso', simbolo: '●', texto: 'En curso' },
+  fallido: { clave: 'fallido', simbolo: '✕', texto: 'Falló aquí' },
+  cancelado: { clave: 'cancelado', simbolo: '■', texto: 'Cancelada aquí' },
+  pendiente: { clave: 'pendiente', simbolo: '○', texto: 'Pendiente' },
 }
 
 /** El estado de un paso tal como se enseña; uno desconocido se trata como pendiente. */

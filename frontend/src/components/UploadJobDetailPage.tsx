@@ -57,35 +57,22 @@ function Panel({ title, live, loading, help, collapsible, defaultExpanded = fals
   const [expanded, setExpanded] = useState(defaultExpanded)
   const open = !collapsible || expanded
   return (
-    <div style={{ marginTop: 28, ...(fill ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : {}) }}>
+    <div className={fill ? 'dsub-panel dsub-panel-llena' : 'dsub-panel'}>
       <div
         onClick={collapsible ? () => setExpanded(e => !e) : undefined}
-        style={{
-          // Same size as Biblioteca's Temporadas/Capítulos section titles
-          // (LibraryChildrenSection) — this is now the only other "fixed,
-          // always-expanded section title" in the app, so they should read
-          // the same size at a glance.
-          fontSize: 12, fontWeight: 600,
-          color: 'var(--text-secondary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6,
-          cursor: collapsible ? 'pointer' : undefined, userSelect: collapsible ? 'none' : undefined,
-          flexShrink: 0,
-        }}
+        className={collapsible ? 'dsub-panel-titulo dsub-panel-clic' : 'dsub-panel-titulo'}
       >
         {collapsible && (
           <IconoDesplegar abierto={open} size={12} />
         )}
         {title}
         {help && <span onClick={e => e.stopPropagation()}><InfoIcon text={help} /></span>}
-        {loading && <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />}
-        {live && <span style={{ color: 'var(--color-available)', fontWeight: 400 }}>(en directo)</span>}
+        {loading && <span className="spinner dsub-spinner-13" />}
+        {live && <span className="dsub-en-directo">(en directo)</span>}
       </div>
       {open && (
         <div
-          className="detail-card"
-          style={{
-            padding: '16px 18px', borderRadius: 10,
-            ...(fill ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : {}),
-          }}
+          className={fill ? 'detail-card dsub-caja dsub-panel-llena' : 'detail-card dsub-caja'}
         >
           {children}
         </div>
@@ -115,8 +102,8 @@ const INTERNAL_TITLE_TOOLTIP = 'Es el nombre del torrent sin acentos y con punto
 
 function GeneratingSpinner({ text }: { text: string }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13, padding: '2px 0' }}>
-      <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
+    <span className="dsub-generando">
+      <span className="spinner dsub-spinner-12" />
       {text}
     </span>
   )
@@ -133,8 +120,8 @@ function NomenclatureSection({ snapshot, mediaType, isStaging }: { snapshot: Upl
 
   return (
     <>
-      <div style={{ overflowX: 'auto' }}>
-        <table className="data-table" style={{ fontSize: 12.5 }}>
+      <div className="dsub-scroll-x">
+        <table className="data-table dsub-tabla">
           <thead>
             <tr><th>Campo</th><th>Valor</th></tr>
           </thead>
@@ -143,27 +130,27 @@ function NomenclatureSection({ snapshot, mediaType, isStaging }: { snapshot: Upl
               const value = data[r.key]
               return (
                 <tr key={r.key}>
-                  <td style={{ fontWeight: 600 }}>{r.label}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)' }}>{value != null && value !== '' ? String(value) : '—'}</td>
+                  <td className="dsub-b600">{r.label}</td>
+                  <td className="dsub-mono">{value != null && value !== '' ? String(value) : '—'}</td>
                 </tr>
               )
             })}
           </tbody>
         </table>
       </div>
-      <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
+      <div className="dsub-bloques">
         <div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 3 }}>
+          <div className="dsub-etiqueta">
             Nombre del torrent
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, wordBreak: 'break-all' }}>{name || '—'}</div>
+          <div className="dsub-valor-mono">{name || '—'}</div>
         </div>
         <div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div className="dsub-etiqueta dsub-etiqueta-info">
             {INTERNAL_TITLE_LABEL_TEXT}
             <InfoIcon text={INTERNAL_TITLE_TOOLTIP} />
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, wordBreak: 'break-all' }}>{fileName || '—'}</div>
+          <div className="dsub-valor-mono">{fileName || '—'}</div>
         </div>
       </div>
     </>
@@ -184,19 +171,19 @@ const REMUX_TEMPLATE_ROWS: { type: string }[] = [
 function EmptyRemuxShell() {
   return (
     <>
-      <div style={{ overflowX: 'auto' }}>
-        <table className="data-table" style={{ fontSize: 12.5 }}>
+      <div className="dsub-scroll-x">
+        <table className="data-table dsub-tabla">
           <thead>
             <tr>{REMUX_COLUMNS.map(c => <th key={c}>{c}</th>)}</tr>
           </thead>
           <tbody>
             {REMUX_TEMPLATE_ROWS.map(r => (
-              <tr key={r.type} style={{ opacity: 0.5, fontStyle: 'italic' }}>
+              <tr key={r.type} className="dsub-fila-plantilla">
                 <td>{r.type}</td>
                 <td>—</td>
                 <td>—</td>
                 <td>—</td>
-                <td style={{ textAlign: 'center' }}>—</td>
+                <td className="dsub-centro">—</td>
               </tr>
             ))}
           </tbody>
@@ -273,16 +260,13 @@ function ChecksSection({ snapshot, mediaType, isActive }: {
 
   if (!snapshot && isActive) {
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13, padding: '2px 0' }}>
-        <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
-        Esperando a la nomenclatura de eMuwarez…
-      </span>
+      <GeneratingSpinner text="Esperando a la nomenclatura de eMuwarez…" />
     )
   }
 
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table className="data-table" style={{ fontSize: 12.5 }}>
+    <div className="dsub-scroll-x">
+      <table className="data-table dsub-tabla">
         <thead><tr><th>Comprobación</th><th>Estado</th><th>Detalle</th></tr></thead>
         <tbody>
           {topics.map(t => {
@@ -293,16 +277,15 @@ function ChecksSection({ snapshot, mediaType, isActive }: {
                 <td>
                   {c ? (
                     <span
-                      className={`${CHECK_STATUS_BADGE[c.status] || 'badge status-unknown'}${c.status === 'fail' ? ' badge-blink' : ''}`}
-                      style={{ fontSize: '0.72rem' }}
+                      className={`${CHECK_STATUS_BADGE[c.status] || 'badge status-unknown'} dsub-badge-chico${c.status === 'fail' ? ' badge-blink' : ''}`}
                     >
                       {CHECK_STATUS_TEXT[c.status] || c.status}
                     </span>
                   ) : (
-                    <span className="badge status-unknown" style={{ fontSize: '0.72rem' }}>Pendiente</span>
+                    <span className="badge status-unknown dsub-badge-chico">Pendiente</span>
                   )}
                 </td>
-                <td style={{ color: 'var(--text-muted)' }}>
+                <td className="dsub-muted">
                   {c ? [c.label, c.message].filter(Boolean).join(': ') : '—'}
                 </td>
               </tr>
@@ -366,9 +349,9 @@ const JOB_TERMINAL_PHASE_STATUS: Record<string, string> = { failed: 'failed', ca
 // (wide) Progreso column instead of the topbar's own fixed 140px.
 function ProgressCell({ pct, bold }: { pct: number; bold?: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ fontWeight: bold ? 700 : undefined, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{pct}%</span>
-      <div className="sync-chip-bar" style={{ width: 'auto', flex: 1 }}>
+    <div className="dsub-progreso">
+      <span className={bold ? 'dsub-progreso-pct dsub-progreso-pct-negrita' : 'dsub-progreso-pct'}>{pct}%</span>
+      <div className="sync-chip-bar dsub-barra">
         <div className="sync-chip-bar-fill" style={{ transform: `scaleX(${pct / 100})` }} />
       </div>
     </div>
@@ -378,12 +361,11 @@ function ProgressCell({ pct, bold }: { pct: number; bold?: boolean }) {
 // Los pasos con nombre de la subida y cuál se paró (los manda el servidor: services/subida_pasos.py).
 function PasosDeSubida({ pasos }: { pasos: PasoSubida[] }) {
   return (
-    <ol aria-label="Pasos de la subida" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', listStyle: 'none', margin: '0 0 12px', padding: 0 }}>
+    <ol aria-label="Pasos de la subida" className="dsub-pasos">
       {pasos.map((p, i) => {
         const e = estadoDePaso(p)
         return (
-          <li key={p.clave} title={e.texto} aria-label={`${p.nombre}: ${e.texto}`}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, fontSize: 12, border: `1px solid ${e.color}`, color: e.color }}>
+          <li key={p.clave} title={e.texto} aria-label={`${p.nombre}: ${e.texto}`} className={`dsub-paso dsub-paso-${e.clave}`}>
             <span aria-hidden="true">{e.simbolo}</span>
             <span>{i + 1}. {p.nombre}</span>
           </li>
@@ -400,16 +382,16 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
   // too instead of leaving it looking like it's still going.
   const overrideStatus = JOB_TERMINAL_PHASE_STATUS[job.status]
   return (
-    <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
-      <table className="data-table" style={{ fontSize: 12.5, tableLayout: 'fixed' }}>
+    <div className="dsub-fases-scroll">
+      <table className="data-table dsub-tabla dsub-tabla-fija">
         <colgroup>
-          <col style={{ width: 34 }} />
-          <col style={{ width: 200 }} />
-          <col style={{ width: 90 }} />
-          <col style={{ width: 360 }} />
-          <col style={{ width: 143 }} />
-          <col style={{ width: 143 }} />
-          <col style={{ width: 75 }} />
+          <col className="dsub-col-34" />
+          <col className="dsub-col-200" />
+          <col className="dsub-col-90" />
+          <col className="dsub-col-360" />
+          <col className="dsub-col-143" />
+          <col className="dsub-col-143" />
+          <col className="dsub-col-75" />
         </colgroup>
         <thead>
           <tr>
@@ -422,20 +404,19 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
             const status = (p.status === 'running' && overrideStatus) ? overrideStatus : p.status
             return (
             <tr key={p.key}>
-              <td style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</td>
+              <td className="dsub-muted dsub-num">{i + 1}</td>
               <td>{p.label}</td>
               <td>
                 <span
-                  className={`${PHASE_STATUS_BADGE[status] || 'badge status-unknown'}${status === 'failed' ? ' badge-blink' : ''}`}
-                  style={{ fontSize: '0.72rem' }}
+                  className={`${PHASE_STATUS_BADGE[status] || 'badge status-unknown'} dsub-badge-chico${status === 'failed' ? ' badge-blink' : ''}`}
                 >
                   {PHASE_STATUS_TEXT[status] || status}
                 </span>
               </td>
               <td><ProgressCell pct={p.pct} /></td>
-              <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.started_at ? formatDate(p.started_at) : '—'}</td>
-              <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.finished_at ? formatDate(p.finished_at) : (overrideStatus ? formatDate(job.finished_at) : '—')}</td>
-              <td style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPhaseDuration(p.started_at, p.finished_at, overrideStatus ? job.finished_at : null)}</td>
+              <td className="dsub-fecha">{p.started_at ? formatDate(p.started_at) : '—'}</td>
+              <td className="dsub-fecha">{p.finished_at ? formatDate(p.finished_at) : (overrideStatus ? formatDate(job.finished_at) : '—')}</td>
+              <td className="dsub-num">{formatPhaseDuration(p.started_at, p.finished_at, overrideStatus ? job.finished_at : null)}</td>
             </tr>
             )
           })}
@@ -449,13 +430,13 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
               allí es un número suelto y aquí está en su contexto: alineado
               con las columnas de inicio, fin y duración de las fases que lo
               componen. */}
-          <tr className="sticky-footer-row" style={{ borderTop: '2px solid var(--border)' }}>
+          <tr className="sticky-footer-row dsub-total">
             <td />
-            <td style={{ fontWeight: 700 }} colSpan={2}>Progreso global</td>
+            <td className="dsub-b700" colSpan={2}>Progreso global</td>
             <td><ProgressCell pct={globalPct} bold /></td>
-            <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{formatDate(job.started_at ?? job.created_at ?? null)}</td>
-            <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{job.finished_at ? formatDate(job.finished_at) : '—'}</td>
-            <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{formatPhaseDuration(job.started_at ?? job.created_at, job.finished_at)}</td>
+            <td className="dsub-fecha dsub-b700">{formatDate(job.started_at ?? job.created_at ?? null)}</td>
+            <td className="dsub-fecha dsub-b700">{job.finished_at ? formatDate(job.finished_at) : '—'}</td>
+            <td className="dsub-num dsub-b700">{formatPhaseDuration(job.started_at ?? job.created_at, job.finished_at)}</td>
           </tr>
         </tbody>
       </table>
@@ -575,16 +556,16 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   const mediaIcon = <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
 
   return (
-    <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flexShrink: 0 }}>
+    <div className="dsub-pagina">
+      <div className="dsub-cabecera">
       <DetailHero backdropUrl={job.backdrop_url}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div className="dsub-barra-sup">
+        <div className="dsub-botones">
           <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a Subidas</button>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+        <div className="dsub-botones dsub-botones-fijos">
           {job.result_url && (
-            <a className="btn btn-primary btn-sm" href={job.result_url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+            <a className="btn btn-primary btn-sm dsub-sin-subrayado" href={job.result_url} target="_blank" rel="noreferrer">
               <ExternalLinkButtonIcon /> Ver en eMuwarez
             </a>
           )}
@@ -604,24 +585,25 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
         </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
+      <div className="dsub-titulo-caja">
         <DetailTitle>
           <DetailTitleText title={job.display_title || job.title || `Job ${jobId}`} />
-          {isRunning && <span style={{ fontSize: 11, color: 'var(--color-available)' }}>● en vivo</span>}
+          {isRunning && <span className="dsub-en-vivo">● en vivo</span>}
         </DetailTitle>
       </div>
 
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div className="dsub-cuerpo">
         <DetailPoster url={job.poster_url ? posterUrl(job.poster_url, 'w500') : null} alt={job.title || `Job ${jobId}`} fallbackIcon={mediaIcon} />
 
-        <div style={{ flex: 1, minWidth: 300 }}>
+        <div className="dsub-columna">
           {retryError && (
-            <div style={{ padding: '8px 12px', background: 'color-mix(in srgb, var(--color-error-soft) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--color-error-soft) 30%, transparent)', borderRadius: 6, fontSize: 12.5, color: 'var(--color-error-pale)', marginBottom: 16 }}>
+            <div className="dsub-error-reintento">
               {retryError}
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
+          {/* El alto sale de una constante de DetailCard: se queda en línea. */}
+          <div className="dsub-tarjetas" style={{ minHeight: DETAIL_CARD_HEIGHT }}>
             <Card title="Estado de la subida" icon={<StatusCardIcon />}>
               <FieldRow label="Estado"><span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>{statusLabel(job.status)}</span></FieldRow>
               <FieldRow label="Tipo">
@@ -643,7 +625,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
               <FieldRow label="Nomenclatura" help="Los campos que componen el nombre final del torrent, del archivo y de su título interno.">
                 <ValueChip as="button" linkable onClick={() => setShowNomenclatura(true)} title="Ver nomenclatura">
                   {stagingLoadingNomenclature
-                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, flexShrink: 0 }} />
+                    ? <span className="spinner dsub-spinner-14" />
                     : <ValueIcon><NomenclatureValueIcon /></ValueIcon>}
                   <span className="txt">{job.nomenclature_snapshot ? 'Ver' : 'Pendiente'}</span>
                 </ValueChip>
@@ -651,7 +633,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
               <FieldRow label="Reordenación/Renombrado" help="Antes de subir se hace un remux para reordenar las pistas de audio y subtítulos y ponerles el nombre adecuado, siguiendo la prioridad de idioma: Español (Castellano) → Català → Inglés → el resto.">
                 <ValueChip as="button" linkable onClick={() => setShowRemux(true)} title="Ver reordenación de pistas">
                   {stagingLoadingRemux
-                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, flexShrink: 0 }} />
+                    ? <span className="spinner dsub-spinner-14" />
                     : <ValueIcon><AudioCodecValueIcon /></ValueIcon>}
                   <span className="txt">
                     {job.remux_snapshot?.omitida ? `Omitida (${job.remux_snapshot.omitida})` : job.remux_snapshot ? 'Ver' : 'Pendiente'}
@@ -661,7 +643,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
               <FieldRow label="Verificación pre-subida" help="Las comprobaciones que se hacen antes de subir: que el archivo se pueda renombrar o enlazar, que el directorio de salida sea escribible, y que qBittorrent, el repositorio de imágenes y eMuwarez estén disponibles. Si alguna falla (no las que se omiten), la subida no continúa.">
                 <ValueChip as="button" linkable blink={checksFailed ? 'alert' : undefined} onClick={() => setShowChecks(true)} title="Ver verificación pre-subida">
                   {stagingLoadingChecks
-                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, flexShrink: 0 }} />
+                    ? <span className="spinner dsub-spinner-14" />
                     : <ValueIcon><ChecksValueIcon /></ValueIcon>}
                   <span className="txt">{checksLabel}</span>
                 </ValueChip>
@@ -678,7 +660,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
               <FieldRow label="Progreso">
                 <ValueChip>
                   {progressValueLoading
-                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, flexShrink: 0 }} />
+                    ? <span className="spinner dsub-spinner-14" />
                     : <ValueIcon><ProgressValueIcon /></ValueIcon>}
                   <span className="txt">
                     {isStaging
@@ -737,7 +719,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       </Panel>
 
       {showNomenclatura && (
-        <Modal titulo="Nomenclatura" onClose={() => setShowNomenclatura(false)} className="modal-wide" style={{ maxWidth: 720 }}>
+        <Modal titulo="Nomenclatura" onClose={() => setShowNomenclatura(false)} className="modal-wide dsub-modal-720">
           <div className="modal-body">
             <NomenclatureSection snapshot={job.nomenclature_snapshot} mediaType={job.media_type} isStaging={isStaging} />
           </div>
@@ -745,7 +727,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       )}
 
       {showRemux && (
-        <Modal titulo="Reordenación/Renombrado" onClose={() => setShowRemux(false)} className="modal-wide" style={{ maxWidth: 780 }}>
+        <Modal titulo="Reordenación/Renombrado" onClose={() => setShowRemux(false)} className="modal-wide dsub-modal-780">
           <div className="modal-body">
             <RemuxSection snapshot={job.remux_snapshot} isStaging={isStaging} />
           </div>
@@ -753,7 +735,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       )}
 
       {showChecks && (
-        <Modal titulo="Verificación pre-subida" onClose={() => setShowChecks(false)} className="modal-wide" style={{ maxWidth: 720 }}>
+        <Modal titulo="Verificación pre-subida" onClose={() => setShowChecks(false)} className="modal-wide dsub-modal-720">
           <div className="modal-body">
             <ChecksSection
               snapshot={job.checks_snapshot}
@@ -765,14 +747,14 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       )}
 
       {showActividad && (
-        <Modal titulo={<>Actividad{isRunning ? ' (en directo)' : ''}</>} onClose={() => setShowActividad(false)} className="modal-wide" style={{ maxWidth: 680 }}>
+        <Modal titulo={<>Actividad{isRunning ? ' (en directo)' : ''}</>} onClose={() => setShowActividad(false)} className="modal-wide dsub-modal-680">
           <div className="modal-body">
             {logsTotal > logs.length && (
-              <p style={{ margin: '0 0 6px', fontSize: 11.5, color: 'var(--text-muted)' }}>
+              <p className="dsub-log-resumen">
                 Mostrando las últimas {logs.length} de {logsTotal} líneas.
               </p>
             )}
-            <pre ref={logsBoxRef} style={{ margin: 0, maxHeight: 420, overflowY: 'auto', fontSize: '0.76rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            <pre ref={logsBoxRef} className="dsub-log">
               {loadingLogs ? 'Cargando…' : logs.length === 0 ? 'Sin actividad registrada todavía.' : logs.map(log => {
                 // created_at is stored/sent in UTC — naively slicing the raw
                 // string (the old approach) showed the UTC hour verbatim,

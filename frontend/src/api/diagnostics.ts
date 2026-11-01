@@ -41,7 +41,6 @@ export interface VerifyFilesResponse {
   files_found: number
   errors: number
   warnings: number
-  results: object[]
 }
 
 export interface RecommendationResponse {

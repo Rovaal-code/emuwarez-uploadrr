@@ -38,13 +38,15 @@ def get_path_mappings(conn=None) -> list[dict]:
             conn.close()
 
 
-def resolve_local_path(path: str | None, conn=None) -> str | None:
+def resolve_local_path(path: str | None, conn=None, mappings: list[dict] | None = None) -> str | None:
     """Return `path` with the first matching mapping applied (longest prefix
     wins). Paths with no matching mapping are returned unchanged, so this is a
-    no-op when no mappings are configured."""
+    no-op when no mappings are configured. `mappings` ya leídas, para no pedirlas
+    en cada ruta de un recorrido largo."""
     if not path:
         return path
-    mappings = get_path_mappings(conn)
+    if mappings is None:
+        mappings = get_path_mappings(conn)
     for m in sorted(mappings, key=lambda x: len(x["from"]), reverse=True):
         frm = m["from"].rstrip("/")
         to = m["to"].rstrip("/")

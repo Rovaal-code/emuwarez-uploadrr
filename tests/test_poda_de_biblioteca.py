@@ -174,6 +174,8 @@ def test_la_peticion_pasa_a_casar_con_la_copia_que_queda(conn, arr):
     arr[RADARR] = [_peli(1, "Matrix", 603), _peli(2, "Dune", 438631)]
     arr[RADARR_4K] = [_peli(3, "Matrix", 603, "WEB-DL-2160p")]
     library.sync_all(conn)
+    # Casan igual de bien y desempata la más reciente: la de 4K, más antigua, para no depender del segundo en que se guardó.
+    conn.execute("UPDATE library_items SET updated_at = '2000-01-01 00:00:00' WHERE instance_id = ?", (RADARR_4K,))
     conn.execute("INSERT INTO request_items (emu_id, title, tmdb_id, requested_resolution)"
                  " VALUES ('7', 'Matrix', '603', '1080p')")
     conn.commit()

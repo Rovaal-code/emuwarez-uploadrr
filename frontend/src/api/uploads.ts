@@ -5,8 +5,6 @@ import type {
   UploadJobLogsResponse,
   UploadStartRequest,
   UploadStartResult,
-  UploadArtifactsResponse,
-  UploadRetryRequest,
   OkResponse,
 } from '../types/api'
 import type { TrackRemuxOverride } from './nomenclature'
@@ -118,22 +116,11 @@ export async function getUploadJobLogs(
   return api.get<UploadJobLogsResponse>(`/uploads/${jobId}/logs?limit=${limit}&offset=${offset}&tail=${tail}${after}`)
 }
 
-export async function getUploadJobArtifacts(jobId: number): Promise<UploadArtifactsResponse> {
-  return api.get<UploadArtifactsResponse>(`/uploads/${jobId}/artifacts`)
-}
-
 export async function startUploadJob(
   jobId: number,
   body: UploadStartRequest,
 ): Promise<UploadStartResult> {
   return api.post<UploadStartResult>(`/uploads/${jobId}/start`, body)
-}
-
-export async function retryUploadJob(
-  jobId: number,
-  body: UploadRetryRequest,
-): Promise<UploadStartResult> {
-  return api.post<UploadStartResult>(`/uploads/${jobId}/retry`, body)
 }
 
 // Retries straight into the same queued/60s-countdown flow queueUpload()

@@ -1046,7 +1046,14 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // Lo que cierra el Modal (✕, Escape, clic fuera): no mientras se encola, que
   // el bucle seguiría sin que se viera el resultado ni se fuera a Subidas.
   const ocupado = uploading || batchPhase === 'processing'
-  const cerrarModal = () => { if (!ocupado) onClose() }
+  // Algo del formulario tocado a mano: un clic fuera o Escape lo perdería todo, así que antes se pregunta.
+  const editado = useRef(false)
+  const [confirmandoCierre, setConfirmandoCierre] = useState(false)
+  const cerrarModal = () => {
+    if (ocupado) return
+    if (editado.current && batchPhase !== 'done') setConfirmandoCierre(true)
+    else onClose()
+  }
 
   useEffect(() => {
     if (step === 1 && cargadoPara.current !== objetivo && targetIsSeason) loadSeasonPlan()
@@ -1132,7 +1139,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       setDetectingProvider(true)
       try {
         const res = await suggestProvider(targetId)
-        if (res.suggested) setField('provider', res.suggested)
+        if (res.suggested) setField('provider', res.suggested, false)
       } catch { /* non-blocking — leave "Sin provider" */ }
       finally { setDetectingProvider(false) }
     }, 500)
@@ -1189,6 +1196,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const edicionesFinales = (): Record<number, TrackRemuxOverride> => remuxEdits
 
   const setRemuxEdit = (trackId: number, patch: TrackRemuxOverride) => {
+    editado.current = true
     setRemuxEdits(prev => ({ ...prev, [trackId]: { ...prev[trackId], ...patch } }))
   }
 
@@ -1262,7 +1270,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     return () => { vigente = false; clearTimeout(t) }
   }, [targetId, targetIsSeason, fields, seasonPlan?.season_number, seasonPlan?.custom])
 
-  const setField = (key: string, value: string | null) => {
+  const setField = (key: string, value: string | null, deUsuario = true) => {
+    if (deUsuario) editado.current = true
     // Título is a property of the SERIES, so it is shared by every item in a
     // multi-episode or multi-season batch: picking it on episode 5 has to show
     // up on episode 1 too, and go up with all of them. Everything else
@@ -2505,6 +2514,20 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             </button>
           </div>
         </div>
+      )}
+
+      {confirmandoCierre && (
+        <Modal titulo="¿Descartar los cambios?" onClose={() => setConfirmandoCierre(false)} className="modal-estrecho">
+          <div className="modal-body">
+            <p className="text-muted">
+              Has cambiado datos de la subida y todavía no se ha encolado. Si cierras ahora se perderán los cambios sin guardar; la nomenclatura que ya guardaste al pasar de paso se queda como está.
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" type="button" onClick={() => setConfirmandoCierre(false)}>Seguir editando</button>
+              <button className="btn btn-danger" type="button" onClick={onClose}>Cerrar y descartar</button>
+            </div>
+          </div>
+        </Modal>
       )}
     </Modal>
   )

@@ -54,14 +54,14 @@ def test_list_backups_ok(client, auth_headers):
 # ---------- /api/maintenance/restore ----------
 
 def test_restore_requires_auth(client):
-    resp = client.post("/api/maintenance/restore", json={"backup_path": "/tmp/x.tar.gz"})
+    resp = client.post("/api/maintenance/restore", json={"backup_name": "x.tar.gz"})
     assert resp.status_code == 401
 
 
-def test_restore_dry_run_nonexistent_path(client, auth_headers):
+def test_restore_dry_run_nonexistent_backup(client, auth_headers):
     resp = client.post(
         "/api/maintenance/restore",
-        json={"backup_path": "/nonexistent/path.tar.gz", "dry_run": True},
+        json={"backup_name": "emuwarez_config_no_existe.tar.gz", "dry_run": True},
         headers=auth_headers,
     )
     assert resp.status_code == 200

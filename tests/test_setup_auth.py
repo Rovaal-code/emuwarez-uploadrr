@@ -160,7 +160,7 @@ def test_logout_revokes_token(client):
 
 
 # ---------------------------------------------------------------------------
-# Protected placeholders return 401 without token
+# Protected endpoints return 401 without token
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("method,path", [
@@ -171,9 +171,7 @@ def test_logout_revokes_token(client):
     ("GET", "/api/missing"),
     ("GET", "/api/requests"),
     ("GET", "/api/uploads"),
-    ("GET", "/api/tasks"),
     ("GET", "/api/logs"),
-    ("GET", "/api/config"),
 ])
 def test_protected_endpoints_require_auth(client, method, path):
     if method == "GET":
@@ -190,19 +188,6 @@ def test_protected_endpoints_accessible_with_token(auth_headers, client):
     data = resp.json()
     # Real response has library_total, not implemented=False
     assert "library_total" in data or "implemented" in data
-
-
-def test_create_emu_request_requires_auth(client):
-    resp = client.post("/api/missing/1/create-emu-request")
-    assert resp.status_code == 401
-
-
-def test_create_emu_request_stub_with_auth(client, auth_headers):
-    resp = client.post("/api/missing/1/create-emu-request", headers=auth_headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["stub"] is True
-    assert data["implemented"] is False
 
 
 # ---------------------------------------------------------------------------

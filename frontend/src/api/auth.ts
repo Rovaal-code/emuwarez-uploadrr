@@ -31,3 +31,20 @@ export async function changeCredentials(body: {
 }): Promise<ChangeCredentialsResponse> {
   return api.post<ChangeCredentialsResponse>('/auth/change-credentials', body)
 }
+
+export interface SesionAbierta {
+  id: number
+  current: boolean
+  created_at: string
+  last_used_at: string
+  user_agent: string | null
+  ip_address: string | null
+}
+
+export async function getSessions(): Promise<{ sessions: SesionAbierta[]; inactive_days: number }> {
+  return api.get('/auth/sessions')
+}
+
+export async function closeOtherSessions(): Promise<{ closed: number }> {
+  return api.post('/auth/sessions/close-others')
+}

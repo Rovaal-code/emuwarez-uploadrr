@@ -55,7 +55,7 @@ def test_setup_status_endpoint(client):
 
 
 # ---------------------------------------------------------------------------
-# Protected placeholders — return 401 without token (Phase 3 behavior)
+# Protected endpoints — return 401 without token
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("path", [
@@ -66,10 +66,8 @@ def test_setup_status_endpoint(client):
     "/api/missing",
     "/api/requests",
     "/api/uploads",
-    "/api/tasks",
     "/api/logs",
     "/api/auth/me",
-    "/api/config",
 ])
 def test_protected_endpoints_require_auth(client, path):
     response = client.get(path)
@@ -91,38 +89,12 @@ def test_real_endpoints_return_200_with_auth(client, auth_headers, path):
     assert response.status_code == 200
 
 
-# Phase 3+ placeholders that still return implemented=False
-@pytest.mark.parametrize("path", [
-    "/api/tasks",
-    "/api/config",
-])
-def test_placeholder_returns_stub_with_auth(client, auth_headers, path):
-    response = client.get(path, headers=auth_headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["implemented"] is False
-
-
 def test_logs_endpoint_returns_captured_records(client, auth_headers):
     # /api/logs is now a real endpoint backed by the in-memory capture buffer.
     response = client.get("/api/logs?limit=50", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert "items" in data and isinstance(data["items"], list)
-
-
-def test_create_emu_request_requires_auth(client):
-    response = client.post("/api/missing/1/create-emu-request")
-    assert response.status_code == 401
-
-
-def test_create_emu_request_stub_with_auth(client, auth_headers):
-    response = client.post("/api/missing/1/create-emu-request", headers=auth_headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["implemented"] is False
-    assert data["stub"] is True
-    assert "DevTools" in data["message"] or "endpoint" in data["message"].lower() or "pendiente" in data["message"].lower()
 
 
 # ---------------------------------------------------------------------------

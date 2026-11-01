@@ -244,6 +244,7 @@ def upload_preflight(
 def upload_checks(
     item_id: int,
     scope: str = Query(default="all", pattern="^(all|content|environment)$"),
+    provider: str | None = Query(default=None),
     current_user: dict = Depends(require_auth),
 ) -> dict:
     """Run the pre-upload checks (fail-fast, eMuwarez last) for the 'Subida a
@@ -259,7 +260,9 @@ def upload_checks(
     "all" (por defecto) las hace todas, que es lo que usa un solo elemento."""
     from emuwarez_uploadrr.services.upload_checks import run_upload_checks
     with _get_conn() as conn:
-        return run_upload_checks(conn, item_id, scope=scope)
+        # `provider` de una temporada: el elegido en el asistente ("" = Sin proveedor).
+        return run_upload_checks(conn, item_id, scope=scope,
+                                 provider_override=None if provider is None else provider.strip())
 
 
 @router.get("/library/{item_id}/upload/checks/progress")

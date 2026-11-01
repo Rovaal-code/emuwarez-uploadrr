@@ -3,8 +3,12 @@ import type { SeasonPackPlanResponse } from '../types/api'
 import type { MediaInfoReport } from './library'
 import type { TrackRemuxPreview, SourceComparison } from './nomenclature'
 
-export function previewSeasonPack(seasonId: number): Promise<SeasonPackPlanResponse> {
-  return api.get<SeasonPackPlanResponse>(`/library/season/${seasonId}/pack-preview`)
+// `provider`: el Proveedor elegido a mano (utils/origenProveedor.ts::
+// proveedorParaServidor; '' es "Sin proveedor"). Con él, capítulos con
+// proveedores distintos en el nombre ya no bloquean el pack.
+export function previewSeasonPack(seasonId: number, provider?: string): Promise<SeasonPackPlanResponse> {
+  const qs = provider !== undefined ? `?provider=${encodeURIComponent(provider)}` : ''
+  return api.get<SeasonPackPlanResponse>(`/library/season/${seasonId}/pack-preview${qs}`)
 }
 
 export interface SeasonPackFieldsPreviewFields {
@@ -77,7 +81,8 @@ export function getSeasonEpisodeNames(
 ): Promise<{ episodes: SeasonEpisodeName[] }> {
   const qs = new URLSearchParams()
   if (overrides?.source) qs.set('source', overrides.source)
-  if (overrides?.provider) qs.set('provider', overrides.provider)
+  // '' es "Sin proveedor" elegido a mano: también se manda.
+  if (overrides?.provider != null) qs.set('provider', overrides.provider)
   if (overrides?.tag) qs.set('tag', overrides.tag)
   const query = qs.toString()
   return api.get<{ episodes: SeasonEpisodeName[] }>(`/library/season/${seasonId}/episode-names${query ? `?${query}` : ''}`)

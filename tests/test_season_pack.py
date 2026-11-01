@@ -1143,3 +1143,254 @@ def test_the_progress_names_the_episode_being_worked_on(isolated_db, tmp_path, m
     final = sp.get_season_plan_progress(season_id)
     assert final["done"] == final["total"] == 3
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Un solo proveedor para el pack y sus capítulos
+# ---------------------------------------------------------------------------
+
+def _renombrar_capitulo(conn, tmp_path, numero, nombre):
+    viejo = tmp_path / "One Piece" / "Season 1" / f"S01E0{numero}.mkv"
+    nuevo = viejo.with_name(nombre)
+    viejo.rename(nuevo)
+    conn.execute("UPDATE library_items SET path = ? WHERE path = ?", (str(nuevo), str(viejo)))
+    conn.commit()
+
+
+def test_el_proveedor_sugerido_para_el_pack_llega_a_todos_los_capitulos(isolated_db, tmp_path, monkeypatch):
+    """El fallo real: la carpeta salía "... FLMN WEB-DL ..." (sugerido por TMDb) y
+    los capítulos sin FLMN, porque cada uno decidía su proveedor por separado."""
+    from emuwarez_uploadrr.services import source_assistant
+    monkeypatch.setattr(source_assistant, "suggest_provider_for_item",
+                        lambda item_id, conn=None: {"suggested": "FLMN", "tmdb_providers": ["FLMN"]})
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_de_dos(conn, tmp_path), conn=conn)
+    assert plan["status"] == "valid", plan["errors"]
+    assert "FLMN WEB-DL" in plan["season_pack_title"]
+    assert all("FLMN.WEB-DL" in e["nombre"] for e in plan["episodes"]), [e["nombre"] for e in plan["episodes"]]
+    assert plan["provider"] == "FLMN"
+    assert plan["provider_source"] == "tmdb"
+    assert "TMDb" in plan["provider_source_detail"]
+    conn.close()
+
+
+def test_el_proveedor_de_un_capitulo_se_aplica_a_todo_el_pack(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    _renombrar_capitulo(conn, tmp_path, 1, "S01E01.FLMN.WEB-DL.mkv")
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "valid", plan["errors"]
+    assert "FLMN WEB-DL" in plan["season_pack_title"]
+    assert all("FLMN.WEB-DL" in e["nombre"] for e in plan["episodes"]), [e["nombre"] for e in plan["episodes"]]
+    assert plan["provider_source"] == "file"
+    assert plan["provider_source_detail"] == (
+        "detectado en el nombre del archivo del capítulo 1; lo traen 1 de 2 capítulos y se aplica a todos")
+    conn.close()
+
+
+def test_el_proveedor_impuesto_por_el_pack_no_se_guarda_en_el_capitulo(isolated_db, tmp_path):
+    """Es una decisión del pack: la propuesta guardada del capítulo 2 no cambia."""
+    from emuwarez_uploadrr.services.nomenclature import get_latest_nomenclature_proposal
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    _renombrar_capitulo(conn, tmp_path, 1, "S01E01.FLMN.WEB-DL.mkv")
+    build_season_pack_plan(season_id, conn=conn)
+    ep2 = conn.execute("SELECT id FROM library_items WHERE episode_number = 2").fetchone()[0]
+    guardada = get_latest_nomenclature_proposal(ep2, conn=conn)
+    assert guardada is None or not guardada.get("provider_final")
+    conn.close()
+
+
+def test_el_proveedor_elegido_a_mano_para_el_pack_no_se_guarda_en_los_capitulos(isolated_db, tmp_path):
+    """Con NF elegido a mano para el pack, las propuestas guardadas de los capítulos no lo llevan."""
+    from emuwarez_uploadrr.services.nomenclature import get_latest_nomenclature_proposal
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    plan = build_season_pack_plan(season_id, conn=conn, provider_override="NF")
+    assert plan["provider"] == "NF"
+    for (ep,) in conn.execute("SELECT id FROM library_items WHERE episode_number IN (1, 2)").fetchall():
+        guardada = get_latest_nomenclature_proposal(ep, conn=conn)
+        assert guardada is None or guardada.get("provider_final") != "NF"
+    conn.close()
+
+
+def test_sin_proveedor_elegido_para_el_pack_no_caduca_la_propuesta_del_capitulo(isolated_db, tmp_path):
+    """«Sin proveedor» también es una decisión del pack: la propuesta guardada del capítulo 1 sigue."""
+    from emuwarez_uploadrr.services.nomenclature import get_latest_nomenclature_proposal
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    _renombrar_capitulo(conn, tmp_path, 1, "S01E01.FLMN.WEB-DL.mkv")
+    build_season_pack_plan(season_id, conn=conn)
+    ep1 = conn.execute("SELECT id FROM library_items WHERE episode_number = 1").fetchone()[0]
+    antes = get_latest_nomenclature_proposal(ep1, conn=conn)
+    plan = build_season_pack_plan(season_id, conn=conn, provider_override="")
+    assert plan["provider"] is None
+    despues = get_latest_nomenclature_proposal(ep1, conn=conn)
+    assert (antes or {}).get("id") == (despues or {}).get("id")
+    conn.close()
+
+
+def test_un_proveedor_solo_en_la_carpeta_no_se_aplica(isolated_db, tmp_path):
+    """Coincidencia débil: "FLMN" solo en una carpeta de la ruta, no en el nombre
+    de ningún archivo. Ni el pack ni los capítulos lo llevan; se avisa."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece FLMN" / "Season 1"
+    folder.mkdir(parents=True)
+    for i in (1, 2):
+        f = folder / f"S01E0{i}.WEB-DL.mkv"
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                      audio_languages="spa", source="WEB-DL")
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "valid", plan["errors"]
+    assert plan["provider"] is None
+    assert plan["provider_source"] is None
+    assert "FLMN" not in plan["season_pack_title"]
+    assert not any("FLMN" in e["nombre"] for e in plan["episodes"])
+    assert any("FLMN solo aparece en una carpeta" in w for w in plan["warnings"]), plan["warnings"]
+    conn.close()
+
+
+def test_el_proveedor_elegido_a_mano_dice_que_es_manual(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_de_dos(conn, tmp_path), conn=conn, provider_override="NF")
+    assert plan["provider"] == "NF"
+    assert plan["provider_source"] == "manual"
+    assert all("NF.WEB-DL" in e["nombre"] for e in plan["episodes"])
+    conn.close()
+
+
+def _pack_con_proveedores_distintos(conn, tmp_path):
+    season_id = _pack_de_dos(conn, tmp_path)
+    _renombrar_capitulo(conn, tmp_path, 1, "S01E01.AMZN.WEB-DL.mkv")
+    _renombrar_capitulo(conn, tmp_path, 2, "S01E02.NF.WEB-DL.mkv")
+    return season_id
+
+
+def test_proveedores_distintos_dicen_cuales_para_elegir_uno(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_con_proveedores_distintos(conn, tmp_path), conn=conn)
+    assert plan["status"] == "blocked"
+    assert plan["provider_conflict"] == ["AMZN", "NF"]
+    conn.close()
+
+
+def test_elegir_proveedor_desbloquea_un_pack_con_proveedores_distintos(isolated_db, tmp_path):
+    """El error pide "elige uno en Proveedor": elegirlo tiene que bastar."""
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_con_proveedores_distintos(conn, tmp_path), conn=conn,
+                                  provider_override="NF")
+    assert plan["status"] == "valid", plan["errors"]
+    assert plan["provider_conflict"] == []
+    assert "NF WEB-DL" in plan["season_pack_title"]
+    assert all("NF.WEB-DL" in e["nombre"] and "AMZN" not in e["nombre"] for e in plan["episodes"])
+    conn.close()
+
+
+def test_el_aviso_de_la_carpeta_sale_aunque_otro_capitulo_traiga_proveedor(isolated_db, tmp_path):
+    """E01 trae AMZN en el nombre y E02 solo encuentra NF en la carpeta: se avisa de NF."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece NF" / "Season 1"
+    folder.mkdir(parents=True)
+    for i, nombre in ((1, "S01E01.AMZN.WEB-DL.mkv"), (2, "S01E02.WEB-DL.mkv")):
+        f = folder / nombre
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                      audio_languages="spa", source="WEB-DL")
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["provider"] == "AMZN"
+    assert any("NF solo aparece en una carpeta" in w for w in plan["warnings"]), plan["warnings"]
+    conn.close()
+
+
+def test_el_aviso_de_la_carpeta_no_niega_el_proveedor_que_otro_capitulo_trae(isolated_db, tmp_path):
+    """E01 trae AMZN en el nombre y E02 solo lo encuentra en la carpeta: el pack
+    lleva AMZN y el aviso habla del capítulo 2 sin decir que no se aplica."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece AMZN" / "Season 1"
+    folder.mkdir(parents=True)
+    for i, nombre in ((1, "S01E01.AMZN.WEB-DL.mkv"), (2, "S01E02.WEB-DL.mkv")):
+        f = folder / nombre
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                      audio_languages="spa", source="WEB-DL")
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["provider"] == "AMZN"
+    assert plan["warnings"] == [
+        "En el capítulo 2, el proveedor AMZN solo aparece en una carpeta de la ruta, no en el nombre "
+        "del archivo: esa coincidencia no cuenta. El pack lleva AMZN igualmente porque otro capítulo "
+        "lo trae en el nombre."
+    ]
+    assert all("AMZN.WEB-DL" in e["nombre"] for e in plan["episodes"])
+    conn.close()
+
+
+def test_sin_proveedor_elegido_a_mano_quita_el_del_nombre(isolated_db, tmp_path):
+    """"" es "Sin proveedor" elegido a mano, distinto de no elegir (None): ni el
+    pack ni los capítulos llevan el AMZN que trae el nombre."""
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    _renombrar_capitulo(conn, tmp_path, 1, "S01E01.AMZN.WEB-DL.mkv")
+    _renombrar_capitulo(conn, tmp_path, 2, "S01E02.AMZN.WEB-DL.mkv")
+    plan = build_season_pack_plan(season_id, conn=conn, provider_override="")
+    assert plan["status"] == "valid", plan["errors"]
+    assert plan["provider"] is None
+    assert plan["provider_source"] == "manual"
+    assert "AMZN" not in plan["season_pack_title"]
+    assert not any("AMZN" in e["nombre"] for e in plan["episodes"]), [e["nombre"] for e in plan["episodes"]]
+    # Sin elegir nada, el del nombre sigue valiendo.
+    assert build_season_pack_plan(season_id, conn=conn)["provider"] == "AMZN"
+    conn.close()
+
+
+def test_sin_proveedor_elegido_a_mano_desbloquea_proveedores_distintos(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_con_proveedores_distintos(conn, tmp_path), conn=conn,
+                                  provider_override="")
+    assert plan["status"] == "valid", plan["errors"]
+    assert not any("AMZN" in e["nombre"] or "NF." in e["nombre"] for e in plan["episodes"])
+    conn.close()
+
+
+def test_las_comprobaciones_usan_el_proveedor_elegido(isolated_db, tmp_path):
+    """Con proveedores distintos, las comprobaciones bloqueaban aunque el
+    usuario ya hubiera elegido uno: no recibían su elección."""
+    from emuwarez_uploadrr.services.upload_checks import run_upload_checks
+    conn = _open(isolated_db)
+    season_id = _pack_con_proveedores_distintos(conn, tmp_path)
+
+    def pack(**kw):
+        checks = run_upload_checks(conn, season_id, scope="content", **kw)["checks"]
+        return next(c for c in checks if c["id"] == "season_pack")
+
+    assert pack()["status"] == "fail"
+    assert pack(provider_override="NF")["status"] == "ok", pack(provider_override="NF")
+    conn.close()
+
+
+def test_con_proveedores_distintos_el_aviso_no_dice_que_el_pack_lo_lleva(isolated_db, tmp_path):
+    """E01 AMZN y E03 NF en el nombre, E02 AMZN solo en la carpeta: el plan se
+    bloquea, así que el aviso no puede decir que el pack lleva AMZN."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece AMZN" / "Season 1"
+    folder.mkdir(parents=True)
+    for i, nombre in ((1, "S01E01.AMZN.WEB-DL.mkv"), (2, "S01E02.WEB-DL.mkv"), (3, "S01E03.NF.WEB-DL.mkv")):
+        f = folder / nombre
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                      audio_languages="spa", source="WEB-DL")
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "blocked"
+    assert plan["warnings"] == [
+        "En el capítulo 2, el proveedor AMZN solo aparece en una carpeta de la ruta, no en el nombre "
+        "del archivo: esa coincidencia no cuenta."
+    ]
+    conn.close()

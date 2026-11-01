@@ -494,6 +494,88 @@ def _spanish_errors(episode_entries: list[dict]) -> list[str]:
     return errors
 
 
+def _decidir_proveedor_pack(
+    episodios: list[dict], source_override: str | None, provider_override: str | None, conn,
+) -> dict:
+    """El proveedor del pack, decidido UNA vez para la carpeta y todos los
+    capítulos, y de dónde sale. Por orden:
+
+    1. El elegido a mano en Proveedor.
+    2. El que trae el NOMBRE del archivo de algún capítulo (el primero que lo
+       trae; si dos capítulos traen proveedores distintos, el pack se bloquea).
+       Se aplica a todos, también a los que no lo traen.
+    3. Con source WEB-DL y ningún nombre que lo diga, una sola consulta a TMDb
+       para toda la temporada.
+
+    Un código que solo aparece en una CARPETA de la ruta no cuenta (coincidencia
+    débil, ver nomenclature.detectar_proveedor): solo se avisa.
+
+    `por_capitulo` dice el proveedor que trae el nombre de cada capítulo, para
+    no rehacer la propuesta de los que ya lo llevan."""
+    from .nomenclature import ORIGEN_CARPETA, ORIGEN_NOMBRE, _infer_source_from_item, detectar_proveedor
+
+    decision: dict[str, Any] = {"provider": None, "source": None, "detail": None, "conflicto": [],
+                                "warnings": [], "errors": [], "por_capitulo": {}}
+    # "" (SIN_PROVEEDOR) es "Sin proveedor" elegido a mano: también es una
+    # decisión manual, no un "detecta tú".
+    if provider_override is not None:
+        decision.update(provider=provider_override or None, source="manual",
+                        detail="elegido a mano" if provider_override else "sin proveedor, elegido a mano")
+        return decision
+
+    sources: dict[int, Optional[str]] = {}
+    # Código visto solo en una carpeta -> capítulos donde pasa.
+    debiles: dict[str, list] = {}
+    primero: Optional[dict] = None
+    for ep in episodios:
+        sources[ep["id"]] = source_override or _infer_source_from_item(ep)
+        codigo, origen = detectar_proveedor(ep, sources[ep["id"]])
+        if origen == ORIGEN_NOMBRE:
+            decision["por_capitulo"][ep["id"]] = codigo
+            primero = primero or ep
+        elif origen == ORIGEN_CARPETA:
+            debiles.setdefault(codigo, []).append(ep.get("episode_number"))
+
+    # Los avisos van antes de cualquier return y dicen QUÉ capítulos solo lo
+    # encuentran en una carpeta: esa coincidencia no cuenta, pero no niega la
+    # que otro capítulo trae en el nombre.
+    del_pack = decision["por_capitulo"][primero["id"]] if primero is not None else None
+    for codigo, numeros in debiles.items():
+        capitulos = (f"el capítulo {numeros[0]}" if len(numeros) == 1
+                     else f"los capítulos {', '.join(str(n) for n in numeros)}")
+        aviso = (f"En {capitulos}, el proveedor {codigo} solo aparece en una carpeta de la ruta, no en "
+                 "el nombre del archivo: esa coincidencia no cuenta.")
+        if del_pack is None:
+            aviso += " Elígelo en Proveedor si es correcto."
+        elif codigo == del_pack and len(set(decision["por_capitulo"].values())) == 1:
+            # Con proveedores distintos el pack no lleva ninguno hasta que se elige.
+            aviso += f" El pack lleva {codigo} igualmente porque otro capítulo lo trae en el nombre."
+        decision["warnings"].append(aviso)
+
+    distintos = sorted(set(decision["por_capitulo"].values()))
+    if len(distintos) > 1:
+        # El asistente enseña el selector de Proveedor con este error; elegir
+        # uno rehace el plan con provider_override, que ya no pasa por aquí.
+        decision["conflicto"] = distintos
+        decision["errors"].append(f"Los capítulos vienen de proveedores distintos ({', '.join(distintos)}): "
+                                  "elige uno en Proveedor.")
+    if primero is not None:
+        con = len(decision["por_capitulo"])
+        detalle = f"detectado en el nombre del archivo del capítulo {primero.get('episode_number')}"
+        if con < len(episodios):
+            detalle += f"; lo traen {con} de {len(episodios)} capítulos y se aplica a todos"
+        decision.update(provider=decision["por_capitulo"][primero["id"]], source="file", detail=detalle)
+        return decision
+
+    if (sources.get(episodios[0]["id"]) or "").upper() == "WEB-DL":
+        from .source_assistant import suggest_provider_for_item
+        sugerencia = suggest_provider_for_item(episodios[0]["id"], conn=conn)
+        if sugerencia.get("suggested"):
+            decision.update(provider=sugerencia["suggested"], source="tmdb",
+                            detail="sugerido por TMDb (plataformas donde se emite la serie)")
+    return decision
+
+
 def build_season_pack_plan(
     season_id: int, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
@@ -595,6 +677,15 @@ def build_season_pack_plan(
         total = len(available_episodes)
         _clear_season_plan_cancel(season_id)
         _set_season_plan_progress(season_id, done=0, total=total)
+
+        # Una sola decisión de proveedor para el pack y TODOS sus capítulos
+        # (ver _decidir_proveedor_pack). Antes cada capítulo decidía el suyo y
+        # el pack otro: la carpeta salía con "FLMN" y los capítulos sin él.
+        decision = _decidir_proveedor_pack(available_episodes, source_override, provider_override, conn)
+        provider = decision["provider"]
+        warnings: list[str] = list(decision["warnings"])
+        errors.extend(decision["errors"])
+
         episode_entries = []
         for i, ep in enumerate(available_episodes):
             # Checked BEFORE each episode, so closing the wizard stops the work
@@ -608,23 +699,31 @@ def build_season_pack_plan(
             # YA TERMINADO mientras trabajaba en el siguiente.
             _set_season_plan_progress(season_id, done=i, total=total,
                                       current_title=ep.get("title"))
+            # Al capítulo cuyo nombre ya trae el proveedor del pack no se le
+            # fuerza nada (su propuesta guardada sigue valiendo); a los demás,
+            # el del pack sin guardarla: es una decisión del pack, no suya.
+            impuesto = provider if provider and decision["por_capitulo"].get(ep["id"]) != provider else None
             proposal = build_nomenclature_proposal(
                 ep["id"], conn=conn,
-                source_override=source_override, provider_override=provider_override,
+                source_override=source_override, provider_override=impuesto or provider_override,
                 tag_override=tag_override, title_override=title_override,
+                # Lo que impone el pack (detectado o elegido a mano, también «Sin proveedor») no se
+                # guarda como propuesta del capítulo: no es suya, y la caducaría.
+                guardar=impuesto is None and provider_override is None,
             )
+            if ((provider or provider_override is not None)
+                    and (proposal.get("provider_final") or None) != provider):
+                # Una propuesta guardada editada a mano con otro proveedor: manda el del pack.
+                proposal = build_nomenclature_proposal(
+                    ep["id"], conn=conn, source_override=source_override,
+                    provider_override=provider or "",
+                    tag_override=tag_override, title_override=title_override, guardar=False,
+                )
             episode_entries.append({"episode": ep, "proposal": proposal})
         _set_season_plan_progress(season_id, done=total, total=total, current_title=None)
 
         errors.extend(_consistency_errors(episode_entries))
-        # Un capítulo sin proveedor en el nombre no cuenta; dos distintos sí.
-        proveedores = sorted({e["proposal"].get("provider_final") for e in episode_entries} - {None, ""})
-        if len(proveedores) > 1:
-            errors.append(f"Los capítulos vienen de proveedores distintos ({', '.join(proveedores)}): "
-                          "elige uno en Proveedor.")
         errors.extend(_spanish_errors(episode_entries))
-
-        first_proposal = episode_entries[0]["proposal"]
 
         # Internal Source Tool comparison (name vs Radarr/Sonarr vs
         # MediaInfo-bitrate), computed once from the first available episode
@@ -636,17 +735,6 @@ def build_season_pack_plan(
         source_comparison = build_editable_nomenclature_fields(
             available_episodes[0]["id"], conn=conn,
         ).get("source_comparison")
-
-        # Provider: each episode's own proposal already tried the filename
-        # first (nomenclature.py's _infer_provider_from_item); if NONE
-        # revealed one and the source is WEB-DL, ONE TMDb lookup for the
-        # whole season — not repeated per episode.
-        provider = next((e["proposal"].get("provider_final") for e in episode_entries
-                         if e["proposal"].get("provider_final")), None)
-        if not provider and (first_proposal.get("source") or "").upper() == "WEB-DL":
-            from .source_assistant import suggest_provider_for_item
-            suggestion = suggest_provider_for_item(available_episodes[0]["id"], conn=conn)
-            provider = suggestion.get("suggested")
 
         # Del conjunto de capítulos, no del primero: ya no tienen por qué
         # coincidir en todo (ver _aggregate_pack_fields).
@@ -705,7 +793,7 @@ def build_season_pack_plan(
         return {
             "status": status,
             "errors": errors,
-            "warnings": [],
+            "warnings": warnings,
             "season_pack_title": season_pack_title,
             "pack_folder": pack_folder,
             "episodes": episodes_out,
@@ -722,6 +810,11 @@ def build_season_pack_plan(
             "source": pack_fields.get("source"),
             "tmdb_id": (series or {}).get("tmdb_id"),
             "provider": provider,
+            # De dónde sale el proveedor, para que el asistente lo diga.
+            "provider_source": decision["source"],
+            "provider_source_detail": decision["detail"],
+            # Proveedores distintos en los nombres: el asistente deja elegir uno.
+            "provider_conflict": decision["conflicto"],
             # Rest of the field breakdown used to build season_pack_title,
             # kept on the return dict so a caller (upload_queue.py) can
             # snapshot the full nomenclature breakdown for the job detail

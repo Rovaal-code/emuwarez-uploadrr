@@ -72,15 +72,15 @@ export function SettingsPage() {
     // quedan fijas arriba, y el contenido de la pestaña activa se desplaza
     // por dentro (el div de más abajo) cuando no cabe entero — las cuatro
     // pestañas se comportan igual, Configuración incluida.
-    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <div className="page-header" style={{ flexShrink: 0 }}>
+    <div className="aj-marco">
+      <div className="page-header aj-no-encoge">
         <div>
           <div className="page-title">Configuración</div>
           <div className="page-subtitle">Ajustes, diagnóstico y backup</div>
         </div>
         {saveAction && (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            {saveAction.dirty && <span style={{ fontSize: 12, color: 'var(--color-warning)' }}>Cambios sin guardar</span>}
+          <div className="aj-flex-c-12 aj-wrap">
+            {saveAction.dirty && <span className="aj-aviso-cambios">Cambios sin guardar</span>}
             <button
               className={`btn btn-primary btn-sm${saveAction.dirty ? ' btn-unsaved' : ''}`}
               onClick={saveAction.onSave}
@@ -92,7 +92,7 @@ export function SettingsPage() {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+      <div className="aj-tabs">
         {tabs.map(t => (
           <button
             key={t.key}
@@ -111,7 +111,7 @@ export function SettingsPage() {
 
       {/* overflowY auto y no hidden: todas las pestañas pueden crecer más
           que la pantalla y necesitan poder desplazarse por dentro. */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      <div className="aj-cuerpo">
         <SettingsMessageContext.Provider key={reinicio} value={showMessage}>
           {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}
           {tab === 'notifications' && <NotificationsTab onExposeSave={setSaveAction} />}

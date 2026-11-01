@@ -71,12 +71,8 @@ export function SettingsMessageSlot({ msg }: { msg: SettingsMsg }) {
   return (
     <span
       ref={ref}
-      style={{
-        marginLeft: 'auto', alignSelf: 'center', minWidth: 0,
-        padding: '4px 10px', marginBottom: 6, borderRadius: 6,
-        background: c.fondo, border: `1px solid ${c.borde}`, color: c.texto,
-        fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-      }}
+      className="aj-mensaje"
+      style={{ background: c.fondo, border: `1px solid ${c.borde}`, color: c.texto }}
       {...triggerProps}
     >
       {msg.text}

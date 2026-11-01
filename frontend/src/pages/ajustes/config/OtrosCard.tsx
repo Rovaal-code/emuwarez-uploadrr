@@ -31,7 +31,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
 
   return (
     <div className="placeholder-card">
-      <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <h3 className="aj-card-titulo aj-mb-14">
         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="1.75" aria-hidden>
           <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />
           <line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" />
@@ -41,7 +41,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
         Otros
       </h3>
       <div className="form-group">
-        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label className="form-label aj-flex-c-6">
           Renombrar/Ordenar pistas
           <InfoIcon text="Qué se le hace a las pistas de audio y subtítulos antes de subir. Renombrar les pone nombre siguiendo las reglas de eMuwarez y cambia solo la cabecera del archivo: es casi instantáneo por grande que sea. Reordenar las coloca en orden (Español, Català, Inglés, resto) y obliga a reescribir el contenedor entero, y tarda en proporción al tamaño. Si el archivo lo comparte un torrent (un hardlink), no se escribe en él: renombrar y el título interno se hacen en una copia por reflink en la carpeta de subidas (o se omiten, con «No hacer nunca copias reflink») y reordenar se omite. Con Ninguno el archivo se sube tal cual, sin tocar tampoco el título interno. En los tres primeros se marca la pista predeterminada, que es lo que decide qué audio suena al abrirlo." />
         </label>
@@ -51,7 +51,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
         </select>
       </div>
       <div className="form-group">
-        <label className="form-label" htmlFor="sin-copias-reflink" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label className="form-label aj-flex-c-6" htmlFor="sin-copias-reflink">
           No hacer nunca copias reflink
           <InfoIcon text="Si el archivo lo comparte un torrent o la biblioteca (un hardlink), renombrar las pistas y poner el título interno se hacen en una copia por reflink dentro de la carpeta de subidas, para no tocar el original. Activado, nunca se hace esa copia: esas ediciones se omiten con un aviso en el registro de la subida y se sube el archivo tal cual, con un enlace duro. Un archivo que no comparte nadie se sigue editando en su sitio." />
         </label>
@@ -63,7 +63,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
           de este navegador, no de la instalación, y se aplica y se recuerda
           al elegirlo. Ver utils/uiScale.ts. */}
       <div className="form-group">
-        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label className="form-label aj-flex-c-6">
           Tamaño de interfaz
           <InfoIcon text="Agranda o encoge la interfaz entera, para ajustarla a tu pantalla. La misma resolución se ve muy distinta según el tamaño del monitor y a la distancia que lo tengas, así que aquí no se adivina nada: lo eliges tú y se aplica al momento. Se guarda solo en este navegador, así que puedes tener un tamaño en el sobremesa y otro en el portátil, y no entra en el backup de configuración." />
         </label>
@@ -75,7 +75,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
         </select>
       </div>
       <div className="form-group">
-        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label className="form-label aj-flex-c-6">
           Internal Source Tool
           <InfoIcon text="Herramienta interna que deduce el source analizando el archivo real con MediaInfo, FFprobe y MKVToolNix, sin mirar el nombre. Todavía está en desarrollo y puede ser inexacta, por eso viene desactivada. Activada, añade su columna a la comparación de Source y participa en el aviso de discrepancia. Desactivada, esa columna sale vacía y el aviso compara solo el nombre del archivo con Radarr/Sonarr; el source final no cambia salvo en archivos donde ni el nombre ni Radarr/Sonarr dicen nada, que siguen usando la estimación por bitrate de siempre." />
         </label>
@@ -85,7 +85,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
         </select>
       </div>
       <div className="form-group">
-        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label className="form-label aj-flex-c-6">
           Subir el logo del contenido
           <InfoIcon text="Incrusta el logo del contenido al principio de la descripción del torrent, en español cuando TMDb lo tiene en ese idioma. Desactivado, la descripción se sube sin logo; el resto (capturas, ficha técnica y tráiler) no cambia." />
         </label>
@@ -95,7 +95,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
         </select>
       </div>
       <div className="form-group">
-        <label className="form-label" htmlFor="capturas-de-los-packs" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label className="form-label aj-flex-c-6" htmlFor="capturas-de-los-packs">
           Capturas de los packs
           <InfoIcon text="En un pack de temporada o de serie completa, de qué capítulos genera y sube capturas Uploadrr. Por defecto, solo del primero (el de número más bajo, sin contar los especiales si el pack trae otra temporada). Con todos los capítulos, cada uno lleva además las suyas en un desplegable de la descripción, y con muchos capítulos la subida tarda bastante más." />
         </label>
@@ -105,12 +105,12 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
         </select>
       </div>
       <div className="form-group">
-        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label className="form-label aj-flex-c-6">
           Máximo de Subidas en Paralelo
           <InfoIcon text="Cuántas subidas pueden estar en curso a la vez, de principio a fin (verificación previa, nomenclatura, remux, hasheo del torrent y transferencia a eMuwarez). No es solo una cola visual: las demás no dan ni un paso hasta que se libera un hueco. Sin límite las deja correr todas a la vez. El botón «Ver Máximo» estima cuántas puede aguantar este equipo según su RAM y CPU disponibles." />
         </label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <select className="form-input form-select" style={{ flex: 1 }} value={uploadMaxConcurrent} onChange={e => setUploadMaxConcurrent(Number(e.target.value))}>
+        <div className="aj-flex-c-10">
+          <select className="form-input form-select aj-flex-1" value={uploadMaxConcurrent} onChange={e => setUploadMaxConcurrent(Number(e.target.value))}>
             <option value={0}>Sin límite</option>
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
@@ -124,7 +124,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
           </button>
         </div>
         {concurrencyEstimate && (
-          <Modal titulo="Máximo de subidas en paralelo" onClose={() => setConcurrencyEstimate(null)} style={{ maxWidth: 860 }}>
+          <Modal titulo="Máximo de subidas en paralelo" onClose={() => setConcurrencyEstimate(null)} className="aj-modal-860">
             <div className="modal-body">
               <table className="data-table">
                 <thead>
@@ -141,7 +141,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
                     <td>RAM</td>
                     <td>{concurrencyEstimate.available_ram_gb} GB</td>
                     <td>{concurrencyEstimate.assumed_ram_gb_per_slot} GB</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    <td className="aj-muted-12">
                       Capturas con FFmpeg: extraer y escalar fotogramas. Es casi todo el gasto.
                     </td>
                     <td>{concurrencyEstimate.ram_limited_to}</td>
@@ -150,14 +150,14 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
                     <td>CPU</td>
                     <td>{concurrencyEstimate.cpu_cores} núcleos</td>
                     <td>1 núcleo</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    <td className="aj-muted-12">
                       Hasheo del torrent con torf: satura un núcleo entero. Y las capturas con FFmpeg.
                     </td>
                     <td>{concurrencyEstimate.cpu_limited_to}</td>
                   </tr>
                 </tbody>
               </table>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14 }}>
+              <div className="aj-barra-modal">
                 <span className="form-hint">
                   Estimación orientativa, no tiene en cuenta la velocidad del disco o de la red.
                   El trabajo sobre las pistas no entra en estos números, ni activando «Reordenar
@@ -166,9 +166,8 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
                   barato: mkvpropedit toca la cabecera en el sitio, sin releer el archivo.
                 </span>
                 <button
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-secondary btn-sm aj-no-encoge"
                   type="button"
-                  style={{ flexShrink: 0 }}
                   onClick={() => { setUploadMaxConcurrent(concurrencyEstimate.recommended); setConcurrencyEstimate(null) }}
                 >
                   Establecer {concurrencyEstimate.recommended}
@@ -179,7 +178,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
         )}
       </div>
       <div className="form-group">
-        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label className="form-label aj-flex-c-6">
           Ignorar Temporadas especiales
           <InfoIcon text="Excluye la temporada especial (temporada 0) del estado global de una serie. Si tienes todas las temporadas y capítulos salvo los especiales, la serie aparece como completa en las columnas Estado y eMuwarez de la Biblioteca. Sus atributos consolidados (resolución, source, códecs, audio y subtítulos) se calculan ignorando los especiales, y en el Panel sus capítulos faltantes no cuentan como faltantes." />
         </label>
@@ -189,7 +188,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
         </select>
       </div>
       <div className="form-group">
-        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label className="form-label aj-flex-c-6">
           Máximo de Elementos en Recomendaciones
           <InfoIcon text="Cuántos elementos como máximo se muestran en Recomendaciones. Sin límite los muestra todos." />
         </label>

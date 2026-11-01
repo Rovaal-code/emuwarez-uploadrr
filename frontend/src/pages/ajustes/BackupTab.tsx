@@ -91,10 +91,10 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="aj-col-16">
       <div className="placeholder-card">
         <h3>Crear backup</h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 12px' }}>
+        <p className="aj-sec-13 aj-m-0-12">
           Crea un archivo <code>.tar.gz</code> del directorio de configuración, sin las claves: las API keys, la
           contraseña de qBittorrent, el webhook de Discord y el token de Telegram van vacíos, y no entran
           el <code>config.yaml</code> ni las cookies de Uploadrr-EMU.
@@ -107,33 +107,33 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
       <div className="placeholder-card">
         <h3>Backups existentes ({status?.backups_count ?? backups.length})</h3>
         {backupDir && (
-          <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: '0 0 10px' }}>
+          <p className="aj-sec-12 aj-m-0-10">
             Ubicación: <code>{backupDir}</code>
           </p>
         )}
-        <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: '0 0 10px' }}>
+        <p className="aj-sec-12 aj-m-0-10">
           Las automáticas las crea la tarea Copia de seguridad (en Tareas) y se guardan las últimas; las manuales y
           las que subas no se borran solas.
         </p>
         {backups.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No hay backups.</p>
+          <p className="aj-sec-13">No hay backups.</p>
         ) : (
-          <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+          <table className="aj-tabla aj-fs-12">
             <thead>
               <tr>
                 {['Nombre', 'Tipo', 'Tamaño', 'Fecha', ''].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)' }}>{h}</th>
+                  <th key={h} className="aj-th">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {backups.map(b => (
-                <tr key={b.path} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '5px 8px' }}>{b.name}</td>
-                  <td style={{ padding: '5px 8px' }}>{TIPO_COPIA[b.tipo]}{b.con_claves ? ' · con claves' : b.con_claves === null ? ' · puede llevar claves' : ''}</td>
-                  <td style={{ padding: '5px 8px' }}>{formatBytes(b.size_bytes)}</td>
-                  <td style={{ padding: '5px 8px' }}>{b.created_at.slice(0, 16).replace('T', ' ')}</td>
-                  <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <tr key={b.path} className="aj-fila-borde">
+                  <td className="aj-td-5">{b.name}</td>
+                  <td className="aj-td-5">{TIPO_COPIA[b.tipo]}{b.con_claves ? ' · con claves' : b.con_claves === null ? ' · puede llevar claves' : ''}</td>
+                  <td className="aj-td-5">{formatBytes(b.size_bytes)}</td>
+                  <td className="aj-td-5">{b.created_at.slice(0, 16).replace('T', ' ')}</td>
+                  <td className="aj-td-5 aj-der">
                     <button className="btn btn-secondary btn-sm" onClick={() => handleDownload(b)}>Descargar</button>
                   </td>
                 </tr>
@@ -141,7 +141,7 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
             </tbody>
           </table>
         )}
-        <div style={{ marginTop: 12 }}>
+        <div className="aj-mt-12">
           <input
             ref={subirRef}
             type="file"
@@ -157,15 +157,14 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
 
       <div className="placeholder-card">
         <h3>Restaurar backup</h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>
+        <p className="aj-sec-13 aj-m-0-10">
           Elige uno de los backups existentes en <code>{backupDir || '…'}</code>. Las claves que el backup no
           lleve se quedan como las tienes ahora.
         </p>
         <select
-          className="form-input form-select"
+          className="form-input form-select aj-w-100 aj-mb-8"
           value={restoreName}
           onChange={e => setRestoreName(e.target.value)}
-          style={{ width: '100%', marginBottom: 8 }}
         >
           <option value="">Selecciona un backup…</option>
           {backups.map(b => (
@@ -177,9 +176,9 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
           placeholder="Confirmación: RESTAURAR_CONFIG (solo para restauración real)"
           value={restoreConfirm}
           onChange={e => setRestoreConfirm(e.target.value)}
-          style={{ width: '100%', marginBottom: 10, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' }}
+          className="aj-campo-ancho aj-mb-10"
         />
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="aj-flex-8">
           <button className="btn btn-secondary" onClick={() => handleRestore(true)} disabled={busy}>Previsualizar</button>
           <button className="btn btn-danger" onClick={() => handleRestore(false)} disabled={busy}>Restaurar</button>
         </div>

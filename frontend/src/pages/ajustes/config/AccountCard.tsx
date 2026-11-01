@@ -45,29 +45,29 @@ export function AccountCard() {
 
   return (
     <div className="placeholder-card">
-      <h3 style={{ marginTop: 0, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <h3 className="aj-card-titulo aj-mb-6">
         <IconoUsuario size={18} style={{ color: 'var(--text-accent)' }} /> Cuenta
       </h3>
-      <p className="form-hint" style={{ marginTop: 0, marginBottom: 14 }}>
+      <p className="form-hint aj-mt-0 aj-mb-14">
         Cambia el usuario y/o la contraseña con la que inicias sesión en esta aplicación.
       </p>
-      <div className="form-group" style={{ marginBottom: 12 }}>
+      <div className="form-group aj-mb-12">
         <label className="form-label">Usuario actual</label>
         <input className="form-input" value={username || '…'} disabled />
       </div>
-      <div className="form-group" style={{ marginBottom: 12 }}>
+      <div className="form-group aj-mb-12">
         <label className="form-label">Nuevo usuario <span className="form-hint">(dejar vacío para no cambiarlo)</span></label>
         <input className="form-input" value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder={username} autoComplete="off" />
       </div>
-      <div className="form-group" style={{ marginBottom: 12 }}>
+      <div className="form-group aj-mb-12">
         <label className="form-label">Nueva contraseña <span className="form-hint">(dejar vacío para no cambiarla)</span></label>
         <input type="password" className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña" autoComplete="new-password" />
       </div>
-      <div className="form-group" style={{ marginBottom: 14 }}>
+      <div className="form-group aj-mb-14">
         <label className="form-label">Contraseña actual <span className="form-hint">(obligatoria para confirmar)</span></label>
         <input type="password" className="form-input" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Tu contraseña actual" autoComplete="current-password" />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="aj-flex-c-12">
         <button className="btn btn-primary btn-sm" type="button" onClick={handleSave} disabled={saving || !dirty}>
           {saving ? 'Guardando…' : 'Guardar cambios'}
         </button>

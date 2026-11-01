@@ -32,34 +32,33 @@ export function QbitCard({ form }: { form: ConfigForm }) {
 
   return (
     <div className="placeholder-card">
-      <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <h3 className="aj-card-titulo aj-mb-14">
         <ServiceIcon type="qbittorrent" size={18} /> qBittorrent
       </h3>
-      <div className="form-group" style={{ marginBottom: 10 }}>
+      <div className="form-group aj-mb-10">
         <label className="form-label">URL del WebUI</label>
         <input className="form-input" value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} placeholder="http://127.0.0.1" />
       </div>
-      <div className="form-group" style={{ marginBottom: 10 }}>
+      <div className="form-group aj-mb-10">
         <label className="form-label">Tag</label>
         <input className="form-input" value={qbitTag} onChange={e => setQbitTag(e.target.value)} placeholder="Subidas" />
       </div>
-      <div className="form-group" style={{ marginBottom: 10 }}>
+      <div className="form-group aj-mb-10">
         <label className="form-label">Usuario</label>
-        <div style={{ position: 'relative' }}>
+        <div className="aj-rel">
           <input
-            className="form-input"
+            className="form-input aj-pr-38"
             type={showQbitUser ? 'text' : 'password'}
             value={qbitUser}
             onChange={e => setQbitUser(e.target.value)}
             placeholder="admin"
             autoComplete="off"
-            style={{ paddingRight: 38 }}
           />
           <button
             type="button"
             onClick={() => setShowQbitUser(s => !s)}
             aria-label={showQbitUser ? 'Ocultar usuario' : 'Mostrar usuario'}
-            style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', padding: 2 }}
+            className="aj-ojo"
             {...qbitUserEyeTip.triggerProps}
           >
             {qbitUserEyeTip.tooltipNode}
@@ -77,16 +76,16 @@ export function QbitCard({ form }: { form: ConfigForm }) {
           </button>
         </div>
       </div>
-      <div className="form-group" style={{ marginBottom: 12 }}>
+      <div className="form-group aj-mb-12">
         <label className="form-label">Contraseña <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
         <input type="password" className="form-input" value={qbitPass} onChange={e => { setQbitPass(e.target.value); setQuitarQbitPass(false) }} placeholder={quitarQbitPass ? 'Se quitará al guardar' : settings?.qbit_password_configured ? '••••••••' : 'Contraseña del WebUI'} autoComplete="new-password" />
         {settings?.qbit_password_configured && !qbitPass && (
-          <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6, alignSelf: 'flex-start' }} onClick={() => setQuitarQbitPass(q => !q)}>
+          <button type="button" className="btn btn-secondary btn-sm aj-mt-6 aj-self-start" onClick={() => setQuitarQbitPass(q => !q)}>
             {quitarQbitPass ? 'No quitarla' : 'Quitar la contraseña'}
           </button>
         )}
       </div>
-      <div className="form-group" style={{ marginBottom: 12 }}>
+      <div className="form-group aj-mb-12">
         <label className="form-label" htmlFor="qbit-qui-proxy">
           Proxy de <a href="https://getqui.com/docs/features/reverse-proxy" target="_blank" rel="noreferrer">qui</a>{' '}
           <span className="form-hint">(opcional; con él no hacen falta usuario ni contraseña)</span>
@@ -101,7 +100,7 @@ export function QbitCard({ form }: { form: ConfigForm }) {
           autoComplete="off"
         />
         {settings?.qbit_qui_configured && !qbitQui && (
-          <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6, alignSelf: 'flex-start' }} onClick={() => setQuitarQui(q => !q)}>
+          <button type="button" className="btn btn-secondary btn-sm aj-mt-6 aj-self-start" onClick={() => setQuitarQui(q => !q)}>
             {quitarQui ? 'No quitarlo' : 'Quitar el proxy de qui'}
           </button>
         )}
@@ -111,7 +110,7 @@ export function QbitCard({ form }: { form: ConfigForm }) {
           {testingQbit ? 'Probando…' : 'Probar conexión'}
         </button>
         {qbitTestResult && (
-          <span style={{ marginLeft: 10, fontSize: 12, color: testResultColor(qbitTestResult) }}>
+          <span className="aj-res-12" style={{ color: testResultColor(qbitTestResult) }}>
             {testResultLabel(qbitTestResult)}
           </span>
         )}

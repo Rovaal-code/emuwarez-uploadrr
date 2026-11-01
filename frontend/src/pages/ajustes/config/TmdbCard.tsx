@@ -29,18 +29,18 @@ export function TmdbCard({ form }: { form: ConfigForm }) {
 
   return (
     <div className="placeholder-card">
-      <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <h3 className="aj-card-titulo aj-mb-14">
         <ServiceIcon type="tmdb" size={18} /> TMDb
       </h3>
-      <div className="form-group" style={{ marginBottom: 12 }}>
+      <div className="form-group aj-mb-12">
         <label className="form-label">Estado de la API key</label>
-        <div style={{ fontSize: 13 }}>
+        <div className="aj-fs-13">
           {settings?.tmdb_api_key_configured
-            ? <><span style={{ color: 'var(--color-available)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurada</span>{settings.tmdb_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.tmdb_api_key_masked}</code>}</>
-            : <span style={{ color: 'var(--color-error)' }}>✗ No configurada</span>}
+            ? <><span className="aj-ok"><CheckStatusIcon status="ok" /> Configurada</span>{settings.tmdb_api_key_masked && <code className="aj-code-mascara">{settings.tmdb_api_key_masked}</code>}</>
+            : <span className="aj-err">✗ No configurada</span>}
         </div>
       </div>
-      <div className="form-group" style={{ marginBottom: 12 }}>
+      <div className="form-group aj-mb-12">
         <label className="form-label">Nueva API key <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
         <input
           type="password"
@@ -52,7 +52,7 @@ export function TmdbCard({ form }: { form: ConfigForm }) {
         />
         <span className="form-hint">Usada para marcar proveedores disponibles en TMDb y para traducir los títulos de las series al español (eMuwarez exige el título siempre en español).</span>
       </div>
-      <div style={{ marginBottom: 12 }}>
+      <div className="aj-mb-12">
         <button
           className="btn btn-secondary btn-sm"
           onClick={handleTestTmdb}
@@ -62,7 +62,7 @@ export function TmdbCard({ form }: { form: ConfigForm }) {
           {testingTmdb ? 'Probando…' : 'Probar conexión'}
         </button>
         {tmdbTestResult && (
-          <span style={{ marginLeft: 10, fontSize: 12, color: testResultColor(tmdbTestResult) }}>
+          <span className="aj-res-12" style={{ color: testResultColor(tmdbTestResult) }}>
             {testResultLabel(tmdbTestResult)}
           </span>
         )}

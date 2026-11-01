@@ -13,10 +13,10 @@ import { OtrosCard } from './config/OtrosCard'
 export function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => void }) {
   const form = useConfigForm(onExposeSave)
 
-  if (form.loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
+  if (form.loading) return <p className="aj-cargando">Cargando…</p>
 
   return (
-    <div data-tour="settings-content" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div data-tour="settings-content" className="aj-col-16">
       {/* Ocho tarjetas en cuatro columnas de ancho: cada una con el alto que
           le pida su contenido (ver settings-config-grid en dashboard.css). La
           página entera se desplaza si no caben todas, no cada tarjeta por

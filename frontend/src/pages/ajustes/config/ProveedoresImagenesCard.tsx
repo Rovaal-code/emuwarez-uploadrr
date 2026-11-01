@@ -13,7 +13,7 @@ import type { ConfigForm } from './useConfigForm'
 function RemoveImgHostButton({ onClick }: { onClick: () => void }) {
   const { triggerProps, tooltipNode } = useTooltip('Quitar')
   return (
-    <button className="btn btn-ghost btn-sm" style={{ fontSize: 13, padding: '2px 6px', color: 'var(--text-muted)' }}
+    <button className="btn btn-ghost btn-sm aj-ghost-muted"
       onClick={onClick} type="button" {...triggerProps}>✕{tooltipNode}</button>
   )
 }
@@ -58,13 +58,13 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
 
   return (
     <div className="placeholder-card provider-card">
-      <h3 style={{ marginTop: 0, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <h3 className="aj-card-titulo aj-mb-6">
         <ServiceIcon type="imghost" size={18} /> Proveedores de imágenes
       </h3>
-      <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
+      <span className="form-hint aj-block aj-mb-12">
         Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; arrastra para reordenar, o usa las flechas desde el asa de cada fila. <strong>imgbox</strong>, sin API key, va siempre el último.
       </span>
-      <label className="form-label" style={{ display: 'block', marginBottom: 8 }}>Prioridad de proveedores</label>
+      <label className="form-label aj-block aj-mb-8">Prioridad de proveedores</label>
       {(() => {
         const avail = settings?.image_hosts_available ?? []
         // imgbox no se ordena: la subida siempre lo prueba el último (fallback_order).
@@ -77,28 +77,23 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
           const dragging = !!asa?.dragging
           const t = imgTest[id]
           return (
-            <div style={{
-              padding: '8px 10px', borderRadius: 8,
-              background: dragging ? 'color-mix(in srgb, var(--color-primary) 15%, transparent)' : 'color-mix(in srgb, var(--color-uploading) 6%, transparent)',
-              border: `1px solid ${dragging ? 'var(--text-accent)' : 'var(--border)'}`,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
+            <div className={dragging ? 'aj-pill-fila aj-pill-fila-arrastre' : 'aj-pill-fila'}>
+              <div className="aj-flex-c-8">
+                <span className="aj-idx">{idx + 1}</span>
                 {asa ? (
                   <HoverTitle
                     as="span"
                     tip="Arrastra para reordenar, o usa las flechas del teclado"
                     {...asa.handleProps}
-                    className="drag-handle"
-                    style={{ ...asa.handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
+                    className="drag-handle aj-asa-handle"
                   ><DragHandleIcon /></HoverTitle>
-                ) : <span style={{ width: 16, marginLeft: 8, marginRight: 8 }} />}
+                ) : <span className="aj-asa-hueco" />}
                 <a href={h.url} target="_blank" rel="noreferrer" title={`Abrir ${h.label}`}
                   onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}
-                  style={{ display: 'inline-flex' }}>
+                  className="aj-inline-flex">
                   <Favicon domain={domainOf(h.url)} src={h.favicon} size={15} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={15} />} />
                 </a>
-                <span style={{ fontSize: 13, fontWeight: 500, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.label}</span>
+                <span className="aj-ellipsis-nowrap-13">{h.label}</span>
                 {isDefault && <span className="badge status-available">por defecto</span>}
                 {h.needs_key && (() => {
                   // Verde cuando hay clave guardada; gris parpadeando
@@ -110,16 +105,7 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                     <button
                       type="button"
                       title={guardada ? 'API key comprobada. Pulsa para cambiarla' : 'Falta la API key. Pulsa para añadirla'}
-                      className={`badge ${guardada ? 'status-available' : 'nom-na badge-blink'}`}
-                      // Sin border:none — .badge lleva su propio borde
-                      // y quitarlo era lo que lo hacía distinto del
-                      // "por defecto" de al lado. El resto neutraliza
-                      // lo que el navegador le añade a un <button>:
-                      // su tipografía, su interlineado y su margen.
-                      style={{
-                        fontSize: 10, cursor: 'pointer', appearance: 'none',
-                        fontFamily: 'inherit', lineHeight: 'inherit', margin: 0,
-                      }}
+                      className={`badge aj-badge-key ${guardada ? 'status-available' : 'nom-na badge-blink'}`}
                       onClick={e => { e.stopPropagation(); setKeyModalHost(id); setKeyDraft(''); setKeyError(null) }}
                       onMouseDown={e => e.stopPropagation()}
                     >API key</button>
@@ -134,9 +120,9 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                     proveedores sin API key (los demás se prueban en su
                     tarjeta), así que colgar de él la alineación dejaba
                     la X pegada a las insignias en el resto. */}
-                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="aj-flex-c-8 aj-ml-auto">
                   {!h.needs_key && (
-                    <button className="btn btn-secondary btn-sm" style={{ fontSize: 11, padding: '2px 8px' }}
+                    <button className="btn btn-secondary btn-sm aj-btn-mini"
                       onClick={() => handleTestImghost(id)} disabled={imgTesting === id} type="button">
                       {imgTesting === id ? 'Probando…' : 'Probar'}
                     </button>
@@ -148,7 +134,7 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
               </div>
               {/* Solo para los que no tienen tarjeta: los demás ya lo
                   enseñan ahí y salía dos veces. */}
-              {!h.needs_key && t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+              {!h.needs_key && t && <div className="aj-res-11" style={{ color: testResultColor(t) }}>{testResultLabel(t)}</div>}
             </div>
           )
         }
@@ -156,7 +142,7 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
           <>
           <div className="provider-card__body">
             <div className="provider-card__list">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="aj-col-8">
                 <SortableList etiqueta={id => metaOf(id)?.label ?? id} ids={configuredIds} onChange={setImgEnabled} gap={8} renderRow={fila} />
                 {fila('imgbox', configuredIds.length)}
               </div>
@@ -199,11 +185,11 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                 finally { setKeySaving(false) }
               }
               return (
-                <Modal titulo={<>API key de {host?.label ?? keyModalHost}</>} onClose={() => { if (!keySaving) setKeyModalHost(null) }} style={{ maxWidth: 480 }}>
+                <Modal titulo={<>API key de {host?.label ?? keyModalHost}</>} onClose={() => { if (!keySaving) setKeyModalHost(null) }} className="aj-modal-480">
                   <div className="modal-body">
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                    <div className="aj-flex-8 aj-stretch">
                       <input
-                        type="password" className="form-input" style={{ flex: 1 }} autoComplete="new-password"
+                        type="password" className="form-input aj-flex-1" autoComplete="new-password"
                         value={keyDraft} onChange={e => setKeyDraft(e.target.value)}
                         placeholder={guardada ? '•••••••• (hay una guardada)' : `API key de ${host?.label ?? ''}`}
                         autoFocus
@@ -216,15 +202,15 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                         {imgTesting === keyModalHost ? 'Probando…' : 'Probar'}
                       </button>
                     </div>
-                    {t && <div style={{ fontSize: 12, marginTop: 8, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
-                    {keyError && <div className="text-error" style={{ fontSize: 12, marginTop: 8 }}>✗ {keyError}</div>}
-                    <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 10, marginBottom: 0 }}>
+                    {t && <div className="aj-res-modal" style={{ color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+                    {keyError && <div className="text-error aj-fs-12 aj-mt-8">✗ {keyError}</div>}
+                    <p className="aj-nota-115">
                       La clave se comprueba contra el proveedor, sin subir ninguna imagen. Guardar la
                       comprueba también: si no vale, no se guarda.
                     </p>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                    <div className="aj-acciones-modal">
                       {guardada && (
-                        <button className="btn btn-secondary" type="button" style={{ marginRight: 'auto' }} onClick={quitar} disabled={keySaving}>
+                        <button className="btn btn-secondary aj-mr-auto" type="button" onClick={quitar} disabled={keySaving}>
                           Quitar la clave
                         </button>
                       )}
@@ -239,15 +225,14 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
             })()}
 
             {showAddImg && (
-              <Modal titulo="Añadir proveedor de imágenes" onClose={() => setShowAddImg(false)} style={{ maxWidth: 480 }}>
+              <Modal titulo="Añadir proveedor de imágenes" onClose={() => setShowAddImg(false)} className="aj-modal-480">
                 <div className="modal-body">
                   {notConfigured.length === 0 ? (
-                    <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ya están todos añadidos.</p>
+                    <p className="aj-muted-13">Ya están todos añadidos.</p>
                   ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: 'calc(var(--vh100) * 0.55)', overflowY: 'auto' }}>
+                    <div className="aj-rejilla-add">
                       {notConfigured.map(h => (
-                        <button key={h.id} className="btn btn-ghost btn-sm" type="button"
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', justifySelf: 'start', fontSize: 12 }}
+                        <button key={h.id} className="btn btn-ghost btn-sm aj-add-btn" type="button"
                           onClick={() => toggleImgHost(h.id)}>
                           <Favicon domain={domainOf(h.url)} src={h.favicon} size={16} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na">API key</span>}
                         </button>

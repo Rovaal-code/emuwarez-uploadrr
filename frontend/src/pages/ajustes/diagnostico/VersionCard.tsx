@@ -38,46 +38,46 @@ export function VersionCard() {
   useEffect(() => { cargar() }, [cargar])
 
   const fila = (etiqueta: string, valor: React.ReactNode) => (
-    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-      <td style={{ padding: '6px 8px', color: 'var(--text-secondary)', width: 150 }}>{etiqueta}</td>
-      <td style={{ padding: '6px 8px', wordBreak: 'break-all' }}>{valor}</td>
+    <tr className="aj-fila-borde">
+      <td className="aj-td-etq-150">{etiqueta}</td>
+      <td className="aj-td-6 aj-corta">{valor}</td>
     </tr>
   )
 
   // El digest es largo y no aporta leído entero: se enseña recortado y entero
   // al pasar el ratón, como el resto de identificadores de la aplicación.
   const digest = (valor?: string | null) => {
-    if (!valor) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+    if (!valor) return <span className="aj-muted">—</span>
     const corto = valor.startsWith('sha256:') ? valor.slice(0, 19) + '…' : valor.slice(0, 12) + '…'
-    return <HoverTitle tip={valor}><code style={{ fontSize: 12 }}>{corto}</code></HoverTitle>
+    return <HoverTitle tip={valor}><code className="aj-fs-12">{corto}</code></HoverTitle>
   }
 
   return (
     <div className="placeholder-card">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <h3 style={{ margin: 0 }}>Versión</h3>
+      <div className="aj-entre-12">
+        <h3 className="aj-m-0">Versión</h3>
         <button className="btn btn-secondary btn-sm" type="button"
                 onClick={() => cargar(true)} disabled={comprobando}>
           {comprobando ? 'Comprobando…' : 'Comprobar ahora'}
         </button>
       </div>
-      {!info && <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Cargando…</p>}
+      {!info && <p className="aj-sec-13">Cargando…</p>}
       {info && (
         <>
-          <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+          <table className="aj-tabla aj-fs-13">
             <tbody>
               {fila('Versión', info.version)}
               {fila('Commit', info.commit_corto
-                ? <HoverTitle tip={info.commit!}><code style={{ fontSize: 12 }}>{info.commit_corto}</code></HoverTitle>
-                : <span style={{ color: 'var(--text-muted)' }}>sin sellar</span>)}
-              {fila('Construida', info.construida || <span style={{ color: 'var(--text-muted)' }}>—</span>)}
+                ? <HoverTitle tip={info.commit!}><code className="aj-fs-12">{info.commit_corto}</code></HoverTitle>
+                : <span className="aj-muted">sin sellar</span>)}
+              {fila('Construida', info.construida || <span className="aj-muted">—</span>)}
               {fila('Digest', digest(info.digest))}
               {info.estado === 'hay_novedad' && fila('Última publicada',
                 <>
                   {info.ultima.commit_corto
-                    ? <HoverTitle tip={info.ultima.commit!}><code style={{ fontSize: 12 }}>{info.ultima.commit_corto}</code></HoverTitle>
+                    ? <HoverTitle tip={info.ultima.commit!}><code className="aj-fs-12">{info.ultima.commit_corto}</code></HoverTitle>
                     : '—'}
-                  {info.ultima.publicada ? <span style={{ color: 'var(--text-muted)' }}> · {info.ultima.publicada}</span> : null}
+                  {info.ultima.publicada ? <span className="aj-muted"> · {info.ultima.publicada}</span> : null}
                 </>)}
               {info.estado === 'hay_novedad' && fila('Digest publicado', digest(info.ultima.digest))}
             </tbody>

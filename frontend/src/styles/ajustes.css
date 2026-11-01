@@ -1,0 +1,501 @@
+/* Configuración (SettingsPage y pages/ajustes/): estilos que antes iban en línea.
+   Prefijo aj-; se importa el último para ganar a las reglas base de igual especificidad. */
+
+.aj-mb-6 {
+  margin-bottom: 6px;
+}
+
+.aj-mb-8 {
+  margin-bottom: 8px;
+}
+
+.aj-mb-10 {
+  margin-bottom: 10px;
+}
+
+.aj-mb-12 {
+  margin-bottom: 12px;
+}
+
+.aj-mb-14 {
+  margin-bottom: 14px;
+}
+
+.aj-mt-6 {
+  margin-top: 6px;
+}
+
+.aj-mt-8 {
+  margin-top: 8px;
+}
+
+.aj-mt-10 {
+  margin-top: 10px;
+}
+
+.aj-mt-12 {
+  margin-top: 12px;
+}
+
+.aj-mt-14 {
+  margin-top: 14px;
+}
+
+.aj-mt-0 {
+  margin-top: 0;
+}
+
+.aj-m-0 {
+  margin: 0;
+}
+
+.aj-m-0-8 {
+  margin: 0 0 8px;
+}
+
+.aj-m-0-10 {
+  margin: 0 0 10px;
+}
+
+.aj-m-0-12 {
+  margin: 0 0 12px;
+}
+
+.aj-fs-12 {
+  font-size: 12px;
+}
+
+.aj-fs-13 {
+  font-size: 13px;
+}
+
+.aj-sec-12 {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.aj-sec-13 {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.aj-muted {
+  color: var(--text-muted);
+}
+
+.aj-muted-12 {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.aj-muted-13 {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.aj-ok {
+  color: var(--color-available);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.aj-err {
+  color: var(--color-error);
+}
+
+.aj-err-13 {
+  color: var(--color-error);
+  font-size: 13px;
+}
+
+.aj-block {
+  display: block;
+}
+
+.aj-inline-flex {
+  display: inline-flex;
+}
+
+.aj-wrap {
+  flex-wrap: wrap;
+}
+
+.aj-stretch {
+  align-items: stretch;
+}
+
+.aj-no-encoge {
+  flex-shrink: 0;
+}
+
+.aj-flex-1 {
+  flex: 1;
+}
+
+.aj-ml-auto {
+  margin-left: auto;
+}
+
+.aj-mr-auto {
+  margin-right: auto;
+}
+
+.aj-rel {
+  position: relative;
+}
+
+.aj-self-start {
+  align-self: flex-start;
+}
+
+.aj-der {
+  text-align: right;
+}
+
+.aj-corta {
+  word-break: break-all;
+}
+
+.aj-flex-c-6 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aj-flex-c-8 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aj-flex-c-10 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aj-flex-c-12 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.aj-flex-8 {
+  display: flex;
+  gap: 8px;
+}
+
+.aj-col-6 {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.aj-col-8 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aj-col-16 {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.aj-card-titulo {
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aj-tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.aj-w-100 {
+  width: 100%;
+}
+
+.aj-campo-ancho {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.aj-th {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.aj-fila-borde {
+  border-bottom: 1px solid var(--border);
+}
+
+.aj-td-5 {
+  padding: 5px 8px;
+}
+
+.aj-td-6 {
+  padding: 6px 8px;
+}
+
+.aj-td-etq-150 {
+  padding: 6px 8px;
+  color: var(--text-secondary);
+  width: 150px;
+}
+
+.aj-td-etq-130 {
+  padding: 6px 8px;
+  color: var(--text-secondary);
+  width: 130px;
+}
+
+.aj-marco {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.aj-aviso-cambios {
+  font-size: 12px;
+  color: var(--color-warning);
+}
+
+.aj-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.aj-cuerpo {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.aj-ellipsis-13 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.aj-modal-860 {
+  max-width: 860px;
+}
+
+.aj-modal-480 {
+  max-width: 480px;
+}
+
+.aj-barra-modal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.aj-entre-12 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.aj-cargando {
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.aj-idx {
+  color: var(--text-muted);
+  font-size: 11px;
+  width: 16px;
+  text-align: center;
+}
+
+.aj-asa-hueco {
+  width: 16px;
+  margin-left: 8px;
+  margin-right: 8px;
+}
+
+.aj-ellipsis-nowrap-13 {
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aj-btn-mini {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.aj-nota-115 {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+.aj-acciones-modal {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.aj-pr-38 {
+  padding-right: 38px;
+}
+
+.aj-ojo {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  padding: 2px;
+}
+
+.aj-titulo-grupo {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.aj-rejilla-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.aj-code-mascara {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.aj-res-12 {
+  margin-left: 10px;
+  font-size: 12px;
+}
+
+.aj-res-11 {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.aj-res-modal {
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.aj-grupo-eventos {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.aj-desactivado {
+  opacity: 0.5;
+}
+
+.aj-pill-fila {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--color-uploading) 6%, transparent);
+}
+
+.aj-pill-fila-arrastre {
+  border-color: var(--text-accent);
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.aj-asa-handle {
+  color: var(--text-accent);
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  margin-right: 8px;
+}
+
+.aj-rejilla-add {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+  max-height: calc(var(--vh100) * 0.55);
+  overflow-y: auto;
+}
+
+.aj-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  justify-self: start;
+  font-size: 12px;
+}
+
+.aj-campo-ruta {
+  flex: 1;
+  min-width: 200px;
+}
+
+.aj-mensaje {
+  margin-left: auto;
+  align-self: center;
+  min-width: 0;
+  padding: 4px 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Para ganar a `.hud-app .btn-ghost { color }` */
+.hud-app .aj-ghost-muted {
+  font-size: 13px;
+  padding: 2px 6px;
+  color: var(--text-muted);
+}
+
+/* Etiqueta «API key» (botón): sin border:none, .badge lleva su propio borde y quitarlo la
+   hacía distinta del «por defecto» de al lado. El resto neutraliza lo que el navegador
+   añade a un <button>: su tipografía, su interlineado y su margen. */
+.badge.aj-badge-key {
+  font-size: 10px;
+  cursor: pointer;
+  appearance: none;
+  font-family: inherit;
+  line-height: inherit;
+  margin: 0;
+}

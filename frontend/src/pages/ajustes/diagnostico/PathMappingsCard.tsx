@@ -54,30 +54,30 @@ export function PathMappingsCard() {
 
   return (
     <div className="placeholder-card">
-      <h3 style={{ marginTop: 0, marginBottom: 6 }}>Mapeo de rutas (biblioteca remota)</h3>
-      <p className="form-hint" style={{ marginTop: 0, marginBottom: 12 }}>
+      <h3 className="aj-mt-0 aj-mb-6">Mapeo de rutas (biblioteca remota)</h3>
+      <p className="form-hint aj-mt-0 aj-mb-12">
         Traduce la ruta que reporta Radarr/Sonarr a la ruta donde la app alcanza el archivo
         (monta la biblioteca por SSHFS/NFS/SMB donde quieras). Se aplica al leer MediaInfo,
         verificar y subir. Sin reglas, no cambia nada.
       </p>
       {loading ? (
-        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
+        <p className="aj-muted-13">Cargando…</p>
       ) : (
         <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="aj-col-8">
             {mappings.length === 0 && (
               <span className="form-hint">No hay reglas. Añade una para acceder a una biblioteca remota.</span>
             )}
             {mappings.map((m, i) => (
-              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div key={i} className="aj-flex-c-8 aj-wrap">
                 <input
-                  className="form-input" style={{ flex: 1, minWidth: 200 }}
+                  className="form-input aj-campo-ruta"
                   value={m.from} placeholder="Ruta de Radarr/Sonarr: /data/media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, from: e.target.value } : x))}
                 />
-                <span style={{ color: 'var(--text-muted)' }}>→</span>
+                <span className="aj-muted">→</span>
                 <input
-                  className="form-input" style={{ flex: 1, minWidth: 200 }}
+                  className="form-input aj-campo-ruta"
                   value={m.to} placeholder="Ruta local: /home/alvaro/mnt/emu-media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, to: e.target.value } : x))}
                 />
@@ -85,7 +85,7 @@ export function PathMappingsCard() {
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+          <div className="aj-flex-c-12 aj-mt-10">
             <button className="btn btn-secondary btn-sm" type="button"
               onClick={() => setMappings(p => [...p, { from: '', to: '' }])}>+ Añadir regla</button>
             <button className="btn btn-primary btn-sm" type="button" onClick={handleSave} disabled={saving || !dirty}>

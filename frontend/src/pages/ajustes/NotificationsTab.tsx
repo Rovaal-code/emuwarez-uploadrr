@@ -18,11 +18,11 @@ function EventPicker({ title, eventTypes, selected, disabled, onToggle }: {
 }) {
   if (eventTypes.length === 0) return null
   return (
-    <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', opacity: disabled ? 0.5 : 1 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div className={disabled ? 'aj-grupo-eventos aj-desactivado' : 'aj-grupo-eventos'}>
+      <div className="aj-titulo-grupo">{title}</div>
+      <div className="aj-col-6">
         {eventTypes.map(ev => (
-          <label key={ev.code} className="checkbox-label" style={{ fontSize: 13 }}>
+          <label key={ev.code} className="checkbox-label aj-fs-13">
             <input
               type="checkbox"
               checked={selected.includes(ev.code)}
@@ -206,19 +206,19 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
     })
   }, [setMsg])
 
-  if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
+  if (loading) return <p className="aj-cargando">Cargando…</p>
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
+    <div className="aj-col-16">
+      <div className="aj-rejilla-4">
       <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h3 className="aj-card-titulo aj-mb-14">
           <ServiceIcon type="emu" size={20} /> Notificaciones UI
         </h3>
-        <label className="checkbox-label" style={{ marginBottom: 12 }}>
+        <label className="checkbox-label aj-mb-12">
           <input type="checkbox" checked={uiEnabled} onChange={e => setUiEnabled(e.target.checked)} /> Mostrar avisos en la campana
         </label>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 0 }}>
+        <p className="aj-muted-12 aj-mt-0">
           Avisos dentro de la propia app (icono de la campana en la barra superior).
         </p>
         <EventPicker
@@ -231,18 +231,18 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
       </div>
 
       <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h3 className="aj-card-titulo aj-mb-14">
           <ServiceIcon type="discord" size={20} /> Discord
         </h3>
-        <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
+        <label className="checkbox-label aj-mb-12 aj-block">
           <input type="checkbox" checked={discordEnabled} onChange={e => setDiscordEnabled(e.target.checked)} /> Activar notificaciones por Discord
         </label>
-        <div className="form-group" style={{ marginBottom: 12 }}>
+        <div className="form-group aj-mb-12">
           <label className="form-label">Webhook URL</label>
-          <div style={{ fontSize: 13, marginBottom: 6 }}>
+          <div className="aj-fs-13 aj-mb-6">
             {settings?.notify_discord_webhook_configured
-              ? <><span style={{ color: 'var(--color-available)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_discord_webhook_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_discord_webhook_masked}</code>}</>
-              : <span style={{ color: 'var(--color-error)' }}>✗ No configurado</span>}
+              ? <><span className="aj-ok"><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_discord_webhook_masked && <code className="aj-code-mascara">{settings.notify_discord_webhook_masked}</code>}</>
+              : <span className="aj-err">✗ No configurado</span>}
           </div>
           <input
             type="password"
@@ -253,7 +253,7 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
             autoComplete="new-password"
           />
           {settings?.notify_discord_webhook_configured && !discordWebhook && (
-            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => setQuitarDiscord(q => !q)}>
+            <button type="button" className="btn btn-secondary btn-sm aj-mt-6" onClick={() => setQuitarDiscord(q => !q)}>
               {quitarDiscord ? 'No quitarlo' : 'Quitar el webhook'}
             </button>
           )}
@@ -272,18 +272,18 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
       </div>
 
       <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h3 className="aj-card-titulo aj-mb-14">
           <ServiceIcon type="telegram" size={20} /> Telegram
         </h3>
-        <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
+        <label className="checkbox-label aj-mb-12 aj-block">
           <input type="checkbox" checked={telegramEnabled} onChange={e => setTelegramEnabled(e.target.checked)} /> Activar notificaciones por Telegram
         </label>
-        <div className="form-group" style={{ marginBottom: 12 }}>
+        <div className="form-group aj-mb-12">
           <label className="form-label">Bot token</label>
-          <div style={{ fontSize: 13, marginBottom: 6 }}>
+          <div className="aj-fs-13 aj-mb-6">
             {settings?.notify_telegram_bot_token_configured
-              ? <><span style={{ color: 'var(--color-available)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_telegram_bot_token_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_telegram_bot_token_masked}</code>}</>
-              : <span style={{ color: 'var(--color-error)' }}>✗ No configurado</span>}
+              ? <><span className="aj-ok"><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_telegram_bot_token_masked && <code className="aj-code-mascara">{settings.notify_telegram_bot_token_masked}</code>}</>
+              : <span className="aj-err">✗ No configurado</span>}
           </div>
           <input
             type="password"
@@ -294,12 +294,12 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
             autoComplete="new-password"
           />
           {settings?.notify_telegram_bot_token_configured && !telegramToken && (
-            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => setQuitarTelegram(q => !q)}>
+            <button type="button" className="btn btn-secondary btn-sm aj-mt-6" onClick={() => setQuitarTelegram(q => !q)}>
               {quitarTelegram ? 'No quitarlo' : 'Quitar el token'}
             </button>
           )}
         </div>
-        <div className="form-group" style={{ marginBottom: 12 }}>
+        <div className="form-group aj-mb-12">
           <label className="form-label">Chat ID</label>
           <input className="form-input" value={telegramChatId} onChange={e => setTelegramChatId(e.target.value)} placeholder="-100123456789" />
         </div>

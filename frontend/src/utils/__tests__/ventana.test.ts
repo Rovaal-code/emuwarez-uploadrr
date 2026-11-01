@@ -7,7 +7,7 @@
  * la barra de scroll mentiría sobre el largo de la lista.
  */
 import { describe, it, expect } from 'vitest'
-import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo, medidaCorregida, AJUSTES_SEGUIDOS_MAX } from '../ventana'
+import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo, medidaCorregida, cuentaTrasMedir, AJUSTES_SEGUIDOS_MAX } from '../ventana'
 
 const filas = (tramos: Tramo[]) => tramos.flatMap(t => (t.tipo === 'fila' ? [t.indice] : []))
 const altoTotal = (tramos: Tramo[], alturas: number[]) =>
@@ -160,5 +160,26 @@ describe('medidaCorregida', () => {
 
   it('una corrección normal (columnas y luego alto) cabe de sobra en el tope', () => {
     expect(AJUSTES_SEGUIDOS_MAX).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('cuentaTrasMedir', () => {
+  it('otra clave (scroll, lista, ancho) empieza la cuenta de nuevo', () => {
+    expect(cuentaTrasMedir({ clave: 'a', usados: 5 }, 'b', false)).toEqual({ clave: 'b', usados: 0 })
+  })
+
+  it('una medida que ya coincide también: seis correcciones separadas no agotan el tope', () => {
+    let c = { clave: 'a', usados: 0 }
+    for (let i = 0; i < AJUSTES_SEGUIDOS_MAX * 2; i++) {
+      c = cuentaTrasMedir(c, 'a', false)
+      c.usados++                       // una corrección
+      c = cuentaTrasMedir(c, 'a', true) // y la rejilla se calma
+      expect(c.usados).toBe(0)
+    }
+  })
+
+  it('con la misma clave y medidas todavía distintas, la cuenta sigue', () => {
+    const c = { clave: 'a', usados: 4 }
+    expect(cuentaTrasMedir(c, 'a', false)).toBe(c)
   })
 })

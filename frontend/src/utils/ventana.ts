@@ -126,3 +126,19 @@ export function medidaCorregida(actual: MedidaRejilla, medido: MedidaRejilla, us
   if (usados >= AJUSTES_SEGUIDOS_MAX) return null
   return medido
 }
+
+export interface CuentaAjustes {
+  clave: string
+  usados: number
+}
+
+/**
+ * La cuenta de correcciones seguidas tras medir. Empieza de nuevo cuando cambia
+ * la `clave` (scroll, lista, ancho) y cuando la medida ya coincide con lo
+ * medido: la rejilla se ha calmado y la siguiente corrección es otra. Si se
+ * alcanza el tope con medidas todavía distintas, la cuenta se queda como está.
+ */
+export function cuentaTrasMedir(cuenta: CuentaAjustes, clave: string, coincide: boolean): CuentaAjustes {
+  if (cuenta.clave !== clave || coincide) return { clave, usados: 0 }
+  return cuenta
+}

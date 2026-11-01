@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { planVentana, columnasAutoFill, filasDeRejilla, medidaCorregida } from '../utils/ventana'
+import { planVentana, columnasAutoFill, filasDeRejilla, medidaCorregida, cuentaTrasMedir } from '../utils/ventana'
 
 // Lo que se pinta de más por arriba y por abajo de lo visible: unas diez filas
 // a cada lado, para que desplazarse deprisa no enseñe huecos en blanco.
@@ -135,14 +135,21 @@ export function RejillaVirtual<T>({ items, clave, minimo, hueco, contenedor, pin
   // ese tope, dos medidas que se provocan una a la otra repintaban sin fin,
   // React lo cortaba con el error 185 y Biblioteca quedaba en negro.
   const ajustes = useRef({ clave: '', usados: 0 })
+  // Qué lista es: cambia con la identidad de `items`, no solo con su largo
+  // (otro orden o contenido de la misma longitud también es otra lista). Los
+  // repintados de este componente no la tocan: la medida es estado propio.
+  const lista = useRef({ items, version: 0 })
   useLayoutEffect(() => {
     const el = rejilla.current
     if (!el) return
     const columnas = columnasAutoFill(el.clientWidth, minimo, hueco)
     const alto = (el.firstElementChild as HTMLElement | null)?.offsetHeight || medida.alto
-    // Un scroll, un cambio de lista o de ancho empiezan la cuenta de nuevo.
-    const clave = `${items.length}|${minimo}|${hueco}|${vista.desde}|${vista.ancho}`
-    if (ajustes.current.clave !== clave) ajustes.current = { clave, usados: 0 }
+    if (lista.current.items !== items) lista.current = { items, version: lista.current.version + 1 }
+    // Un scroll, un cambio de lista o de ancho, o una medida ya calmada,
+    // empiezan la cuenta de nuevo.
+    const clave = `${lista.current.version}|${minimo}|${hueco}|${vista.desde}|${vista.ancho}`
+    const coincide = columnas === medida.columnas && alto === medida.alto
+    ajustes.current = cuentaTrasMedir(ajustes.current, clave, coincide)
     const nueva = medidaCorregida(medida, { columnas, alto }, ajustes.current.usados)
     if (!nueva) return
     ajustes.current.usados++

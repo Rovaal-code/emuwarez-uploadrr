@@ -8,7 +8,10 @@ interface Props {
 }
 
 interface Estado {
-  error: Error | null
+  // Aparte del error: lo lanzado puede ser null o undefined, y entonces el
+  // error por sí solo no diría que hubo fallo.
+  fallo: boolean
+  error: unknown
 }
 
 /**
@@ -18,20 +21,20 @@ interface Estado {
  * «Reintentar» vuelve a pintar lo que falló.
  */
 export class LimiteDeErrores extends Component<Props, Estado> {
-  state: Estado = { error: null }
+  state: Estado = { fallo: false, error: null }
 
-  static getDerivedStateFromError(error: Error): Estado {
-    return { error }
+  static getDerivedStateFromError(error: unknown): Estado {
+    return { fallo: true, error }
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  componentDidCatch(error: unknown, info: ErrorInfo) {
     console.error('Error de render:', error, info.componentStack)
   }
 
-  private reintentar = () => this.setState({ error: null })
+  private reintentar = () => this.setState({ fallo: false, error: null })
 
   render() {
-    if (!this.state.error) return this.props.children
+    if (!this.state.fallo) return this.props.children
     return (
       <ErrorState
         title={`Algo ha fallado en ${this.props.donde ?? 'esta página'}`}

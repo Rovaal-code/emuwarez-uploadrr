@@ -4,7 +4,6 @@ SAFETY CONTRACT: Read-only. Never modifies, moves, renames, or deletes files.
 """
 from __future__ import annotations
 
-import json
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -61,17 +60,24 @@ def _inspeccionar(
 
 
 def verify_library_item_file(item_id: int, conn: sqlite3.Connection) -> dict[str, Any]:
-    """Verify filesystem state for a single library item. Returns result dict."""
-    row = conn.execute(
-        "SELECT id, title, path, local_status FROM library_items WHERE id = ?",
-        (item_id,),
-    ).fetchone()
-    if not row:
-        return {"ok": False, "error": f"Item {item_id} no encontrado", "item_id": item_id}
+    """Verify filesystem state for a single library item. Returns result dict.
 
-    result = _inspeccionar(item_id, row["title"], row["path"])
-    update_library_item_file_status(item_id, result, conn)
-    return result
+    Si la sincronización cambia la ruta mientras se mira el disco, el resultado ya
+    no es de la fila y no se guarda: se vuelve a mirar con la ruta nueva una vez y,
+    si tampoco cuadra, se devuelve un error en vez de un resultado de otra ruta."""
+    for _ in range(2):
+        row = conn.execute(
+            "SELECT id, title, path, local_status FROM library_items WHERE id = ?",
+            (item_id,),
+        ).fetchone()
+        if not row:
+            return {"ok": False, "error": f"Item {item_id} no encontrado", "item_id": item_id}
+
+        result = _inspeccionar(item_id, row["title"], row["path"])
+        if update_library_item_file_status(item_id, result, conn):
+            return result
+    return {"ok": False, "item_id": item_id,
+            "error": "La ruta del fichero cambió mientras se comprobaba; vuelve a intentarlo."}
 
 
 _SQL_ESTADO_DEL_FICHERO = """
@@ -101,10 +107,12 @@ def _valores_del_estado(item_id: int, result: dict[str, Any]) -> tuple:
 
 def update_library_item_file_status(
     item_id: int, result: dict[str, Any], conn: sqlite3.Connection
-) -> None:
-    """Persist filesystem verification result to library_items."""
-    conn.execute(_SQL_ESTADO_DEL_FICHERO, _valores_del_estado(item_id, result))
+) -> bool:
+    """Persist filesystem verification result to library_items. False si no se
+    guardó porque la ruta de la fila ya no es la que se miró."""
+    guardadas = conn.execute(_SQL_ESTADO_DEL_FICHERO, _valores_del_estado(item_id, result)).rowcount
     conn.commit()
+    return guardadas > 0
 
 
 def verify_library_files(

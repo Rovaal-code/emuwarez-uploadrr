@@ -306,6 +306,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     setLoading(true)
     setError(null)
     setFallaMas(false)
+    // Una tanda de "Cargar más" en marcha ya no vale: su respuesta se tira y el botón no espera por ella.
+    setCargandoMas(false)
     try {
       const result = await consulta(offset)
       if (esta === ultimaCarga.current) startTransition(() => setData(result))
@@ -331,14 +333,20 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try {
       const result = await consulta((data?.items.length ?? 0) + offset)
       if (carga === ultimaCarga.current) {
-        startTransition(() => setData(prev => prev && { ...result, items: unirPagina(prev.items, result.items) }))
+        const antes = data?.items ?? []
+        const unidas = unirPagina(antes, result.items)
+        // Si el orden cambió (una sincronización) la tanda puede traer solo filas ya mostradas: sin crecer,
+        // "Cargar más" pediría lo mismo para siempre. Se rehace la primera página.
+        if (result.items.length > 0 && unidas.length === antes.length) load()
+        else startTransition(() => setData(prev => prev && { ...result, items: unirPagina(prev.items, result.items) }))
       }
     } catch {
       if (carga === ultimaCarga.current) setFallaMas(true)
     } finally {
-      setCargandoMas(false)
+      // Solo la tanda vigente apaga el indicador: una vieja no pisa el de una carga nueva.
+      if (carga === ultimaCarga.current) setCargandoMas(false)
     }
-  }, [consulta, data, offset])
+  }, [consulta, data, offset, load])
 
   // "Ver en Biblioteca" desde una petición, desde una subida, desde el Panel o
   // desde la campana: el id viene apuntado en sessionStorage y se recoge aquí.

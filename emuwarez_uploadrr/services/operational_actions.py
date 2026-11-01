@@ -352,6 +352,11 @@ def execute_safe_queue_action(
         try:
             from .library_verification import verify_library_item_file
             result = verify_library_item_file(lib_id, conn)
+            if result.get("ok") is False:
+                msg = f"Error verificando archivo: {result.get('error')}"
+                record_queue_action_event(item_id, "error", "warning", msg, None, conn)
+                conn.commit()
+                return {"ok": False, "action": "verify_file", "error": msg}
             status = "ok" if result.get("file_exists") else "warning"
             msg = (
                 f"Archivo {'encontrado' if result.get('file_exists') else 'NO encontrado'}: "

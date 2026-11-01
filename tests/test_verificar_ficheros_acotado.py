@@ -151,6 +151,43 @@ def test_la_ficha_suelta_sigue_guardando_su_resultado(conn, isolated_db):
     assert lv.verify_library_item_file(9999, conn)["ok"] is False
 
 
+def test_la_ficha_suelta_vuelve_a_mirar_si_la_ruta_cambia_mientras_tanto(conn, isolated_db, monkeypatch):
+    (isolated_db / "a.mkv").write_bytes(b"x")
+    (isolated_db / "b.mkv").write_bytes(b"xy")
+    item = _fila(conn, "A", str(isolated_db / "a.mkv"))
+    real = lv._inspeccionar
+    vistas = []
+
+    def inspeccionar(item_id, title, path):
+        vistas.append(path)
+        if len(vistas) == 1:  # la sincronización mueve el fichero mientras se mira el disco
+            conn.execute("UPDATE library_items SET path = ? WHERE id = ?", (str(isolated_db / "b.mkv"), item_id))
+            conn.commit()
+        return real(item_id, title, path)
+
+    monkeypatch.setattr(lv, "_inspeccionar", inspeccionar)
+    r = lv.verify_library_item_file(item, conn)
+    assert vistas == [str(isolated_db / "a.mkv"), str(isolated_db / "b.mkv")]
+    assert r["path"].endswith("b.mkv")
+    assert conn.execute("SELECT file_verified_at FROM library_items WHERE id = ?", (item,)).fetchone()[0]
+
+
+def test_la_ficha_suelta_da_error_si_la_ruta_no_para_de_cambiar(conn, isolated_db, monkeypatch):
+    item = _fila(conn, "A", str(isolated_db / "a.mkv"))
+    real = lv._inspeccionar
+    n = iter(range(100))
+
+    def inspeccionar(item_id, title, path):
+        conn.execute("UPDATE library_items SET path = ? WHERE id = ?", (str(isolated_db / f"{next(n)}.mkv"), item_id))
+        conn.commit()
+        return real(item_id, title, path)
+
+    monkeypatch.setattr(lv, "_inspeccionar", inspeccionar)
+    r = lv.verify_library_item_file(item, conn)
+    assert r["ok"] is False and "cambió" in r["error"]
+    assert conn.execute("SELECT file_verified_at FROM library_items WHERE id = ?", (item,)).fetchone()[0] is None
+
+
 # --- Por el endpoint ---------------------------------------------------------------------------
 
 def test_el_endpoint_devuelve_recuentos_sin_el_detalle_de_cada_fila(client, auth_headers):

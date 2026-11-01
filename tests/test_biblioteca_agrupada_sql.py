@@ -307,3 +307,10 @@ def test_con_titulos_repetidos_las_paginas_no_repiten_ni_omiten(conn, sort):
         assert total == 30
     completo = [f["id"] for f in list_library_agrupada(conn, status=["Faltante"], sort=sort, limit=-1)[0]]
     assert por_paginas == completo and sorted(completo) == ids
+
+
+def test_una_pagina_mas_alla_del_final_sigue_dando_el_total(biblioteca):
+    _filas, total = list_library_agrupada(biblioteca, limit=-1)
+    filas, total_fuera = list_library_agrupada(biblioteca, limit=2, offset=total + 10)
+    assert filas == [] and total_fuera == total
+    assert all("_total_raices" not in f for f in list_library_agrupada(biblioteca, limit=2)[0])

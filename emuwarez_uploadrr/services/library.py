@@ -1357,9 +1357,18 @@ def _paginar_raices(
     """Las películas y series (nivel raíz) cuyo id sale de `raices_sql`, ya ordenadas y
     paginadas en SQL, y cuántas son en total."""
     base = f" FROM library_items WHERE parent_id IS NULL AND id IN ({raices_sql})"
-    total = conn.execute("SELECT COUNT(*)" + base, params).fetchone()[0]
-    sql = f"SELECT {_columnas_de_lista(conn)}{base}{_orden_de_lista(sort, ignore_specials)} LIMIT ? OFFSET ?"
-    return [dict(r) for r in conn.execute(sql, [*params, limit, offset])], total
+    # El total sale de la misma consulta que la página (COUNT(*) OVER () se calcula antes del
+    # LIMIT): con dos consultas, una sincronización entre ambas daba un total de otra biblioteca.
+    sql = (f"SELECT {_columnas_de_lista(conn)}, COUNT(*) OVER () AS _total_raices{base}"
+           f"{_orden_de_lista(sort, ignore_specials)} LIMIT ? OFFSET ?")
+    filas = [dict(r) for r in conn.execute(sql, [*params, limit, offset])]
+    if filas:
+        total = filas[0]["_total_raices"]
+        for fila in filas:
+            del fila["_total_raices"]
+        return filas, total
+    # Una página vacía (desplazamiento más allá del final) no trae el total: se cuenta aparte.
+    return [], conn.execute("SELECT COUNT(*)" + base, params).fetchone()[0]
 
 
 def list_library_agrupada(
@@ -2754,6 +2763,9 @@ def library_filter_values(conn) -> dict:
 # mucho porque un estado nuevo (una subida acabada) también cambia la lista.
 _VALORES_DE_FILTRO_SEGUNDOS = 60
 _valores_de_filtro: dict[str, tuple[float, dict]] = {}
+# Sube con cada olvidar_valores_de_filtro(): un cálculo que empezó antes de una
+# sincronización no guarda lo que leyó, que ya es viejo.
+_generacion_de_filtros = 0
 
 
 def valores_de_filtro(conn) -> dict:
@@ -2761,13 +2773,16 @@ def valores_de_filtro(conn) -> dict:
     guardado = _valores_de_filtro.get(ruta)
     if guardado and time.monotonic() - guardado[0] < _VALORES_DE_FILTRO_SEGUNDOS:
         return guardado[1]
+    generacion = _generacion_de_filtros
     valores = library_filter_values(conn)
-    if ruta:
+    if ruta and generacion == _generacion_de_filtros:
         _valores_de_filtro[ruta] = (time.monotonic(), valores)
     return valores
 
 
 def olvidar_valores_de_filtro() -> None:
+    global _generacion_de_filtros
+    _generacion_de_filtros += 1
     _valores_de_filtro.clear()
 
 

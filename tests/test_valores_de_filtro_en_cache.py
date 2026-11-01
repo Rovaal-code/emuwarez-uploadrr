@@ -81,3 +81,20 @@ def test_solo_presentes_sin_aportes_ofrece_solo_no_aporta(conn):
     conn.commit()
     valores = lib.library_filter_values(conn)
     assert valores["emu_states"] == ["present"] and valores["aporte_states"] == ["no"]
+
+
+def test_un_calculo_que_empezo_antes_de_olvidar_no_guarda_lo_viejo(conn, monkeypatch):
+    _poner(conn, "Uno")
+    lib.olvidar_valores_de_filtro()
+    real = lib.library_filter_values
+
+    def calcular_mientras_sincroniza(c):
+        valores = real(c)
+        lib.olvidar_valores_de_filtro()  # la sincronización termina a mitad del cálculo
+        return valores
+
+    monkeypatch.setattr(lib, "library_filter_values", calcular_mientras_sincroniza)
+    lib.valores_de_filtro(conn)
+    monkeypatch.setattr(lib, "library_filter_values", real)
+    _poner(conn, "Dos", "Faltante")
+    assert lib.valores_de_filtro(conn)["statuses"] == ["Disponible", "Faltante"]

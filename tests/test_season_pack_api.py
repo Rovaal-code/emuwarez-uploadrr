@@ -176,3 +176,57 @@ def test_adapt_pack_endpoint_removed(client, auth_headers, isolated_db, tmp_path
         headers=auth_headers,
     )
     assert resp.status_code in (404, 405)
+
+
+def test_pack_preview_dice_de_donde_sale_el_proveedor(client, auth_headers, isolated_db, tmp_path):
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    nuevo = tmp_path / "S01E01.FLMN.WEB-DL.mkv"
+    (tmp_path / "S01E01.mkv").rename(nuevo)
+    conn.execute("UPDATE library_items SET path = ? WHERE item_type = 'episode'", (str(nuevo),))
+    conn.commit()
+    conn.close()
+    data = client.get(f"/api/library/season/{season_id}/pack-preview", headers=auth_headers).json()
+    assert data["provider"] == "FLMN"
+    assert data["provider_source"] == "file"
+    assert data["provider_source_detail"] == "detectado en el nombre del archivo del capítulo 1"
+
+
+def test_pack_preview_acepta_el_proveedor_elegido(client, auth_headers, isolated_db, tmp_path):
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    resp = client.get(f"/api/library/season/{season_id}/pack-preview?provider=NF", headers=auth_headers)
+    data = resp.json()
+    assert data["provider"] == "NF"
+    assert data["provider_source"] == "manual"
+    assert data["provider_conflict"] == []
+
+
+def test_pack_preview_con_provider_vacio_es_sin_proveedor(client, auth_headers, isolated_db, tmp_path):
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    nuevo = tmp_path / "S01E01.FLMN.WEB-DL.mkv"
+    (tmp_path / "S01E01.mkv").rename(nuevo)
+    conn.execute("UPDATE library_items SET path = ? WHERE item_type = 'episode'", (str(nuevo),))
+    conn.commit()
+    conn.close()
+    data = client.get(f"/api/library/season/{season_id}/pack-preview?provider=", headers=auth_headers).json()
+    assert data["provider"] is None
+    assert data["provider_source"] == "manual"
+    assert "FLMN" not in data["season_pack_title"]
+
+
+def test_las_comprobaciones_reciben_el_proveedor(client, auth_headers, isolated_db, tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import upload_checks
+    visto = {}
+
+    def falso(conn, item_id, *, scope="all", provider_override=None):
+        visto["provider_override"] = provider_override
+        return {"checks": [], "ready": True}
+
+    monkeypatch.setattr(upload_checks, "run_upload_checks", falso)
+    client.post("/api/library/1/upload/checks?scope=content&provider=", headers=auth_headers)
+    assert visto["provider_override"] == ""
+    client.post("/api/library/1/upload/checks?provider=NF", headers=auth_headers)
+    assert visto["provider_override"] == "NF"
+    client.post("/api/library/1/upload/checks", headers=auth_headers)
+    assert visto["provider_override"] is None

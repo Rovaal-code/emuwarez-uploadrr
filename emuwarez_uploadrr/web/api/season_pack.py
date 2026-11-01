@@ -34,11 +34,20 @@ def _get_conn():
 
 
 @router.get("/library/season/{season_id}/pack-preview", response_model=SeasonPackPlanResponse)
-def preview_season_pack(season_id: int, current_user: dict = Depends(require_auth)):
+def preview_season_pack(
+    season_id: int,
+    provider: str | None = Query(None),
+    current_user: dict = Depends(require_auth),
+):
     """Can take a while for a big season (real work per episode) — poll
-    GET .../pack-preview/progress concurrently for a live "N de M" counter."""
+    GET .../pack-preview/progress concurrently for a live "N de M" counter.
+
+    `provider`: el Proveedor elegido en el asistente, sobre todo para salir de
+    un plan bloqueado por capítulos con proveedores distintos."""
     with _get_conn() as conn:
-        plan = build_season_pack_plan(season_id, conn=conn)
+        # "" (?provider=) es "Sin proveedor" elegido a mano; sin parámetro, se detecta.
+        plan = build_season_pack_plan(season_id, conn=conn,
+                                      provider_override=None if provider is None else provider.strip())
     if plan["status"] == "blocked" and plan["errors"] == ["Temporada no encontrada."]:
         raise HTTPException(status_code=404, detail="Temporada no encontrada.")
     return SeasonPackPlanResponse(**plan)

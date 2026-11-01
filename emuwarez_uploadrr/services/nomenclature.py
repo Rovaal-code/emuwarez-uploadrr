@@ -33,12 +33,15 @@ STATUS_EXPIRED = "expired"
 # salen de leerlo. La ruta no, que cambia al renombrar la propia app.
 _CAMPOS_HUELLA = ("size_bytes", "resolution", "quality", "source", "release_group",
                   "title", "year", "season_number", "episode_number", "tmdb_id")
-# Sube cuando cambian las reglas del nombre, para rehacer las guardadas.
-_VERSION_REGLAS = 2
+# Se sube cuando cambian las reglas que construyen la propuesta, para que las
+# guardadas con la regla vieja se rehagan. 2: el proveedor ya no sale de una
+# carpeta de la ruta, solo del nombre del archivo. 3: una pista sin idioma (UND)
+# avisa en vez de bloquear y el nombre sale sin ella.
+_VERSION_REGLAS = 3
 
 
 def _huella(item: dict) -> list:
-    return [_VERSION_REGLAS] + [item.get(c) for c in _CAMPOS_HUELLA]
+    return [_VERSION_REGLAS, *(item.get(c) for c in _CAMPOS_HUELLA)]
 
 
 def aviso_pistas_sin_idioma(posiciones: list[int]) -> str:
@@ -178,29 +181,56 @@ _PROVIDER_TOKENS_BY_LENGTH: list[str] = sorted(
 )
 
 
-def _infer_provider_from_item(item: dict, source: str | None) -> str | None:
-    """Detect an EMU provider code (AMZN, NF, DSNP...) already present in the
-    item's current filename/path — e.g. a file already named
-    '...WEB-DL AMZN x265...' keeps that same AMZN tag in the proposal,
-    instead of the proposed filename silently dropping it. Read-only,
-    string-matching only: no TMDb call, no re-recommendation (that's a
-    separate, not-yet-built feature — see 'editar campos' for the
-    TMDb-driven suggestion flow).
-
-    Only attempted when `source` is a provider-carrying source (WEB-DL,
-    same PROVIDER_SOURCES gate source_assistant.py already uses) — several
-    EMU_PROVIDERS codes are short/generic (IT, HS, SL, M+) and would
-    false-positive far too easily against an arbitrary BluRay/HDTV/DVD
-    filename that was never tagged with a streaming provider at all."""
-    if source not in PROVIDER_SOURCES:
-        return None
-    haystack = f"{item.get('path') or ''}"
-    if not haystack:
-        return None
+def _buscar_proveedor(texto: str) -> str | None:
+    """El primer código de proveedor que aparece como palabra suelta en `texto`."""
     for token in _PROVIDER_TOKENS_BY_LENGTH:
-        if re.search(rf"(?<![A-Za-z0-9]){re.escape(token)}(?![A-Za-z0-9])", haystack):
+        if re.search(rf"(?<![A-Za-z0-9]){re.escape(token)}(?![A-Za-z0-9])", texto):
             return _PROVIDER_TOKEN_MAP[token]
     return None
+
+
+# Un provider_override con este valor es "Sin proveedor" elegido a mano, que
+# no es lo mismo que no elegir nada (None): con None el proveedor se detecta.
+SIN_PROVEEDOR = ""
+
+# Dónde se encontró el proveedor (ver detectar_proveedor).
+ORIGEN_NOMBRE = "nombre"
+ORIGEN_CARPETA = "carpeta"
+
+
+def detectar_proveedor(item: dict, source: str | None) -> tuple[str | None, str | None]:
+    """(código, origen) del proveedor (AMZN, NF, DSNP…) que ya trae el elemento.
+
+    Regla: solo vale el NOMBRE del propio elemento (el último componente de la
+    ruta: el fichero, o la carpeta si el elemento es una carpeta). Un código que
+    solo aparece en una carpeta de más arriba es una coincidencia débil (la
+    carpeta de la serie, un punto de montaje "/mnt/NF", "IT Crowd"…) y no se
+    aplica: se devuelve con origen "carpeta" para poder avisar, nunca como
+    proveedor. Antes se buscaba en toda la ruta y una carpeta podía poner el
+    proveedor a unos capítulos y no a otros.
+
+    Solo con un source que lleva proveedor (WEB-DL, la misma puerta
+    PROVIDER_SOURCES de source_assistant): códigos cortos como IT, HS o SL
+    darían falsos positivos en cualquier BluRay/HDTV/DVD."""
+    if source not in PROVIDER_SOURCES:
+        return None, None
+    ruta = (item.get("path") or "").replace("\\", "/").rstrip("/")
+    if not ruta:
+        return None, None
+    carpeta, _, nombre = ruta.rpartition("/")
+    codigo = _buscar_proveedor(nombre)
+    if codigo:
+        return codigo, ORIGEN_NOMBRE
+    codigo = _buscar_proveedor(carpeta)
+    return (codigo, ORIGEN_CARPETA) if codigo else (None, None)
+
+
+def _infer_provider_from_item(item: dict, source: str | None) -> str | None:
+    """El proveedor que ya trae el NOMBRE del elemento (p. ej. '...WEB-DL AMZN
+    x265...'), para que la propuesta no lo pierda. Solo texto: sin TMDb. Una
+    coincidencia solo en la carpeta no cuenta (ver detectar_proveedor)."""
+    codigo, origen = detectar_proveedor(item, source)
+    return codigo if origen == ORIGEN_NOMBRE else None
 
 
 def infer_provider_from_item(item: dict) -> str | None:
@@ -497,7 +527,15 @@ def build_nomenclature_proposal(
         # Phase 6E — provider (AMZN/NF/DSNP...) already present in the
         # current filename, kept in the proposal instead of silently
         # dropped. Detection only, no TMDb re-recommendation here.
-        provider = provider_override or _infer_provider_from_item(item, source)
+        # provider_override: None = sin elegir (se detecta); SIN_PROVEEDOR ("")
+        # = "Sin proveedor" elegido a mano; un código = ese.
+        provider = provider_override or None
+        if provider_override is None:
+            provider, origen_proveedor = detectar_proveedor(item, source)
+            if origen_proveedor == ORIGEN_CARPETA:
+                warnings.append(f"El proveedor {provider} solo aparece en una carpeta de la ruta, no en el "
+                                "nombre del archivo: no se añade. Elígelo en Proveedor si es correcto.")
+                provider = None
 
         # Full nomenclature with spaces + accents = the torrent/aporte title.
         proposed_torrent_name = _build_proposed_filename(

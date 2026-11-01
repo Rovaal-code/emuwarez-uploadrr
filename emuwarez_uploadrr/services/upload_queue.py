@@ -276,7 +276,8 @@ def queue_upload_for_item(
             proposal = _propuesta_vigente(item_id, conn)
 
         season_overrides = None
-        if is_season and (source_override or provider_override or tag_override or title_override):
+        # provider_override "" ("Sin proveedor" elegido a mano) también cuenta.
+        if is_season and (source_override or provider_override is not None or tag_override or title_override):
             season_overrides = {
                 "source": source_override, "provider": provider_override,
                 "tag": tag_override, "title": title_override,

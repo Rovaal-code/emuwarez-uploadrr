@@ -653,7 +653,9 @@ def build_editable_nomenclature_fields(
             "source": source,
             # Provider: from the file name first; only if the name has none (and
             # the source is WEB-DL) fall back to the TMDb suggestion.
-            "provider": provider_override or infer_provider_from_item(item) or suggested_provider,
+            # provider_override "" es "Sin proveedor" elegido a mano (nomenclature.SIN_PROVEEDOR).
+            "provider": ((provider_override or None) if provider_override is not None
+                         else (infer_provider_from_item(item) or suggested_provider)),
             "dynamic_range": mi_hdr,
             "video_codec": mi_video,
             "audio_summary": mi_audio,

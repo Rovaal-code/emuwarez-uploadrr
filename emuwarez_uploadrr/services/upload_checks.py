@@ -87,7 +87,8 @@ def _se_puede_leer(ruta: str | None) -> bool:
         return False
 
 
-def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "all") -> dict:
+def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "all",
+                      provider_override: str | None = None) -> dict:
     """`scope`:
 
     - "all" (por defecto): contenido + entorno, el comportamiento de siempre,
@@ -161,7 +162,9 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         # must already live in the same folder) — so it's reused as the
         # single season check instead of re-deriving pieces of it.
         from .season_pack import build_season_pack_plan
-        plan = build_season_pack_plan(item_id, conn=conn)
+        # El Proveedor elegido en el asistente, el mismo que el plan y la cola:
+        # sin él, un pack con proveedores distintos seguía bloqueado aquí.
+        plan = build_season_pack_plan(item_id, conn=conn, provider_override=provider_override)
         ok = plan["status"] == "valid"
         msg = "; ".join(plan["errors"]) if not ok else (
             f"Pack listo: {len(plan['episodes'])} episodio(s) → {plan.get('pack_folder')}"

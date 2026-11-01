@@ -32,6 +32,9 @@ import { seguirProgreso } from '../api/eventos'
 import { fetchSettings } from '../api/settings'
 import { AVISO_MODO_PISTAS, normalizarModo, renombra, tocaElFichero } from '../utils/modoPistas'
 import {
+  ajustesDeTemporada, proveedorParaServidor, textoOrigenProveedor, type ProveedoresElegidos,
+} from '../utils/origenProveedor'
+import {
   SIN_SELECCION, seleccionUnica, seleccionTemporadas, seleccionCapitulos,
   colaTemporadas, colaCapitulos, esTanda, mismaSeleccion, conObjetivo,
   cacheCubre, conAjustes, peticionCubre, type Seleccion, type Ajustes,
@@ -490,6 +493,12 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // por id — persisten al cambiar en el desplegable (loadSeasonPlan los
   // pisaría con lo autodetectado cada vez que vuelves).
   const [ajustesPorId, setAjustesPorId] = useState<Map<number, Ajustes>>(new Map())
+  // Proveedor elegido A MANO por temporada (campo Proveedor o selector del
+  // conflicto). Va aparte de ajustesPorId, que guarda también el detectado:
+  // solo este viaja como provider_override (ver ajustesDeTemporada).
+  const [proveedorElegido, setProveedorElegido] = useState<ProveedoresElegidos>(new Map())
+  const elegirProveedor = (id: number, valor: string | null) =>
+    setProveedorElegido(prev => new Map(prev).set(id, valor))
   // De quién son los campos que hay ahora en `fields`: no se apuntan como
   // ajustes de otro elemento mientras este aún carga.
   const camposDe = useRef<number | null>(null)
@@ -675,14 +684,14 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     }
     const dejarDeSeguir = seguirProgreso(
       'comprobaciones-progreso', a => a.item_id === targetId, pedir, 400)
-    try { setChecks(await runUploadChecks(targetId)) }
+    try { setChecks(await runUploadChecks(targetId, undefined, proveedorParaServidor(proveedorElegido, targetId))) }
     catch { setChecks(null) }
     finally {
       dejarDeSeguir()
       setChecksLoading(false)
       setLiveChecks([])
     }
-  }, [targetId])
+  }, [targetId, proveedorElegido])
 
   // --- Step 0: load seasons (series) or episodes (season) ---
   useEffect(() => {
@@ -759,7 +768,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         for (let i = 0; i < batchQueue.length; i++) {
           if (!alive) return
           setBatchChecksIndex(i)
-          acc.set(batchQueue[i], await runUploadChecks(batchQueue[i], 'content'))
+          acc.set(batchQueue[i], await runUploadChecks(
+            batchQueue[i], 'content', proveedorParaServidor(proveedorElegido, batchQueue[i])))
           setBatchContentChecks(new Map(acc))
         }
         if (alive) setBatchViewId(prev => prev ?? batchQueue[0])
@@ -799,6 +809,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (!mismaSeleccion(seleccion, nueva)) {
       setSeleccion(nueva)
       setAjustesPorId(new Map())
+      setProveedorElegido(new Map())
       setEpisodeFieldsById(new Map())
       setBatchEnvChecks(null); setBatchContentChecks(new Map()); setBatchViewId(null)
       setBatchPhase('idle'); setBatchResults([])
@@ -971,8 +982,13 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
 
   // --- Step 1 (season target): build the pack plan, polling progress while
   // it's in flight (real work per episode — build_nomenclature_proposal()).
-  const loadSeasonPlan = useCallback(async () => {
+  // `proveedor`: el elegido a mano para salir de un plan bloqueado por
+  // proveedores distintos; si no, el que ya se eligió para esta temporada.
+  const loadSeasonPlan = useCallback(async (proveedor?: string) => {
     if (targetId == null) return
+    if (proveedor) elegirProveedor(targetId, proveedor)
+    const yaElegido = proveedorElegido.has(targetId)
+    const proveedorPedido = proveedor ?? proveedorParaServidor(proveedorElegido, targetId)
     const pedido = ++planPedido.current
     setSeasonPlanLoading(true); setSeasonPlanError(null)
     buildingPlanFor.current = targetId
@@ -985,7 +1001,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       'plan-temporada-progreso', a => a.season_id === targetId, pedirPlan, 400)
     try {
       const [plan, srcResp, prvResp] = await Promise.all([
-        previewSeasonPack(targetId), getEmuSources(), getEmuProviders(),
+        previewSeasonPack(targetId, proveedorPedido), getEmuSources(), getEmuProviders(),
       ])
       if (pedido !== planPedido.current) return
       setSeasonPlan(plan)
@@ -1007,7 +1023,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         year: plan.year != null ? String(plan.year) : undefined,
         resolution: plan.resolution ?? undefined,
         source: saved?.source ?? plan.source ?? undefined,
-        provider: saved?.provider ?? plan.provider ?? undefined,
+        // El elegido a mano; si no, el que decide el servidor (nunca el
+        // detectado de una visita anterior, que ya no tiene por qué valer).
+        provider: proveedor ?? (yaElegido ? proveedorElegido.get(targetId) : plan.provider) ?? undefined,
         video_codec: plan.video_codec ?? undefined,
         dynamic_range: plan.dynamic_range ?? undefined,
         audio_summary: plan.audio_summary ?? undefined,
@@ -1033,7 +1051,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         setSeasonPlanLoading(false)
       }
     }
-  }, [targetId, ajustesPorId])
+  }, [targetId, ajustesPorId, proveedorElegido])
 
   // Closing the wizard while a season plan is being built has to stop the
   // server too: it runs one real nomenclature proposal per episode, so a 24
@@ -1071,13 +1089,15 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (id == null) return
     setSeasonNamesLoading(true)
     try {
-      const overrides = { source: fields.source, provider: fields.provider, tag: fields.tag }
+      const overrides = {
+        source: fields.source, provider: proveedorParaServidor(proveedorElegido, id) ?? fields.provider, tag: fields.tag,
+      }
       const r = await getSeasonEpisodeNames(id, overrides)
       if (objetivoActual.current === id) setSeasonNames(r.episodes)
     }
     catch { if (objetivoActual.current === id) setSeasonNames(null) }
     finally { if (objetivoActual.current === id) setSeasonNamesLoading(false) }
-  }, [targetId, fields.source, fields.provider, fields.tag])
+  }, [targetId, fields.source, fields.provider, fields.tag, proveedorElegido])
 
   const loadSeasonMi = useCallback(async () => {
     const id = targetId
@@ -1297,6 +1317,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     // up on episode 1 too, and go up with all of them. Everything else
     // (Source, Proveedor, Tag) belongs to the individual file.
     if (key === 'title') setSharedTitle(value)
+    if (targetIsSeason && targetId != null) {
+      if (key === 'provider') elegirProveedor(targetId, value)
+      if (key === 'source' && !PROVIDER_SOURCES.has(value || '')) elegirProveedor(targetId, null)
+    }
     setFields(prev => {
       const updated = { ...prev, [key]: value }
       if (key === 'source' && !PROVIDER_SOURCES.has(value || '')) updated.provider = null
@@ -1348,7 +1372,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       const r = await queueUpload(
         targetId, edicionesFinales(), checks, remuxSnapshot,
         targetIsSeason
-          ? { source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title }
+          ? ajustesDeTemporada(
+              { source: fields.source, tag: fields.tag, title: fields.title }, proveedorElegido, targetId)
           : undefined,
         requestId,
       )
@@ -1397,13 +1422,13 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         // Ya comprobado al entrar en el paso 2: el contenido de cada
         // temporada una vez, y el entorno una sola vez para toda la tanda. Si
         // por lo que sea no está cacheado, se hace la pasada completa.
-        const checksResult = mergedChecksFor(seasonId) ?? await runUploadChecks(seasonId)
+        const checksResult = mergedChecksFor(seasonId) ?? await runUploadChecks(seasonId, undefined, proveedorParaServidor(proveedorElegido, seasonId))
         if (!checksResult.ready) {
           const reason = checksResult.checks.find(c => c.status === 'fail')?.message || 'Alguna comprobación falló'
           results.push({ seasonId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(seasonId, undefined, checksResult, null, overridesMap.get(seasonId), s && peticionCubre(preselect, s) ? requestId : undefined)
+        const r = await queueUpload(seasonId, undefined, checksResult, null, ajustesDeTemporada(overridesMap.get(seasonId), proveedorElegido, seasonId), s && peticionCubre(preselect, s) ? requestId : undefined)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {
@@ -1824,6 +1849,12 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // being stuck with whatever the filename/Radarr-Sonarr happened to say —
   // the same kind of misdetection the Internal Source Tool exists to catch.
   const seasonTitleOptions = seasonPlan?.title_options ?? []
+  // Los avisos del plan, tanto si el pack es válido como si está bloqueado.
+  const avisosDelPlan = seasonPlan?.warnings?.map((w, i) => (
+    <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}><IconoAviso /> {w}</p>
+  ))
+  const origenProveedor = textoOrigenProveedor(
+    seasonPlan?.provider, seasonPlan?.provider_source_detail, fields.provider)
 
   const seasonFieldBox = (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
@@ -1895,6 +1926,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             <option value="">— Sin proveedor —</option>
             {providers.map(p => <option key={p.code} value={p.code}>{p.name} ({p.code})</option>)}
           </select>
+          {origenProveedor && <span className="form-hint">{origenProveedor}</span>}
         </label>
       )}
       <label><FieldLabel label="Códec de vídeo" info={FIELD_INFO.video_codec} />
@@ -2013,7 +2045,17 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           {seasonPlanError && !seasonPlanLoading && (
             <div style={{ padding: '20px 0' }}>
               <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {seasonPlanError}</p>
-              <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonPlan}>↻ Reintentar</button>
+              {avisosDelPlan}
+              {(seasonPlan?.provider_conflict?.length ?? 0) > 0 && (
+                // El error pide elegir un proveedor: el selector tiene que estar aquí.
+                <label style={{ display: 'block', marginBottom: 10 }}><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
+                  <select className="form-input form-select" value="" onChange={e => { if (e.target.value) loadSeasonPlan(e.target.value) }}>
+                    <option value="">— Elegir proveedor para todo el pack —</option>
+                    {providers.map(p => <option key={p.code} value={p.code}>{p.name} ({p.code})</option>)}
+                  </select>
+                </label>
+              )}
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => loadSeasonPlan()}>↻ Reintentar</button>
             </div>
           )}
           {!seasonPlanLoading && !seasonPlanError && seasonPlan && (
@@ -2028,6 +2070,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}><IconoAviso /> {w}</p>
               ))}
               {seasonFieldBox}
+              {avisosDelPlan}
               {seasonSummaryBox}
 
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>

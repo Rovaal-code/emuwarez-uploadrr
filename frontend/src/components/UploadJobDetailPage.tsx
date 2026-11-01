@@ -14,7 +14,8 @@ import {
   TypeValueIcon, CalendarValueIcon, ProgressValueIcon,
   NomenclatureValueIcon, AudioCodecValueIcon, ChecksValueIcon, LogsValueIcon,
 } from './DetailCard'
-import { RemuxTable, EpisodeAccordionRow } from './UploadWizardModal'
+import { RemuxTable } from './asistente/RemuxTable'
+import { EpisodeAccordionRow } from './asistente/Capitulos'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo, progressCounter, formatElapsed, queuedWaitText, formatSecondsHM,
 } from '../utils/uploadStatus'

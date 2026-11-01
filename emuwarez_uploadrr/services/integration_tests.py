@@ -199,8 +199,8 @@ def test_emuwarez_connection(
     _base = base_url
 
     if conn is not None:
+        from .settings import get_setting_canonical
         if not _key:
-            from .settings import get_setting_canonical
             _key = get_setting_canonical(conn, "emu.api_key")
         if not _base:
             _base = get_setting_canonical(conn, "emu.endpoint_url")
@@ -231,6 +231,7 @@ def test_emuwarez_connection(
             )
         from emuwarez_uploadrr.database import set_state
         set_state(conn, EMU_TEST_STATE_KEY, dt.datetime.now(dt.timezone.utc).isoformat())
+        conn.commit()  # sin esto el bloqueo de escritura dura toda la petición y las otras escrituras fallan con «database is locked»
 
     # Va por el mismo limitador que el resto de peticiones a eMuwarez, como consulta interactiva.
     from ..integrations import emu_limitador

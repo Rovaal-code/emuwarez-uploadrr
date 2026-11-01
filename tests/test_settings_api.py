@@ -240,6 +240,26 @@ def test_el_ajuste_viejo_de_reordenar_se_deja_a_la_par(client, auth_headers):
     assert viejo() == "false"
 
 
+def test_no_hacer_copias_reflink_va_apagado_y_se_guarda_en_la_clave_que_lee_la_cola(client, auth_headers):
+    from emuwarez_uploadrr.database import connect, db_path
+    from emuwarez_uploadrr.services.settings import get_setting_canonical
+    from emuwarez_uploadrr.services.upload_queue import AJUSTE_SIN_COPIAS_REFLINK
+
+    def guardado():
+        conn = connect(db_path())
+        try:
+            return get_setting_canonical(conn, AJUSTE_SIN_COPIAS_REFLINK)
+        finally:
+            conn.close()
+
+    assert client.get("/api/settings", headers=auth_headers).json()["remux_no_reflink_copies"] is False
+    for valor in (True, False):
+        resp = client.put("/api/settings", json={"remux_no_reflink_copies": valor}, headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["remux_no_reflink_copies"] is valor
+        assert guardado() == ("true" if valor else "false")
+
+
 def test_por_defecto_solo_hay_un_grupo_de_subida(client, auth_headers):
     assert client.get("/api/settings", headers=auth_headers).json()["upload_tags"] == ["EMUWAREZ"]
 

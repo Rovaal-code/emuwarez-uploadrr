@@ -729,6 +729,10 @@ def _motivo_para_no_tocar(origen: str) -> str | None:
     return None
 
 
+# Con "true", un fichero compartido nunca se copia por reflink: sus ediciones se omiten.
+AJUSTE_SIN_COPIAS_REFLINK = "remux.no_reflink_copies"
+
+
 def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo: str, conn, *,
                       overrides: dict | None = None, on_progress=None) -> dict:
     """Pone `origen` en `destino` (carpeta de subidas, ya libre) sin romper nunca
@@ -736,8 +740,9 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
 
     - Pistas y título interno se editan en el original si no lo comparte nadie
       (st_nlink == 1). Reordenar uno compartido se omite: sería reescribirlo.
-    - Si lo comparte, van a una copia por reflink en `destino`. Sin reflink, o
-      si la edición de la copia falla, se omiten con un aviso y se enlaza tal cual.
+    - Si lo comparte, van a una copia por reflink en `destino`. Sin reflink, con
+      el ajuste «No hacer nunca copias reflink» (`remux.no_reflink_copies`), o si
+      la edición de la copia falla, se omiten con un aviso y se enlaza tal cual.
 
     Devuelve {metodo, original_editado, pistas (ordered_tracks o None), omitida}.
     Lanza NoSePudoPreparar si falla la edición de las pistas del original.
@@ -823,6 +828,10 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
 
     if en_su_sitio:
         return sin_copia("no cabe una copia donde ya está el archivo", "sin copia")
+    from .settings import get_setting_canonical
+    if get_setting_canonical(conn, AJUSTE_SIN_COPIAS_REFLINK) == "true":
+        return sin_copia(f"el original {motivo}, y el ajuste «No hacer nunca copias reflink» está activado",
+                         "sin reflink por el ajuste")
     try:
         clonar(origen, destino)
     except OSError as e:

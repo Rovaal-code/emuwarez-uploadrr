@@ -236,6 +236,76 @@ def test_compartido_sin_reflink_se_enlaza_tal_cual_y_lo_dice(entorno, mkv_base, 
     assert json.loads(r["job"]["remux_snapshot_json"]) == {"omitida": "sin reflink"}
 
 
+def _sin_copias_reflink(entorno, activado: bool) -> None:
+    from emuwarez_uploadrr.services.settings import set_setting
+    set_setting(entorno["conn"], uq.AJUSTE_SIN_COPIAS_REFLINK, "true" if activado else "false")
+    entorno["conn"].commit()
+
+
+def test_con_el_ajuste_apagado_se_sigue_copiando_por_reflink(entorno, mkv_base, monkeypatch):
+    """Escrito a "false" es lo mismo que sin escribir: la copia por reflink de siempre."""
+    from emuwarez_uploadrr.services import carpeta_subida
+    clones = []
+    copia = _reflink("copia")
+    monkeypatch.setattr(carpeta_subida, "clonar", lambda o, d: (clones.append(d), copia(o, d)))
+    _modo(entorno, "solo_renombrar")
+    _sin_copias_reflink(entorno, False)
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)")
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    destino = entorno["uploads"] / f"{PROPUESTO}.mkv"
+    assert r["visto"]["status"] == "ready", r["logs"]
+    assert clones == [str(destino)]
+    assert destino.stat().st_ino != peli["f"].stat().st_ino
+    assert _mkv_info(destino)["titulo"] == PROPUESTO
+    assert any("copia por reflink" in m for m in r["logs"])
+    assert not any("No hacer nunca copias reflink" in m for m in r["logs"])
+
+
+def test_con_el_ajuste_encendido_nunca_se_copia_y_se_enlaza_tal_cual(entorno, mkv_base, monkeypatch):
+    """Aunque el reflink funcione, el ajuste lo prohíbe: se omiten las ediciones,
+    va un enlace duro y el aviso dice que es por el ajuste."""
+    from emuwarez_uploadrr.services import carpeta_subida
+    clones = []
+    monkeypatch.setattr(carpeta_subida, "clonar", lambda o, d: clones.append(d))
+    _modo(entorno, "solo_renombrar")
+    _sin_copias_reflink(entorno, True)
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)")
+    antes = _sha(peli["f"])
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    destino = entorno["uploads"] / f"{PROPUESTO}.mkv"
+    assert r["visto"]["status"] == "ready", r["logs"]
+    assert clones == []
+    assert destino.stat().st_ino == peli["f"].stat().st_ino     # enlace duro
+    assert _sha(peli["f"]) == antes and _sha(peli["seed"]) == antes
+    assert _mkv_info(peli["f"])["titulo"] == TITULO_FUENTE
+    aviso = next(m for m in r["logs"] if "No hacer nunca copias reflink" in m)
+    assert "enlaces duros" in aviso
+    assert "los nombres de las pistas" in aviso and "el título interno" in aviso
+    assert any("enlace duro" in m and "el original no se ha tocado" in m for m in r["logs"])
+    assert json.loads(r["job"]["remux_snapshot_json"]) == {"omitida": "sin reflink por el ajuste"}
+
+
+def test_con_el_ajuste_encendido_lo_no_compartido_se_edita_en_su_sitio(entorno, mkv_base, monkeypatch):
+    """El ajuste solo quita la copia: un archivo con un solo enlace se edita como siempre."""
+    from emuwarez_uploadrr.services import carpeta_subida
+    monkeypatch.setattr(carpeta_subida, "clonar", _reflink("copia"))
+    _modo(entorno, "solo_renombrar")
+    _sin_copias_reflink(entorno, True)
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)", semilla=False)
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    destino = entorno["uploads"] / f"{PROPUESTO}.mkv"
+    assert r["visto"]["status"] == "ready", r["logs"]
+    assert _mkv_info(peli["f"])["titulo"] == PROPUESTO
+    assert destino.stat().st_ino == peli["f"].stat().st_ino
+    assert not any("No hacer nunca copias reflink" in m for m in r["logs"])
+
+
 def test_compartido_con_reflink_de_verdad_o_sin_el(entorno, mkv_base):
     """Sin sustitutos: en btrfs/XFS sale una copia por reflink; en el overlay o
     tmpfs del contenedor, un enlace duro con el aviso. El original, igual siempre."""

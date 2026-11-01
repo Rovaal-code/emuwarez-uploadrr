@@ -15,6 +15,7 @@ export interface SettingsData {
   emu_add_logo: boolean
   emu_per_episode_screens: boolean
   remux_track_mode: ModoPistas
+  remux_no_reflink_copies: boolean
   qbit_username: string | null
   qbit_password_configured: boolean
   qbit_qui_configured: boolean
@@ -65,6 +66,7 @@ export interface SettingsUpdatePayload {
   emu_add_logo?: boolean
   emu_per_episode_screens?: boolean
   remux_track_mode?: ModoPistas
+  remux_no_reflink_copies?: boolean
   qbit_username?: string
   qbit_password?: string
   qbit_qui_proxy_url?: string

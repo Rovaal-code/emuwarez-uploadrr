@@ -22,7 +22,7 @@ export function DiagnosticsTab({ status, onRefresh }: { status: MaintenanceStatu
                 ['Ruta', db.db_path],
                 ['Tamaño', formatBytes(db.size_bytes ?? 0)],
                 ['Páginas', db.page_count],
-                ['Freelist', db.freelist_count],
+                ['Páginas libres', db.freelist_count],
                 ['Fragmentación', `${db.fragmentation_pct ?? 0} %`],
               ].map(([k, v]) => (
                 <tr key={String(k)} style={{ borderBottom: '1px solid var(--border)' }}>

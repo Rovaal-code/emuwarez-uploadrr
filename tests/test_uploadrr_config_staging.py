@@ -648,3 +648,85 @@ def test_una_subida_que_se_une_no_reescribe_si_los_ajustes_no_cambiaron(tmp_path
     assert len(escrituras) == 1
     ue._release_staged_config(1, primera)
     ue._release_staged_config(2, segunda)
+
+
+# --- La imagen trae config.yaml y config.yaml.bak como enlaces a /config -----------
+
+def _config_con_enlaces(tmp_path):
+    """Como la imagen: data/ con enlaces hacia otro directorio. El .bak empieza roto."""
+    estado = tmp_path / "estado"
+    estado.mkdir()
+    (estado / "config.yaml").write_text("DEFAULT:\n  tmdb: ''\nSCREENS:\n  per_episode: 3\n", encoding="utf-8")
+    data = tmp_path / "Uploadrr" / "data"
+    data.mkdir(parents=True)
+    (data / "config.yaml").symlink_to(estado / "config.yaml")
+    (data / "config.yaml.bak").symlink_to(estado / "config.yaml.bak")
+    return data / "config.yaml", estado
+
+
+def test_preparar_y_restaurar_el_config_escribe_en_el_destino_del_enlace(tmp_path):
+    """Sustituir el enlace con os.replace falla con EPERM para un usuario normal
+    (directorio con sticky, enlace de root): se escribe en el fichero real."""
+    config, estado = _config_con_enlaces(tmp_path)
+    original = (estado / "config.yaml").read_bytes()
+
+    write_staged_config(config, ["DEFAULT:", "  tmdb: 'CLAVE'"])
+
+    assert config.is_symlink() and config.with_suffix(".yaml.bak").is_symlink()
+    assert b"CLAVE" in (estado / "config.yaml").read_bytes()
+    assert (estado / "config.yaml.bak").read_bytes() == original
+
+    assert restore_config_from_backup(config) is True
+
+    assert config.is_symlink()
+    assert (estado / "config.yaml").read_bytes() == original
+    assert sorted(p.name for p in estado.iterdir()) == ["config.yaml", "config.yaml.bak"]
+    assert sorted(p.name for p in config.parent.iterdir()) == ["config.yaml", "config.yaml.bak"]
+
+
+def test_restaurar_lo_que_dejo_una_subida_muerta_tambien_respeta_el_enlace(tmp_path):
+    config, estado = _config_con_enlaces(tmp_path)
+    backup_config(config)
+    original = (estado / "config.yaml").read_bytes()
+    (estado / "config.yaml").write_text("DEFAULT:\n  tmdb: 'CLAVE_REAL'\n", encoding="utf-8")
+
+    from emuwarez_uploadrr.services.uploadrr_config_staging import restore_stale_config
+    assert restore_stale_config(config) is True
+
+    assert config.is_symlink()
+    assert (estado / "config.yaml").read_bytes() == original
+
+
+def test_si_no_se_puede_sustituir_el_config_no_queda_el_temporal(tmp_path, monkeypatch):
+    import os
+    config, estado = _config_con_enlaces(tmp_path)
+
+    def sin_permiso(origen, destino):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(os, "replace", sin_permiso)
+    with pytest.raises(PermissionError):
+        write_staged_config(config, ["DEFAULT:", "  tmdb: 'x'"])
+
+    assert not any(p.name.endswith(".tmp") for p in estado.iterdir())
+
+
+def test_escribir_el_config_conserva_su_modo_y_lo_crea_privado(tmp_path):
+    """os.replace no conserva el modo: un config.yaml con 0600 acababa con el
+    que dejara la umask, legible por otros usuarios del volumen."""
+    import os
+    config, estado = _config_con_enlaces(tmp_path)
+    anterior = os.umask(0o022)
+    try:
+        (estado / "config.yaml").chmod(0o600)
+        write_staged_config(config, ["DEFAULT:", "  tmdb: 'x'"])
+        restore_config_from_backup(config)
+
+        assert (estado / "config.yaml").stat().st_mode & 0o777 == 0o600
+        assert (estado / "config.yaml.bak").stat().st_mode & 0o777 == 0o600  # nuevo: privado
+
+        (estado / "config.yaml").chmod(0o640)
+        write_staged_config(config, ["DEFAULT:", "  tmdb: 'y'"])
+        assert (estado / "config.yaml").stat().st_mode & 0o777 == 0o640
+    finally:
+        os.umask(anterior)

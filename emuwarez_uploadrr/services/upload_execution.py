@@ -772,14 +772,18 @@ def _notify_upload_failed(job_id: int, error_message: str | None, result_url: st
         )
 
 
+class ConfigNoPreparada(RuntimeError):
+    """El config.yaml de Uploadrr no se pudo preparar: lanzarlo así lo haría fallar con las claves sin poner."""
+
+
 def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
-    """Best-effort staging of DEFAULT.tmdb / TRACKERS.EMU.api_key into config.yaml.
+    """Staging of DEFAULT.tmdb / TRACKERS.EMU.api_key into config.yaml.
 
     Returns the config_path if staging happened (so the caller knows to
     restore it later), or None if there was nothing to stage (config.yaml
     missing, or no secrets configured) — in that case there is nothing to
-    restore either. Never raises: staging failures are logged as warnings
-    and execution proceeds without a staged config.
+    restore either. Si preparar el config falla lanza ConfigNoPreparada: el
+    job termina fallido sin lanzar Uploadrr.
     """
     config_path = default_uploadrr_config_path(cwd)
     if not config_path.exists():
@@ -861,8 +865,9 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         )
         return config_path
     except Exception as exc:
-        append_upload_log(job_id, "warning", f"No se pudo stagear config.yaml: {exc}", stream="system")
-        return None
+        raise ConfigNoPreparada(
+            f"No se pudo preparar el config.yaml de Uploadrr ({exc}). No se lanza la subida: con el config sin preparar fallaría."
+        ) from exc
 
 
 def _restore_uploadrr_config(job_id: int, config_path: Path | None) -> None:
@@ -1589,7 +1594,8 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             error_message=msg[:2000],
             last_error_at=finished_at,
         )
-        append_upload_log(job_id, "error", f"Excepción inesperada: {msg}", stream="system")
+        append_upload_log(job_id, "error", msg if isinstance(exc, ConfigNoPreparada) else f"Excepción inesperada: {msg}",
+                          stream="system")
         logger.error("Subida fallida (job %s): excepción inesperada: %s", job_id, msg)
         _notify_upload_failed(job_id, msg)
     finally:

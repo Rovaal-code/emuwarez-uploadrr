@@ -90,9 +90,24 @@ def read_baseline_lines(config_path: Path) -> list[str]:
 def _write_atomic(path: Path, data: bytes) -> None:
     # Se escribe aparte y se renombra: un lector (Uploadrr arrancando) o un fallo
     # a medias (disco lleno) nunca ven un fichero cortado.
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_bytes(data)
-    os.replace(tmp_path, path)
+    # En la imagen config.yaml y config.yaml.bak son enlaces de root hacia /config
+    # dentro de un directorio con sticky: un usuario normal no puede sustituirlos
+    # (EPERM). Se escribe en el fichero real, junto a él, y el enlace no se toca.
+    real = Path(os.path.realpath(path))
+    real.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = real.with_suffix(real.suffix + ".tmp")
+    # El config lleva claves: el temporal nace privado y, antes de sustituir, toma el
+    # modo del fichero que reemplaza (os.replace no lo conserva y la umask lo ensancharía).
+    modo = stat.S_IMODE(real.stat().st_mode) if real.exists() else 0o600
+    tmp_path.unlink(missing_ok=True)
+    try:
+        with os.fdopen(os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as destino:
+            destino.write(data)
+        os.chmod(tmp_path, modo)
+        os.replace(tmp_path, real)
+    except OSError:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def backup_config(config_path: Path) -> Optional[Path]:
@@ -104,7 +119,7 @@ def backup_config(config_path: Path) -> Optional[Path]:
         return None
     backup_path = _backup_path(config_path)
     if not backup_path.exists():
-        backup_path.write_bytes(config_path.read_bytes())
+        _write_atomic(backup_path, config_path.read_bytes())
     return backup_path
 
 

@@ -3,9 +3,8 @@
 SAFETY CONTRACT:
 - dry_run=True by default.
 - apply_internal_title_update() requires confirmation="APLICAR_TITULO_MKV".
-- El título es parte del nombre: solo se escribe en un fichero de la carpeta de
-  subidas que no comparte nadie (la copia por reflink, o el propio si ya está
-  ahí), nunca en uno de la biblioteca.
+- Como los nombres de pista: solo en un fichero que no comparte nadie
+  (st_nlink == 1), y nunca con las pistas en "Ninguno". Jellyfin no lo lee.
 - Uses subprocess without shell=True.
 - mkvpropedit is never called in tests (caller must mock subprocess).
 """
@@ -51,17 +50,16 @@ def build_internal_mkv_title(torrent_name: str) -> str:
     return to_filesystem_name(torrent_name)
 
 
-TITULO_NO_EN_BIBLIOTECA = ("El título interno no se escribe en el archivo de la biblioteca: "
-                           "se pone en la copia de la carpeta de subidas al subir.")
+TITULO_CON_NINGUNO = "Renombrar/Ordenar pistas está en Ninguno: no se toca el título interno."
 
 
-def _por_que_no_se_escribe(ruta: str | None) -> str | None:
-    """None si se puede escribir el título en `ruta` (de la carpeta de subidas y
-    sin otro enlace duro); si no, el motivo."""
-    from .carpeta_subida import en_carpeta_de_subidas
-    if not ruta or not en_carpeta_de_subidas(ruta):
-        return TITULO_NO_EN_BIBLIOTECA
-    enlaces = Path(ruta).stat().st_nlink if Path(ruta).exists() else 1
+def _por_que_no_se_escribe(ruta: str | None, conn) -> str | None:
+    """None si se puede escribir el título en `ruta` (sin otro enlace duro y con
+    las pistas en un modo que toca el fichero); si no, el motivo."""
+    from .mkv_remux import modo_pistas, toca_el_fichero
+    if not toca_el_fichero(modo_pistas(conn)):
+        return TITULO_CON_NINGUNO
+    enlaces = Path(ruta).stat().st_nlink if ruta and Path(ruta).exists() else 1
     if enlaces > 1:
         return f"No se edita {Path(ruta).name}: lo comparten {enlaces} enlaces duros."
     return None
@@ -163,7 +161,7 @@ def preview_internal_title_update(library_item_id: int, conn=None, *, ruta: str 
             warnings.append("mkvpropedit no está instalado. Instala mkvtoolnix para aplicar el título interno.")
         if not p.exists():
             warnings.append(f"El archivo preparado no existe todavía en disco: {prepared_path}")
-        veto = _por_que_no_se_escribe(prepared_path)
+        veto = _por_que_no_se_escribe(prepared_path, conn)
         if veto:
             warnings.append(veto)
 
@@ -204,7 +202,7 @@ def apply_internal_title_update(
 
     Real execution requires:
       dry_run=False, apply=True, confirmation='APLICAR_TITULO_MKV',
-      y un fichero de la carpeta de subidas sin otro enlace duro.
+      y un fichero sin otro enlace duro.
     """
     own = conn is None
     conn = conn or connect()
@@ -250,7 +248,7 @@ def apply_internal_title_update(
                 "errors": [f"El archivo no existe: {prepared_path}"],
             }
 
-        veto = _por_que_no_se_escribe(prepared_path)
+        veto = _por_que_no_se_escribe(prepared_path, conn)
         if veto:
             return {**preview, "status": "blocked", "dry_run": False, "apply": False, "errors": [veto]}
 

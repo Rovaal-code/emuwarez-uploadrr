@@ -3,7 +3,7 @@
 Detector multi-herramienta del "source" (BluRay/WEB-DL/HDTV/...) de un
 archivo de vídeo, integrado en el botón **Ver MediaInfo** / **Internal
 Source Tool** ya existente en el asistente de subida. Sustituye a la
-heurística anterior (un único umbral de bitrate en `legacy.py`) por un
+heurística anterior (un único umbral de bitrate, ya borrada) por un
 sistema de evidencias ponderadas que siempre puntúa los 9 candidatos
 oficiales de eMuwarez y nunca devuelve "unknown".
 
@@ -145,7 +145,7 @@ entrada correspondiente.
 Se hizo una pasada de calibración real contra el informe de MediaInfo de
 toda la biblioteca del usuario (`mediainfo_report_20260717_144848.txt`,
 2802 archivos). Metodología: la "verdad" usada es el source que indica el
-propio **nombre de archivo** (vía `legacy._detect_source_by_name`, la misma
+propio **nombre de archivo** (vía `media_probe._detect_source_by_name`, la misma
 regex que ya usa el resto de la app como primera prioridad — no un dataset
 etiquetado externamente, pero sí una base razonable dado que son releases
 ya seleccionados/nombrados según la guía oficial). El script vive en

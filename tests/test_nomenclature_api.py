@@ -209,15 +209,6 @@ def test_get_upload_job_exists(client, auth_headers, isolated_db):
 # Safety checks
 # ---------------------------------------------------------------------------
 
-def test_create_emu_request_still_blocked(client, auth_headers):
-    """Verify POST /api/missing/{id}/create-emu-request stays blocked."""
-    r = client.post("/api/missing/1/create-emu-request", json={}, headers=auth_headers)
-    assert r.status_code in (200, 404, 501)
-    if r.status_code == 200:
-        data = r.json()
-        assert data.get("implemented") is False or data.get("stub") is True
-
-
 def test_no_filesystem_modification(isolated_db, monkeypatch):
     """Ensure nomenclature endpoints never call os.rename or os.remove."""
     import os

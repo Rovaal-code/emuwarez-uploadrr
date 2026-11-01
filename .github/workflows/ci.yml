@@ -19,7 +19,8 @@ concurrency:
 
 jobs:
   python:
-    runs-on: ubuntu-latest
+    # La distro fija (no `latest`): de ella salen las versiones de mediainfo, mkvtoolnix y ffmpeg.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -40,11 +41,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      # Con los binarios reales, los tests con ficheros de verdad corren en vez de saltarse.
+      - if: steps.alcance.outputs.solo_frontend != 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends mediainfo mkvtoolnix ffmpeg
       - run: pip install -c constraints.txt -e ".[web,dev]" ruff==0.17.3
       # Solo errores que rompen en ejecución (sintaxis, nombres sin definir).
       # El estilo lo revisa CodeRabbit sobre las líneas cambiadas.
       - run: ruff check --select E9,F63,F7,F82 --output-format github .
-      # Sin red (tests/conftest.py). Cobertura mínima del 78 % (hoy, 80 % en el runner, sin mediainfo ni mkvtoolnix).
+      # Sin red (tests/conftest.py). Cobertura mínima del 78 %.
       - if: steps.alcance.outputs.solo_frontend != 'true'
         run: pytest -q --cov=emuwarez_uploadrr --cov-report=term-missing --cov-report=xml --cov-fail-under=78 --junitxml=junit.xml -o junit_family=legacy
       - if: steps.alcance.outputs.solo_frontend == 'true'

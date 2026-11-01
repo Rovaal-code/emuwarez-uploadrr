@@ -607,6 +607,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const edicionesActuales = useRef(remuxEdits)
   edicionesActuales.current = remuxEdits
   const versionIdioma = useRef(0)
+  // Sube cada vez que cambian los datos del pack (idioma elegido, otro objetivo): una carga de nombres
+  // o de pistas por capítulo pedida antes de eso llega con los datos viejos y no se aplica.
+  const versionDatosPack = useRef(0)
   // Mientras se recalcula el nombre con el idioma elegido, Continuar y Subir esperan: si no, se
   // guardaría el nombre con el audio de antes y el remux aplicaría el idioma nuevo.
   const [recalculandoIdioma, setRecalculandoIdioma] = useState(false)
@@ -622,6 +625,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [idiomasPackEnVuelo, setIdiomasPackEnVuelo] = useState<IdiomasPorPosicion | null>(null)
   useEffect(() => {
     versionIdioma.current++
+    versionDatosPack.current++
     setRecalculandoIdioma(false)
     idiomasConfirmados.current = {}
     setIdiomasPackEnVuelo(null)
@@ -1115,6 +1119,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const loadSeasonNames = useCallback(async () => {
     const id = targetId
     if (id == null) return
+    const datos = versionDatosPack.current
+    const vigente = () => objetivoActual.current === id && datos === versionDatosPack.current
     setSeasonNamesLoading(true)
     try {
       const overrides = {
@@ -1122,10 +1128,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         idiomas: idiomasParaServidor(idiomasPorTemporada.get(id)),
       }
       const r = await getSeasonEpisodeNames(id, overrides)
-      if (objetivoActual.current === id) setSeasonNames(r.episodes)
+      if (vigente()) setSeasonNames(r.episodes)
     }
-    catch { if (objetivoActual.current === id) setSeasonNames(null) }
-    finally { if (objetivoActual.current === id) setSeasonNamesLoading(false) }
+    catch { if (vigente()) setSeasonNames(null) }
+    finally { if (vigente()) setSeasonNamesLoading(false) }
   }, [targetId, fields.source, fields.provider, fields.tag, proveedorElegido, idiomasPorTemporada])
 
   const loadSeasonMi = useCallback(async () => {
@@ -1145,15 +1151,17 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const loadSeasonRemux = useCallback(async () => {
     const id = targetId
     if (id == null) return
+    const datos = versionDatosPack.current
+    const vigente = () => objetivoActual.current === id && datos === versionDatosPack.current
     setSeasonRemuxLoading(true); setSeasonRemuxError(null)
     try {
       const r = await getSeasonEpisodeRemuxPreview(id, idiomasParaServidor(idiomasPorTemporada.get(id)))
-      if (objetivoActual.current === id) setSeasonRemux(r.episodes)
+      if (vigente()) setSeasonRemux(r.episodes)
     }
     catch (e: unknown) {
-      if (objetivoActual.current === id) { setSeasonRemux(null); setSeasonRemuxError(e instanceof Error ? e.message : 'Error calculando el remux') }
+      if (vigente()) { setSeasonRemux(null); setSeasonRemuxError(e instanceof Error ? e.message : 'Error calculando el remux') }
     }
-    finally { if (objetivoActual.current === id) setSeasonRemuxLoading(false) }
+    finally { if (vigente()) setSeasonRemuxLoading(false) }
   }, [targetId, idiomasPorTemporada])
 
   // Reset all per-target state (both single-file and season) whenever the
@@ -1329,8 +1337,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       })
       setAudioWarning(null)
       // Los nombres y las pistas por capítulo ya no valen: se piden otra vez al abrirlos.
-      setSeasonNames(null)
-      setSeasonRemux(null)
+      versionDatosPack.current++
+      setSeasonNames(null); setSeasonNamesLoading(false)
+      setSeasonRemux(null); setSeasonRemuxLoading(false)
     } catch {
       if (objetivoActual.current !== id || version !== versionIdioma.current) return
       setAudioWarning('No se pudo recalcular el nombre con ese idioma; se queda lo que había. Vuelve a elegirlo.')
@@ -2179,9 +2188,6 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 estos campos confirman que todos coinciden. Source, Proveedor y Tag se pueden corregir
                 a mano si el detectado no es correcto (se aplica a todos los capítulos por igual).
               </p>
-              {seasonPlan.warnings?.map((w, i) => (
-                <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}><IconoAviso /> {w}</p>
-              ))}
               {seasonFieldBox}
               {avisosDelPlan}
               {seasonSummaryBox}

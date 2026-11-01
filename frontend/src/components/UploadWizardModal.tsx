@@ -591,8 +591,11 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const edicionesActuales = useRef(remuxEdits)
   edicionesActuales.current = remuxEdits
   const versionIdioma = useRef(0)
+  // Mientras se recalcula el nombre con el idioma elegido, Continuar y Subir esperan: si no, se
+  // guardaría el nombre con el audio de antes y el remux aplicaría el idioma nuevo.
+  const [recalculandoIdioma, setRecalculandoIdioma] = useState(false)
   // Cambiar de elemento invalida las respuestas pendientes del anterior, aunque se vuelva a él.
-  useEffect(() => { versionIdioma.current++ }, [targetId])
+  useEffect(() => { versionIdioma.current++; setRecalculandoIdioma(false) }, [targetId])
   const [showRemuxCard, setShowRemuxCard] = useState(false)
 
   // Step 1 (season target only) — the pack plan: consistency across
@@ -1208,6 +1211,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     const id = targetId
     if (id == null) return
     editado.current = true
+    setRecalculandoIdioma(true)
     const previas = edicionesActuales.current
     const nuevas = { ...previas, [trackId]: { ...previas[trackId], language: code || undefined } }
     edicionesActuales.current = nuevas
@@ -1236,6 +1240,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       edicionesActuales.current = revertidas
       setRemuxEdits(revertidas)
       setAudioWarning('No se pudo recalcular el nombre con ese idioma; la pista sigue sin idioma. Vuelve a elegirlo.')
+    } finally {
+      // Solo la última elección apaga la espera; una anterior que acabe antes no la quita.
+      if (version === versionIdioma.current) setRecalculandoIdioma(false)
     }
   }
 
@@ -2321,7 +2328,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 {needsSelection
                   ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
                   : <span />}
-                <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || !preview || existingJobBlocking}>
+                <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || recalculandoIdioma || !preview || existingJobBlocking}>
                   {preparing ? 'Preparando…' : 'Continuar'}
                 </button>
               </div>
@@ -2519,7 +2526,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             <button
               className="btn btn-primary"
               onClick={doUpload}
-              disabled={!canUpload || uploading || checksLoading}
+              disabled={!canUpload || uploading || checksLoading || recalculandoIdioma}
               {...uploadBtnTip.triggerProps}
             >
               {uploading ? 'Subiendo…' : 'Subir a eMuwarez'}

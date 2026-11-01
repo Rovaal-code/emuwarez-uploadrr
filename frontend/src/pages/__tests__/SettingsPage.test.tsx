@@ -482,3 +482,76 @@ describe('Configuración: pestaña de backup', () => {
     expect(texto()).toContain('✓ Restaurado')
   })
 })
+
+describe('Configuración: no guardar sin haber cargado ni pisar lo editado durante el guardado', () => {
+  it('si falla la carga no se puede guardar los valores por defecto encima de los ajustes reales', async () => {
+    vi.mocked(fetchSettings).mockRejectedValueOnce(new Error('sin conexión'))
+    await montar()
+    expect(texto()).toContain('sin conexión')
+    expect(boton('Guardar configuración').disabled).toBe(true)
+    await pulsar(boton('Guardar configuración'))
+    expect(updateSettings).not.toHaveBeenCalled()
+
+    // «Reintentar» vuelve a cargar y, ya con los ajustes reales, se puede guardar
+    await pulsar(boton('Reintentar'))
+    expect(fetchSettings).toHaveBeenCalledTimes(2)
+    expect(campo('Tag').value).toBe('Subidas')
+    expect(boton('Guardar configuración').disabled).toBe(false)
+    await escribir(campo('Tag'), 'Nuevo')
+    await pulsar(boton('Guardar configuración'))
+    expect(vi.mocked(updateSettings).mock.calls[0][0]).toMatchObject({ upload_tags: ['GRUPO', 'OTRO'], qbit_tag: 'Nuevo' })
+  })
+
+  describe('mapeo de rutas', () => {
+    const REGLA = { from: '/data/media', to: '/mnt/media' }
+
+    async function diagnostico() {
+      // La pestaña Configuración carga bien; la tarjeta de rutas, la segunda lectura, falla.
+      vi.mocked(fetchSettings).mockResolvedValueOnce(structuredClone(AJUSTES))
+      vi.mocked(fetchSettings).mockRejectedValueOnce(new Error('sin conexión'))
+      await montar()
+      await pulsar(boton('Diagnóstico'))
+    }
+
+    it('si falla la carga no enseña «No hay reglas», bloquea el editor y reintenta', async () => {
+      await diagnostico()
+      expect(texto()).toContain('sin conexión')
+      expect(texto()).not.toContain('No hay reglas')
+      expect(() => boton('+ Añadir regla')).toThrow()
+      expect(() => boton('Guardar cambios')).toThrow()
+
+      vi.mocked(fetchSettings).mockResolvedValueOnce({ ...structuredClone(AJUSTES), path_mappings: [REGLA] })
+      await pulsar(boton('Reintentar'))
+      expect(porPlaceholder('Ruta de Radarr/Sonarr').value).toBe('/data/media')
+      await pulsar(boton('+ Añadir regla'))
+      const [, desde] = document.body.querySelectorAll<HTMLInputElement>('input[placeholder^="Ruta de Radarr/Sonarr"]')
+      const [, hasta] = document.body.querySelectorAll<HTMLInputElement>('input[placeholder^="Ruta local"]')
+      await escribir(desde, '/data/series')
+      await escribir(hasta, '/mnt/series')
+      await pulsar(boton('Guardar cambios'))
+      // la regla que ya existía viaja con la nueva: no se sustituye por una lista incompleta
+      expect(updateSettings).toHaveBeenCalledWith({ path_mappings: [REGLA, { from: '/data/series', to: '/mnt/series' }] })
+    })
+
+    it('mientras se guarda no se puede editar, así la respuesta no borra lo escrito entretanto', async () => {
+      vi.mocked(fetchSettings).mockResolvedValueOnce(structuredClone(AJUSTES))
+      vi.mocked(fetchSettings).mockResolvedValueOnce({ ...structuredClone(AJUSTES), path_mappings: [REGLA] })
+      let terminar!: (s: SettingsData) => void
+      vi.mocked(updateSettings).mockReturnValueOnce(new Promise<SettingsData>(r => { terminar = r }))
+      await montar()
+      await pulsar(boton('Diagnóstico'))
+      await escribir(porPlaceholder('Ruta de Radarr/Sonarr'), '/data/otra')
+      await pulsar(boton('Guardar cambios'))
+      expect(boton('Guardando…').disabled).toBe(true)
+      expect(porPlaceholder('Ruta de Radarr/Sonarr').disabled).toBe(true)
+      expect(porPlaceholder('Ruta local').disabled).toBe(true)
+      expect(boton('+ Añadir regla').disabled).toBe(true)
+      expect(boton('✕').disabled).toBe(true)
+
+      await act(async () => { terminar({ ...structuredClone(AJUSTES), path_mappings: [{ from: '/data/otra', to: '/mnt/media' }] }) })
+      await esperar()
+      expect(porPlaceholder('Ruta de Radarr/Sonarr').disabled).toBe(false)
+      expect(porPlaceholder('Ruta de Radarr/Sonarr').value).toBe('/data/otra')
+    })
+  })
+})

@@ -1,0 +1,99 @@
+"""Sincroniza una instancia de Radarr/Sonarr en cuanto vuelve a responder.
+
+Las instancias de subida se encienden solo para subir y están apagadas días: justo al encenderlas se quiere la
+biblioteca al día, no dentro de media hora. Cada pocos minutos (tarea programada `vigilar-instancias`) se pregunta a
+cada instancia activa lo mismo que la prueba de conexión (`/system/status`), con un plazo corto, y la sincronización
+solo sale en el paso de «no respondía» a «responde».
+
+El último estado de cada instancia vive en memoria y no en la base de datos, a propósito: tras reiniciar la aplicación
+cada instancia es una primera mirada, que solo apunta cómo está. Guardado en `app_state`, un reinicio con una
+instancia apagada la daría por «vuelta» al encenderla y no habría forma de distinguirlo de una caída real; y con
+varias, el reinicio lanzaría una sincronización en cadena. Lo que se pierda en el reinicio lo recoge la tarea
+periódica de sincronizar bibliotecas.
+"""
+from __future__ import annotations
+
+import logging
+import sqlite3
+from datetime import datetime, timedelta, timezone
+
+from ..integrations.arr_base import ArrClientError, arr_request, join_api_path
+from ..models import InstanceConfig
+from .instances import list_instances
+from .settings import leer_ajuste
+
+logger = logging.getLogger("emuwarez.vigilancia")
+
+# Cada comprobación es una llamada barata: si no contesta en esto, la instancia no responde.
+PLAZO_COMPROBACION = 5
+# Una instancia que se enciende y se apaga sin parar no sincroniza más de una vez en este tiempo.
+ENFRIAMIENTO = timedelta(minutes=15)
+
+# Id de instancia -> si respondía en la última mirada. Sin entrada: aún no se ha mirado.
+_respondia: dict[int, bool] = {}
+# Id de instancia -> cuándo se lanzó su última sincronización por haber vuelto.
+_sincronizada: dict[int, datetime] = {}
+
+
+def _ahora() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _responde(instance: InstanceConfig) -> bool:
+    """La misma llamada que la prueba de conexión de Radarr y Sonarr. Un fallo, sea cual sea (conexión rechazada,
+    plazo, 5xx, clave mala), es que no responde."""
+    try:
+        arr_request("GET", join_api_path(instance.url, "system/status"), instance.api_key, timeout=PLAZO_COMPROBACION)
+    except ArrClientError:
+        return False
+    return True
+
+
+def vigilar_instancias(conn: sqlite3.Connection) -> tuple[str, str]:
+    """Mira cada instancia activa y sincroniza la que acaba de volver. Devuelve (estado, resumen) de la tarea."""
+    from .library import SincronizacionParcial, SyncAlreadyRunning, sync_instance_con_candado
+
+    if not leer_ajuste(conn, "sincronizar_al_volver_instancia"):
+        return "skipped", "Desactivado en Configuración"
+    instancias = list_instances(conn, enabled_only=True)
+    # Una instancia que se desactiva o se borra y vuelve después empieza de cero: su primera mirada no sincroniza.
+    for id_ in set(_respondia) - {i.id for i in instancias}:
+        del _respondia[id_]
+
+    sincronizadas: list[str] = []
+    fallos: list[str] = []
+    caidas = 0
+    for instancia in instancias:
+        responde = _responde(instancia)
+        habia_caido = _respondia.get(instancia.id) is False
+        _respondia[instancia.id] = responde
+        if not responde:
+            caidas += 1
+            continue
+        if not habia_caido:
+            continue
+        ultima = _sincronizada.get(instancia.id)
+        if ultima is not None and _ahora() - ultima < ENFRIAMIENTO:
+            continue
+        logger.info("%s «%s» vuelve a responder: se sincroniza", instancia.type.capitalize(), instancia.name)
+        try:
+            sync_instance_con_candado(conn, instancia.id)
+        except SyncAlreadyRunning:
+            # Con otra sincronización en marcha no se lanza otra; sigue como caída para volver a intentarlo.
+            _respondia[instancia.id] = False
+            continue
+        except SincronizacionParcial:
+            sincronizadas.append(instancia.name)  # lo demás sí se sincronizó
+        except Exception as exc:  # noqa: BLE001 — se cuenta en el resumen; la tarea periódica lo reintenta
+            fallos.append(f"{instancia.name}: {exc}")
+            logger.warning("No se pudo sincronizar «%s» al volver: %s", instancia.name, exc)
+        else:
+            sincronizadas.append(instancia.name)
+        _sincronizada[instancia.id] = _ahora()
+
+    resumen = f"{len(instancias)} instancia(s) comprobadas, {caidas} sin responder"
+    if sincronizadas:
+        resumen += "; sincronizada al volver: " + ", ".join(sincronizadas)
+    if fallos:
+        return "failed", resumen + "; error: " + "; ".join(fallos)
+    return "completed", resumen

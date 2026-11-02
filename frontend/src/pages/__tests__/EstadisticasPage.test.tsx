@@ -25,14 +25,14 @@ beforeEach(() => { pedir.mockReset() })
 afterEach(desmontar)
 
 describe('EstadisticasPage', () => {
-  it('con datos pinta los cuatro gráficos accesibles y la tabla con cifras es-ES', async () => {
-    pedir.mockResolvedValue({ dias: 90, puntos: [punto('2026-10-01'), punto('2026-10-02', { ratio: 4.25, hit_and_runs: 1 })] })
+  it('con datos pinta los tres gráficos accesibles y la tabla con cifras es-ES', async () => {
+    pedir.mockResolvedValue({ dias: 90, puntos: [punto('2026-10-01'), punto('2026-10-02', { ratio: 4.25 })] })
     await montar(<EstadisticasPage />)
     await esperar(() => document.querySelector('svg[role="img"]'))
 
     expect(pedir).toHaveBeenCalledWith(90)
     const graficos = [...document.querySelectorAll('svg[role="img"]')]
-    expect(graficos).toHaveLength(4)
+    expect(graficos).toHaveLength(3)
     expect(graficos[0].getAttribute('aria-label')).toContain('Ratio: de 4,10 el 01/10/2026 a 4,25 el 02/10/2026')
     expect(graficos[1].getAttribute('aria-label')).toContain('Subido: de 1,0 TB')
     expect(graficos.every(g => g.querySelector('title'))).toBe(true)
@@ -76,7 +76,7 @@ describe('EstadisticasPage', () => {
     pedir.mockResolvedValue({ dias: 90, puntos: [punto('2026-10-01', { bonus: null }), punto('2026-10-02', { bonus: null })] })
     await montar(<EstadisticasPage />)
     await esperar(() => document.querySelector('svg[role="img"]'))
-    expect(document.querySelectorAll('svg[role="img"]')).toHaveLength(3)
+    expect(document.querySelectorAll('svg[role="img"]')).toHaveLength(2)
     expect(texto()).toContain('Sin datos de esto en este rango')
   })
 

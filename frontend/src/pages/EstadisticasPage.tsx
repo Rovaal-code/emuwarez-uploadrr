@@ -84,8 +84,6 @@ export function EstadisticasPage() {
               ]} />
             <GraficoLinea titulo="Bonus" formato={entero}
               series={[{ nombre: 'Bonus', clase: 'est-serie-bonus', puntos: serie(puntos, 'bonus') }]} />
-            <GraficoLinea titulo="Hit & Run" formato={entero} desdeCero
-              series={[{ nombre: 'H&R', clase: 'est-serie-hr', puntos: serie(puntos, 'hit_and_runs') }]} />
           </div>
 
           <details className="est-tabla">
@@ -95,7 +93,7 @@ export function EstadisticasPage() {
               <thead>
                 <tr>
                   <th scope="col">Día</th><th scope="col">Ratio</th><th scope="col">Subido</th>
-                  <th scope="col">Bajado</th><th scope="col">Bonus</th><th scope="col">H&amp;R</th>
+                  <th scope="col">Bajado</th><th scope="col">Bonus</th>
                 </tr>
               </thead>
               <tbody>
@@ -106,7 +104,6 @@ export function EstadisticasPage() {
                     <td>{celda(p.subido_bytes, bytes)}</td>
                     <td>{celda(p.bajado_bytes, bytes)}</td>
                     <td>{celda(p.bonus, entero)}</td>
-                    <td>{celda(p.hit_and_runs, entero)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -34,7 +34,6 @@
 .est-serie-bajado { --est-color: var(--color-warning-soft); }
 .est-serie-bajado .est-linea { stroke-dasharray: 6 4; }
 .est-serie-bonus { --est-color: var(--color-uploading); }
-.est-serie-hr { --est-color: var(--color-error-soft); }
 
 .est-leyenda { display: flex; gap: 16px; list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; color: var(--text-secondary); }
 .est-leyenda li { display: flex; align-items: center; gap: 6px; }

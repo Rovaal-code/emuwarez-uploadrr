@@ -553,7 +553,6 @@ class PuntoCuentaResponse(BaseModel):
     subido_bytes: Optional[int] = None
     bajado_bytes: Optional[int] = None
     bonus: Optional[float] = None
-    hit_and_runs: Optional[int] = None
 
 
 class EstadisticasCuentaResponse(BaseModel):

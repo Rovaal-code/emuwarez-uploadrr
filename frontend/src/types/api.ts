@@ -49,7 +49,6 @@ export interface PuntoCuenta {
   subido_bytes: number | null
   bajado_bytes: number | null
   bonus: number | null
-  hit_and_runs: number | null
 }
 
 export interface EstadisticasCuenta {

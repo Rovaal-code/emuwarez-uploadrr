@@ -18,7 +18,7 @@ import { EstadisticasPage } from '../EstadisticasPage'
 const pedir = vi.mocked(getEstadisticasCuenta)
 
 const punto = (dia: string, extra: Partial<PuntoCuenta> = {}): PuntoCuenta => ({
-  dia, ratio: 4.1, subido_bytes: 1024 ** 4, bajado_bytes: 300 * 1024 ** 3, bonus: 12345.5, hit_and_runs: 0, ...extra,
+  dia, ratio: 4.1, subido_bytes: 1024 ** 4, bajado_bytes: 300 * 1024 ** 3, bonus: 12345.5, ...extra,
 })
 
 beforeEach(() => { pedir.mockReset() })

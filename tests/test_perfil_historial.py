@@ -33,7 +33,7 @@ def conn(isolated_db):
 
 def _filas(conn):
     return [tuple(f) for f in conn.execute(
-        "SELECT dia, ratio, subido_bytes, bajado_bytes, bonus, hit_and_runs FROM perfil_historial ORDER BY dia")]
+        "SELECT dia, ratio, subido_bytes, bajado_bytes, bonus FROM perfil_historial ORDER BY dia")]
 
 
 def _dia(dias_atras: int) -> str:
@@ -45,7 +45,7 @@ def _dia(dias_atras: int) -> str:
 def test_base_nueva_trae_la_tabla(conn):
     assert get_state(conn, "schema_version") == str(SCHEMA_VERSION)
     columnas = [f[1] for f in conn.execute("PRAGMA table_info(perfil_historial)")]
-    assert columnas == ["dia", "ratio", "subido_bytes", "bajado_bytes", "bonus", "hit_and_runs", "actualizado_at"]
+    assert columnas == ["dia", "ratio", "subido_bytes", "bajado_bytes", "bonus", "actualizado_at"]
 
 
 def test_base_anterior_se_actualiza_sin_perder_nada(conn):
@@ -86,20 +86,20 @@ def test_bytes_de_texto(texto, esperado):
 
 def test_instantanea_con_las_cifras_del_perfil(conn):
     guardar_instantanea(conn, USUARIO, AHORA)
-    assert _filas(conn) == [(_dia(0), 4.1, round(1.2 * 1024 ** 4), 300 * 1024 ** 3, 12345.5, 2)]
+    assert _filas(conn) == [(_dia(0), 4.1, round(1.2 * 1024 ** 4), 300 * 1024 ** 3, 12345.5)]
 
 
 def test_ratio_infinito_o_cifras_ausentes_quedan_a_none(conn):
     guardar_instantanea(conn, {"username": "K", "ratio": "∞", "uploaded": "1 GiB"}, AHORA)
-    assert _filas(conn) == [(_dia(0), None, 1024 ** 3, None, None, None)]
+    assert _filas(conn) == [(_dia(0), None, 1024 ** 3, None, None)]
 
 
 def test_el_ultimo_valor_del_dia_gana(conn):
     guardar_instantanea(conn, USUARIO, AHORA)
-    guardar_instantanea(conn, {**USUARIO, "ratio": "4.3", "hit_and_runs": 0}, AHORA.replace(hour=22))
+    guardar_instantanea(conn, {**USUARIO, "ratio": "4.3", "seedbonus": "10"}, AHORA.replace(hour=22))
     filas = _filas(conn)
     assert len(filas) == 1
-    assert (filas[0][1], filas[0][5]) == (4.3, 0)
+    assert (filas[0][1], filas[0][4]) == (4.3, 10.0)
     assert conn.execute("SELECT actualizado_at FROM perfil_historial").fetchone()[0] == "2026-11-02T22:30:00"
 
 
@@ -118,7 +118,7 @@ def test_poda_lo_que_pasa_de_la_retencion(conn):
 
 def test_guardar_nunca_lanza(conn, caplog):
     guardar_instantanea(conn, {"ratio": object()}, AHORA)  # un perfil con forma rara
-    assert _filas(conn) == [(_dia(0), None, None, None, None, None)]
+    assert _filas(conn) == [(_dia(0), None, None, None, None)]
     conn.execute("DROP TABLE perfil_historial")
     guardar_instantanea(conn, USUARIO, AHORA)
     assert "No se pudo guardar la instantánea" in caplog.text
@@ -126,11 +126,11 @@ def test_guardar_nunca_lanza(conn, caplog):
 
 def test_serie_ordenada_y_solo_la_ventana_pedida(conn):
     for atras in (40, 0, 29, 30, 5):
-        guardar_instantanea(conn, {**USUARIO, "hit_and_runs": atras}, AHORA - timedelta(days=atras))
+        guardar_instantanea(conn, {**USUARIO, "seedbonus": str(atras)}, AHORA - timedelta(days=atras))
     serie = serie_cuenta(conn, 30, AHORA)
     assert [p["dia"] for p in serie] == [_dia(29), _dia(5), _dia(0)]
-    assert [p["hit_and_runs"] for p in serie] == [29, 5, 0]
-    assert set(serie[0]) == {"dia", "ratio", "subido_bytes", "bajado_bytes", "bonus", "hit_and_runs"}
+    assert [p["bonus"] for p in serie] == [29, 5, 0]
+    assert set(serie[0]) == {"dia", "ratio", "subido_bytes", "bajado_bytes", "bonus"}
     assert len(serie_cuenta(conn, 90, AHORA)) == 5
     assert serie_cuenta(conn, 1, AHORA)[0]["dia"] == _dia(0)
 
@@ -177,19 +177,19 @@ def test_endpoint_exige_sesion(client):
 def test_endpoint_devuelve_la_serie(client, auth_headers, conn):
     hoy = datetime.now()
     for atras in (100, 3, 0):
-        guardar_instantanea(conn, {**USUARIO, "hit_and_runs": atras}, hoy - timedelta(days=atras))
+        guardar_instantanea(conn, {**USUARIO, "seedbonus": str(atras)}, hoy - timedelta(days=atras))
     conn.commit()
 
     resp = client.get("/api/estadisticas/cuenta", headers=auth_headers)
     assert resp.status_code == 200
     cuerpo = resp.json()
     assert cuerpo["dias"] == 90
-    assert [p["hit_and_runs"] for p in cuerpo["puntos"]] == [3, 0]  # la de hace 100 días queda fuera de los 90
+    assert [p["bonus"] for p in cuerpo["puntos"]] == [3, 0]  # la de hace 100 días queda fuera de los 90
     assert cuerpo["puntos"][0]["ratio"] == 4.1 and cuerpo["puntos"][0]["subido_bytes"] == round(1.2 * 1024 ** 4)
 
     todo = client.get("/api/estadisticas/cuenta?dias=365", headers=auth_headers).json()
-    assert [p["hit_and_runs"] for p in todo["puntos"]] == [100, 3, 0]
-    assert client.get("/api/estadisticas/cuenta?dias=1", headers=auth_headers).json()["puntos"][0]["hit_and_runs"] == 0
+    assert [p["bonus"] for p in todo["puntos"]] == [100, 3, 0]
+    assert client.get("/api/estadisticas/cuenta?dias=1", headers=auth_headers).json()["puntos"][0]["bonus"] == 0
 
 
 def test_endpoint_sin_instantaneas_devuelve_lista_vacia(client, auth_headers):

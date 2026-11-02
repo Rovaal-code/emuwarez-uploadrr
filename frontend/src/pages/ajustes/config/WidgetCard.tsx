@@ -8,12 +8,14 @@ import { useSettingsMessageAdapter } from '../mensajes'
 // después la base solo guarda su hash.
 export function WidgetCard() {
   const [configurada, setConfigurada] = useState<boolean | null>(null)
+  const [errorCarga, setErrorCarga] = useState(false)
   const [nueva, setNueva] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const setMsg = useSettingsMessageAdapter()
 
   const cargar = useCallback(async () => {
-    try { setConfigurada((await getWidgetKeyStatus()).configurada) } catch { /* sin estado: la tarjeta queda cargando */ }
+    setErrorCarga(false)
+    try { setConfigurada((await getWidgetKeyStatus()).configurada) } catch { setErrorCarga(true) }
   }, [])
   useAlEntrar(() => { void cargar() })
 
@@ -59,7 +61,14 @@ export function WidgetCard() {
     <div className="placeholder-card">
       <h3>Widget para Homepage</h3>
       {configurada === null ? (
-        <p className="form-hint">Cargando…</p>
+        errorCarga ? (
+          <p className="form-hint">
+            No se pudo cargar el estado de la clave.{' '}
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => { void cargar() }}>Reintentar</button>
+          </p>
+        ) : (
+          <p className="form-hint">Cargando…</p>
+        )
       ) : (
         <>
           <p className="form-hint widget-nota">

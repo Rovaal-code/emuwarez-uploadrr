@@ -388,6 +388,15 @@ describe('Configuración: widget para Homepage', () => {
     expect(texto()).not.toContain('emuw_clave-de-prueba')
   })
 
+  it('si no se puede leer el estado de la clave, lo dice y deja reintentar', async () => {
+    vi.mocked(getWidgetKeyStatus).mockRejectedValueOnce(new Error('sin red')).mockResolvedValue({ configurada: true })
+    await montar()
+    expect(texto()).toContain('No se pudo cargar el estado de la clave.')
+    expect(texto()).not.toContain('Cargando…')
+    await pulsar(boton('Reintentar'))
+    expect(texto()).toContain('Clave puesta.')
+  })
+
   it('regenerar y quitar piden confirmación', async () => {
     vi.mocked(getWidgetKeyStatus).mockResolvedValue({ configurada: true })
     vi.mocked(generateWidgetKey).mockResolvedValue({ clave: 'emuw_otra' })

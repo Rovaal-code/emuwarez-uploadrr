@@ -37,7 +37,8 @@ def clave_estado(
 
 @router.post("/clave", response_model=WidgetClaveGenerada)
 def clave_generar(
-    response: Response, current_user: dict = Depends(require_auth), conn: sqlite3.Connection = Depends(get_db),
+    response: Response, current_user: dict = Depends(require_auth),
+    conn: sqlite3.Connection = Depends(get_db, scope="function"),  # se confirma antes de enseñar la clave
 ) -> WidgetClaveGenerada:
     from ...services.widget import generar_clave
     response.headers.update(_SIN_CACHE)
@@ -46,7 +47,7 @@ def clave_generar(
 
 @router.delete("/clave", response_model=WidgetClaveEstado)
 def clave_quitar(
-    current_user: dict = Depends(require_auth), conn: sqlite3.Connection = Depends(get_db),
+    current_user: dict = Depends(require_auth), conn: sqlite3.Connection = Depends(get_db, scope="function"),
 ) -> WidgetClaveEstado:
     from ...services.widget import quitar_clave
     quitar_clave(conn)

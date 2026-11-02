@@ -3,6 +3,7 @@ import { ErrorDeCarga } from './ErrorDeCarga'
 import { useConfigForm } from './config/useConfigForm'
 import { AccountCard } from './config/AccountCard'
 import { SessionsCard } from './config/SessionsCard'
+import { WidgetCard } from './config/WidgetCard'
 import { EmuwarezCard } from './config/EmuwarezCard'
 import { TmdbCard } from './config/TmdbCard'
 import { QbitCard } from './config/QbitCard'
@@ -39,6 +40,7 @@ export function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
       <ProveedoresImagenesCard form={form} />
       <BibliotecaCard form={form} />
       <OtrosCard form={form} />
+      <WidgetCard />
       </div>
     </div>
   )

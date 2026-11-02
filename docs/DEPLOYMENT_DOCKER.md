@@ -201,7 +201,7 @@ el registro de las subidas terminadas sin fallo de hace más de 30 días (el de 
 borra los avisos leídos de más de 30 días y optimiza la base. No toca las subidas ni nada que enlacen.
 
 El backup no lleva las claves. En la base de datos van vacías las API keys (TMDb, eMuwarez, Radarr/Sonarr, hosts
-de imágenes), la contraseña de qBittorrent, el webhook de Discord y el token de Telegram, y de
+de imágenes), la contraseña de qBittorrent, el webhook de Discord, el token de Telegram y la clave del widget de Homepage, y de
 `/config/Uploadrr/data` no entran `config.yaml`, `config.yaml.bak` ni `cookies/`, que pueden llevar claves de
 cualquier tracker, ni las configuraciones antiguas de Uploadrr (`config.py`, `config.json`,
 `backup/old_config.py`). La contraseña de acceso a la app sí va, como hash. Al restaurarlo, las claves que tengas
@@ -334,3 +334,53 @@ docker exec emuwarez-uploadrr python3 emuwarez_uploader.py web setup-status
 las claves de TMDb y eMuwarez, y las instancias de Radarr/Sonarr. En la web, Configuración → Diagnóstico muestra la
 versión, la base de datos y el inventario de `/config`, y Logs, los registros de la app y de cada subida. La CLI
 completa está en [`README_CLI_READY.md`](../README_CLI_READY.md).
+
+## 11. Widget para Homepage
+
+[Homepage](https://gethomepage.dev) puede enseñar unos contadores de la app con su widget `customapi`. En
+Configuración → «Widget para Homepage», «Generar clave» crea una clave de solo lectura y la enseña entera una sola
+vez (después la app solo guarda su hash; si la pierdes, regenerarla invalida la anterior). Esa clave abre solo
+`GET /api/widget`: no vale para ninguna otra ruta y no hace falta iniciar sesión. Sin clave, `/api/widget`
+responde 404; con una clave ausente o incorrecta, 401.
+
+La respuesta es un JSON plano:
+
+| Clave | Qué cuenta |
+|---|---|
+| `peticiones_listas` | Peticiones «listas para subir» (el contador del Panel). |
+| `subidas_hoy` | Subidas terminadas con éxito desde las 00:00 de la zona horaria del servidor (`TZ`). |
+| `subidas_fallidas` | Subidas fallidas que siguen en Subidas (desaparecen al reintentarlas o borrarlas). |
+| `en_cola` | Subidas esperando su turno o preparándose. |
+| `subiendo` | Subidas en marcha. |
+
+Homepage manda la clave en una cabecera (`headers` del widget); la app acepta `X-Api-Key` y `Authorization: Bearer`.
+En el `services.yaml` de Homepage (cambia el host y el puerto por los de tu app y pega tu clave):
+
+```yaml
+- eMuwarez Uploadrr:
+    icon: mdi-upload
+    href: http://192.168.1.10:9494
+    widget:
+      type: customapi
+      url: http://192.168.1.10:9494/api/widget
+      refreshInterval: 30000
+      headers:
+        X-Api-Key: emuw_pega-aquí-tu-clave
+      mappings:
+        - field: peticiones_listas
+          label: Listas para subir
+          format: number
+        - field: subidas_hoy
+          label: Subidas hoy
+          format: number
+        - field: en_cola
+          label: En cola
+          format: number
+        - field: subidas_fallidas
+          label: Fallidas
+          format: number
+```
+
+El `services.yaml` guarda la clave en claro: quien lea la carpeta de Homepage la verá, pero con ella solo puede leer
+esos cinco números. Para quitar el acceso, «Quitar clave» (o regenerarla) en Configuración. Si Homepage llega a la
+app a través de un proxy inverso, el proxy tiene que pasar la cabecera `X-Api-Key` (los habituales lo hacen).

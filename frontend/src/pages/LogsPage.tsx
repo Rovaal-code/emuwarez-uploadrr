@@ -55,7 +55,7 @@ export function LogsPage() {
   }, [auto, load, logsALaVista])
 
   return (
-    <div data-tour="logs-content" style={{ height: '100%' }}>
+    <div data-tour="logs-content" className="logs-pagina">
       <div className="page-header">
         <div>
           <div className="page-title">Logs</div>
@@ -63,39 +63,39 @@ export function LogsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="logs-barra">
         <input
-          className="form-input"
+          className="form-input logs-buscar"
           placeholder="Buscar en los logs…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()}
-          style={{ minWidth: 240 }}
         />
-        <select className="form-input form-select" value={level} onChange={e => setLevel(e.target.value)} style={{ width: 150 }}>
+        <select className="form-input form-select logs-nivel" value={level} onChange={e => setLevel(e.target.value)}>
           {LEVELS.map(l => <option key={l} value={l}>{l ? `Nivel: ${l}+` : 'Nivel: Todos'}</option>)}
         </select>
         <button className="btn btn-secondary btn-sm" onClick={load}>↻ Refrescar</button>
-        <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+        <label className="checkbox-label logs-auto">
           <input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)} /> Auto (3s)
         </label>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>{items.length} líneas</span>
+        <span className="logs-contador">{items.length} líneas</span>
       </div>
 
-      <div className="activity-section" style={{ padding: 0 }}>
+      <div className="activity-section logs-caja">
         {loading ? (
-          <div style={{ padding: 20, color: 'var(--text-muted)' }}>Cargando…</div>
+          <div className="logs-aviso">Cargando…</div>
         ) : error ? (
-          <div style={{ padding: 20, color: 'var(--color-missing)' }}>{error}</div>
+          <div className="logs-aviso logs-aviso-error">{error}</div>
         ) : items.length === 0 ? (
           <EmptyState icon={<IconoDocumento />} title="Sin logs" body="No hay entradas que coincidan con el filtro." />
         ) : (
-          <div style={{ maxHeight: 'calc(var(--vh100) * 0.7)', overflow: 'auto', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+          <div className="logs-lista">
             {items.map((e, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, padding: '3px 12px', borderBottom: '1px solid var(--border)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{e.time}</span>
-                <span style={{ color: LEVEL_COLOR[e.level] ?? 'var(--text-secondary)', fontWeight: 700, flexShrink: 0, width: 64 }}>{e.level}</span>
-                <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{e.logger}</span>
+              <div key={i} className="logs-linea">
+                <span className="logs-tiempo">{e.time}</span>
+                {/* El color depende del nivel de cada línea: se queda en línea. */}
+                <span className="logs-nivel-linea" style={{ color: LEVEL_COLOR[e.level] ?? 'var(--text-secondary)' }}>{e.level}</span>
+                <span className="logs-tiempo">{e.logger}</span>
                 <span>{e.message}</span>
               </div>
             ))}

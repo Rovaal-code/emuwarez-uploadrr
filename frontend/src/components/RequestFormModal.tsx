@@ -35,10 +35,6 @@ interface Props {
   onClose: () => void
 }
 
-const labelStyle: React.CSSProperties = {
-  fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block',
-}
-
 export function RequestFormModal({ item, onClose }: Props) {
   const isSeriesLike = item.item_type === 'series' || item.item_type === 'season' || item.item_type === 'episode'
 
@@ -79,9 +75,9 @@ export function RequestFormModal({ item, onClose }: Props) {
   const createUrl = urlCrearPeticion({ category, title, imdb: imdbId, tmdb: tmdbId, tvdb: tvdbId, mal: malId })
 
   return (
-    <Modal titulo="Nueva petición en eMuwarez" onClose={onClose} className="modal-wide" style={{ maxWidth: 640 }}>
+    <Modal titulo="Nueva petición en eMuwarez" onClose={onClose} className="modal-wide reqform-modal">
       <div className="modal-body">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+        <div className="reqform-rejilla">
           <ReadOnlyField label="Título" value={title} gridColumn="1 / -1" />
           <ReadOnlyField label="Categoría" value={CATEGORY_LABELS[category] ?? category} gridColumn={isSeries ? undefined : '1 / -1'} />
           {isSeries && <ReadOnlyField label="Alcance de la petición" value={SCOPE_LABELS[scope]} />}
@@ -95,7 +91,7 @@ export function RequestFormModal({ item, onClose }: Props) {
         </div>
 
         {/* External IDs — read-only: whatever the library item already has. */}
-        <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px' }}>
+        <div className="reqform-rejilla-ids">
           <IdRow label="TMDB ID" value={tmdbId} href={idVerifyUrl('tmdb', tmdbId, isSeries)} />
           <IdRow label="IMDB ID" value={imdbId} href={idVerifyUrl('imdb', imdbId, isSeries)} />
           <IdRow label="MAL ID (anime)" value={malId} href={idVerifyUrl('mal', malId, isSeries)} />
@@ -104,13 +100,13 @@ export function RequestFormModal({ item, onClose }: Props) {
           )}
         </div>
 
-        <p style={{ fontSize: 12, marginTop: 16 }} className="text-muted">
+        <p className="text-muted reqform-nota">
           Se abre el formulario de eMuwarez rellenado con estos datos. Allí completas tipo, resolución{scope !== 'all' && ', temporada, episodio'}, descripción y recompensa, y envías la petición.
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+        <div className="reqform-botones">
           <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-          <a className="btn btn-primary" href={createUrl} target="_blank" rel="noreferrer" onClick={onClose} style={{ textDecoration: 'none' }}>
+          <a href={createUrl} target="_blank" rel="noreferrer" onClick={onClose} className="btn btn-primary reqform-abrir">
             Abrir en eMuwarez
           </a>
         </div>
@@ -124,9 +120,10 @@ export function RequestFormModal({ item, onClose }: Props) {
 // Episodio) instead of a real form control the user could edit.
 function ReadOnlyField({ label, value, gridColumn }: { label: string; value: string; gridColumn?: string }) {
   return (
+    // gridColumn lo decide quien llama: en línea.
     <label style={gridColumn ? { gridColumn } : undefined}>
-      <span style={labelStyle}>{label}</span>
-      <input className="form-input" value={value || '—'} disabled readOnly style={{ opacity: 0.7 }} />
+      <span className="reqform-etiqueta">{label}</span>
+      <input className="form-input reqform-lectura" value={value || '—'} disabled readOnly />
     </label>
   )
 }
@@ -136,30 +133,24 @@ function IdRow({ label, value, href }: { label: string; value: string; href?: st
   const verifyTip = useTooltip(canVerify ? 'Verificar: abrir la ficha en su web' : 'Este campo no tiene un valor disponible')
   return (
     <div>
-      <span style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>{label}</span>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <span className="reqform-id-etiqueta">{label}</span>
+      <div className="reqform-id-fila">
         <input
-          className="form-input"
+          className="form-input reqform-lectura reqform-id-valor"
           value={value || '—'}
           disabled
           readOnly
-          style={{ flex: 1, minWidth: 0, opacity: 0.7 }}
         />
         <a
-          className="btn btn-secondary btn-sm hover-link"
+          className={`btn btn-secondary btn-sm hover-link reqform-id-enlace${canVerify ? '' : ' reqform-id-enlace-off'}`}
           href={canVerify ? href! : undefined}
           target="_blank"
           rel="noreferrer"
           aria-disabled={!canVerify}
           onClick={e => { if (!canVerify) e.preventDefault() }}
-          style={{
-            flexShrink: 0, textDecoration: 'none', lineHeight: 1,
-            padding: '0 10px', height: 34, display: 'flex', alignItems: 'center',
-            opacity: canVerify ? 1 : 0.4, pointerEvents: canVerify ? 'auto' : 'none',
-          }}
           {...verifyTip.triggerProps}
         >
-          <Favicon domain={domainOf(href)} size={16} radius={3} fallback={<span style={{ fontSize: 12 }}>↗</span>} />
+          <Favicon domain={domainOf(href)} size={16} radius={3} fallback={<span className="reqform-flecha">↗</span>} />
           {verifyTip.tooltipNode}
         </a>
       </div>

@@ -40,11 +40,7 @@ export function DetailHero({ backdropUrl, children }: { backdropUrl?: string | n
 // view and UploadJobDetailPage.
 export function DetailTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div className="detail-card" style={{
-      display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-      borderRadius: 10, padding: '10px 18px',
-      fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em',
-    }}>
+    <div className="detail-card detcard-titulo-pagina">
       {children}
     </div>
   )
@@ -63,7 +59,7 @@ export function DetailTitleText({ title }: { title: string }) {
   return (
     <>
       {before}
-      <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{year}</span>
+      <span className="detcard-anio">{year}</span>
       {after}
     </>
   )
@@ -80,14 +76,11 @@ export function Card({ title, icon, children, padding = '21px 19px', gap = 10, t
   gap?: number
   titleGap?: number
 }) {
+  // padding y titleGap llegan por props: se quedan en línea.
   return (
-    <div className="detail-card" style={{ borderRadius: 10, padding }}>
-      <div className="detail-card-title" style={{
-        fontSize: 13.5, fontWeight: 600,
-        marginBottom: titleGap, paddingBottom: titleGap / 2,
-        display: 'flex', alignItems: 'center', gap: 8,
-      }}>
-        {icon && <span style={{ display: 'inline-flex', color: 'var(--text-accent)', flexShrink: 0 }}>{icon}</span>}
+    <div className="detail-card detcard-tarjeta" style={{ padding }}>
+      <div className="detail-card-title detcard-titulo" style={{ marginBottom: titleGap, paddingBottom: titleGap / 2 }}>
+        {icon && <span className="detcard-icono">{icon}</span>}
         {title}
       </div>
       {/* `--row-gap` drives the spacing AROUND the divider CSS (below) adds
@@ -105,15 +98,15 @@ export function Card({ title, icon, children, padding = '21px 19px', gap = 10, t
 
 export function FieldRow({ label, children, help }: { label: string; children: React.ReactNode; help?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-      <span style={{ fontSize: 13.5, color: 'var(--text-muted)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, overflowWrap: 'break-word', minWidth: 0 }}>
+    <div className="detcard-fila">
+      <span className="detcard-fila-etiqueta">
         {label}
         {help && <InfoIcon text={help} />}
       </span>
       {/* overflow:hidden alongside minWidth:0 so a very long value (a 20
           language audio list) truncates inside the row instead of widening
           the whole card — the chip's own ellipsis needs a bounded parent. */}
-      <span style={{ textAlign: 'right', wordBreak: 'break-word', minWidth: 0, overflow: 'hidden' }}>{children}</span>
+      <span className="detcard-fila-valor">{children}</span>
     </div>
   )
 }
@@ -157,9 +150,9 @@ export function ValueIcon({ children }: { children: React.ReactNode }) {
 // so a chip border still means "this opens something".
 export function PlainValue({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+    <span className="detcard-plano">
       {icon && <span className="vicon">{icon}</span>}
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{children}</span>
+      <span className="detcard-plano-texto">{children}</span>
     </span>
   )
 }
@@ -171,7 +164,7 @@ export function PlainValue({ icon, children }: { icon?: React.ReactNode; childre
 // an empty-looking chip.
 export function TechChip({ icon: Icon, value }: { icon: React.ComponentType; value: string | null | undefined }) {
   if (!value || value === '—' || value === '?') {
-    return <span style={{ color: 'var(--text-muted)' }}>{value || '—'}</span>
+    return <span className="detcard-atenuado">{value || '—'}</span>
   }
   return <ValueChip><ValueIcon><Icon /></ValueIcon><span className="txt">{value}</span></ValueChip>
 }
@@ -184,7 +177,7 @@ export function CheckStatusIcon({ status }: { status: 'ok' | 'fail' | 'skip' }) 
   return (
     <svg viewBox="0 0 24 24" width={16} height={16}
       role="img" aria-label={status === 'ok' ? 'Correcto' : status === 'skip' ? 'Omitido' : 'Falla'}
-      style={{ color, filter: `drop-shadow(0 0 4px ${color})`, flexShrink: 0 }}>
+      className="detcard-check" style={{ color, filter: `drop-shadow(0 0 4px ${color})` }}>
       <circle cx="12" cy="12" r="9.5" fill="none" stroke="rgba(56,189,255,.18)" strokeWidth="2" />
       <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" strokeWidth="2" />
       {status === 'ok' && (
@@ -206,17 +199,18 @@ export function CheckStatusIcon({ status }: { status: 'ok' | 'fail' | 'skip' }) 
 // Fixed-size poster (300px, 2:3) used at the top of every dedicated detail
 // page, next to the title/action-buttons header.
 export function DetailPoster({ url, alt, fallbackIcon }: { url?: string | null; alt: string; fallbackIcon: React.ReactNode }) {
+  // La altura sale de DETAIL_CARD_HEIGHT (constante del módulo): en línea.
   return (
-    <div className="detail-poster" style={{ flexShrink: 0, height: DETAIL_CARD_HEIGHT, maxWidth: '100%', aspectRatio: '2 / 3', borderRadius: 10, overflow: 'hidden' }}>
+    <div className="detail-poster detcard-poster" style={{ height: DETAIL_CARD_HEIGHT }}>
       {url ? (
         <img
           src={url}
           alt={alt}
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          className="detcard-poster-img"
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
         />
       ) : (
-        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 88, opacity: 0.35 }}>
+        <div className="detcard-poster-vacio">
           {fallbackIcon}
         </div>
       )}

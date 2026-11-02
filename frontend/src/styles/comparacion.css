@@ -1,0 +1,99 @@
+/* Comparaciones (EmuComparisonSection y SourceComparisonModal): estilos que antes iban en línea. Prefijo comp-.
+   Las reglas que retocan una celda de `.data-table` o un `.detail-card` llevan el selector tan específico
+   como la regla base o más (`.data-table td.comp-...`): una clase suelta perdería contra ellas. */
+
+/* Modales */
+.modal-wide.comp-modal-emu { max-width: calc(var(--vw100) * 0.95); width: max-content; }
+.modal-wide.comp-modal-fuente { max-width: 620px; }
+.modal-wide.comp-modal-fuente-detalle { max-width: 980px; }
+
+/* eMuwarez: chip y mensajes */
+.comp-icono-marca { display: inline-flex; }
+.comp-mensaje { color: var(--text-muted); font-size: 13px; }
+.comp-veredicto {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.comp-veredicto-txt { font-weight: 600; }
+.comp-veredicto-txt.comp-secundario { color: var(--text-secondary); }
+.comp-veredicto-txt.comp-acento { color: var(--color-accent-soft); }
+.comp-veredicto-txt.comp-disponible { color: var(--color-available); }
+.comp-veredicto-txt.comp-pendiente { color: var(--color-req-pending); }
+.comp-chip-aporte {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--color-available) 14%, transparent);
+  color: var(--color-available);
+  border: 1px solid color-mix(in srgb, var(--color-available) 30%, transparent);
+}
+
+/* eMuwarez: tabla */
+.comp-scroll-x { overflow-x: auto; }
+.data-table.comp-tabla { font-size: 12.5px; width: calc(100% - 1px); }
+.comp-th-icono { display: inline-flex; align-items: center; gap: 4px; }
+.data-table tr.comp-fila-tuya { background: color-mix(in srgb, var(--color-available) 6%, transparent); }
+.data-table tr.comp-fila-coincide { background: color-mix(in srgb, var(--text-accent) 8%, transparent); }
+.data-table td.comp-nowrap { white-space: nowrap; }
+.data-table td.comp-tuya { font-weight: 600; white-space: nowrap; }
+.data-table td.comp-origen { color: var(--text-muted); white-space: nowrap; }
+.data-table td.comp-vacio { color: var(--text-muted); }
+.data-table td.comp-nombre {
+  max-width: 1000px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+/* Source: tabla de tres columnas */
+.detail-card.comp-caja { border-radius: 8px; }
+.detail-card.comp-caja-scroll { border-radius: 8px; overflow-x: auto; }
+.detail-card.comp-caja-resumen { border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+.comp-tabla-fuente { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+.comp-tabla-evidencia { width: 100%; border-collapse: collapse; font-size: 11.5px; min-width: 820px; }
+.comp-th {
+  text-align: left;
+  padding: 8px 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface);
+}
+th.comp-th.comp-th-evidencia { min-width: 160px; }
+th.comp-th.comp-th-etiqueta { text-align: right; min-width: 68px; }
+th.comp-th.comp-th-ganadora { color: var(--color-available); }
+.comp-fila-borde { border-top: 1px solid var(--border); }
+.comp-fila-total { border-top: 2px solid var(--border-hover); font-weight: 700; }
+.comp-celda-mono { padding: 7px 12px; font-family: var(--font-mono); }
+.comp-celda-evidencia { padding: 6px 10px; }
+.comp-celda-valor { padding: 6px 10px; text-align: right; font-family: var(--font-mono); }
+.comp-celda-valor.comp-nulo { color: var(--text-muted); }
+.comp-celda-valor.comp-positivo { color: var(--color-available-soft); }
+.comp-celda-valor.comp-negativo { color: var(--color-error-soft); }
+.comp-celda-valor.comp-ganadora { background: color-mix(in srgb, var(--color-available) 6%, transparent); }
+.comp-celda-total { padding: 7px 10px; }
+.comp-celda-total.comp-valor { text-align: right; font-family: var(--font-mono); }
+.comp-celda-total.comp-ganadora {
+  color: var(--color-available);
+  background: color-mix(in srgb, var(--color-available) 10%, transparent);
+}
+.comp-celda-confianza { padding: 5px 10px; font-size: 11px; color: var(--text-muted); }
+.comp-celda-confianza.comp-valor { text-align: right; font-family: var(--font-mono); }
+.comp-celda-confianza.comp-ganadora { color: var(--color-available); }
+.comp-etiqueta-evidencia { display: inline-flex; align-items: center; gap: 5px; }
+
+/* Source: resumen del motor */
+.comp-detalle { margin-top: 14px; }
+.comp-resumen { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 12.5px; }
+.comp-explicacion { font-size: 12.5px; color: var(--text-secondary); margin: 10px 0 0; }
+.comp-explicacion.comp-segunda { margin-top: 6px; }
+.comp-contradicciones { margin-top: 8px; }
+.comp-contradicciones-titulo { font-size: 12px; color: var(--text-muted); }
+.comp-contradiccion { font-size: 12px; color: var(--color-req-pending); margin: 4px 0 0; }

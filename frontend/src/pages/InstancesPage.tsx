@@ -231,13 +231,13 @@ export function InstancesPage() {
   }
 
   return (
-    <div data-tour="instances-content" style={{ height: '100%' }}>
+    <div data-tour="instances-content" className="inst-pagina">
       <div className="page-header">
         <div>
           <div className="page-title">Instancias</div>
           <div className="page-subtitle">Gestiona tus instancias Radarr y Sonarr</div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="inst-cabecera-acciones">
           <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(!showAdd)}>
             {showAdd ? 'Cancelar' : '+ Añadir instancia'}
           </button>
@@ -246,10 +246,10 @@ export function InstancesPage() {
 
       {/* Add form */}
       {showAdd && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, marginBottom: 14 }}>Nueva instancia</div>
+        <div className="card inst-nueva">
+          <div className="inst-nueva-titulo">Nueva instancia</div>
           <form onSubmit={handleAdd}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
+            <div className="inst-rejilla-200">
               <div className="form-group">
                 <label className="form-label">Tipo</label>
                 <select className="form-input form-select" value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value as InstanceKind }))}>
@@ -270,20 +270,21 @@ export function InstancesPage() {
                 <input className="form-input" type="password" placeholder="API key" value={form.api_key} onChange={e => setForm(p => ({ ...p, api_key: e.target.value }))} />
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
+            <div className="inst-checks">
               <label className="checkbox-label"><input type="checkbox" checked={form.is_4k} onChange={e => setForm(p => ({ ...p, is_4k: e.target.checked }))} /> 4K</label>
               <label className="checkbox-label"><input type="checkbox" checked={form.is_anime} onChange={e => setForm(p => ({ ...p, is_anime: e.target.checked }))} /> Anime</label>
             </div>
-            {addError && <div className="alert alert-error" style={{ marginBottom: 12 }}>{addError}</div>}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {addError && <div className="alert alert-error inst-error">{addError}</div>}
+            <div className="inst-botones">
               <button type="submit" className="btn btn-primary btn-sm" disabled={adding}>
                 {adding ? 'Probando conexión…' : 'Añadir'}
               </button>
               <button type="button" className="btn btn-secondary btn-sm" onClick={handleAddTest} disabled={addTesting}>
                 {addTesting ? 'Probando…' : 'Probar conexión'}
               </button>
+              {/* Color calculado según el resultado de la prueba. */}
               {addTestResult && (
-                <span style={{ fontSize: 12, color: testResultColor(addTestResult) }}>
+                <span className="inst-prueba-resultado" style={{ color: testResultColor(addTestResult) }}>
                   {testResultLabel(addTestResult)}
                 </span>
               )}
@@ -305,12 +306,12 @@ export function InstancesPage() {
           action={<button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Añadir instancia</button>}
         />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="inst-lista">
           {instances.map(inst => (
             <div key={inst.id} className="instance-card">
               {editingId === inst.id && editForm ? (
-                <div style={{ width: '100%' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 10 }}>
+                <div className="inst-edicion">
+                  <div className="inst-rejilla-180">
                     <div className="form-group">
                       <label className="form-label">Nombre</label>
                       <input className="form-input" value={editForm.name} onChange={e => setEditForm(p => p && ({ ...p, name: e.target.value }))} maxLength={15} />
@@ -324,13 +325,13 @@ export function InstancesPage() {
                       <input type="password" className="form-input" placeholder={inst.api_key_masked} value={editForm.api_key} onChange={e => setEditForm(p => p && ({ ...p, api_key: e.target.value }))} />
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 16, marginBottom: 10, alignItems: 'center' }}>
+                  <div className="inst-checks inst-checks-edicion">
                     <label className="checkbox-label"><input type="checkbox" checked={editForm.is_4k} onChange={e => setEditForm(p => p && ({ ...p, is_4k: e.target.checked }))} /> 4K</label>
                     <label className="checkbox-label"><input type="checkbox" checked={editForm.is_anime} onChange={e => setEditForm(p => p && ({ ...p, is_anime: e.target.checked }))} /> Anime</label>
                     <label className="checkbox-label"><input type="checkbox" checked={editForm.enabled} onChange={e => setEditForm(p => p && ({ ...p, enabled: e.target.checked }))} /> Activada</label>
                   </div>
-                  {editError && <div className="alert alert-error" style={{ marginBottom: 10 }}>{editError}</div>}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  {editError && <div className="alert alert-error inst-error inst-error-edicion">{editError}</div>}
+                  <div className="inst-botones">
                     <button className="btn btn-primary btn-sm" onClick={() => handleUpdate(inst)} disabled={editSaving}>
                       {editSaving ? 'Guardando…' : 'Guardar cambios'}
                     </button>
@@ -338,8 +339,9 @@ export function InstancesPage() {
                       {editTesting ? 'Probando…' : 'Probar conexión'}
                     </button>
                     <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancelar</button>
+                    {/* Color calculado según el resultado de la prueba. */}
                     {editTestResult && (
-                      <span style={{ fontSize: 12, color: testResultColor(editTestResult) }}>
+                      <span className="inst-prueba-resultado" style={{ color: testResultColor(editTestResult) }}>
                         {testResultLabel(editTestResult)}
                       </span>
                     )}
@@ -352,20 +354,20 @@ export function InstancesPage() {
                     <div className="instance-card-meta">
                       <div className="instance-card-name">
                         <ServiceLabel type={inst.type} label={inst.name} size={14} />
-                        {inst.is_4k && <span className="badge status-queued" style={{ padding: '1px 6px' }}>4K</span>}
-                        {inst.is_anime && <span className="badge status-uploading" style={{ padding: '1px 6px' }}>Anime</span>}
-                        {!inst.enabled && <span className="badge status-unknown" style={{ padding: '1px 6px' }}>Desactivada</span>}
+                        {inst.is_4k && <span className="badge status-queued inst-etiqueta">4K</span>}
+                        {inst.is_anime && <span className="badge status-uploading inst-etiqueta">Anime</span>}
+                        {!inst.enabled && <span className="badge status-unknown inst-etiqueta">Desactivada</span>}
                       </div>
                       <div className="instance-card-url">{inst.url}</div>
                       {/* Tres datos sueltos: cada uno en su hueco, no cosidos con puntos. */}
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, display: 'flex', flexWrap: 'wrap', columnGap: 16 }}>
+                      <div className="inst-datos">
                         <span>API key: {inst.api_key_masked}</span>
                         <span>Añadida: {formatDate(inst.created_at)}</span>
                         {inst.last_test_status && <span>Último test: {inst.last_test_status}</span>}
                       </div>
                       {(testResults[inst.id] || syncResults[inst.id]) && (
-                        <div style={{ fontSize: 12, marginTop: 4, color: 'var(--text-secondary)' }}>
-                          {testResults[inst.id] && <span style={{ marginRight: 12 }}>{testResults[inst.id]}</span>}
+                        <div className="inst-resultados">
+                          {testResults[inst.id] && <span className="inst-resultado-prueba">{testResults[inst.id]}</span>}
                           {syncResults[inst.id] && <span>{syncResults[inst.id]}</span>}
                         </div>
                       )}

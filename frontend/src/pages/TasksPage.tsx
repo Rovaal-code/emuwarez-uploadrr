@@ -67,8 +67,8 @@ function LogsModal({ taskKey, taskName, onClose }: { taskKey: string; taskName: 
   useEffect(() => { load() }, [load])
 
   return (
-    <Modal titulo={<>Logs: {taskName}</>} onClose={onClose} style={{ maxWidth: 700 }}>
-      <div className="modal-body" style={{ maxHeight: 480, overflowY: 'auto' }}>
+    <Modal titulo={<>Logs: {taskName}</>} onClose={onClose} className="tareas-modal-logs">
+      <div className="modal-body tareas-logs-cuerpo">
         {loading ? <p>Cargando…</p> : logs.length === 0 ? (
           <p className="text-muted">Sin ejecuciones registradas todavía.</p>
         ) : (
@@ -79,12 +79,15 @@ function LogsModal({ taskKey, taskName, onClose }: { taskKey: string; taskName: 
             <tbody>
               {logs.map(log => (
                 <tr key={log.id}>
-                  <td><span style={{ color: statusColor(log.status), fontSize: 12, fontWeight: 600 }}>{statusLabel(log.status)}</span></td>
-                  <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(log.started_at)}</td>
-                  <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(log.finished_at)}</td>
-                  <td style={{ fontSize: 12 }}>
+                  <td>
+                    {/* Color calculado según el estado. */}
+                    <span className="tareas-log-estado" style={{ color: statusColor(log.status) }}>{statusLabel(log.status)}</span>
+                  </td>
+                  <td className="tareas-log-fecha">{formatDate(log.started_at)}</td>
+                  <td className="tareas-log-fecha">{formatDate(log.finished_at)}</td>
+                  <td className="tareas-log-resumen">
                     {log.status === 'failed' && log.summary
-                      ? <span style={{ color: 'var(--color-error)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconoAviso />{log.summary}</span>
+                      ? <span className="tareas-error-linea"><IconoAviso />{log.summary}</span>
                       : (log.summary ?? '—')}
                   </td>
                 </tr>
@@ -93,9 +96,9 @@ function LogsModal({ taskKey, taskName, onClose }: { taskKey: string; taskName: 
           </table>
         )}
       </div>
-      <div className="detail-panel__actions" style={{ padding: '10px 16px' }}>
+      <div className="detail-panel__actions tareas-logs-acciones">
         <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>Actualizar</button>
-        <button className="btn btn-secondary" onClick={onClose} style={{ marginLeft: 'auto' }}>Cerrar</button>
+        <button className="btn btn-secondary tareas-a-la-derecha" onClick={onClose}>Cerrar</button>
       </div>
     </Modal>
   )
@@ -132,8 +135,8 @@ function OpcionDeTarea({ taskKey, opcion, onChanged, onMsg }: {
 
   if (opcion.minimo === 0 && opcion.maximo === 1) {
     return (
-      <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
-        <label className="checkbox-label" style={{ fontSize: 13 }}>
+      <div className="form-group tareas-sin-margen tareas-ancho-total">
+        <label className="checkbox-label tareas-check">
           <input type="checkbox" checked={opcion.valor === 1} onChange={e => enviar(e.target.checked ? 1 : 0)} /> {opcion.etiqueta}
         </label>
         {opcion.nota && <span className="form-hint">{opcion.nota}</span>}
@@ -142,7 +145,7 @@ function OpcionDeTarea({ taskKey, opcion, onChanged, onMsg }: {
   }
 
   return (
-    <div className="form-group" style={{ marginBottom: 0 }}>
+    <div className="form-group tareas-sin-margen">
       <label className="form-label">{opcion.etiqueta}</label>
       <input
         className="form-input"
@@ -230,23 +233,19 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
   return (
     <div className="placeholder-card">
       {logsOpen && <LogsModal taskKey={task.task_key} taskName={task.name} onClose={() => setLogsOpen(false)} />}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+      <div className="tareas-cabecera">
         <div>
-          <h3 style={{ marginTop: 0, marginBottom: 4 }}>{task.name}</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, maxWidth: 480 }}>{task.description}</p>
+          <h3 className="tareas-titulo">{task.name}</h3>
+          <p className="tareas-descripcion">{task.description}</p>
         </div>
-        <span style={{
-          fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
-          color: statusColor(task.last_status),
-          background: 'color-mix(in srgb, var(--overlay-light) 4%, transparent)',
-          whiteSpace: 'nowrap',
-        }}>
+        {/* Color calculado según el estado. */}
+        <span className="tareas-estado" style={{ color: statusColor(task.last_status) }}>
           {task.last_status ? statusLabel(task.last_status) : 'sin ejecutar'}
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginTop: 16 }}>
-        <div className="form-group" style={{ marginBottom: 0 }}>
+      <div className="tareas-rejilla-160">
+        <div className="form-group tareas-sin-margen">
           <label className="form-label">Cuándo</label>
           <select
             className="form-input form-select"
@@ -260,7 +259,7 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
         </div>
 
         {horaFija ? (
-          <div className="form-group" style={{ marginBottom: 0 }}>
+          <div className="form-group tareas-sin-margen">
             <label className="form-label">Hora</label>
             <input
               className="form-input"
@@ -272,7 +271,7 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
             <span className="form-hint">Cada día, hora de {task.timezone}</span>
           </div>
         ) : (
-          <div className="form-group" style={{ marginBottom: 0 }}>
+          <div className="form-group tareas-sin-margen">
             <label className="form-label">Intervalo</label>
             <select
               className="form-input form-select"
@@ -289,18 +288,18 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
         )}
 
         <div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Última ejecución</div>
-          <div style={{ fontSize: 13 }}>{formatDate(task.last_run_at)}</div>
+          <div className="tareas-dato-etiqueta">Última ejecución</div>
+          <div className="tareas-dato-valor">{formatDate(task.last_run_at)}</div>
         </div>
 
         <div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Próxima ejecución</div>
-          <div style={{ fontSize: 13 }}>{formatCountdown(task.next_run_at, now)}</div>
+          <div className="tareas-dato-etiqueta">Próxima ejecución</div>
+          <div className="tareas-dato-valor">{formatCountdown(task.next_run_at, now)}</div>
         </div>
       </div>
 
       {task.opciones.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginTop: 14 }}>
+        <div className="tareas-rejilla-200">
           {task.opciones.map(o => (
             <OpcionDeTarea key={o.clave} taskKey={task.task_key} opcion={o} onChanged={onChanged} onMsg={setMsg} />
           ))}
@@ -309,19 +308,19 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
 
       {task.last_summary && (
         task.last_status === 'failed'
-          ? <p style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 10, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}><IconoAviso />{task.last_summary}</p>
-          : <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, marginBottom: 0 }}>{task.last_summary}</p>
+          ? <p className="tareas-resumen tareas-resumen-error"><IconoAviso />{task.last_summary}</p>
+          : <p className="tareas-resumen">{task.last_summary}</p>
       )}
 
-      {msg && <p style={{ fontSize: 12, marginTop: 10, marginBottom: 0 }}>{msg}</p>}
+      {msg && <p className="tareas-mensaje">{msg}</p>}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+      <div className="tareas-acciones">
         {task.manual_allowed ? (
           <button className="btn btn-secondary btn-sm" onClick={handleRunNow} disabled={running}>
             {running ? 'Ejecutando…' : 'Ejecutar ahora'}
           </button>
         ) : (
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>
+          <span className="tareas-sin-manual">
             Sin refresco manual (para no saturar el servicio). Próxima automática: {formatCountdown(task.next_run_at, now)}
           </span>
         )}
@@ -367,7 +366,7 @@ export function TasksPage() {
       </div>
 
       {loading ? <LoadingState label="Cargando tareas…" /> : error ? <ErrorState message={error} onRetry={load} /> : (
-        <div data-tour="tasks-content" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div data-tour="tasks-content" className="tareas-lista">
           {tasks.map(task => (
             <TaskCard key={task.task_key} task={task} onChanged={load} />
           ))}

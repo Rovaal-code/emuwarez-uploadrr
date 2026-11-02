@@ -42,8 +42,8 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
       : null)
 
   return (
-    <div style={{ marginTop: 28, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 2 }}>
+    <div className="hijos-seccion">
+      <div className="hijos-titulo">
         {title}
         {/* La flecha apunta a donde va a ir la tabla: arriba para comerse el
             hueco de la ficha, abajo para devolvérselo. Mismo .tree-expander
@@ -64,19 +64,19 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
         )}
       </div>
       {loading ? (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando…</div>
+        <div className="hijos-aviso">Cargando…</div>
       ) : children.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emptyLabel}</div>
+        <div className="hijos-aviso">{emptyLabel}</div>
       ) : (
-        <div className="activity-section" style={{ marginBottom: 0, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="activity-section hijos-caja">
           {/* Fills the remaining space below the detail page's fixed-height
               content (poster/fields/comparison) — same fill+internal-scroll
               pattern as Biblioteca's own list table. */}
-          <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+          <div className="hijos-scroll">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: '100%' }}>Título</th>
+                  <th className="hijos-col-titulo">Título</th>
                   <th>Tipo</th>
                   <th>Origen</th>
                   <th>Estado</th>

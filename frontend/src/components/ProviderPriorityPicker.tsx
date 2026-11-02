@@ -17,7 +17,7 @@ export interface ProviderOption {
 // the same list Configuración has, not meant to send you off-app mid-setup.
 function ProviderIcon({ domain, size = 16, link = true }: { domain?: string | null; size?: number; link?: boolean }) {
   const { triggerProps, tooltipNode } = useTooltip(domain && link ? `Abrir ${domain}` : null)
-  const icon = <Favicon domain={domain} size={size} fallback={<span style={{ display: 'inline-flex', opacity: 0.4 }}><IconoPelicula /></span>} />
+  const icon = <Favicon domain={domain} size={size} fallback={<span className="provprio-sin-icono"><IconoPelicula /></span>} />
   if (!domain || !link) return icon
   return (
     <a
@@ -26,7 +26,7 @@ function ProviderIcon({ domain, size = 16, link = true }: { domain?: string | nu
       rel="noreferrer"
       onClick={e => e.stopPropagation()}
       draggable={false}
-      style={{ display: 'flex', flexShrink: 0 }}
+      className="provprio-enlace"
       {...triggerProps}
     >
       {icon}
@@ -44,7 +44,7 @@ function RemoveProviderButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, padding: '2px 6px' }}
+      className="provprio-quitar"
       {...triggerProps}
     >
       ✕
@@ -100,7 +100,7 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
     <>
     <div className="provider-card__body">
       {order.length === 0 && (
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>
+        <p className="provprio-aviso">
           Ningún proveedor activado: se añadirán por orden de prioridad.
         </p>
       )}
@@ -109,27 +109,22 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
           <SortableList etiqueta={code => options.find(p => p.code === code)?.label ?? code} ids={order} onChange={onChange} renderRow={(code, idx, { dragging, handleProps }) => {
             const opt = options.find(p => p.code === code)
             return (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, fontSize: 13,
-                background: dragging ? 'color-mix(in srgb, var(--color-primary) 15%, transparent)' : 'color-mix(in srgb, var(--color-uploading) 6%, transparent)',
-                border: `1px solid ${dragging ? 'var(--text-accent)' : 'var(--border)'}`,
-                minWidth: 0,
-              }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center', flexShrink: 0 }}>{idx + 1}</span>
+              <div className={`provprio-fila${dragging ? ' provprio-fila-arrastrando' : ''}`}>
+                <span className="provprio-numero">{idx + 1}</span>
                 <HoverTitle
                   as="span"
                   tip="Arrastra para reordenar, o usa las flechas del teclado"
                   {...handleProps}
-                  className="drag-handle"
-                  style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8, flexShrink: 0 }}
+                  className="drag-handle provprio-asa"
+                  style={handleProps.style}
                 ><DragHandleIcon /></HoverTitle>
                 <ProviderIcon domain={opt?.domain} size={16} link={linkIcons} />
                 {/* minWidth: 0 para que el flex:1 pueda encogerse por debajo
                     del ancho natural del texto; sin esto, un nombre largo
                     (o la tarjeta estrecha de abajo de 300px) empujaba el
                     botón de quitar fuera de la tarjeta en vez de truncar. */}
-                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {opt?.label ?? code} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({code})</span>
+                <span className="provprio-nombre">
+                  {opt?.label ?? code} <span className="provprio-codigo">({code})</span>
                 </span>
                 <RemoveProviderButton onClick={() => disable(code)} />
               </div>
@@ -145,18 +140,17 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
     </div>
 
       {showAdd && (
-        <Modal titulo="Añadir proveedor de vídeo" onClose={() => setShowAdd(false)} style={{ maxWidth: 480 }}>
+        <Modal titulo="Añadir proveedor de vídeo" onClose={() => setShowAdd(false)} className="provprio-modal">
           <div className="modal-body">
             {available.length === 0 ? (
-              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ya están todos añadidos.</p>
+              <p className="provprio-todos">Ya están todos añadidos.</p>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: 'calc(var(--vh100) * 0.55)', overflowY: 'auto' }}>
+              <div className="provprio-rejilla">
                 {available.map(opt => (
                   <button
                     key={opt.code}
                     type="button"
-                    className="btn btn-ghost btn-sm"
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', justifySelf: 'start', fontSize: 12 }}
+                    className="btn btn-ghost btn-sm provprio-opcion"
                     onClick={() => enable(opt.code)}
                   >
                     <Favicon domain={opt.domain} size={16} fallback={<IconoPelicula />} />

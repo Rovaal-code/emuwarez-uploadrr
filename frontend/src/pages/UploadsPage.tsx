@@ -22,6 +22,8 @@ import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText,
 } from '../utils/uploadStatus'
+import { useSeeding, type SeedingEstado } from '../hooks/useSeeding'
+import { SeedingCelda } from '../components/SaludSeeding'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { useAlSalir, useSeccionVisible } from '../context/SeccionVisible'
 import { IconoSubida, IconoTipo } from '../components/Iconos'
@@ -130,8 +132,9 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
 // One table row — used both for the latest attempt in a retry chain (normal
 // row) and for its older attempts (indented/muted, revealed by expanding the
 // Reintentos toggle). `retryToggle` is only passed on the latest-attempt row.
-function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry, onDelete }: {
+function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel, onRetry, onDelete }: {
   job: UploadJob
+  seeding: SeedingEstado
   instances: InstanceSafeResponse[]
   onOpen: () => void
   indent?: boolean
@@ -247,6 +250,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
           </span>
         ) : '—'}
       </td>
+      <td className="sub-nowrap"><SeedingCelda job={job} seeding={seeding} /></td>
       <td className="sub-muted sub-t11 sub-nowrap">{formatDateTimeSeconds(job.created_at ?? null)}</td>
       <td className="sub-muted sub-t11 sub-nowrap">{formatDateTimeSeconds(job.finished_at ?? null)}</td>
       <td className="col-prioridad-baja sub-muted sub-t12">
@@ -307,6 +311,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [jobs, setJobs] = useState<UploadJob[]>([])
   // Only needed to build the Origen deep link (same as Biblioteca's own column).
   const instances = useInstancias()
+  // El seeding de qBittorrent: se lee al entrar y con «Actualizar» del detalle, sin reloj.
+  const seeding = useSeeding()
   // Volver aquí no vuelve a enseñar "Cargando…" ni reinicia los filtros: la
   // sección no se desmonta al cambiar de pestaña, se queda montada y oculta
   // (ver AppShell). Esto solo corre la PRIMERA vez que se entra.
@@ -389,6 +395,13 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try { sessionStorage.removeItem('emuwarez_open_upload') } catch { /* ignore */ }
     openUpload(Number(pending))
   }, [cargado, subidasALaVista])
+
+  // La sección sigue montada al cambiar de pestaña: el seeding se vuelve a leer cada vez que se ve (el servidor lo
+  // guarda 60 s, así que no es una consulta más a qBittorrent).
+  const recargarSeeding = seeding.cargar
+  useEffect(() => {
+    if (subidasALaVista) recargarSeeding()
+  }, [subidasALaVista, recargarSeeding])
 
   function quitarFiltros() {
     setSearch('')
@@ -628,6 +641,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           onCancel={id => handleCancel(id)}
           onDelete={j => setDeleteJob(j)}
           onOpenLibraryItem={goToLibraryItem}
+          seeding={seeding}
           retryError={retryError}
         />
         {modals}
@@ -686,6 +700,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     { value: '', label: 'Todos' }, ...STATUS_OPTIONS.filter(Boolean).map(s => ({ value: s, label: statusLabel(s) })),
                   ]} /></th>
                   <th>Progreso</th>
+                  <th>Seeding</th>
                   <th>Creado</th>
                   <th>Finalizado</th>
                   <th className="col-prioridad-baja">Duración</th>
@@ -695,7 +710,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
               </thead>
               {visibleJobs.length === 0 && filtrando && (
                 <FilaVacia
-                  columnas={11}
+                  columnas={12}
                   icon={<IconoSubida />}
                   title="Sin resultados"
                   body={hayMas
@@ -718,6 +733,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                       <JobRow
                         job={job}
                         instances={instances}
+                        seeding={seeding}
                         onOpen={() => openUpload(job.id!)}
                         retryToggle={ancestors.length > 0 ? { count: ancestors.length, expanded, onClick: () => toggleChain(job.id!) } : undefined}
                         onCancel={handleCancel}
@@ -725,7 +741,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                         onRetry={handleRetryQueued}
                       />
                       {expanded && ancestors.map(a => (
-                        <JobRow key={a.id} job={a} instances={instances} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} onDelete={setDeleteJob} />
+                        <JobRow key={a.id} job={a} instances={instances} seeding={seeding} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} onDelete={setDeleteJob} />
                       ))}
                     </Fragment>
                   )

@@ -80,6 +80,7 @@ const REC_GROUP_META: Record<number, {
 // tests/test_copias_frontend.py.
 const TASK_NAME_LABEL: Record<string, string> = {
   'sync-library': 'Sincronizar bibliotecas',
+  'vigilar-instancias': 'Vigilar instancias',
   'check-version': 'Comprobar versión',
   'sync-emu-requests': 'Sincronizar peticiones eMuwarez',
   'sync-emu-catalog': 'Sincronizar catálogo eMuwarez',

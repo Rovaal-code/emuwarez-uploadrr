@@ -208,6 +208,19 @@ def test_la_comprobacion_es_la_de_la_prueba_de_conexion_con_un_plazo_corto(conn,
     assert http_falso.ultima.extensions["timeout"]["read"] == vig.PLAZO_COMPROBACION
 
 
+def test_una_url_mal_formada_es_que_no_responde_y_no_corta_la_vigilancia_de_las_demas(conn, arr, instancias, reloj, monkeypatch):
+    original = vig.arr_request
+
+    def rota(metodo, url, *args, **kwargs):
+        if "sonarr" in url:
+            raise ValueError("URL mal formada")
+        return original(metodo, url, *args, **kwargs)
+
+    monkeypatch.setattr(vig, "arr_request", rota)
+    vig.vigilar_instancias(conn)
+    assert sorted(vig._respondia.values()) == [False, True]
+
+
 @pytest.mark.parametrize("fallo", [lambda: respuesta(500), lambda: respuesta(401), lambda: falla_conexion()])
 def test_un_5xx_una_clave_mala_o_una_conexion_rechazada_es_que_no_responde(conn, arr, http_falso, fallo):
     http_falso.responde(fallo())

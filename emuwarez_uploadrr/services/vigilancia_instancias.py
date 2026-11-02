@@ -17,7 +17,7 @@ import logging
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
-from ..integrations.arr_base import ArrClientError, arr_request, join_api_path
+from ..integrations.arr_base import arr_request, join_api_path
 from ..models import InstanceConfig
 from .instances import list_instances
 from .settings import leer_ajuste
@@ -44,7 +44,7 @@ def _responde(instance: InstanceConfig) -> bool:
     plazo, 5xx, clave mala), es que no responde."""
     try:
         arr_request("GET", join_api_path(instance.url, "system/status"), instance.api_key, timeout=PLAZO_COMPROBACION)
-    except ArrClientError:
+    except Exception:  # noqa: BLE001 — una URL mal formada tampoco responde y no puede cortar la vigilancia de las demás
         return False
     return True
 

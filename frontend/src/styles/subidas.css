@@ -246,3 +246,17 @@ input.sub-confirmar:not([type="checkbox"]):not([type="radio"]):not([type="range"
 input.sub-confirmar.sub-confirmar-ok:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
   border-color: var(--color-available-soft);
 }
+
+/* Rellenar petición: la URL del torrent para copiarla a mano cuando el navegador no deja hacerlo solo. */
+.rellenar-texto { margin: 0 0 10px; font-size: 13.5px; line-height: 1.5; }
+.rellenar-url {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}

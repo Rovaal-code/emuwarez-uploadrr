@@ -1,0 +1,218 @@
+/* Panel (DashboardPage): estilos que antes iban en línea. Prefijo panel-.
+   Se importa el último en main.tsx. Las reglas que retocan una celda de
+   `.data-table`, un `.badge`, un `.spinner`, un `.poster-thumb` o un bloque
+   `.activity-section`/`.upload-panel` llevan el selector tan específico como
+   la regla base o más (`.data-table td`, `.hud-app .activity-section`...):
+   una clase suelta perdería contra ellas. */
+
+/* Página */
+.panel-pagina {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.page-header.panel-cabecera { flex-shrink: 0; }
+.dashboard-grid.panel-rejilla { flex: 1; min-height: 0; }
+.panel-columna {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+}
+.activity-section.panel-bloque,
+.upload-panel.panel-bloque {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-bottom: 0;
+}
+.activity-section.panel-bloque.panel-grande,
+.upload-panel.panel-bloque.panel-grande { flex: 2; }
+.activity-section.panel-bloque.panel-chico,
+.upload-panel.panel-bloque.panel-chico { flex: 1; }
+.panel-tabla-scroll { overflow: auto; flex: 1; }
+.panel-atenuado { color: var(--text-muted); }
+
+/* Recomendaciones */
+.panel-rec-titulo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hover-link.panel-rec-nombre { font-weight: 500; min-width: 0; }
+.data-table td.panel-nowrap { white-space: nowrap; }
+.badge.panel-cat-1,
+.badge.panel-cat-2,
+.badge.panel-cat-3 {
+  color: var(--panel-cat);
+  background: color-mix(in srgb, var(--panel-cat) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--panel-cat) 35%, transparent);
+}
+.badge.panel-cat-1 { --panel-cat: var(--color-available); }
+.badge.panel-cat-2 { --panel-cat: var(--color-uploading); }
+.badge.panel-cat-3 { --panel-cat: var(--color-error); }
+
+/* Últimas tareas ejecutadas */
+.data-table td.panel-tarea-resumen {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.data-table td.panel-tarea-fecha {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Actividad de subida */
+.panel-ver-todas {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.panel-sin-subidas {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 10px 8px;
+}
+.upload-row.panel-fila-saliendo {
+  opacity: 0;
+  pointer-events: none;
+}
+.poster-thumb.panel-poster {
+  width: 36px;
+  height: 54px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.poster-thumb.panel-poster.panel-poster-peq { width: 28px; height: 42px; }
+.panel-poster-img { width: 100%; height: 100%; object-fit: cover; }
+.panel-poster-icono { font-size: 18px; opacity: 0.35; }
+.panel-poster-peq .panel-poster-icono { font-size: 14px; }
+.panel-fila-texto { flex: 1; min-width: 0; }
+.panel-fila-titulo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.panel-fila-tiempo {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.panel-fila-estado {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+.panel-fila-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.panel-fila-nota {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.panel-fila-fase {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 0;
+  overflow: hidden;
+}
+.panel-fila-fase-texto {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-fila-contador {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.spinner.panel-spinner-10 {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
+  flex-shrink: 0;
+}
+.panel-fila-duracion {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.panel-fila-progreso {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.progress-bar.panel-fila-barra { flex: 1; }
+.panel-fila-pct {
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* Conexiones */
+.panel-conexiones-cuerpo {
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+.panel-sin-conexiones { font-size: 12px; color: var(--text-muted); }
+.panel-conn-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.panel-conn-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.panel-conn-icono {
+  display: flex;
+  width: 18px;
+  justify-content: center;
+}
+.panel-conn-etiqueta {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tarjetas de cifras */
+.stat-cards-row.panel-cifras-fijas { flex-shrink: 0; }
+.panel-cifras-peticiones {
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+.panel-sub-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.panel-sub-lista.panel-sub-scroll {
+  max-height: 78px;
+  overflow-y: auto;
+}

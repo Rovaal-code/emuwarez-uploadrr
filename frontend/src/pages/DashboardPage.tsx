@@ -36,7 +36,7 @@ function RecOriginCell({ item, instances }: { item: DashboardRecommendationItem;
   const deepLink = buildDeepLink(item, instances)
   const label = INSTANCE_TYPE_LABEL[item.instance_type ?? ''] ?? item.instance_type ?? ''
   const { triggerProps, tooltipNode } = useTooltip(deepLink ? `Abrir en ${label}` : null)
-  if (!item.instance_type) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+  if (!item.instance_type) return <span className="panel-atenuado">—</span>
   return (
     <ValueChip linkable={!!deepLink}>
       {deepLink
@@ -62,17 +62,14 @@ type RecAction = 'view-request' | 'upload' | 'request'
 const REC_GROUP_META: Record<number, {
   category: string
   action: RecAction; actionLabel: string
-  color: string; bg: string; border: string
+  className: string
 }> = {
   1: { category: 'Petición compatible',
-       action: 'view-request', actionLabel: 'Ver petición',
-       color: 'var(--color-available)', bg: 'color-mix(in srgb, var(--color-available) 14%, transparent)', border: 'color-mix(in srgb, var(--color-available) 35%, transparent)' },
+       action: 'view-request', actionLabel: 'Ver petición', className: 'panel-cat-1' },
   2: { category: 'Contenido único',
-       action: 'upload', actionLabel: 'Subir a eMuwarez',
-       color: 'var(--color-uploading)', bg: 'color-mix(in srgb, var(--color-uploading) 14%, transparent)', border: 'color-mix(in srgb, var(--color-uploading) 35%, transparent)' },
+       action: 'upload', actionLabel: 'Subir a eMuwarez', className: 'panel-cat-2' },
   3: { category: 'Faltante',
-       action: 'request', actionLabel: 'Petición a eMuwarez',
-       color: 'var(--color-error)', bg: 'color-mix(in srgb, var(--color-error) 14%, transparent)', border: 'color-mix(in srgb, var(--color-error) 35%, transparent)' },
+       action: 'request', actionLabel: 'Petición a eMuwarez', className: 'panel-cat-3' },
 }
 
 // task_runs.name is the internal task key (services/scheduler.py's
@@ -103,16 +100,15 @@ function ConnRow({ icon, label, href, badge = 'Configurado', tone = 'ok' }: {
   const { triggerProps, tooltipNode } = useTooltip(href ? `Abrir ${label}` : null)
   const inner = (
     <>
-      <span style={{ display: 'flex', width: 18, justifyContent: 'center' }}>{icon}</span>
-      <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <span className="panel-conn-icono">{icon}</span>
+      <span className="panel-conn-etiqueta">{label}</span>
     </>
   )
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div className="panel-conn-fila">
       {href
-        ? <a className="hover-link" href={href} target="_blank" rel="noreferrer" {...triggerProps}
-             style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>{inner}{tooltipNode}</a>
-        : <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>{inner}</div>}
+        ? <a className="hover-link panel-conn-info" href={href} target="_blank" rel="noreferrer" {...triggerProps}>{inner}{tooltipNode}</a>
+        : <div className="panel-conn-info">{inner}</div>}
       <span className={`badge ${cls}`}>{badge}</span>
     </div>
   )
@@ -136,57 +132,55 @@ function FilaSubida({ job, yendose = false, compacta = false, onOpen }: {
   // pondera cada fase); se acota por si llega algo raro.
   const globalPct = Math.min(100, Math.max(0, Math.round(job.progress?.global_pct ?? 0)))
   return (
-    <HoverTitle className="upload-row" tip="Ver detalle de la subida" onClick={() => onOpen(job.id!)} style={{
-      // Terminada, se queda quieta ESPERA_MS y luego se va poco a
-      // poco. Las que se despiden van al final de la lista, así
-      // que al desaparecer no mueven de sitio a las de arriba.
-      opacity: yendose ? 0 : 1,
-      transition: `opacity ${DESVANECER_MS}ms ease-out`,
-      pointerEvents: yendose ? 'none' : undefined,
-    }}>
+    // Terminada, se queda quieta ESPERA_MS y luego se va poco a
+    // poco. Las que se despiden van al final de la lista, así
+    // que al desaparecer no mueven de sitio a las de arriba.
+    // En línea solo la duración, que es una constante del código.
+    <HoverTitle className={`upload-row${yendose ? ' panel-fila-saliendo' : ''}`} tip="Ver detalle de la subida" onClick={() => onOpen(job.id!)}
+      style={{ transition: `opacity ${DESVANECER_MS}ms ease-out` }}>
       {/* 36x54: el texto de la derecha ocupa unos 55 px (título 16,
           estado 17, barra con su % 11 y los huecos), así que el póster tiene
           que ser al menos eso para que la fila no crezca por debajo
           de él. Las recientes, sin barra, van al tamaño de Recomendaciones. */}
-      <div className="poster-thumb" style={{ width: compacta ? 28 : 36, height: compacta ? 42 : 54, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <div className={`poster-thumb panel-poster${compacta ? ' panel-poster-peq' : ''}`}>
         {job.poster_url ? (
           <img
             src={posterUrl(job.poster_url, 'w154')}
             alt=""
             loading="lazy"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            className="panel-poster-img"
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
-          <span style={{ fontSize: compacta ? 14 : 18, opacity: 0.35 }}>
+          <span className="panel-poster-icono">
             <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
           </span>
         )}
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+      <div className="panel-fila-texto">
+        <div className="panel-fila-titulo">
           <span className="upload-row-title">{job.title ?? `Job #${job.id}`}</span>
           {(totalElapsedText || terminada) && (
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+            <span className="panel-fila-tiempo">
               {totalElapsedText ?? timeAgo(job.finished_at ?? job.updated_at)}
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+        <div className="panel-fila-estado">
+          <div className="panel-fila-badges">
             <span className={`${STATUS_CLASS[job.status] || 'badge req-unknown'}${isPreparingOrRunning ? ' badge-blink' : ''}`}>{statusLabel(job.status)}</span>
             {job.status === 'queued' && (
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{queuedWaitText(job)}</span>
+              <span className="panel-fila-nota">{queuedWaitText(job)}</span>
             )}
             {isPreparingOrRunning && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', minWidth: 0, overflow: 'hidden' }}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{phaseLabelText}</span>
-                {phaseInfo?.counterText && <span style={{ flexShrink: 0, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{phaseInfo.counterText}</span>}
-                <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2, flexShrink: 0 }} />
+              <span className="panel-fila-fase">
+                <span className="panel-fila-fase-texto">{phaseLabelText}</span>
+                {phaseInfo?.counterText && <span className="panel-fila-contador">{phaseInfo.counterText}</span>}
+                <span className="spinner panel-spinner-10" />
               </span>
             )}
             {terminada && job.duration_seconds != null && (
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>en {formatSecondsHM(job.duration_seconds)}</span>
+              <span className="panel-fila-duracion">en {formatSecondsHM(job.duration_seconds)}</span>
             )}
           </div>
           {/* Progreso global, en la misma barra fina que usa el resto
@@ -194,11 +188,12 @@ function FilaSubida({ job, yendose = false, compacta = false, onOpen }: {
               cola no hay nada que medir todavía, y terminada la barra no dice
               nada que el estado no diga ya. */}
           {isPreparingOrRunning && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div className="progress-bar" style={{ flex: 1 }}>
+            <div className="panel-fila-progreso">
+              <div className="progress-bar panel-fila-barra">
+                {/* En línea: el avance es un valor calculado. */}
                 <div className="progress-fill" style={{ transform: `scaleX(${globalPct / 100})` }} />
               </div>
-              <span style={{ fontSize: 11, lineHeight: 1, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{globalPct}%</span>
+              <span className="panel-fila-pct">{globalPct}%</span>
             </div>
           )}
         </div>
@@ -427,7 +422,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const taskRuns = (taskActivity?.items ?? []).slice(0, 50)
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="panel-pagina">
       {wizardItem && (
         <UploadWizardModal item={wizardItem} preselect={wizardPreselect} onClose={() => setWizardItem(null)} onDone={() => { loadData(); loadActiveUploads() }} onNavigate={onNavigate} />
       )}
@@ -435,7 +430,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
       )}
 
-      <div className="page-header" style={{ flexShrink: 0 }}>
+      <div className="page-header panel-cabecera">
         <div>
           <div className="page-title">Panel</div>
         </div>
@@ -446,12 +441,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       {/* Main grid — fills the remaining height exactly (flex:1, minHeight:0)
           so the page itself never scrolls; each panel below keeps its own
           internal scroll via its inner `overflow: auto` div. */}
-      <div className="dashboard-grid" style={{ flex: 1, minHeight: 0 }}>
+      <div className="dashboard-grid panel-rejilla">
         {/* Left column — "Actividad reciente" (50vh) with "Últimas tareas
             ejecutadas" (25vh) stacked under it, so tasks sits parallel to the
             "Conexiones" card in the right column. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minHeight: 0 }}>
-          <div data-tour="dashboard-recommendations" className="activity-section" style={{ flex: 2, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
+        <div className="panel-columna">
+          <div data-tour="dashboard-recommendations" className="activity-section panel-bloque panel-grande">
             <div className="section-header">
               <div className="section-title">Recomendaciones</div>
             </div>
@@ -462,7 +457,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                 body="Sincroniza tu biblioteca, eMuwarez y las peticiones para ver aquí qué subir o pedir."
               />
             ) : (
-              <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
+              <div className="panel-tabla-scroll">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -480,44 +475,39 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                       return (
                       <tr key={`${item.rec_group}-${item.rec_request_id ?? item.id}`}>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div className="poster-thumb" style={{
-                              flexShrink: 0, width: 28, height: 42, borderRadius: 4, overflow: 'hidden',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
+                          <div className="panel-rec-titulo">
+                            <div className="poster-thumb panel-poster panel-poster-peq">
                               {item.poster_url ? (
                                 <img
                                   src={posterUrl(item.poster_url, 'w154')}
                                   alt=""
                                   loading="lazy"
-                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  className="panel-poster-img"
                                   onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                                 />
                               ) : (
-                                <span style={{ fontSize: 14, opacity: 0.35 }}>
+                                <span className="panel-poster-icono">
                                   <IconoTipo serie={item.item_type === 'series' || item.item_type === 'season' || item.item_type === 'episode'} />
                                 </span>
                               )}
                             </div>
-                            <HoverTitle className="hover-link" style={{ fontWeight: 500, minWidth: 0 }} onClick={() => openLibraryDetail(item)} tip="Ver ficha del contenido"><DetailTitleText title={item.content_name} /></HoverTitle>
+                            <HoverTitle className="hover-link panel-rec-nombre" onClick={() => openLibraryDetail(item)} tip="Ver ficha del contenido"><DetailTitleText title={item.content_name} /></HoverTitle>
                           </div>
                         </td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
+                        <td className="panel-nowrap">
                           <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{formatItemType(item.item_type)}</span></ValueChip>
                         </td>
-                        <td style={{ whiteSpace: 'nowrap' }}><RecOriginCell item={item} instances={connInstances} /></td>
+                        <td className="panel-nowrap"><RecOriginCell item={item} instances={connInstances} /></td>
                         <td>
-                          <span className="badge" style={{
-                            color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap',
-                          }}>{meta.category}</span>
+                          <span className={`badge ${meta.className}`}>{meta.category}</span>
                         </td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
+                        <td className="panel-nowrap">
                           {item.size_bytes
                             ? <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
-                            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                            : <span className="panel-atenuado">—</span>}
                         </td>
                         <td className="col-actions">
-                          <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => handleRecAction(item)}>
+                          <button className="btn btn-primary btn-sm" onClick={() => handleRecAction(item)}>
                             {meta.actionLabel}
                           </button>
                         </td>
@@ -531,7 +521,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           </div>
 
           {/* Últimas tareas ejecutadas — parallel to "Conexiones" on the right. */}
-          <div data-tour="dashboard-tasks" className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
+          <div data-tour="dashboard-tasks" className="activity-section panel-bloque panel-chico">
             <div className="section-header">
               <div className="section-title">Últimas tareas ejecutadas</div>
             </div>
@@ -542,7 +532,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                 body="Las sincronizaciones automáticas y manuales aparecerán aquí."
               />
             ) : (
-              <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
+              <div className="panel-tabla-scroll">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -560,9 +550,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                         <td>
                           <StatusBadge status={item.status ?? ''} type="task" />
                         </td>
-                        <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{item.summary ?? '—'}</td>
-                        <td style={{ color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{formatDate(item.started_at)}</td>
-                        <td style={{ color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{formatDate(item.finished_at)}</td>
+                        <td className="panel-tarea-resumen">{item.summary ?? '—'}</td>
+                        <td className="panel-tarea-fecha">{formatDate(item.started_at)}</td>
+                        <td className="panel-tarea-fecha">{formatDate(item.finished_at)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -575,11 +565,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         {/* Right — Actividad de subida: real running upload jobs, honest data only,
             and the last few that finished below them. Stretches to the full
             height of "Actividad reciente" on its left. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minHeight: 0 }}>
-          <div data-tour="dashboard-uploads" className="upload-panel" style={{ flex: 2, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="panel-columna">
+          <div data-tour="dashboard-uploads" className="upload-panel panel-bloque panel-grande">
             <div className="section-header">
               <div className="section-title">Actividad de subida</div>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+              <span className="panel-ver-todas">
                 <HoverTitle as="span" className="hover-link" onClick={() => onNavigate?.('uploads')} tip="Abrir Subidas">Ver todas</HoverTitle>
               </span>
             </div>
@@ -593,7 +583,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
               ) : (
                 <>
                   {filasDeSubida.length === 0
-                    ? <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '10px 8px' }}>No hay subidas en curso.</div>
+                    ? <div className="panel-sin-subidas">No hay subidas en curso.</div>
                     : filasDeSubida.map(({ job, yendose }) => <FilaSubida key={job.id} job={job} yendose={yendose} onOpen={goToUpload} />)}
                   {recientes.length > 0 && (
                     <>
@@ -607,11 +597,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           </div>
 
           {/* Estado de conexiones — misma altura que "Últimas tareas ejecutadas" */}
-          <div data-tour="dashboard-connections" className="upload-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div data-tour="dashboard-connections" className="upload-panel panel-bloque panel-chico">
             <div className="section-header">
               <div className="section-title">Conexiones</div>
             </div>
-            <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', flex: 1 }}>
+            <div className="panel-conexiones-cuerpo">
               {(() => {
                 const rows: React.ReactNode[] = []
                 const qbitUrl = connSettings?.qbit_url
@@ -641,7 +631,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                   rows.push(<ConnRow key="discord" icon={<ServiceIcon type="discord" size={16} />} label="Bot de Discord" />)
                 if (connSettings?.notify_telegram_bot_token_configured)
                   rows.push(<ConnRow key="telegram" icon={<ServiceIcon type="telegram" size={16} />} label="Bot de Telegram" />)
-                return rows.length ? rows : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin conexiones configuradas todavía.</div>
+                return rows.length ? rows : <div className="panel-sin-conexiones">Sin conexiones configuradas todavía.</div>
               })()}
             </div>
           </div>
@@ -654,14 +644,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           estado (disponible, faltante, compatible, parcial); el resto va en
           el color del texto. */}
       <div data-tour="dashboard-stats">
-      <div className="stat-cards-row" style={{ flexShrink: 0 }}>
+      <div className="stat-cards-row panel-cifras-fijas">
         <StatCard
           icon={ICON_LIBRARY}
           label="Biblioteca sincronizada"
           value={s.library_total}
           info="Total de películas y episodios importados desde tus instancias de Radarr y Sonarr."
         >
-          <div style={{ maxHeight: 78, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div className="panel-sub-lista panel-sub-scroll">
             <div className="stat-card-sub-row">
               <ServiceLabel type="radarr" label={`Radarr: ${formatNumero(s.radarr_items)}`} size={13} />
             </div>
@@ -693,7 +683,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           value={s.unique_content ?? 0}
           info="Contenido disponible que aún no está en eMuwarez: las películas, las temporadas completas de series o documentales y sus capítulos. Son tus oportunidades de subida."
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div className="panel-sub-lista">
             <div className="stat-card-sub-row"><IconoPelicula /> {formatNumero(s.unique_movies ?? 0)} películas</div>
             <div className="stat-card-sub-row"><IconoSerie /> {formatNumero(s.unique_seasons ?? 0)} temporadas, {formatNumero(s.unique_episodes ?? 0)} capítulos</div>
           </div>
@@ -710,7 +700,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       {/* eMuwarez requests — cards + a "Sincronizar peticiones" button below.
           20px bottom margin = the flex gap between the activity panels and
           their lower cards, so spacing above and below each panel matches. */}
-      <div style={{ marginBottom: 20, flexShrink: 0 }}>
+      <div className="panel-cifras-peticiones">
         <div className="stat-cards-row">
           <StatCard
             icon={ICON_REQUESTS}

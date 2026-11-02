@@ -141,6 +141,32 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - #145: Configuración no deja guardar si la carga falló (ofrece reintentar) ni pierde lo editado al guardar las
     rutas;
   - #146: la base ya no guarda la clave del indexador que traen la cola y el historial de Radarr/Sonarr.
+- **Oleada 4, primera tanda:**
+  - #155: en una tanda del asistente se salta un capítulo con la nomenclatura bloqueada y se cuenta como fallido, y una
+    película o un pack enseñan el error si fallan las comprobaciones (#152); Configuración descarta una lectura que
+    llega tarde y no deja guardar tras una recarga fallida (#153).
+  - #156: Vite 8.3, plugin-react 6 y Vitest 5 (React y TypeScript siguen igual). Solo afecta a la herramienta: el
+    `vite build` pasa de ~2,5 s a ~1,6 s y el bundle pesa lo mismo. `@codecov/vite-plugin` aún no declara Vite 8 y
+    lleva un `override` en `package.json`.
+  - #157 (N14): la tarea «Vigilar instancias» mira cada 5 min si responden Radarr y Sonarr y sincroniza la que vuelve
+    tras estar caída (nunca a la primera mirada de una que ya estaba viva). El estado va en memoria, para que un
+    reinicio no lance una sincronización en cadena; una misma instancia no se sincroniza más de una vez cada 15 min.
+    Se apaga en Configuración → Otros (`biblioteca.sincronizar_al_volver`, activado).
+  - #158 (N8 y N9): «Rellenar petición» en Subidas y en el detalle de una subida completada que cubría una petición:
+    copia la URL del torrent y abre la petición (si el navegador no deja copiar, un modal enseña la URL). Aviso
+    `request_new_ready` cuando la sincronización diaria encuentra una petición nueva que ya se puede rellenar: uno
+    por petición y en un solo mensaje; no avisa en la primera sincronización ni sobre una base incompleta (migración
+    49, `request_items.aviso_pendiente`, que también lo añade a la campana de quien ya guardó sus eventos).
+  - #159 (N12): migración 50 (`perfil_historial`): una instantánea al día de ratio, subido, bajado y bonus, que se
+    guarda donde se guarda el perfil y se vacía si el perfil pasa a ser de otro usuario. Página Estadísticas con
+    gráficos SVG a mano y una tabla con los datos. No guarda Hit & Run: es un contador que no cambia y ya sale en el
+    perfil del Panel.
+  - #160 (N11): `GET /api/uploads/seeding` lee de qBittorrent el estado, la ratio y lo subido de cada subida
+    completada (columna en Subidas y bloque en el detalle). Solo lectura, caché de 60 s, sin migración. Casa por la
+    ruta de contenido (la app no guarda el info-hash) y, si es ambiguo, dice «No se encuentra» en vez de adivinar.
+  - #161 (N16): `GET /api/widget` con cinco contadores para el widget `customapi` de Homepage y su propia clave de
+    solo lectura (`X-Api-Key` o `Bearer`; la base solo guarda su hash). Se genera en Configuración y solo abre ese
+    endpoint; sin clave responde 404. Ejemplo de `services.yaml` en `docs/DEPLOYMENT_DOCKER.md`.
 
 ## Siguiente (oleada 3)
 
@@ -149,29 +175,30 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
    tamaño: `LibraryPage` con `LibraryTreeRow`, `TasksPage`, `EmuComparisonSection` con `SourceComparisonModal`,
    `NomenclatureModal` con `UploadPreflightModal` e `InstancesPage`. Después, los componentes pequeños (`DetailCard`,
    `LogsPage`, `ProviderPriorityPicker`, `RequestFormModal`, `LibraryDetailPage`…).
-2. Issues abiertos:
-   - #152: el asistente de subida encola capítulos bloqueados en una tanda y no avisa si falla `runUploadChecks` en
-     una película;
-   - #153: `useConfigForm` no invalida `settings` cuando falla una recarga;
-   - #141: decidir si la prueba de conexión de eMuwarez exige HTTPS antes de enviar el `api_token`.
+2. Issue abierto: #141, decidir si la prueba de conexión de eMuwarez exige HTTPS antes de enviar el `api_token`.
+3. Pequeños pendientes de la primera tanda de la oleada 4:
+   - `manualChunks` pasa a `build.rolldownOptions.output.codeSplitting`: Vite 8 lo marca como obsoleto (nitpick de
+     CodeRabbit en #156);
+   - una selección vacía de eventos de la campana se lee como «sin configurar» y recibe todos los eventos
+     (`notification_center.py`; ya era así antes, lo señaló CodeRabbit en #158);
+   - probar en el NAS el seeding (#160): que el estado, la ratio y los bytes cuadren con la WebUI de qBittorrent y que
+     el casamiento por ruta funcione con la carpeta de subidas que ve qBittorrent;
+   - ver en marcha la tarjeta del widget (#161) y el aviso de peticiones nuevas (#158). «Rellenar petición» y
+     Estadísticas sí se vieron en una instancia local con datos de prueba; de ahí salió el arreglo del modal, que
+     quedaba atrapado bajo la columna fija de acciones.
 
 ## Oleada 4
 
-- React 19, Vite 8, Vitest 5 y TypeScript 7.
-- Funciones nuevas:
+- React 19 y TypeScript 7 (Vite 8 y Vitest 5 ya están).
+- Funciones nuevas que faltan:
   - subida por lotes;
   - resumen de duplicados y trumps;
   - carril de «listas» ordenado por recompensa;
-  - rellenar la petición tras subir;
-  - avisar de peticiones nuevas que se pueden rellenar;
   - «Mejoras posibles»;
-  - salud del seeding;
-  - historial de la cuenta;
-  - estadísticas del tracker;
-  - sincronizar cuando vuelve una instancia;
-  - widget para Homepage;
+  - estadísticas del tracker por subida;
   - Ctrl+K.
 - Rediseño de la interfaz: Hoy, detalle de subida, resumen del asistente, Biblioteca, Peticiones y Configuración.
+  Espera las capturas de Gabriel; las funciones que tocan Biblioteca, Panel y el asistente van junto a él.
 
 ## Aplazado / ideas
 

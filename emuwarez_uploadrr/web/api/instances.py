@@ -146,14 +146,7 @@ def sync_instance(
     current_user: dict = Depends(require_auth),
 ) -> SyncResponse:
     from emuwarez_uploadrr.services.instances import get_instance
-    from emuwarez_uploadrr.services.library import (
-        SincronizacionParcial,
-        SyncAlreadyRunning,
-        _lib_sync_guard,
-        _set_lib_progress,
-        recompute_after_sync,
-    )
-    from emuwarez_uploadrr.services.library import sync_instance as _sync
+    from emuwarez_uploadrr.services.library import SincronizacionParcial, SyncAlreadyRunning, sync_instance_con_candado
     with _get_conn() as conn:
         inst = get_instance(conn, instance_id)
         if not inst:
@@ -165,24 +158,9 @@ def sync_instance(
             )
         try:
             # Mismo candado y barra de progreso que la sincronización global.
-            with _lib_sync_guard():
-                # Otra vez ya con el candado: si se borró mientras, sincronizarla volvería a escribir lo suyo.
-                if get_instance(conn, instance_id) is None:
-                    raise HTTPException(status_code=404, detail="Instancia no encontrada")
-                _set_lib_progress(phase=f"Sincronizando {inst.type.capitalize()}: {inst.name}…",
-                                  instance=inst.name, instance_type=inst.type)
-                try:
-                    imported, missing = _sync(
-                        conn, inst, include_episodes=True,
-                        on_progress=lambda c: _set_lib_progress(imported=c),
-                        on_total=lambda t: _set_lib_progress(total=t),
-                    )
-                finally:
-                    recompute_after_sync(conn)
+            resultado = sync_instance_con_candado(conn, instance_id)
         except SyncAlreadyRunning:
             raise HTTPException(status_code=429, detail="Ya hay una sincronización de biblioteca en marcha")
-        except HTTPException:
-            raise
         except SincronizacionParcial as exc:
             # Lo demás sí se sincronizó: se cuenta, con el aviso de lo que no.
             return SyncResponse(
@@ -191,6 +169,9 @@ def sync_instance(
             )
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Error en sync: {exc}")
+        if resultado is None:
+            raise HTTPException(status_code=404, detail="Instancia no encontrada")
+        imported, missing = resultado
     return SyncResponse(
         imported=imported,
         missing=missing,

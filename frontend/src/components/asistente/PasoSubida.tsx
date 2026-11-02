@@ -8,7 +8,7 @@ import type { Asistente } from './useAsistente'
 
 export function PasoSubida({ a }: { a: Asistente }) {
   const {
-    item, targetIsSeason, seasonDisplayTitle, preview, checks, checksLoading, liveChecks, runChecks,
+    item, targetIsSeason, seasonDisplayTitle, preview, checks, checksLoading, checksError, liveChecks, runChecks,
     uploadMsg, uploading, canUpload, recalculandoIdioma, setStep, doUpload,
   } = a
   const uploadBtnTip = useTooltip(canUpload ? null : 'Alguna comprobación ha fallado o aún está en curso')
@@ -53,6 +53,11 @@ export function PasoSubida({ a }: { a: Asistente }) {
         {!checksLoading && checks && (
           <div className={checks.ready ? 'asist-mt-14 asist-negrita asist-ok' : 'asist-mt-14 asist-negrita asist-error'}>
             {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}
+          </div>
+        )}
+        {!checksLoading && checksError && (
+          <div className="asist-mt-14 asist-negrita asist-error">
+            {`✗ No se pudieron completar las comprobaciones: ${checksError}`}
           </div>
         )}
         {!checksLoading && (

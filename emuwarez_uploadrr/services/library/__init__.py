@@ -29,6 +29,7 @@ from .sync import (  # noqa: F401
     _sin_sincronizar,
     start_library_sync_background,
     recompute_after_sync,
+    sync_instance_con_candado,
     sync_all,
 )
 from .castellano import (  # noqa: F401

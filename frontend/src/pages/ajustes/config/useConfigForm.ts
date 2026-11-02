@@ -15,14 +15,14 @@ import type { SaveExpose } from '../tipos'
 // know whether there are unsaved changes. Array order is fixed on purpose.
 function configSignature(v: {
   tags: string[]; providerOrder: string[]; region: string
-  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; capturasPorCapitulo: boolean; modoDePistas: ModoPistas; sinCopiasReflink: boolean
+  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; capturasPorCapitulo: boolean; modoDePistas: ModoPistas; sinCopiasReflink: boolean; sincronizarAlVolver: boolean
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string; qbitQui?: string; quitarQui?: boolean; quitarQbitPass?: boolean
 }): string {
   return JSON.stringify([
     v.tags, v.providerOrder, v.region, v.emuUsername,
-    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.capturasPorCapitulo, v.modoDePistas, v.sinCopiasReflink, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
+    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.capturasPorCapitulo, v.modoDePistas, v.sinCopiasReflink, v.sincronizarAlVolver, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.qbitQui ?? '', v.quitarQui ?? false, v.quitarQbitPass ?? false,
   ])
 }
@@ -57,6 +57,8 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
   const [modoDePistas, setModoDePistas] = useState<ModoPistas>(MODO_PISTAS_POR_DEFECTO)
   // Copias por reflink de un archivo compartido: se hacen por defecto.
   const [sinCopiasReflink, setSinCopiasReflink] = useState(false)
+  // Sincronizar una instancia en cuanto vuelve a responder: activado por defecto.
+  const [sincronizarAlVolver, setSincronizarAlVolver] = useState(true)
   const [recentLimit, setRecentLimit] = useState(100)
   const [uploadMaxConcurrent, setUploadMaxConcurrent] = useState(1)
   const [qbitUrl, setQbitUrl] = useState('')
@@ -80,7 +82,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
   const tagsAGuardar = borrador && !tags.includes(borrador) ? [...tags, borrador] : tags
   const currentSig = configSignature({
     tags: tagsAGuardar, providerOrder, region, emuUsername,
-    ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, sinCopiasReflink, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
+    ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, sinCopiasReflink, sincronizarAlVolver, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass, qbitQui, quitarQui, quitarQbitPass,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -98,8 +100,10 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
   useEffect(() => () => onExposeSave(null), [onExposeSave])
 
   useEffect(() => {
+    let activo = true
     fetchSettings()
       .then(s => {
+        if (!activo) return
         setSettings(s)
         setTags(s.upload_tags?.length ? s.upload_tags : [s.default_release_tag])
         setProviderOrder(s.provider_priority_order)
@@ -111,6 +115,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
         setCapturasPorCapitulo(s.emu_per_episode_screens ?? false)
         setModoDePistas(normalizarModo(s.remux_track_mode))
         setSinCopiasReflink(s.remux_no_reflink_copies ?? false)
+        setSincronizarAlVolver(s.sincronizar_al_volver_instancia ?? true)
         setRecentLimit(s.recent_activity_limit ?? 100)
         setUploadMaxConcurrent(s.upload_max_concurrent ?? 1)
         setQbitUrl(s.qbit_url ?? '')
@@ -122,7 +127,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
           tags: s.upload_tags?.length ? s.upload_tags : [s.default_release_tag], providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region,
           emuUsername: s.emu_username ?? '',
-          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, capturasPorCapitulo: s.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(s.remux_track_mode), sinCopiasReflink: s.remux_no_reflink_copies ?? false,
+          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, capturasPorCapitulo: s.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(s.remux_track_mode), sinCopiasReflink: s.remux_no_reflink_copies ?? false, sincronizarAlVolver: s.sincronizar_al_volver_instancia ?? true,
           recentLimit: s.recent_activity_limit ?? 100,
           uploadMaxConcurrent: s.upload_max_concurrent ?? 1,
           qbitUrl: s.qbit_url ?? '', qbitTag: s.qbit_tag ?? '', qbitUser: s.qbit_username ?? '',
@@ -130,8 +135,15 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
           allowedRoots: (s.uploadrr_allowed_roots ?? []).join(', '),
         }))
       })
-      .catch((e: unknown) => setErrorCarga((e instanceof Error ? e.message : String(e)) || 'error desconocido'))
-      .finally(() => setLoading(false))
+      .catch((e: unknown) => {
+        if (!activo) return
+        // Una carga anterior buena no se queda: Guardar enviaría valores que ya no son los del servidor.
+        setSettings(null)
+        setErrorCarga((e instanceof Error ? e.message : String(e)) || 'error desconocido')
+      })
+      .finally(() => { if (activo) setLoading(false) })
+    // Una lectura que llega tarde no pisa a la más reciente.
+    return () => { activo = false }
   }, [intento])
 
   function reintentar() {
@@ -168,6 +180,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
         emu_per_episode_screens: capturasPorCapitulo,
         remux_track_mode: modoDePistas,
         remux_no_reflink_copies: sinCopiasReflink,
+        sincronizar_al_volver_instancia: sincronizarAlVolver,
         recent_activity_limit: recentLimit,
         upload_max_concurrent: uploadMaxConcurrent,
         qbit_url: qbitUrl.trim(),
@@ -212,7 +225,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
         tags: updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag], providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region,
         emuUsername: updated.emu_username ?? '',
-        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, capturasPorCapitulo: updated.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(updated.remux_track_mode), sinCopiasReflink: updated.remux_no_reflink_copies ?? false,
+        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, capturasPorCapitulo: updated.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(updated.remux_track_mode), sinCopiasReflink: updated.remux_no_reflink_copies ?? false, sincronizarAlVolver: updated.sincronizar_al_volver_instancia ?? true,
         recentLimit: updated.recent_activity_limit ?? 100,
         uploadMaxConcurrent: updated.upload_max_concurrent ?? 1,
         qbitUrl: updated.qbit_url ?? '', qbitTag: updated.qbit_tag ?? '', qbitUser: updated.qbit_username ?? '',
@@ -233,7 +246,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
     newKey, setNewKey, newEmuKey, setNewEmuKey, emuUsername, setEmuUsername,
     ignoreSpecials, setIgnoreSpecials, sourceEngine, setSourceEngine, addLogo, setAddLogo,
     capturasPorCapitulo, setCapturasPorCapitulo, modoDePistas, setModoDePistas,
-    sinCopiasReflink, setSinCopiasReflink, recentLimit, setRecentLimit,
+    sinCopiasReflink, setSinCopiasReflink, sincronizarAlVolver, setSincronizarAlVolver, recentLimit, setRecentLimit,
     uploadMaxConcurrent, setUploadMaxConcurrent,
     qbitUrl, setQbitUrl, qbitTag, setQbitTag, qbitUser, setQbitUser, qbitPass, setQbitPass,
     quitarQbitPass, setQuitarQbitPass, qbitQui, setQbitQui, quitarQui, setQuitarQui,

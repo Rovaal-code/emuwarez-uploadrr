@@ -1,0 +1,105 @@
+// Cálculos de los gráficos de línea de Estadísticas: del dato al trazo SVG, sin librerías de gráficos.
+
+export interface PuntoSerie {
+  dia: string            // YYYY-MM-DD
+  valor: number | null   // null: ese día no hay cifra, y la línea se corta
+}
+
+export interface Medidas {
+  ancho: number
+  alto: number
+  izquierda: number
+  derecha: number
+  arriba: number
+  abajo: number
+}
+
+export interface PuntoTrazado {
+  dia: string
+  valor: number
+  x: number
+  y: number
+}
+
+export interface Trazado {
+  /** Una por serie: el atributo `d` del <path> y los puntos con su posición. */
+  lineas: { camino: string; puntos: PuntoTrazado[] }[]
+  ticksY: { valor: number; y: number }[]
+  ticksX: { dia: string; x: number }[]
+}
+
+export function diaAMs(dia: string): number {
+  const [a, m, d] = dia.split('-').map(Number)
+  return Date.UTC(a, m - 1, d)
+}
+
+/** «2026-11-02» a «02/11/2026», o a «02/11» con `corto`. Sin pasar por Date: no hay zonas horarias que torcer. */
+export function formatDia(dia: string, corto = false): string {
+  const [a, m, d] = dia.split('-')
+  return corto ? `${d}/${m}` : `${d}/${m}/${a}`
+}
+
+const r1 = (n: number) => Math.round(n * 10) / 10
+
+/**
+ * Posiciona las series en el recuadro. El eje X es el tiempo real (un día sin instantánea deja hueco, no se
+ * estira), y el Y va de lo más bajo a lo más alto de los datos con un margen para que la línea no toque los
+ * bordes; con `desdeCero` (contadores como H&R) parte siempre de 0. Los ticks del eje Y son valores reales
+ * de los datos: mínimo, medio y máximo.
+ */
+export function trazar(series: PuntoSerie[][], medidas: Medidas, desdeCero = false): Trazado {
+  const { ancho, alto, izquierda, derecha, arriba, abajo } = medidas
+  const valores = series.flatMap(s => s.flatMap(p => (p.valor === null ? [] : [p.valor])))
+  const dias = [...new Set(series.flatMap(s => s.map(p => p.dia)))].sort()
+  if (valores.length === 0 || dias.length === 0) return { lineas: series.map(() => ({ camino: '', puntos: [] })), ticksY: [], ticksX: [] }
+
+  let bajo = Math.min(...valores)
+  const alta = Math.max(...valores)
+  if (desdeCero) bajo = Math.min(0, bajo)
+  const relleno = bajo === alta ? Math.abs(alta) * 0.1 || 1 : (alta - bajo) * 0.08
+  const minY = desdeCero && bajo === 0 ? 0 : bajo - relleno
+  const maxY = alta + relleno
+
+  const ms0 = diaAMs(dias[0])
+  const span = diaAMs(dias[dias.length - 1]) - ms0
+  const anchoUtil = ancho - izquierda - derecha
+  const altoUtil = alto - arriba - abajo
+  const posX = (dia: string) => izquierda + (span === 0 ? anchoUtil / 2 : ((diaAMs(dia) - ms0) / span) * anchoUtil)
+  const posY = (v: number) => arriba + (1 - (v - minY) / (maxY - minY)) * altoUtil
+
+  const lineas = series.map(serie => {
+    const puntos: PuntoTrazado[] = []
+    const trazos: string[] = []
+    let abierto = false
+    for (const p of serie) {
+      if (p.valor === null) { abierto = false; continue }
+      const x = r1(posX(p.dia))
+      const y = r1(posY(p.valor))
+      puntos.push({ dia: p.dia, valor: p.valor, x, y })
+      trazos.push(`${abierto ? 'L' : 'M'}${x} ${y}`)
+      abierto = true
+    }
+    return { camino: trazos.join(' '), puntos }
+  })
+
+  const mitad = (bajo + alta) / 2
+  const niveles = bajo === alta ? [alta] : [bajo, mitad, alta]
+  const ticksY = niveles.map(valor => ({ valor, y: r1(posY(valor)) }))
+  const fechas = dias.length >= 3 ? [dias[0], dias[Math.floor(dias.length / 2)], dias[dias.length - 1]]
+    : dias.length === 2 ? [dias[0], dias[1]] : [dias[0]]
+  const ticksX = fechas.map(dia => ({ dia, x: r1(posX(dia)) }))
+  return { lineas, ticksY, ticksX }
+}
+
+/** El resumen que lee un lector de pantalla en lugar del dibujo (la tabla de abajo trae todos los datos). */
+export function describirSerie(nombre: string, serie: PuntoSerie[], formato: (n: number) => string): string {
+  const con = serie.filter((p): p is PuntoSerie & { valor: number } => p.valor !== null)
+  if (con.length === 0) return `${nombre}: sin datos en este rango.`
+  const primero = con[0]
+  const ultimo = con[con.length - 1]
+  const valores = con.map(p => p.valor)
+  const dias = `${con.length} ${con.length === 1 ? 'día' : 'días'} con datos`
+  if (con.length === 1) return `${nombre}: ${formato(ultimo.valor)} el ${formatDia(ultimo.dia)}; ${dias}.`
+  return `${nombre}: de ${formato(primero.valor)} el ${formatDia(primero.dia)} a ${formato(ultimo.valor)} el ${formatDia(ultimo.dia)}; `
+    + `mínimo ${formato(Math.min(...valores))}, máximo ${formato(Math.max(...valores))}; ${dias}.`
+}

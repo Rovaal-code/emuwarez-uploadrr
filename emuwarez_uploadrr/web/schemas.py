@@ -546,6 +546,20 @@ class EmuPerfilResponse(BaseModel):
     error: Optional[str] = None
 
 
+class PuntoCuentaResponse(BaseModel):
+    """La instantánea de un día de tu cuenta de eMuwarez; lo que no se pudo leer ese día va a None."""
+    dia: str
+    ratio: Optional[float] = None
+    subido_bytes: Optional[int] = None
+    bajado_bytes: Optional[int] = None
+    bonus: Optional[float] = None
+
+
+class EstadisticasCuentaResponse(BaseModel):
+    dias: int
+    puntos: list[PuntoCuentaResponse]
+
+
 # ---------------------------------------------------------------------------
 # Library
 # ---------------------------------------------------------------------------

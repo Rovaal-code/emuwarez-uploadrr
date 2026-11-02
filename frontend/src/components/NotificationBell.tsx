@@ -65,7 +65,7 @@ function NotifTitleIcon({ eventType, level }: { eventType: string; level: string
   const icon =
     eventType === 'upload_completed' ? <UploadButtonIcon /> :
     eventType === 'upload_failed' ? <CancelButtonIcon /> :
-    eventType === 'request_published' ? <RequestCardIcon /> :
+    (eventType === 'request_published' || eventType === 'request_new_ready') ? <RequestCardIcon /> :
     eventType === 'request_match_found' ? <MatchFoundIcon /> :
     eventType === 'content_missing_new' ? <MissingWarningIcon /> :
     eventType === 'content_unique_changed' ? <UniqueContentIconSvg size={14} /> :

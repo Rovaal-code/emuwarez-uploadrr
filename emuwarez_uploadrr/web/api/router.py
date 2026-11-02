@@ -25,6 +25,7 @@ from .scheduled_tasks import router as scheduled_tasks_router
 from .system import router as system_router
 from .eventos import router as eventos_router
 from .widget import router as widget_router
+from .estadisticas import router as estadisticas_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -55,3 +56,4 @@ api_router.include_router(scheduled_tasks_router)
 api_router.include_router(system_router)
 api_router.include_router(eventos_router)
 api_router.include_router(widget_router)
+api_router.include_router(estadisticas_router)

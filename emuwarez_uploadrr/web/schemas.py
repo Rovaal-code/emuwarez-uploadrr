@@ -1532,3 +1532,21 @@ class VersionResponse(BaseModel):
     estado: str
     motivo: Optional[str] = None
     ultima: UltimaVersionPublicada
+
+
+class WidgetContadores(BaseModel):
+    """GET /api/widget: planos y numéricos, para mapearlos tal cual en el widget customapi de Homepage."""
+    peticiones_listas: int
+    subidas_hoy: int
+    subidas_fallidas: int
+    en_cola: int
+    subiendo: int
+
+
+class WidgetClaveEstado(BaseModel):
+    configurada: bool
+
+
+class WidgetClaveGenerada(BaseModel):
+    # La única vez que se ve entera: en la base solo queda su hash.
+    clave: str

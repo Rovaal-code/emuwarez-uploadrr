@@ -6,7 +6,7 @@ import sqlite3
 from contextlib import ExitStack
 from typing import Annotated, Iterator, Optional
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 
 from emuwarez_uploadrr.database import BaseMasNuevaError, db
 from .runtime import _db_path
@@ -90,3 +90,29 @@ def require_auth(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
+
+
+def require_widget_key(
+    x_api_key: Annotated[Optional[str], Header()] = None,
+    authorization: Annotated[Optional[str], Header()] = None,
+    conn: sqlite3.Connection = Depends(get_db),
+) -> None:
+    """La clave del widget de Homepage, en `X-Api-Key` o en `Authorization: Bearer`. Solo abre /api/widget: no es
+    un token de sesión y `require_auth` no la acepta. 404 si el widget no está activado; 401 si falta o no vale;
+    503 si la base no responde."""
+    from ..services.widget import clave_configurada, clave_valida
+    try:
+        if not clave_configurada(conn):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El widget no está activado. Genera su clave en Configuración.",
+            )
+        valida = clave_valida(conn, (x_api_key or "").strip() or _resolve_token(authorization))
+    except ERRORES_DE_BASE:
+        raise base_no_disponible("widget")
+    if not valida:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Clave del widget ausente o no válida. Envíala en X-Api-Key o en Authorization: Bearer.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

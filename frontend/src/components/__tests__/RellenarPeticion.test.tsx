@@ -88,4 +88,12 @@ describe('RellenarPeticion', () => {
     await pulsar(boton('Copiar'))
     await esperar(() => boton('Copiada'))
   })
+
+  it('el modal sale del body y no queda atrapado en la celda fija de la tabla', async () => {
+    contexto({ seguro: true, portapapeles: 'falla', comando: false })
+    await montar(<table><tbody><tr><td className="col-actions"><RellenarPeticion job={trabajo()} /></td></tr></tbody></table>)
+    await pulsar(boton('Rellenar petición'))
+    const dialogo = await esperar(() => document.querySelector('[role="dialog"]'))
+    expect(dialogo.closest('td')).toBeNull()
+  })
 })

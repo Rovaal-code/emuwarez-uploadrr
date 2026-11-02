@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { UploadJob } from '../types/api'
 import { copiarTexto } from '../utils/portapapeles'
 import { ExternalLinkButtonIcon } from './DetailCard'
@@ -30,7 +31,8 @@ export function RellenarPeticion({ job }: { job: UploadJob }) {
         <ExternalLinkButtonIcon /> {copiada ? 'URL copiada' : 'Rellenar petición'}
         {tooltipNode}
       </button>
-      {aMano && <CopiarAMano url={torrent} peticion={peticion} onClose={() => setAMano(false)} />}
+      {/* En el body: dentro de la celda fija de acciones, el modal quedaría atrapado bajo la columna. */}
+      {aMano && createPortal(<CopiarAMano url={torrent} peticion={peticion} onClose={() => setAMano(false)} />, document.body)}
     </>
   )
 }

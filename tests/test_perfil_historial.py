@@ -117,6 +117,12 @@ def test_otra_cuenta_empieza_un_historial_nuevo_y_la_misma_con_otra_clave_no(con
     assert [f[0] for f in _filas(conn)] == [_dia(0)]
 
 
+def test_si_la_instantanea_nueva_falla_no_se_pierde_el_historial_de_antes(conn):
+    guardar_instantanea(conn, USUARIO, AHORA - timedelta(days=1))
+    guardar_instantanea(conn, {**USUARIO, "username": object()}, AHORA)   # un usuario que no se puede guardar
+    assert [f[0] for f in _filas(conn)] == [_dia(1)]
+
+
 def test_poda_lo_que_pasa_de_la_retencion(conn):
     for atras in (RETENCION_DIAS + 5, RETENCION_DIAS + 1, RETENCION_DIAS, 10):
         conn.execute("INSERT INTO perfil_historial (dia, actualizado_at) VALUES (?, 'x')", (_dia(atras),))

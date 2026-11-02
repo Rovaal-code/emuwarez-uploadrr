@@ -46,11 +46,6 @@ def guardar_instantanea(conn: sqlite3.Connection, datos: dict[str, Any], ahora: 
         valores = (_numero(datos.get("ratio")), bytes_de_texto(datos.get("uploaded")),
                    bytes_de_texto(datos.get("downloaded")), _numero(datos.get("seedbonus")),
                    datos.get("username") or None)
-        # El historial es de una cuenta: si el perfil es de otro usuario (otra clave), el anterior no se mezcla.
-        ultimo = conn.execute("SELECT usuario FROM perfil_historial WHERE usuario IS NOT NULL "
-                              "ORDER BY dia DESC LIMIT 1").fetchone()
-        if ultimo and valores[4] and ultimo[0] != valores[4]:
-            conn.execute("DELETE FROM perfil_historial")
         conn.execute(
             """INSERT INTO perfil_historial (dia, ratio, subido_bytes, bajado_bytes, bonus, usuario, actualizado_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -59,6 +54,10 @@ def guardar_instantanea(conn: sqlite3.Connection, datos: dict[str, Any], ahora: 
                    actualizado_at = excluded.actualizado_at""",
             (ahora.strftime("%Y-%m-%d"), *valores, ahora.isoformat(timespec="seconds")),
         )
+        # El historial es de una cuenta: si el perfil es de otro usuario (otra clave), lo anterior no se mezcla. Va
+        # después de escribir la de hoy: si esa falla, no se ha borrado nada.
+        if valores[4]:
+            conn.execute("DELETE FROM perfil_historial WHERE usuario IS NOT NULL AND usuario != ?", (valores[4],))
         conn.execute("DELETE FROM perfil_historial WHERE dia < ?",
                      ((ahora - timedelta(days=RETENCION_DIAS)).strftime("%Y-%m-%d"),))
     except Exception:

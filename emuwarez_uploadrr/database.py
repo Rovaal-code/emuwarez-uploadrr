@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 48
+SCHEMA_VERSION = 49
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1231,6 +1231,18 @@ def _migrate_request_items_last_seen(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_request_items_aviso_pendiente(conn: sqlite3.Connection) -> None:
+    """Esquema 49: las peticiones que la sincronización vio por primera vez y aún no se han mirado para avisar de
+    «nueva y lista para subir». Una columna y no una clave de app_state para que sobreviva a una sincronización
+    que se corta a medias, y para que el aviso salga una sola vez por petición. Las que ya hay no avisan."""
+    try:
+        conn.execute("ALTER TABLE request_items ADD COLUMN aviso_pendiente INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        # Solo se calla si la columna ya está (la añadió otro init_db a la vez), no un «database is locked».
+        if "aviso_pendiente" not in {fila[1] for fila in conn.execute("PRAGMA table_info(request_items)")}:
+            raise
+
+
 def _migrate_library_items_last_seen(conn: sqlite3.Connection) -> None:
     """Esquema 43: cuándo vio la sincronización cada elemento; lo que un recorrido completo no ve ya no está en
     Radarr/Sonarr y se borra, y sus subidas guardan lo que enseñaban de la ficha. El índice evita repasar todas
@@ -1830,6 +1842,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_scheduled_tasks_run_at(conn)
         _migrate_upload_jobs_pasos(conn)
         _migrate_quitar_registro_arr(conn)
+        _migrate_request_items_aviso_pendiente(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

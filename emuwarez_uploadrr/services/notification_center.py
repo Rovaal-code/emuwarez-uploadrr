@@ -39,6 +39,7 @@ EVENT_TYPES: dict[str, str] = {
     "upload_completed": "Subida completada",
     "upload_failed": "Subida fallida",
     "request_match_found": "Contenido compatible",
+    "request_new_ready": "Petición nueva lista para subir",
     "content_missing_new": "Contenido nuevo faltante",
     "content_unique_changed": "Nuevo contenido único",
     "version_available": "Versión nueva disponible",

@@ -309,6 +309,9 @@ def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         set_state(conn, SYNC_STATE_KEY, prev_sync or "")
         conn.commit()
 
+    # Sin sincronización previa (la primera) todo lo que llega ya estaba ahí: no se avisa de nada.
+    conocidas = {r[0] for r in conn.execute("SELECT emu_id FROM request_items")} if prev_sync else None
+
     logger.info("Sincronización de peticiones iniciada")
     try:
         _set_progress(phase="Descargando peticiones…")
@@ -319,6 +322,9 @@ def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         sync_at = _utcnow().isoformat()
         for item in items:
             upsert_request(conn, item, seen_at=sync_at, commit=False)
+        if conocidas is not None:
+            conn.executemany("UPDATE request_items SET aviso_pendiente = 1 WHERE emu_id = ?",
+                             [(i.emu_id,) for i in items if i.emu_id not in conocidas])
         # Solo un recorrido que cuadra con el total de eMuwarez dice cuáles ya no están abiertas.
         complete = total is not None and len(items) == total == len({i.emu_id for i in items})
         if not complete:
@@ -337,6 +343,8 @@ def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
             conn.rollback()
             logger.exception("No se pudo calcular la preparación de las peticiones")
             sin_preparar = None
+        if sin_preparar is not None:
+            _avisar_peticiones_nuevas_listas(conn)
         # Igual que la preparación: unos pósters que no llegan no tumban la sincronización.
         _set_progress(phase="Trayendo los pósters…")
         try:
@@ -365,6 +373,39 @@ def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
         logger.error("Sincronización de peticiones fallida: %s", exc)
         raise
+
+
+_MAX_TITULOS_EN_EL_AVISO = 5
+
+
+def _avisar_peticiones_nuevas_listas(conn: sqlite3.Connection) -> None:
+    """Un solo aviso con las peticiones que esta sincronización vio por primera vez y que ya se pueden rellenar
+    (preparación «ready_to_upload», el mismo criterio que enseña la lista). Cada petición se mira una vez: se
+    apaga su marca esté lista o no. Solo se deja encendida la que no tiene preparación calculada, que se mira
+    en la siguiente. Best-effort: un fallo aquí no tumba la sincronización."""
+    try:
+        filas = conn.execute(
+            "SELECT title, readiness_status FROM request_items WHERE aviso_pendiente = 1 ORDER BY created_at, id"
+        ).fetchall()
+        # Apagadas antes de avisar: si el aviso falla a medias, mejor ninguno que el mismo cada día.
+        conn.execute("UPDATE request_items SET aviso_pendiente = 0 "
+                     "WHERE aviso_pendiente = 1 AND readiness_status IS NOT NULL")
+        conn.commit()
+        titulos = [r["title"] for r in filas if r["readiness_status"] == "ready_to_upload"]
+        if not titulos:
+            return
+        from .notification_center import emit
+        # El título lo escribe cualquier usuario del tracker: un «@everyone» no debe avisar a todo el canal de Discord.
+        primeros = ", ".join(f"«{t.replace('@', '@' + chr(0x200b))}»" for t in titulos[:_MAX_TITULOS_EN_EL_AVISO])
+        resto = len(titulos) - _MAX_TITULOS_EN_EL_AVISO
+        cuerpo = (f"Hay una petición nueva que ya puedes rellenar: {primeros}." if len(titulos) == 1 else
+                  f"Hay {len(titulos)} peticiones nuevas que ya puedes rellenar: {primeros}"
+                  + (f" y {resto} más." if resto > 0 else "."))
+        emit(conn, "request_new_ready", "Peticiones nuevas listas para subir", cuerpo, link="/requests", level="info")
+    except Exception:
+        conn.rollback()
+        logging.getLogger("emuwarez.notifications").exception(
+            "No se pudo avisar de las peticiones nuevas listas para subir")
 
 
 _TMDB_IMAGEN = "https://image.tmdb.org/t/p/original"  # el frontend cambia "original" por el tamaño (posterUrl)

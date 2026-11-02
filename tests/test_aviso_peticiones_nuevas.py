@@ -72,6 +72,17 @@ def test_un_recorrido_cortado_despues_de_uno_completo_no_quita_la_base(db_conn, 
     assert len(_avisos(db_conn)) == 2
 
 
+def test_la_migracion_activa_el_evento_en_la_campana_de_quien_ya_guardo_sus_eventos(db_conn):
+    from emuwarez_uploadrr.database import _migrate_request_items_aviso_pendiente
+    campana = lambda: [f["value"] for f in db_conn.execute("SELECT value FROM settings WHERE key = 'notify.ui.events'")]
+    _migrate_request_items_aviso_pendiente(db_conn)
+    assert campana() == []                                       # sin configurar: ya lo recibe todo
+    set_setting(db_conn, "notify.ui.events", "upload_completed")
+    _migrate_request_items_aviso_pendiente(db_conn)
+    _migrate_request_items_aviso_pendiente(db_conn)              # y no se repite
+    assert campana() == ["upload_completed,request_new_ready"]
+
+
 def test_una_peticion_nueva_ya_lista_avisa_una_sola_vez(db_conn, sincroniza):
     sincroniza([_fila(1)])
     _lista_para_subir(db_conn, 2)

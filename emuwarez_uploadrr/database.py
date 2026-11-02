@@ -981,15 +981,10 @@ def _migrate_dominio_emu_warez(conn: sqlite3.Connection) -> None:
                 conn.execute(f"UPDATE {tabla} SET {columna} = ? WHERE rowid = ?", (nuevo, rowid))
 
 
-def _migrate_ui_recibe_aviso_de_version(conn: sqlite3.Connection) -> None:
-    """Esquema 38: el aviso de versión nueva, activado en la campana.
-
-    Un canal sin configurar recibe todo, así que para una instalación nueva no
-    hace falta nada. Pero quien ya guardó su selección de eventos tiene una
-    lista cerrada, y el evento nuevo se quedaría fuera: se le añade, porque en
-    la campana va activado por defecto.
-
-    A los bots NO se les toca: ahí este aviso es opt-in a propósito."""
+def _activar_evento_en_la_campana(conn: sqlite3.Connection, evento: str) -> None:
+    """Un canal sin configurar recibe todo, así que para una instalación nueva no hace falta nada. Pero quien ya
+    guardó su selección de eventos tiene una lista cerrada, y un evento nuevo se quedaría fuera: se le añade, porque
+    en la campana va activado por defecto. A los bots NO se les toca: ahí los avisos nuevos son opt-in a propósito."""
     try:
         fila = conn.execute(
             "SELECT value FROM settings WHERE key = 'notify.ui.events'").fetchone()
@@ -998,11 +993,16 @@ def _migrate_ui_recibe_aviso_de_version(conn: sqlite3.Connection) -> None:
     if not fila or not fila["value"]:
         return                      # sin configurar: ya lo recibe todo
     codigos = [c.strip() for c in fila["value"].split(",") if c.strip()]
-    if "version_available" in codigos:
+    if evento in codigos:
         return
-    codigos.append("version_available")
+    codigos.append(evento)
     conn.execute("UPDATE settings SET value = ? WHERE key = 'notify.ui.events'",
                  (",".join(codigos),))
+
+
+def _migrate_ui_recibe_aviso_de_version(conn: sqlite3.Connection) -> None:
+    """Esquema 38: el aviso de versión nueva, activado en la campana."""
+    _activar_evento_en_la_campana(conn, "version_available")
 
 
 def _migrate_tmdb_title_cache(conn: sqlite3.Connection) -> None:
@@ -1241,6 +1241,7 @@ def _migrate_request_items_aviso_pendiente(conn: sqlite3.Connection) -> None:
         # Solo se calla si la columna ya está (la añadió otro init_db a la vez), no un «database is locked».
         if "aviso_pendiente" not in {fila[1] for fila in conn.execute("PRAGMA table_info(request_items)")}:
             raise
+    _activar_evento_en_la_campana(conn, "request_new_ready")  # quien ya guardó sus eventos no se queda sin el nuevo
 
 
 def _migrate_library_items_last_seen(conn: sqlite3.Connection) -> None:

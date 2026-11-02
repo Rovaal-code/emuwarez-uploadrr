@@ -103,6 +103,8 @@ class SettingsResponse(BaseModel):
     notify_telegram_events: list[str] = []
     # "Otros"
     series_ignore_specials: bool = True
+    # Sincronizar una instancia de Radarr/Sonarr en cuanto vuelve a responder tras estar caída.
+    sincronizar_al_volver_instancia: bool = True
     # Internal Source Tool (services/source_engine). Apagada por defecto.
     source_engine_enabled: bool = False
     # El logo del contenido en la descripción. Se sube por defecto.
@@ -163,6 +165,7 @@ class SettingsUpdateRequest(BaseModel):
     notify_discord_events: Optional[list[str]] = None
     notify_telegram_events: Optional[list[str]] = None
     series_ignore_specials: Optional[bool] = None
+    sincronizar_al_volver_instancia: Optional[bool] = None
     source_engine_enabled: Optional[bool] = None
     emu_add_logo: Optional[bool] = None
     emu_per_episode_screens: Optional[bool] = None

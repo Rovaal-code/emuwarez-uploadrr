@@ -14,7 +14,7 @@ from ...database import borrar_biblioteca, get_state, set_state
 from ...integrations import radarr, sonarr
 from ...integrations.base import IntegrationError
 from ...models import InstanceConfig, LibraryItem, LocalStatus, MediaKind
-from ..instances import list_instances
+from ..instances import get_instance, list_instances
 from ..tasks import start_task, finish_task
 from ..eventos import EVENTO_SYNC_EMPEZADA, EVENTO_SYNC_TERMINADA, publicar
 
@@ -884,6 +884,27 @@ def recompute_after_sync(conn: sqlite3.Connection) -> None:
     except Exception:
         logger.warning("No se pudo recalcular el castellano (audio/subtítulos) tras la sincronización de biblioteca", exc_info=True)
     olvidar_valores_de_filtro()
+
+
+def sync_instance_con_candado(conn: sqlite3.Connection, instance_id: int) -> Optional[tuple[int, int]]:
+    """Sincroniza una sola instancia con el mismo candado y la misma barra que la sincronización global: el botón de la
+    instancia y la vigilancia de instancias que vuelven entran por aquí. Devuelve (importados, faltantes), o None si la
+    instancia se borró antes de empezar; con otra sincronización en marcha lanza SyncAlreadyRunning."""
+    with _lib_sync_guard():
+        # Ya con el candado: si se borró mientras, sincronizarla volvería a escribir lo suyo.
+        instance = get_instance(conn, instance_id)
+        if instance is None:
+            return None
+        _set_lib_progress(phase=f"Sincronizando {instance.type.capitalize()}: {instance.name}…",
+                          instance=instance.name, instance_type=instance.type)
+        try:
+            return sync_instance(
+                conn, instance, include_episodes=True,
+                on_progress=lambda c: _set_lib_progress(imported=c),
+                on_total=lambda t: _set_lib_progress(total=t),
+            )
+        finally:
+            recompute_after_sync(conn)
 
 
 def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dict:

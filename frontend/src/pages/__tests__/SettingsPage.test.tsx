@@ -79,6 +79,7 @@ const AJUSTES: SettingsData = {
   notify_discord_events: [],
   notify_telegram_events: [],
   series_ignore_specials: true,
+  sincronizar_al_volver_instancia: true,
   recent_activity_limit: 100,
   upload_max_concurrent: 1,
   path_mappings: [],

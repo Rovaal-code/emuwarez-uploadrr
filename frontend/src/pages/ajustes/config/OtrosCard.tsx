@@ -7,7 +7,7 @@ import { MODOS_PISTAS, normalizarModo } from '../../../utils/modoPistas'
 import type { ConfigForm } from './useConfigForm'
 
 export function OtrosCard({ form }: { form: ConfigForm }) {
-  const { modoDePistas, setModoDePistas, sinCopiasReflink, setSinCopiasReflink, sourceEngine, setSourceEngine, addLogo, setAddLogo, capturasPorCapitulo, setCapturasPorCapitulo, uploadMaxConcurrent, setUploadMaxConcurrent, ignoreSpecials, setIgnoreSpecials, recentLimit, setRecentLimit } = form
+  const { modoDePistas, setModoDePistas, sinCopiasReflink, setSinCopiasReflink, sincronizarAlVolver, setSincronizarAlVolver, sourceEngine, setSourceEngine, addLogo, setAddLogo, capturasPorCapitulo, setCapturasPorCapitulo, uploadMaxConcurrent, setUploadMaxConcurrent, ignoreSpecials, setIgnoreSpecials, recentLimit, setRecentLimit } = form
   // Tamaño de interfaz. Arranca de lo que ya está aplicado (utils/uiScale lo
   // puso al cargar la página desde localStorage), no de un valor por defecto:
   // si no, el desplegable diría 100% mientras la interfaz está al 130%.
@@ -48,6 +48,16 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
         <select className="form-input form-select" value={modoDePistas}
                 onChange={e => setModoDePistas(normalizarModo(e.target.value))}>
           {MODOS_PISTAS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </select>
+      </div>
+      <div className="form-group">
+        <label className="form-label aj-flex-c-6" htmlFor="sincronizar-al-volver">
+          Sincronizar al volver una instancia
+          <InfoIcon text="Radarr y Sonarr se suelen encender solo para subir y pasan días apagados. Cada pocos minutos se comprueba si responden, y cuando una que no respondía vuelve a hacerlo se sincroniza sola, para tener la biblioteca al día en cuanto la enciendes. Una instancia caída nunca borra nada de la biblioteca. Desactivado, solo sincroniza la tarea periódica de Sincronizar bibliotecas." />
+        </label>
+        <select id="sincronizar-al-volver" className="form-input form-select" value={sincronizarAlVolver ? 'true' : 'false'} onChange={e => setSincronizarAlVolver(e.target.value === 'true')}>
+          <option value="true">Activado</option>
+          <option value="false">Desactivado</option>
         </select>
       </div>
       <div className="form-group">

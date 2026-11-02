@@ -46,6 +46,7 @@ export interface SettingsData {
   notify_discord_events: string[]
   notify_telegram_events: string[]
   series_ignore_specials: boolean
+  sincronizar_al_volver_instancia: boolean
   recent_activity_limit: number
   upload_max_concurrent: number
   path_mappings: { from: string; to: string }[]
@@ -91,6 +92,7 @@ export interface SettingsUpdatePayload {
   notify_discord_events?: string[]
   notify_telegram_events?: string[]
   series_ignore_specials?: boolean
+  sincronizar_al_volver_instancia?: boolean
   recent_activity_limit?: number
   upload_max_concurrent?: number
   path_mappings?: { from: string; to: string }[]

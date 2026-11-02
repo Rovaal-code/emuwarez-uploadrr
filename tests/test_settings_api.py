@@ -361,3 +361,11 @@ def test_clear_rechaza_lo_que_no_es_un_secreto_borrable(client, auth_headers, no
     resp = client.put("/api/settings", json={"clear": [nombre]}, headers=auth_headers)
     assert resp.status_code == 422
     assert nombre in resp.json()["detail"]
+
+
+def test_sincronizar_al_volver_una_instancia_viene_activado_y_se_puede_apagar(client, auth_headers):
+    assert client.get("/api/settings", headers=auth_headers).json()["sincronizar_al_volver_instancia"] is True
+    for valor in (False, True):
+        resp = client.put("/api/settings", json={"sincronizar_al_volver_instancia": valor}, headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["sincronizar_al_volver_instancia"] is valor

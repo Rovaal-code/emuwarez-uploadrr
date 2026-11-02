@@ -18,11 +18,12 @@ export function RellenarPeticion({ job }: { job: UploadJob }) {
   if (job.status !== 'completed' || !torrent || !peticion) return null
 
   const rellenar = async () => {
-    const ok = await copiarTexto(torrent)
-    setCopiada(ok)
-    setAMano(!ok)
+    // Se abre durante el clic: tras esperar al portapapeles el navegador puede darla por no pedida y bloquearla.
     const ventana = window.open(peticion, '_blank')
     if (ventana) ventana.opener = null
+    const ok = await copiarTexto(torrent)
+    setCopiada(ok)
+    setAMano(!ok || !ventana)
   }
 
   return (
@@ -32,19 +33,20 @@ export function RellenarPeticion({ job }: { job: UploadJob }) {
         {tooltipNode}
       </button>
       {/* En el body: dentro de la celda fija de acciones, el modal quedaría atrapado bajo la columna. */}
-      {aMano && createPortal(<CopiarAMano url={torrent} peticion={peticion} onClose={() => setAMano(false)} />, document.body)}
+      {aMano && createPortal(<CopiarAMano url={torrent} peticion={peticion} copiadaYa={copiada} onClose={() => setAMano(false)} />, document.body)}
     </>
   )
 }
 
-function CopiarAMano({ url, peticion, onClose }: { url: string; peticion: string; onClose: () => void }) {
-  const [copiada, setCopiada] = useState(false)
+function CopiarAMano({ url, peticion, copiadaYa, onClose }: { url: string; peticion: string; copiadaYa: boolean; onClose: () => void }) {
+  const [copiada, setCopiada] = useState(copiadaYa)
   return (
-    <Modal titulo="Copia la URL del torrent" onClose={onClose} className="modal-estrecho">
+    <Modal titulo={copiadaYa ? 'Abre la petición' : 'Copia la URL del torrent'} onClose={onClose} className="modal-estrecho">
       <div className="modal-body">
         <p className="rellenar-texto">
-          El navegador no me deja copiarla solo (suele pasar al abrir la app por http). Cópiala a mano y pégala en la
-          petición, con «Fill».
+          {copiadaYa
+            ? 'La URL del torrent ya está copiada, pero el navegador ha bloqueado la pestaña. Abre la petición y pégala con «Fill».'
+            : 'El navegador no me deja copiarla solo (suele pasar al abrir la app por http). Cópiala a mano y pégala en la petición, con «Fill».'}
         </p>
         <input
           className="rellenar-url"

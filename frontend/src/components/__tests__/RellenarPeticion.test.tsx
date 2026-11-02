@@ -89,6 +89,24 @@ describe('RellenarPeticion', () => {
     await esperar(() => boton('Copiada'))
   })
 
+  it('abre la petición durante el clic, sin esperar a que conteste el portapapeles', async () => {
+    contexto({ seguro: true, portapapeles: 'ok', comando: false })
+    escribir.mockImplementation(() => new Promise(() => {}))  // el portapapeles tarda
+    await montar(<RellenarPeticion job={trabajo()} />)
+    await pulsar(boton('Rellenar petición'))
+    expect(abrir).toHaveBeenCalledWith(PETICION, '_blank')
+  })
+
+  it('si el navegador bloquea la pestaña, ofrece abrir la petición aunque la URL ya esté copiada', async () => {
+    contexto({ seguro: true, portapapeles: 'ok', comando: false })
+    abrir.mockReturnValue(null)
+    await montar(<RellenarPeticion job={trabajo()} />)
+    await pulsar(boton('Rellenar petición'))
+    const enlace = await esperar(() => document.querySelector<HTMLAnchorElement>('[role="dialog"] a'))
+    expect(enlace.getAttribute('href')).toBe(PETICION)
+    expect(texto()).toContain('ya está copiada')
+  })
+
   it('el modal sale del body y no queda atrapado en la celda fija de la tabla', async () => {
     contexto({ seguro: true, portapapeles: 'falla', comando: false })
     await montar(<table><tbody><tr><td className="col-actions"><RellenarPeticion job={trabajo()} /></td></tr></tbody></table>)

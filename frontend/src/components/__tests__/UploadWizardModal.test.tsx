@@ -553,6 +553,36 @@ describe('fallos de red y respuestas tardías', () => {
     })
   })
 
+  describe('si la petición de comprobaciones no llega', () => {
+    it('una película enseña el error y «Volver a comprobar» lo repite', async () => {
+      m(subidas.runUploadChecks).mockRejectedValueOnce(new Error('Sin conexión'))
+      await abrir(PELICULA)
+      await esperar(() => texto().includes('Dune WEB-DL AMZN [GRP]'))
+      await pulsar(boton('Continuar'))
+      await esperar(() => texto().includes('✗ No se pudieron completar las comprobaciones: Sin conexión'))
+      expect(texto()).not.toContain('Todo listo')
+      expect(boton('Subir a eMuwarez')!.disabled).toBe(true)
+      await pulsar(await esperar(() => boton('↻ Volver a comprobar')))
+      await esperar(() => texto().includes('✓ Todo listo para subir'))
+      expect(texto()).not.toContain('No se pudieron completar')
+      expect(boton('Subir a eMuwarez')!.disabled).toBe(false)
+    })
+
+    it('un pack de temporada también', async () => {
+      m(biblioteca.getLibrary).mockResolvedValue({ items: [E1, E2], total: 2 } as never)
+      m(subidas.runUploadChecks).mockRejectedValueOnce(new Error('Sin conexión'))
+      await abrir(TEMPORADA)
+      await pulsar(await esperar(() => tarjeta('Temporada entera')))
+      await pulsar(boton('Continuar'))
+      await esperar(() => texto().includes('Serie S01 WEB-DL DD 5.1 [GRP]'))
+      await pulsar(boton('Continuar'))
+      await esperar(() => texto().includes('✗ No se pudieron completar las comprobaciones: Sin conexión'))
+      expect(boton('Subir a eMuwarez')!.disabled).toBe(true)
+      await pulsar(await esperar(() => boton('↻ Volver a comprobar')))
+      await esperar(() => texto().includes('✓ Todo listo para subir'))
+    })
+  })
+
   describe('varios capítulos', () => {
     beforeEach(() => {
       m(biblioteca.getLibrary).mockResolvedValue({ items: [E1, E2], total: 2 } as never)
@@ -592,6 +622,21 @@ describe('fallos de red y respuestas tardías', () => {
       expect(texto()).not.toContain('Sin conexión')
       // El que salió bien no se vuelve a pedir: un fallo nuevo lo dejaría bloqueado.
       expect(m(nom.getNomenclatureFields).mock.calls.filter(c => c[0] === 22)).toHaveLength(1)
+    })
+
+    it('un capítulo sin nomenclatura se salta aunque sus comprobaciones pasen', async () => {
+      m(nom.getNomenclatureFields).mockImplementation(async id => (id === 22
+        ? { fields: {}, torrent_name: '', internal_mkv_title: '', blocked: true, error: 'Sin audio detectado' }
+        : respuestaCampos({ title: 'Serie', tag: `G${id}` })) as never)
+      await elegirDosCapitulos()
+      await esperar(() => texto().includes('Serie WEB-DL AMZN [G21]'))
+      await pulsar(boton('Continuar'))
+      await esperar(() => texto().includes('✓ Todo listo: 2 capítulos'))
+      await pulsar(boton('Subir todos'))
+      await esperar(() => texto().includes('1 de 2 capítulo(s) encolado(s)'))
+      expect(texto()).toContain('Sin audio detectado')
+      expect(m(subidas.queueUpload).mock.calls.map(c => c[0])).toEqual([21])
+      expect(m(nom.saveNomenclatureFields).mock.calls.map(c => c[0])).not.toContain(22)
     })
 
     // El entorno falla la primera vez y responde bien después.

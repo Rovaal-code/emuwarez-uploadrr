@@ -98,8 +98,10 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
   useEffect(() => () => onExposeSave(null), [onExposeSave])
 
   useEffect(() => {
+    let activo = true
     fetchSettings()
       .then(s => {
+        if (!activo) return
         setSettings(s)
         setTags(s.upload_tags?.length ? s.upload_tags : [s.default_release_tag])
         setProviderOrder(s.provider_priority_order)
@@ -130,8 +132,15 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
           allowedRoots: (s.uploadrr_allowed_roots ?? []).join(', '),
         }))
       })
-      .catch((e: unknown) => setErrorCarga((e instanceof Error ? e.message : String(e)) || 'error desconocido'))
-      .finally(() => setLoading(false))
+      .catch((e: unknown) => {
+        if (!activo) return
+        // Una carga anterior buena no se queda: Guardar enviaría valores que ya no son los del servidor.
+        setSettings(null)
+        setErrorCarga((e instanceof Error ? e.message : String(e)) || 'error desconocido')
+      })
+      .finally(() => { if (activo) setLoading(false) })
+    // Una lectura que llega tarde no pisa a la más reciente.
+    return () => { activo = false }
   }, [intento])
 
   function reintentar() {

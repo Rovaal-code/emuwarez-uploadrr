@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Fija el comportamiento de Configuración (guardar, cambios sin guardar, secretos enmascarados,
 // confirmaciones de VACUUM y de restaurar) para poder partir la página sin cambiarlo.
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsData } from '../../api/settings'
@@ -96,11 +96,11 @@ async function esperar() {
   await act(async () => { await new Promise(r => setTimeout(r, 0)) })
 }
 
-async function montar() {
+async function montar(estricto = false) {
   contenedor = document.createElement('div')
   document.body.appendChild(contenedor)
   raiz = createRoot(contenedor)
-  await act(async () => { raiz.render(<SettingsPage />) })
+  await act(async () => { raiz.render(estricto ? <StrictMode><SettingsPage /></StrictMode> : <SettingsPage />) })
   await esperar()
 }
 
@@ -500,6 +500,17 @@ describe('Configuración: no guardar sin haber cargado ni pisar lo editado duran
     await escribir(campo('Tag'), 'Nuevo')
     await pulsar(boton('Guardar configuración'))
     expect(vi.mocked(updateSettings).mock.calls[0][0]).toMatchObject({ upload_tags: ['GRUPO', 'OTRO'], qbit_tag: 'Nuevo' })
+  })
+
+  it('si una carga buena va seguida de una que falla, tampoco se puede guardar lo de la primera', async () => {
+    // StrictMode ejecuta la carga dos veces: la primera sale bien y la segunda falla.
+    vi.mocked(fetchSettings).mockResolvedValueOnce(structuredClone(AJUSTES))
+    vi.mocked(fetchSettings).mockRejectedValueOnce(new Error('sin conexión'))
+    await montar(true)
+    expect(texto()).toContain('sin conexión')
+    expect(boton('Guardar configuración').disabled).toBe(true)
+    await pulsar(boton('Guardar configuración'))
+    expect(updateSettings).not.toHaveBeenCalled()
   })
 
   it('un error sin mensaje cuenta igual como fallo de carga', async () => {

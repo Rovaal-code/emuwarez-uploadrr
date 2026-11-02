@@ -330,8 +330,9 @@ def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
                              [(i.emu_id,) for i in items if i.emu_id not in conocidas])
         # Solo un recorrido que cuadra con el total de eMuwarez dice cuáles ya no están abiertas.
         complete = total is not None and len(items) == total == len({i.emu_id for i in items})
-        set_state(conn, SYNC_COMPLETA_KEY, "1" if complete else "0")
-        if not complete:
+        if complete:
+            set_state(conn, SYNC_COMPLETA_KEY, "1")  # un recorrido cortado después no quita la base que ya había
+        else:
             logger.warning("El recorrido de peticiones no cuadra con el total de eMuwarez; no se borra ninguna")
         removed = borrar_peticiones(conn, "last_seen_at IS NULL OR last_seen_at != ?", (sync_at,)) if complete else 0
         set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())

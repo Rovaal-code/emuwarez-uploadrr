@@ -89,12 +89,14 @@ describe('RellenarPeticion', () => {
     await esperar(() => boton('Copiada'))
   })
 
-  it('abre la petición durante el clic, sin esperar a que conteste el portapapeles', async () => {
+  it('pide la copia y abre la petición durante el clic, sin esperar a que conteste el portapapeles', async () => {
     contexto({ seguro: true, portapapeles: 'ok', comando: false })
     escribir.mockImplementation(() => new Promise(() => {}))  // el portapapeles tarda
     await montar(<RellenarPeticion job={trabajo()} />)
     await pulsar(boton('Rellenar petición'))
+    expect(escribir).toHaveBeenCalledWith(TORRENT)
     expect(abrir).toHaveBeenCalledWith(PETICION, '_blank')
+    expect(escribir.mock.invocationCallOrder[0]).toBeLessThan(abrir.mock.invocationCallOrder[0])  // la copia, con el foco aquí
   })
 
   it('si el navegador bloquea la pestaña, ofrece abrir la petición aunque la URL ya esté copiada', async () => {

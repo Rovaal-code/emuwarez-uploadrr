@@ -63,6 +63,15 @@ def test_un_primer_recorrido_cortado_no_es_base_para_avisar(db_conn, sincroniza)
     assert len(_avisos(db_conn)) == 1
 
 
+def test_un_recorrido_cortado_despues_de_uno_completo_no_quita_la_base(db_conn, sincroniza):
+    for i in (2, 3):
+        _lista_para_subir(db_conn, i)
+    sincroniza([_fila(1)])                       # completo: la base
+    sincroniza([_fila(1), _fila(2)], total=5)    # cortado: la 2 es nueva y avisa
+    sincroniza([_fila(1), _fila(2), _fila(3)])   # la base sigue valiendo: la 3 también avisa
+    assert len(_avisos(db_conn)) == 2
+
+
 def test_una_peticion_nueva_ya_lista_avisa_una_sola_vez(db_conn, sincroniza):
     sincroniza([_fila(1)])
     _lista_para_subir(db_conn, 2)

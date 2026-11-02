@@ -18,10 +18,12 @@ export function RellenarPeticion({ job }: { job: UploadJob }) {
   if (job.status !== 'completed' || !torrent || !peticion) return null
 
   const rellenar = async () => {
-    // Se abre durante el clic: tras esperar al portapapeles el navegador puede darla por no pedida y bloquearla.
+    // La copia se lanza antes de abrir la pestaña (writeText pide el foco en esta página) y la pestaña se abre en el
+    // mismo clic, sin esperar: tras un await el navegador puede darla por no pedida y bloquearla.
+    const copia = copiarTexto(torrent)
     const ventana = window.open(peticion, '_blank')
     if (ventana) ventana.opener = null
-    const ok = await copiarTexto(torrent)
+    const ok = await copia
     setCopiada(ok)
     setAMano(!ok || !ventana)
   }

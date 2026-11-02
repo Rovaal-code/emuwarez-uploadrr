@@ -56,25 +56,24 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   nombre, preparar e iniciar, cada uno con su `stage` (que es su punto de cancelación), su fila de Fases y lo que
   deja en `_Trabajo` para el siguiente. Mismo comportamiento que antes; lo fijan
   `test_la_preparacion_recorre_los_pasos_en_orden` y `test_cancelar_para_la_preparacion_en_el_siguiente_punto`.
-- **Oleada 3, partir upload_execution.py:** pasa a ser el paquete `services/upload_execution/`: `comun` (constantes, fases,
+- **Oleada 3, partir upload_execution.py (#130):** pasa a ser el paquete `services/upload_execution/`: `comun` (constantes, fases,
   secretos), `consultas` (leer y validar), `registro` (logs y artefactos), `estado` (transiciones y avisos), `config`
   (config.yaml compartido), `concurrencia` (puerta de «Subidas en paralelo»), `progreso` (fases), `procesos`
   (subprocesos en marcha), `ejecucion` (el subproceso y `start_upload_job`) y `ciclo_de_vida` (reintentar, cancelar,
   borrar). `__init__` re-exporta todo: `from ...services.upload_execution import X` sigue igual, pero un test que
   parchee un nombre debe hacerlo en el módulo que lo usa.
-- **Oleada 3, partir cli.py:** `cli.py` queda como punto de entrada (`main`, `modern_main` y el despacho); los comandos
+- **Oleada 3, partir cli.py (#129):** `cli.py` queda como punto de entrada (`main`, `modern_main` y el despacho); los comandos
   viven en el paquete `comandos/`: `parser.py` (`build_parser`), `comunes.py` (tabla, traducción de filtros, conexión),
   `biblioteca.py` (instancias, sync, biblioteca, peticiones, faltantes, *arr), `nomenclatura.py` (nomenclatura y título
   MKV), `subida.py` (subida, tareas, logs), `web.py` (comandos `web`) y `mantenimiento.py` (mantenimiento y demo).
   `emuwarez_uploadrr.cli:main` sigue siendo el entry point; el código se movió sin cambios (`--help` idéntico).
-- **Oleada 3, Configuración partida:** `pages/SettingsPage.tsx` queda en el marco (pestañas, aviso y botón de
+- **Oleada 3, Configuración partida (#131):** `pages/SettingsPage.tsx` queda en el marco (pestañas, aviso y botón de
   guardar) y lo demás vive en `pages/ajustes/`: una pestaña por fichero (`ConfigTab`, `NotificationsTab`,
   `DiagnosticsTab`, `BackupTab`) y una tarjeta por fichero en `config/` y `diagnostico/`. El formulario de la pestaña
   Configuración es `config/useConfigForm.ts`, compartido por sus tarjetas; lo que solo toca una (pruebas de
   conexión, modal de claves de imágenes) está en su tarjeta. Comportamiento igual: lo fija
-  `pages/__tests__/SettingsPage.test.tsx` (jsdom, nueva dependencia de desarrollo). Los estilos en línea siguen
-  sin pasar a clases.
-- **Oleada 3, estilos de Configuración a clases:** `SettingsPage` y `pages/ajustes/` ya no llevan estilos en línea,
+  `pages/__tests__/SettingsPage.test.tsx` (jsdom, nueva dependencia de desarrollo).
+- **Oleada 3, estilos de Configuración a clases (#136):** `SettingsPage` y `pages/ajustes/` ya no llevan estilos en línea,
   salvo los colores calculados (resultado de una prueba, mensaje de guardado) y el de un icono. Las clases están
   en `styles/ajustes.css` (prefijo `aj-`). Mismo aspecto.
 - **Oleada 3, subida por pasos con reintento (#126):** sobre `PASOS` (#127), cada subida enseña sus cuatro pasos con
@@ -82,7 +81,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   paró (`upload_jobs.etapa_parada`, `services/subida_pasos.py`). Un reintento de una subida que ya había preparado los ficheros reanuda desde la
   verificación y reutiliza la preparación si sigue valiendo en disco; «Reintentar desde el principio» lo rehace todo.
   El reintento ahora también conserva las elecciones del pack (`season_overrides_json`).
-- **Oleada 3, partir library.py:** `services/library.py` pasa a ser el paquete `services/library/`, sin cambiar lo que
+- **Oleada 3, partir library.py (#128):** `services/library.py` pasa a ser el paquete `services/library/`, sin cambiar lo que
   hace: `sync` (alta y sincronización con Radarr/Sonarr, avisos de faltantes, progreso y candado), `castellano`
   (audio y subtítulos en castellano), `listado` (filtros, orden, paginación, recuentos y faltantes), `resync`
   (releer un elemento tras renombrar), `panel` (datos del Dashboard), `rollups` (agregados de series y temporadas) y
@@ -96,7 +95,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `constantes`). Comportamiento igual: lo fija `components/__tests__/UploadWizardModal.test.tsx` (jsdom). Arreglado
   de paso: «Ver nombre de todos los capítulos» y «Ver Pistas», si estaban abiertos al cambiar el idioma del pack, se
   recargan con el idioma confirmado en vez de quedarse vacíos.
-- **Oleada 3, un solo limitador para eMuwarez:** toda petición a la API de eMuwarez pasa por
+- **Oleada 3, un solo limitador para eMuwarez (#134):** toda petición a la API de eMuwarez pasa por
   `integrations/emu_limitador.py` (los conectores de `emu.py` y la prueba de conexión de `integration_tests.py`):
   ventana deslizante de 60 s por API key, planificada para 28 de las 30 que deja eMuwarez. Los recorridos largos
   (catálogo y peticiones) se quedan en 20 por minuto entre todos; los 8 huecos restantes son para las consultas
@@ -105,7 +104,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   usan esa clave, no solo al que lo recibió. Se van las pausas sueltas (`EMU_MIN_REQUEST_INTERVAL`,
   `EMU_PETICIONES_INTERVALO`, `min_interval`). En los tests, un fixture de `conftest.py` le da a cada test su
   limitador con un reloj falso: nada duerme de verdad.
-- **Oleada 3, httpx:** las peticiones salientes (Radarr, Sonarr, eMuwarez, TMDb, qBittorrent, proveedores de imágenes,
+- **Oleada 3, httpx (#135):** las peticiones salientes (Radarr, Sonarr, eMuwarez, TMDb, qBittorrent, proveedores de imágenes,
   Discord, Telegram, manifiesto de versiones) dejan urllib y salen todas por `integrations/http_cliente.py` (`pedir`),
   con dos clientes httpx compartidos (con y sin verificar el certificado) que reaprovechan conexiones. Hereda lo de
   urllib: certificados del sistema, redirecciones seguidas (hasta 10), sin cookies salvo la sesión propia del inicio
@@ -115,18 +114,46 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   pasa al extra `web` con su pin. En los tests, un solo servidor falso (`tests/http_falso.py`, fixture `http_falso`,
   `httpx.MockTransport`) sustituye a los parches de `urlopen`, y `test_ninguna_peticion_sale_por_otro_lado` vigila
   que nadie más importe urllib.request, http.client ni httpx.
-- **Oleada 3, estilos del asistente a clases:** `UploadWizardModal.tsx` y `components/asistente/` ya no llevan
+- **Oleada 3, estilos del asistente a clases (#137):** `UploadWizardModal.tsx` y `components/asistente/` ya no llevan
   `style={{` (de 180 a 3): las clases `asist-*` están en `styles/asistente.css`. Siguen en línea los tres
   `width: '100%'` de `<Tooltip style>` en `PasoSeleccion` y los dos `tituloStyle` de los modales de pistas, porque
   `Tooltip` y `Modal` solo admiten objeto de estilo.
-- **Oleada 3, ESLint `react-hooks`:** el frontend tiene `eslint.config.js` con solo `rules-of-hooks` y `exhaustive-deps`
+- **Oleada 3, ESLint `react-hooks` (#142):** el frontend tiene `eslint.config.js` con solo `rules-of-hooks` y `exhaustive-deps`
   (nada más), `npm run lint` (`--max-warnings 0`) y un paso en el job `frontend` de la CI. Todo `eslint-disable` de
   esas reglas lleva su motivo tras `--`; ESLint avisa de los que sobran. Una dependencia que falta no se añade a
   ciegas: un efecto que se recrea en cada pintado puede crear un bucle (como el de `RejillaVirtual`).
+- **Oleada 3, segunda tanda de estilos a clases:** mismo método que en Configuración y el asistente (sin cambio
+  visual, solo tokens y variables que ya existían; una hoja por pantalla, importada en `main.tsx` tras las demás):
+  - #144: Peticiones (`styles/peticiones.css`);
+  - #143: detalle de subida (`styles/detalle-subida.css`);
+  - #148: Guía (`styles/guia.css`);
+  - #149: asistente de primera configuración, `SetupWizard` (`styles/setup.css`);
+  - #150: lista de Subidas (`styles/subidas.css`);
+  - #151: Panel, `DashboardPage` (`styles/panel.css`, prefijo `panel-`): de 58 `style={{` a 2 (la barra de progreso
+    con `scaleX` calculado y la transición de la fila que se despide).
+  Siguen en línea, con comentario, los valores calculados. La comparación visual con capturas de antes y después
+  está pendiente.
+- **Oleada 3, arreglos sueltos:**
+  - #138: «Probar conexión» de eMuwarez no bloquea la base y acepta una clave nueva sin URL;
+  - #139 y #147: el asistente de subida aguanta los fallos de red y las comprobaciones que llegan tarde (en una
+    tanda, una comprobación vieja o fallida no habilita «Subir todas»; «Reintentar» solo rehace los capítulos que
+    fallaron; cambiar el Proveedor vuelve a comprobar esa temporada);
+  - #145: Configuración no deja guardar si la carga falló (ofrece reintentar) ni pierde lo editado al guardar las
+    rutas;
+  - #146: la base ya no guarda la clave del indexador que traen la cola y el historial de Radarr/Sonarr.
 
 ## Siguiente (oleada 3)
 
-1. Los estilos en línea, a clases. Hecho en el asistente de subida y en Configuración; faltan el resto de pantallas y componentes.
+1. Los estilos en línea, a clases (tercera tanda). Hecho en el asistente de subida, Configuración, Peticiones,
+   detalle de subida, Guía, `SetupWizard`, Subidas y el Panel; quedan unos 400 `style={{`. Las siguientes, por
+   tamaño: `LibraryPage` con `LibraryTreeRow`, `TasksPage`, `EmuComparisonSection` con `SourceComparisonModal`,
+   `NomenclatureModal` con `UploadPreflightModal` e `InstancesPage`. Después, los componentes pequeños (`DetailCard`,
+   `LogsPage`, `ProviderPriorityPicker`, `RequestFormModal`, `LibraryDetailPage`…).
+2. Issues abiertos:
+   - #152: el asistente de subida encola capítulos bloqueados en una tanda y no avisa si falla `runUploadChecks` en
+     una película;
+   - #153: `useConfigForm` no invalida `settings` cuando falla una recarga;
+   - #141: decidir si la prueba de conexión de eMuwarez exige HTTPS antes de enviar el `api_token`.
 
 ## Oleada 4
 

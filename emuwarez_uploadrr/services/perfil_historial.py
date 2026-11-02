@@ -44,12 +44,18 @@ def guardar_instantanea(conn: sqlite3.Connection, datos: dict[str, Any], ahora: 
     try:
         ahora = ahora or datetime.now()
         valores = (_numero(datos.get("ratio")), bytes_de_texto(datos.get("uploaded")),
-                   bytes_de_texto(datos.get("downloaded")), _numero(datos.get("seedbonus")))
+                   bytes_de_texto(datos.get("downloaded")), _numero(datos.get("seedbonus")),
+                   datos.get("username") or None)
+        # El historial es de una cuenta: si el perfil es de otro usuario (otra clave), el anterior no se mezcla.
+        ultimo = conn.execute("SELECT usuario FROM perfil_historial WHERE usuario IS NOT NULL "
+                              "ORDER BY dia DESC LIMIT 1").fetchone()
+        if ultimo and valores[4] and ultimo[0] != valores[4]:
+            conn.execute("DELETE FROM perfil_historial")
         conn.execute(
-            """INSERT INTO perfil_historial (dia, ratio, subido_bytes, bajado_bytes, bonus, actualizado_at)
-               VALUES (?, ?, ?, ?, ?, ?)
+            """INSERT INTO perfil_historial (dia, ratio, subido_bytes, bajado_bytes, bonus, usuario, actualizado_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(dia) DO UPDATE SET ratio = excluded.ratio, subido_bytes = excluded.subido_bytes,
-                   bajado_bytes = excluded.bajado_bytes, bonus = excluded.bonus,
+                   bajado_bytes = excluded.bajado_bytes, bonus = excluded.bonus, usuario = excluded.usuario,
                    actualizado_at = excluded.actualizado_at""",
             (ahora.strftime("%Y-%m-%d"), *valores, ahora.isoformat(timespec="seconds")),
         )

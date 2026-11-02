@@ -1284,6 +1284,7 @@ def _migrate_perfil_historial(conn: sqlite3.Connection) -> None:
             subido_bytes INTEGER,
             bajado_bytes INTEGER,
             bonus REAL,
+            usuario TEXT,                  -- de qué cuenta es: si el perfil cambia de usuario, se empieza de cero
             actualizado_at TEXT NOT NULL
         )
     """)

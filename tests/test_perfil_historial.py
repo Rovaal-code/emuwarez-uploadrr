@@ -45,7 +45,7 @@ def _dia(dias_atras: int) -> str:
 def test_base_nueva_trae_la_tabla(conn):
     assert get_state(conn, "schema_version") == str(SCHEMA_VERSION)
     columnas = [f[1] for f in conn.execute("PRAGMA table_info(perfil_historial)")]
-    assert columnas == ["dia", "ratio", "subido_bytes", "bajado_bytes", "bonus", "actualizado_at"]
+    assert columnas == ["dia", "ratio", "subido_bytes", "bajado_bytes", "bonus", "usuario", "actualizado_at"]
 
 
 def test_base_anterior_se_actualiza_sin_perder_nada(conn):
@@ -107,6 +107,14 @@ def test_un_dia_nuevo_es_una_fila_nueva(conn):
     guardar_instantanea(conn, USUARIO, AHORA - timedelta(days=1))
     guardar_instantanea(conn, {**USUARIO, "ratio": "4.5"}, AHORA)
     assert [(f[0], f[1]) for f in _filas(conn)] == [(_dia(1), 4.1), (_dia(0), 4.5)]
+
+
+def test_otra_cuenta_empieza_un_historial_nuevo_y_la_misma_con_otra_clave_no(conn):
+    guardar_instantanea(conn, USUARIO, AHORA - timedelta(days=2))
+    guardar_instantanea(conn, USUARIO, AHORA - timedelta(days=1))   # la misma cuenta (p. ej. otra clave) sigue
+    assert [f[0] for f in _filas(conn)] == [_dia(2), _dia(1)]
+    guardar_instantanea(conn, {**USUARIO, "username": "Otro"}, AHORA)
+    assert [f[0] for f in _filas(conn)] == [_dia(0)]
 
 
 def test_poda_lo_que_pasa_de_la_retencion(conn):

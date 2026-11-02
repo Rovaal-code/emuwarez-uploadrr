@@ -29,7 +29,8 @@ export function resumenSeeding(i: SeedingItem): string {
   return i.ratio == null ? i.etiqueta : `${i.etiqueta} · ratio ${formatNumero(i.ratio, 2)}`
 }
 
-// formatBytes enseña la raya con 0 bytes; aquí 0 es un dato.
+// formatBytes enseña la raya con 0 bytes; aquí 0 es un dato y la raya es no saberlo.
 export function textoSubido(i: SeedingItem): string {
-  return i.subido ? formatBytes(i.subido) : '0 B'
+  if (i.subido == null) return '—'
+  return i.subido === 0 ? '0 B' : formatBytes(i.subido)
 }

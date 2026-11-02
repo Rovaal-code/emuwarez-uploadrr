@@ -6,7 +6,7 @@ export interface SeedingItem {
   estado: string
   etiqueta: string
   ratio?: number
-  subido?: number
+  subido?: number | null
   progreso?: number
   seeds?: number | null
   peers?: number | null

@@ -23,6 +23,7 @@ caído no haga esperar cada petición. Ni la URL ni las credenciales salen de aq
 from __future__ import annotations
 
 import logging
+import math
 import posixpath
 import sqlite3
 import threading
@@ -93,7 +94,10 @@ def _etiquetas(t: dict[str, Any]) -> set[str]:
 
 
 def _numero(valor: Any, por_defecto: Optional[float] = None) -> Optional[float]:
-    return float(valor) if isinstance(valor, (int, float)) and not isinstance(valor, bool) else por_defecto
+    if not isinstance(valor, (int, float)) or isinstance(valor, bool):
+        return por_defecto
+    numero = float(valor)
+    return numero if math.isfinite(numero) else por_defecto  # inf y nan no caben en el JSON de la respuesta
 
 
 def _resumir(t: dict[str, Any]) -> dict[str, Any]:

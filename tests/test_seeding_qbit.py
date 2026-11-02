@@ -32,6 +32,11 @@ def _indices(*torrents):
 
 # --- casamiento ---------------------------------------------------------------------------------------------
 
+def test_una_metrica_no_finita_no_rompe_el_resumen():
+    t = sq._resumir(torrent(ratio=float("inf"), progreso=float("nan"), subido=float("inf")))
+    assert (t["ratio"], t["progress"], t["uploaded"]) == (0.0, 0.0, 0)
+
+
 def test_casa_por_la_ruta_de_contenido():
     t, como = sq.casar(f"{RAIZ}/Peli 2020 1080p", _indices(torrent(), torrent("Otra", hash="b" * 40)), "", RAIZ)
     assert t["hash"] == "a" * 40 and como == "ruta"

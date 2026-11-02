@@ -572,6 +572,32 @@
   gap: 8px;
 }
 
+/* Tarjeta «Widget para Homepage» de Configuración. */
+.widget-nota {
+  margin: 0 0 12px;
+}
+.widget-clave {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.widget-clave__valor {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.widget-clave > .form-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+.widget-botones {
+  display: flex;
+  gap: 8px;
+}
+
 /* Proveedores de vídeo / de imágenes: con la tarjeta creciendo con el
    contenido (arriba), ya no hace falta anclar "Añadir" abajo ni capar la
    lista a unas pocas filas con su propio scroll — eso era lo que escondía la

@@ -32,6 +32,12 @@ def _indices(*torrents):
 
 # --- casamiento ---------------------------------------------------------------------------------------------
 
+def test_una_url_con_el_puerto_mal_escrito_es_un_error_de_qbit_y_no_un_500():
+    from emuwarez_uploadrr.integrations.qbittorrent import ErrorQbit, qbit_listar_torrents
+    with pytest.raises(ErrorQbit, match="no es válida"):
+        qbit_listar_torrents("http://qbit:bad", None, "usuario", "clave")
+
+
 def test_una_metrica_no_finita_no_rompe_el_resumen():
     t = sq._resumir(torrent(ratio=float("inf"), progreso=float("nan"), subido=float("inf")))
     assert (t["ratio"], t["progress"], t["uploaded"]) == (0.0, 0.0, 0)

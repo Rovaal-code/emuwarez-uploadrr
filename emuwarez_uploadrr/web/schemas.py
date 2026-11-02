@@ -546,6 +546,20 @@ class EmuPerfilResponse(BaseModel):
     error: Optional[str] = None
 
 
+class PuntoCuentaResponse(BaseModel):
+    """La instantánea de un día de tu cuenta de eMuwarez; lo que no se pudo leer ese día va a None."""
+    dia: str
+    ratio: Optional[float] = None
+    subido_bytes: Optional[int] = None
+    bajado_bytes: Optional[int] = None
+    bonus: Optional[float] = None
+
+
+class EstadisticasCuentaResponse(BaseModel):
+    dias: int
+    puntos: list[PuntoCuentaResponse]
+
+
 # ---------------------------------------------------------------------------
 # Library
 # ---------------------------------------------------------------------------
@@ -1518,3 +1532,21 @@ class VersionResponse(BaseModel):
     estado: str
     motivo: Optional[str] = None
     ultima: UltimaVersionPublicada
+
+
+class WidgetContadores(BaseModel):
+    """GET /api/widget: planos y numéricos, para mapearlos tal cual en el widget customapi de Homepage."""
+    peticiones_listas: int
+    subidas_hoy: int
+    subidas_fallidas: int
+    en_cola: int
+    subiendo: int
+
+
+class WidgetClaveEstado(BaseModel):
+    configurada: bool
+
+
+class WidgetClaveGenerada(BaseModel):
+    # La única vez que se ve entera: en la base solo queda su hash.
+    clave: str

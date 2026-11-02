@@ -132,8 +132,11 @@ def qbit_listar_torrents(url: str, port: str | int | None, username: str, passwo
                          *, timeout: int = 5) -> list[dict[str, Any]]:
     """Todos los torrents de qBittorrent (`GET /api/v2/torrents/info`), en una sola consulta. Solo lectura.
 
-    Lanza `ErrorQbit` si no hay URL, no se conecta, las credenciales fallan o la respuesta no es una lista."""
-    base = build_base_url(url, port)
+    Lanza `ErrorQbit` si no hay URL o no es válida, no se conecta, las credenciales fallan o la respuesta no es una lista."""
+    try:
+        base = build_base_url(url, port)
+    except ValueError:  # un puerto que no es un número, como en «http://qbit:bad»
+        raise ErrorQbit("La URL de qBittorrent no es válida") from None
     if not base:
         raise ErrorQbit("qBittorrent no está configurado")
     with http_cliente.sesion() as sesion:

@@ -20,6 +20,9 @@ vi.mock('../../api/auth', () => ({
   getMe: vi.fn(), changeCredentials: vi.fn(), getSessions: vi.fn(), closeOtherSessions: vi.fn(),
 }))
 vi.mock('../../api/system', () => ({ getUploadConcurrencyEstimate: vi.fn() }))
+vi.mock('../../api/widget', () => ({
+  getWidgetKeyStatus: vi.fn(), generateWidgetKey: vi.fn(), removeWidgetKey: vi.fn(),
+}))
 
 import { fetchSettings, updateSettings } from '../../api/settings'
 import {
@@ -28,6 +31,7 @@ import {
 import { testImghostConnection, testQbitConnection } from '../../api/integrationTests'
 import { testDiscordNotification } from '../../api/notifications'
 import { getMe, changeCredentials, getSessions, closeOtherSessions } from '../../api/auth'
+import { getWidgetKeyStatus, generateWidgetKey, removeWidgetKey } from '../../api/widget'
 import { hasUnsavedChanges, setLeavePrompt } from '../../utils/unsavedGuard'
 import { SettingsPage } from '../SettingsPage'
 
@@ -157,6 +161,7 @@ beforeEach(() => {
   vi.mocked(listBackups).mockResolvedValue({ ok: true, backups: [COPIA], count: 1, backup_dir: '/b' })
   vi.mocked(getVersionInfo).mockResolvedValue({ version: '0.14.0', estado: 'al_dia', ultima: {} })
   vi.mocked(getMe).mockResolvedValue({ username: 'admin' } as Awaited<ReturnType<typeof getMe>>)
+  vi.mocked(getWidgetKeyStatus).mockResolvedValue({ configurada: false })
   vi.mocked(getSessions).mockResolvedValue({
     sessions: [
       { id: 1, current: true, created_at: '2026-11-01T10:00:00', last_used_at: '2026-11-01T10:00:00', user_agent: null, ip_address: '1.1.1.1' },
@@ -359,6 +364,59 @@ describe('Configuración: cuenta y sesiones', () => {
     expect(closeOtherSessions).toHaveBeenCalledTimes(1)
     expect(getSessions).toHaveBeenCalledTimes(2)
     expect(texto()).toContain('✓ Se ha cerrado 1 sesión.')
+  })
+})
+
+describe('Configuración: widget para Homepage', () => {
+  it('genera la clave, la enseña entera y no la vuelve a mostrar al recargar', async () => {
+    vi.mocked(generateWidgetKey).mockResolvedValue({ clave: 'emuw_clave-de-prueba' })
+    await montar()
+    expect(texto()).toContain('Sin clave: el widget está desactivado.')
+    await pulsar(boton('Generar clave'))
+    expect(generateWidgetKey).toHaveBeenCalledTimes(1)
+    expect((document.querySelector('input[aria-label="Clave del widget"]') as HTMLInputElement).value).toBe('emuw_clave-de-prueba')
+    expect(texto()).toContain('no se vuelve a mostrar')
+    expect(boton('Regenerar clave')).toBeTruthy()
+
+    // Otra visita a Configuración: solo se sabe que hay clave.
+    await act(async () => { raiz.unmount() })
+    contenedor.remove()
+    vi.mocked(getWidgetKeyStatus).mockResolvedValue({ configurada: true })
+    await montar()
+    expect(document.querySelector('input[aria-label="Clave del widget"]')).toBeNull()
+    expect(texto()).toContain('Clave puesta.')
+    expect(texto()).not.toContain('emuw_clave-de-prueba')
+  })
+
+  it('si no se puede leer el estado de la clave, lo dice y deja reintentar', async () => {
+    vi.mocked(getWidgetKeyStatus).mockRejectedValueOnce(new Error('sin red')).mockResolvedValue({ configurada: true })
+    await montar()
+    expect(texto()).toContain('No se pudo cargar el estado de la clave.')
+    expect(texto()).not.toContain('Cargando…')
+    await pulsar(boton('Reintentar'))
+    expect(texto()).toContain('Clave puesta.')
+  })
+
+  it('regenerar y quitar piden confirmación', async () => {
+    vi.mocked(getWidgetKeyStatus).mockResolvedValue({ configurada: true })
+    vi.mocked(generateWidgetKey).mockResolvedValue({ clave: 'emuw_otra' })
+    vi.mocked(removeWidgetKey).mockResolvedValue({ configurada: false })
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await montar()
+
+    await pulsar(boton('Regenerar clave'))
+    await pulsar(boton('Quitar clave'))
+    expect(generateWidgetKey).not.toHaveBeenCalled()
+    expect(removeWidgetKey).not.toHaveBeenCalled()
+
+    confirmar.mockReturnValue(true)
+    await pulsar(boton('Regenerar clave'))
+    expect(generateWidgetKey).toHaveBeenCalledTimes(1)
+    await pulsar(boton('Quitar clave'))
+    expect(removeWidgetKey).toHaveBeenCalledTimes(1)
+    expect(texto()).toContain('Sin clave: el widget está desactivado.')
+    expect(document.querySelector('input[aria-label="Clave del widget"]')).toBeNull()
+    confirmar.mockRestore()
   })
 })
 

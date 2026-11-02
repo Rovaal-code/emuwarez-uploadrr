@@ -12,6 +12,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'library', label: 'Biblioteca', icon: 'library' },
   { id: 'requests', label: 'Peticiones', icon: 'requests' },
   { id: 'uploads', label: 'Subidas', icon: 'uploads' },
+  { id: 'stats', label: 'Estadísticas', icon: 'stats' },
   { id: 'guide', label: 'Guía', icon: 'guide' },
   { id: 'tasks', label: 'Tareas', icon: 'tasks' },
   { id: 'instances', label: 'Instancias', icon: 'instances' },

@@ -10,6 +10,7 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { UploadJobDetailPage } from '../components/UploadJobDetailPage'
 import { DeleteUploadModal } from '../components/DeleteUploadModal'
 import { PeticionDeSubida } from '../components/PeticionDeSubida'
+import { RellenarPeticion } from '../components/RellenarPeticion'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { CancelButtonIcon, RetryButtonIcon, DeleteButtonIcon, ExternalLinkButtonIcon, ValueChip, PlainValue, TypeValueIcon } from '../components/DetailCard'
 import { useTooltip } from '../components/Tooltip'
@@ -269,6 +270,7 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
       </td>
       <td className="col-actions">
         <div className="sub-acciones-fila">
+          <RellenarPeticion job={job} />
           <button
             type="button"
             className="btn btn-primary btn-sm"

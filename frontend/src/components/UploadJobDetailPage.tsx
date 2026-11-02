@@ -9,6 +9,7 @@ import { InfoIcon } from './InfoIcon'
 import { PeticionDeSubida } from './PeticionDeSubida'
 import { SeedingBloque } from './SaludSeeding'
 import type { SeedingEstado } from '../hooks/useSeeding'
+import { RellenarPeticion } from './RellenarPeticion'
 import { ExternalIdLink } from './ExternalIdLink'
 import { ServiceLabel } from './ServiceIcon'
 import {
@@ -572,6 +573,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
               <ExternalLinkButtonIcon /> Ver en eMuwarez
             </a>
           )}
+          <RellenarPeticion job={job} />
           {job.library_item_id != null && (
             <button className="btn btn-primary btn-sm" onClick={() => onOpenLibraryItem?.(job.library_item_id!)}><LibraryButtonIcon /> Ver en Biblioteca</button>
           )}

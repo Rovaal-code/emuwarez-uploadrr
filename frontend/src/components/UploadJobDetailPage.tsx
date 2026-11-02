@@ -7,6 +7,8 @@ import { posterUrl } from '../utils/libraryItem'
 import { formatDate, formatDateTimeSeconds, parseServerDate } from '../utils/format'
 import { InfoIcon } from './InfoIcon'
 import { PeticionDeSubida } from './PeticionDeSubida'
+import { SeedingBloque } from './SaludSeeding'
+import type { SeedingEstado } from '../hooks/useSeeding'
 import { ExternalIdLink } from './ExternalIdLink'
 import { ServiceLabel } from './ServiceIcon'
 import {
@@ -444,7 +446,7 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
   )
 }
 
-export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, onDelete, onOpenLibraryItem, retryError }: {
+export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, onDelete, onOpenLibraryItem, seeding, retryError }: {
   job: UploadJob
   onBack: () => void
   onStart: (job: UploadJob) => void
@@ -452,6 +454,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   onCancel: (jobId: number) => void
   onDelete: (job: UploadJob) => void
   onOpenLibraryItem?: (id: number) => void
+  seeding: SeedingEstado
   retryError?: string | null
 }) {
   const jobId = job.id!
@@ -704,6 +707,8 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
           (Nomenclatura, Reordenación/Renombrado, Verificación pre-subida,
           Actividad) moved into "Estado de la subida" above as mini-card
           fields — each opens its own modal below instead. */}
+      <SeedingBloque job={job} seeding={seeding} />
+
       <Panel
         title="Progreso de la subida" loading={progressIsActive} fill
         help="Cada fase por la que pasa la subida (comprobación de integridad, nomenclatura, remux, subida a eMuwarez…), con su estado, cuándo empezó y terminó, y el porcentaje global de la subida completa."

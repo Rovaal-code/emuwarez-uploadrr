@@ -35,6 +35,8 @@ from .compatibility import (
 logger = logging.getLogger("emuwarez.requests")
 
 SYNC_STATE_KEY = "last_emu_requests_sync_utc"
+# «1» si el último recorrido cuadró con el total de eMuwarez: solo con esa base se sabe cuáles son nuevas.
+SYNC_COMPLETA_KEY = "last_emu_requests_sync_complete"
 MIN_SYNC_SECONDS = 3600
 
 
@@ -309,8 +311,9 @@ def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         set_state(conn, SYNC_STATE_KEY, prev_sync or "")
         conn.commit()
 
-    # Sin sincronización previa (la primera) todo lo que llega ya estaba ahí: no se avisa de nada.
-    conocidas = {r[0] for r in conn.execute("SELECT emu_id FROM request_items")} if prev_sync else None
+    # Sin un recorrido previo completo (la primera vez, o tras uno cortado) todo lo que llega ya estaba ahí: no se avisa.
+    conocidas = ({r[0] for r in conn.execute("SELECT emu_id FROM request_items")}
+                 if get_state(conn, SYNC_COMPLETA_KEY) == "1" else None)
 
     logger.info("Sincronización de peticiones iniciada")
     try:
@@ -327,6 +330,7 @@ def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
                              [(i.emu_id,) for i in items if i.emu_id not in conocidas])
         # Solo un recorrido que cuadra con el total de eMuwarez dice cuáles ya no están abiertas.
         complete = total is not None and len(items) == total == len({i.emu_id for i in items})
+        set_state(conn, SYNC_COMPLETA_KEY, "1" if complete else "0")
         if not complete:
             logger.warning("El recorrido de peticiones no cuadra con el total de eMuwarez; no se borra ninguna")
         removed = borrar_peticiones(conn, "last_seen_at IS NULL OR last_seen_at != ?", (sync_at,)) if complete else 0

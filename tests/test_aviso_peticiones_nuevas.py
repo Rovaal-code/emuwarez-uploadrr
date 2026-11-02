@@ -26,8 +26,8 @@ def db_conn(isolated_db):
 
 @pytest.fixture
 def sincroniza(db_conn, monkeypatch):
-    def hacer(filas):
-        monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", lambda *a, **kw: (filas, len(filas)))
+    def hacer(filas, total=None):
+        monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", lambda *a, **kw: (filas, len(filas) if total is None else total))
         return reqs.sync_emu_requests(db_conn, force=True)
     return hacer
 
@@ -51,6 +51,16 @@ def test_la_primera_sincronizacion_no_avisa_de_lo_que_ya_estaba(db_conn, sincron
     sincroniza([_fila(1), _fila(2), _fila(3)])
     assert _avisos(db_conn) == []
     assert db_conn.execute("SELECT COUNT(*) FROM request_items WHERE aviso_pendiente = 1").fetchone()[0] == 0
+
+
+def test_un_primer_recorrido_cortado_no_es_base_para_avisar(db_conn, sincroniza):
+    for i in (2, 3, 4):
+        _lista_para_subir(db_conn, i)
+    sincroniza([_fila(1)], total=3)                      # el recorrido se quedó corto: falta lo que ya estaba
+    sincroniza([_fila(1), _fila(2), _fila(3)])           # la 2 y la 3 no son nuevas, solo no se habían visto
+    assert _avisos(db_conn) == []
+    sincroniza([_fila(1), _fila(2), _fila(3), _fila(4)])  # con una base completa, la 4 sí es nueva
+    assert len(_avisos(db_conn)) == 1
 
 
 def test_una_peticion_nueva_ya_lista_avisa_una_sola_vez(db_conn, sincroniza):

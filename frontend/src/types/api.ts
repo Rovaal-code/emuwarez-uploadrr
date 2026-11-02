@@ -42,6 +42,20 @@ export interface EmuPerfil {
   error: string | null
 }
 
+// Una instantánea diaria de tu cuenta de eMuwarez (Estadísticas); lo que no se pudo leer ese día va a null.
+export interface PuntoCuenta {
+  dia: string
+  ratio: number | null
+  subido_bytes: number | null
+  bajado_bytes: number | null
+  bonus: number | null
+}
+
+export interface EstadisticasCuenta {
+  dias: number
+  puntos: PuntoCuenta[]
+}
+
 export interface DashboardSummaryResponse {
   library_total: number
   available: number

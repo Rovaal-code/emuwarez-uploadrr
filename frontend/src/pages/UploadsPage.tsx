@@ -396,6 +396,13 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     openUpload(Number(pending))
   }, [cargado, subidasALaVista])
 
+  // La sección sigue montada al cambiar de pestaña: el seeding se vuelve a leer cada vez que se ve (el servidor lo
+  // guarda 60 s, así que no es una consulta más a qBittorrent).
+  const recargarSeeding = seeding.cargar
+  useEffect(() => {
+    if (subidasALaVista) recargarSeeding()
+  }, [subidasALaVista, recargarSeeding])
+
   function quitarFiltros() {
     setSearch('')
     setStatusFilter(''); setTypeFilter('')

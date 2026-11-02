@@ -116,6 +116,7 @@ _REGISTRO: tuple[Ajuste, ...] = (
     Ajuste("notify_telegram_chat_id", "notify.telegram.chat_id", STR),
     # Otros
     Ajuste("series_ignore_specials", "series.ignore_specials", BOOL, True),
+    Ajuste("sincronizar_al_volver_instancia", "biblioteca.sincronizar_al_volver", BOOL, True),
     Ajuste("source_engine_enabled", "source_engine.enabled", BOOL, False),
     # Se lee con mkv_remux.modo_pistas(), que traduce el ajuste viejo de sí/no,
     # y el PUT escribe también ese ajuste viejo (ver web/api/settings.py).

@@ -10,6 +10,8 @@ import { proveedorParaServidor, type ProveedoresElegidos } from '../../utils/ori
 export function useComprobaciones(targetId: number | null, proveedorElegido: ProveedoresElegidos) {
   const [checks, setChecks] = useState<UploadChecksResult | null>(null)
   const [checksLoading, setChecksLoading] = useState(false)
+  // Una petición que no llegó (red, eMuwarez caído): sin su resultado no se puede subir.
+  const [checksError, setChecksError] = useState<string | null>(null)
   // Checks landing one at a time while the run (POST, ~30s of real network
   // calls) is in flight — polled separately so the UI can reveal each one as
   // it actually completes instead of sitting on a static spinner.
@@ -24,6 +26,7 @@ export function useComprobaciones(targetId: number | null, proveedorElegido: Pro
     if (targetId == null) return
     const esta = ++pasada.current
     setChecks(null)
+    setChecksError(null)
     setChecksLoading(true)
     setLiveChecks([])
     const pedir = async () => {
@@ -35,20 +38,22 @@ export function useComprobaciones(targetId: number | null, proveedorElegido: Pro
     const dejarDeSeguir = seguirProgreso(
       'comprobaciones-progreso', a => a.item_id === targetId, pedir, 400)
     let resultado: UploadChecksResult | null = null
+    let fallo: string | null = null
     try { resultado = await runUploadChecks(targetId, undefined, proveedorParaServidor(proveedorElegido, targetId)) }
-    catch { /* sin resultado: no se puede subir */ }
+    catch (e: unknown) { fallo = e instanceof Error ? e.message : 'Error comprobando' }
     finally {
       dejarDeSeguir()
       if (esta === pasada.current) {
         // Si entretanto se eligió otra cosa, lo comprobado no es suyo.
         setChecks(objetivo.current === targetId ? resultado : null)
+        setChecksError(objetivo.current === targetId ? fallo : null)
         setChecksLoading(false)
         setLiveChecks([])
       }
     }
   }, [targetId, proveedorElegido])
 
-  return { checks, checksLoading, liveChecks, runChecks }
+  return { checks, checksLoading, checksError, liveChecks, runChecks }
 }
 
 // Paso 2 con varios elementos elegidos. Las comprobaciones del ENTORNO

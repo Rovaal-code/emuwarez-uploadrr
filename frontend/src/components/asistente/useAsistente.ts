@@ -241,7 +241,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   const [preparing, setPreparing] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
-  const { checks, checksLoading, liveChecks, runChecks } = useComprobaciones(targetId, proveedorElegido)
+  const { checks, checksLoading, checksError, liveChecks, runChecks } = useComprobaciones(targetId, proveedorElegido)
 
   // --- Step 0: load seasons (series) or episodes (season) ---
   useEffect(() => {
@@ -972,21 +972,24 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
       const title = ep ? listDisplayTitle(ep) : `Capítulo ${episodeId}`
       try {
         const ov = overridesMap.get(episodeId)
-        if (ov) {
-          // Straight from the cache the step-1 pass already built — the save
-          // endpoint rebuilds the whole proposal from what it's given rather
-          // than merging, so it needs the episode's full field set, not just
-          // the overridden bits.
-          const current = episodeFieldsById.get(episodeId) ?? await getNomenclatureFields(episodeId)
-          if (!current.blocked) {
-            await saveNomenclatureFields(episodeId, {
-              ...(current.fields || {}),
-              ...(ov.source !== undefined && ov.source !== null ? { source: ov.source } : {}),
-              ...(ov.provider !== undefined && ov.provider !== null ? { provider: ov.provider } : {}),
-              ...(ov.tag ? { tag: ov.tag } : {}),
-              ...(ov.title ? { title: ov.title } : {}),
-            })
-          }
+        // Straight from the cache the step-1 pass already built — the save
+        // endpoint rebuilds the whole proposal from what it's given rather
+        // than merging, so it needs the episode's full field set, not just
+        // the overridden bits.
+        const current = episodeFieldsById.get(episodeId) ?? (ov ? await getNomenclatureFields(episodeId) : undefined)
+        // Sin nomenclatura no hay nombre que subir, aunque sus comprobaciones pasen.
+        if (current?.blocked) {
+          results.push({ seasonId: episodeId, title, status: 'failed', reason: current.error || 'No se puede generar la nomenclatura.' })
+          continue
+        }
+        if (ov && current) {
+          await saveNomenclatureFields(episodeId, {
+            ...(current.fields || {}),
+            ...(ov.source !== undefined && ov.source !== null ? { source: ov.source } : {}),
+            ...(ov.provider !== undefined && ov.provider !== null ? { provider: ov.provider } : {}),
+            ...(ov.tag ? { tag: ov.tag } : {}),
+            ...(ov.title ? { title: ov.title } : {}),
+          })
         }
         // Igual que las temporadas: se reutiliza lo comprobado al entrar en
         // el paso 2 en vez de repetir las 4 de entorno por cada capítulo.
@@ -1033,7 +1036,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     idiomasPackEnVuelo, idiomasPorTemporada, elegirIdiomaPack, detalles,
     goToUpload, preparing,
     // Paso 2
-    checks, checksLoading, liveChecks, runChecks, canUpload, uploading, uploadMsg, doUpload,
+    checks, checksLoading, checksError, liveChecks, runChecks, canUpload, uploading, uploadMsg, doUpload,
     batchQueue, batchIsEpisodes, batchItemTitle, batchPhase, batchIndex, batchResults,
     batchViewId, setBatchViewId, batchEnvChecks, batchContentChecks, batchChecksLoading, batchChecksIndex,
     batchChecksError, repetirComprobacionesTanda, uploadAllSeasons, uploadAllEpisodes,

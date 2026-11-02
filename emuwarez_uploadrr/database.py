@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 48
+SCHEMA_VERSION = 49
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1273,6 +1273,23 @@ def _migrate_quitar_registro_arr(conn: sqlite3.Connection) -> None:
                  "WHERE arr_queue_raw_json IS NOT NULL OR arr_history_raw_json IS NOT NULL")
 
 
+def _migrate_perfil_historial(conn: sqlite3.Connection) -> None:
+    """Esquema 49: una instantánea al día de tu cuenta de eMuwarez (la sacan las lecturas horarias del perfil),
+    para dibujar la evolución en Estadísticas. `dia` es el día local del servidor (TZ del contenedor).
+    Solo añade una tabla."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS perfil_historial (
+            dia TEXT PRIMARY KEY,          -- YYYY-MM-DD, local
+            ratio REAL,
+            subido_bytes INTEGER,
+            bajado_bytes INTEGER,
+            bonus REAL,
+            hit_and_runs INTEGER,
+            actualizado_at TEXT NOT NULL
+        )
+    """)
+
+
 def _migrate_upload_jobs_torrent_subido(conn: sqlite3.Connection) -> None:
     """Esquema 44: `torrent_subido` (qBittorrent siembra del enlace de esa subida, antes se buscaba en todo el
     registro) y el índice del registro, que sirve a MAX(sequence) y a leer el final o lo posterior a una línea."""
@@ -1830,6 +1847,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_scheduled_tasks_run_at(conn)
         _migrate_upload_jobs_pasos(conn)
         _migrate_quitar_registro_arr(conn)
+        _migrate_perfil_historial(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

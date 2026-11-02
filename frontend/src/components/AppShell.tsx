@@ -22,6 +22,7 @@ import { LibraryPage } from '../pages/LibraryPage'
 import { LimiteDeErrores } from './LimiteDeErrores'
 import { RequestsPage } from '../pages/RequestsPage'
 import { UploadsPage } from '../pages/UploadsPage'
+import { EstadisticasPage } from '../pages/EstadisticasPage'
 import { GuidePage } from '../pages/GuidePage'
 import { TasksPage } from '../pages/TasksPage'
 import { InstancesPage } from '../pages/InstancesPage'
@@ -38,6 +39,7 @@ const PAGE_TITLE: Record<string, string> = {
   library:    'Biblioteca',
   requests:   'Peticiones',
   uploads:    'Subidas',
+  stats:      'Estadísticas',
   guide:      'Guía',
   tasks:      'Tareas',
   instances:  'Instancias',
@@ -51,6 +53,7 @@ function unaPagina(page: string, onNavigate: (p: string) => void) {
     case 'library':    return <LibraryPage onNavigate={onNavigate} />
     case 'requests':   return <RequestsPage onNavigate={onNavigate} />
     case 'uploads':    return <UploadsPage onNavigate={onNavigate} />
+    case 'stats':      return <EstadisticasPage />
     case 'guide':      return <GuidePage />
     case 'tasks':      return <TasksPage />
     case 'instances':  return <InstancesPage />
@@ -91,7 +94,7 @@ function unaPagina(page: string, onNavigate: (p: string) => void) {
 // cuestan (piden datos y pintan listas); las de después son casi instantáneas
 // y van al final porque da igual cuándo lleguen.
 const ORDEN_DE_PREPARADO = ['library', 'requests', 'uploads', 'dashboard',
-                            'tasks', 'instances', 'settings', 'logs', 'guide']
+                            'tasks', 'instances', 'settings', 'logs', 'stats', 'guide']
 
 // Lo que se espera antes de empezar. El navegador tiene bastante que hacer
 // justo después de arrancar (pintar la primera sección, pedir sus datos), y
@@ -143,7 +146,7 @@ function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: strin
 // Tabs that map to a URL path, so the address bar reflects the current tab
 // (bookmarkable / reloadable). The backend already serves index.html for any
 // non-/api path (SPA fallback), so a deep link like /library works on reload.
-const VALID_PAGES = ['dashboard', 'library', 'uploads', 'requests', 'guide', 'tasks', 'instances', 'logs', 'settings']
+const VALID_PAGES = ['dashboard', 'library', 'uploads', 'stats', 'requests', 'guide', 'tasks', 'instances', 'logs', 'settings']
 
 function pageFromPath(): string {
   const seg = window.location.pathname.replace(/^\/+/, '').split('/')[0]

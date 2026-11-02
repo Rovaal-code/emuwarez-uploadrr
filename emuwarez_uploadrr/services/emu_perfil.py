@@ -17,6 +17,7 @@ from typing import Any
 from ..database import get_json_state, get_setting_canonical, set_json_state
 from ..integrations.base import IntegrationError
 from ..integrations.emu import emu_get_user
+from .perfil_historial import guardar_instantanea
 from .settings import set_setting
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ def _pedir(conn: sqlite3.Connection, clave: str, guardado: dict[str, Any]) -> di
         # «Mis peticiones» cuenta por este nombre: si no lo has escrito en Ajustes, se pone el de la cuenta.
         if not get_setting_canonical(conn, "emu.username"):
             set_setting(conn, "emu.username", str(datos["username"]))
+        guardar_instantanea(conn, datos)
     set_json_state(conn, PERFIL_STATE_KEY, nuevo)
     conn.commit()
     return nuevo

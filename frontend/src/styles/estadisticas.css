@@ -1,0 +1,44 @@
+/* Estadísticas (EstadisticasPage y GraficoLinea): estilos de la pantalla. Prefijo est-.
+   Se importa el último en main.tsx. */
+
+.est-rangos { display: flex; gap: 6px; }
+.est-nota { color: var(--text-secondary); font-size: 13px; margin: 0 0 16px; }
+
+.est-rejilla-graficos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.est-grafico {
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  min-width: 0;
+}
+.est-grafico-titulo { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+.est-sin-datos { color: var(--text-muted); font-size: 13px; margin: 24px 0; }
+.est-svg { display: block; width: 100%; height: auto; }
+
+.est-rejilla { stroke: var(--border); stroke-width: 1; }
+.est-base { stroke: var(--border-input); stroke-width: 1; }
+.est-eje { fill: var(--text-muted); font-size: 11px; }
+
+.est-linea { fill: none; stroke: var(--est-color); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.est-punto { fill: var(--est-color); }
+.est-serie-ratio { --est-color: var(--color-available-soft); }
+.est-serie-subido { --est-color: var(--color-accent-soft); }
+.est-serie-bajado { --est-color: var(--color-warning-soft); }
+.est-serie-bajado .est-linea { stroke-dasharray: 6 4; }
+.est-serie-bonus { --est-color: var(--color-uploading); }
+.est-serie-hr { --est-color: var(--color-error-soft); }
+
+.est-leyenda { display: flex; gap: 16px; list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; color: var(--text-secondary); }
+.est-leyenda li { display: flex; align-items: center; gap: 6px; }
+
+.est-tabla { margin-bottom: 20px; }
+.est-tabla summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
+.est-tabla .data-table th[scope="row"] { font-weight: 500; text-align: left; }

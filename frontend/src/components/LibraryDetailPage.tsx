@@ -91,11 +91,11 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
   }, [item.id, item.item_type, item.parent_id])
 
   return (
-    <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flexShrink: 0 }}>
+    <div className="bibdet-pagina">
+      <div className="bibdet-cabecera">
       <DetailHero backdropUrl={item.backdrop_url}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div className="bibdet-barra">
+        <div className="bibdet-volver">
           <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a la biblioteca</button>
           {parentSeason && (
             <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeason)}>Volver a la temporada</button>
@@ -104,7 +104,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
             <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeries)}>Volver a la serie</button>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+        <div className="bibdet-acciones">
           <LibraryActionButtons
             item={item}
             onAction={onAction}
@@ -114,22 +114,23 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
         </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
+      <div className="bibdet-titulo">
         <DetailTitle><DetailTitleText title={item.display_title || item.title} /></DetailTitle>
       </div>
 
       {/* Lo que se pliega con la flecha del título de Temporadas/Capítulos: el
           póster y las tres tarjetas. Fuera se quedan el título del elemento y
           sus botones, que son lo que sigue haciendo falta con la tabla grande. */}
-      <div style={{ display: fichaPlegada && tieneTabla ? 'none' : 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div className={`bibdet-ficha${fichaPlegada && tieneTabla ? ' bibdet-ficha-plegada' : ''}`}>
         <DetailPoster
           url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null}
           alt={item.title}
           fallbackIcon={<IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />}
         />
 
-        <div style={{ flex: 1, minWidth: 300 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
+        <div className="bibdet-tarjetas">
+          {/* minHeight sale de DETAIL_CARD_HEIGHT (constante compartida): en línea. */}
+          <div className="bibdet-rejilla" style={{ minHeight: DETAIL_CARD_HEIGHT }}>
             <Card title="Estado de la biblioteca" icon={<StatusCardIcon />}>
               <FieldRow label="Tipo">
                 <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{formatItemType(item.item_type)}</span></ValueChip>
@@ -176,7 +177,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                     cada uno, cada cual con su icono y su nombre completo: es
                     el mismo control que con uno solo, repetido. */}
                 {item.providers_all?.length
-                  ? <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6 }}>
+                  ? <span className="bibdet-proveedores">
                       {item.providers_all.map(p => (
                         <ValueChip key={p.code} linkable><ProviderTag code={p.code} label={p.label} /></ValueChip>
                       ))}
@@ -248,9 +249,9 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
       </DetailHero>
 
       {showRuta && (
-        <Modal titulo="Ruta" onClose={() => setShowRuta(false)} style={{ width: 'max-content', maxWidth: 'calc(var(--vw100) * 0.9)', minWidth: 320 }}>
+        <Modal titulo="Ruta" onClose={() => setShowRuta(false)} className="bibdet-modal-ruta">
           <div className="modal-body">
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)', wordBreak: 'break-all', lineHeight: 1.6 }}>{item.prepared_path || item.path || '—'}</div>
+            <div className="bibdet-ruta">{item.prepared_path || item.path || '—'}</div>
           </div>
         </Modal>
       )}

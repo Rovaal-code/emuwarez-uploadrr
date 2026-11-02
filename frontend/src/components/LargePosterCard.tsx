@@ -16,38 +16,30 @@ export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, p
 }) {
   return (
     <div
-      className="clickable"
+      className="clickable poster-grande-tarjeta"
       onClick={() => onSelect(item)}
-      style={{
-        display: 'flex', flexDirection: 'column', borderRadius: 12, overflow: 'hidden',
-        background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer',
-        boxShadow: '0 2px 8px color-mix(in srgb, var(--overlay-dark) 15%, transparent)',
-      }}
     >
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', background: 'color-mix(in srgb, var(--overlay-light) 4%, transparent)' }}>
+      <div className="poster-grande-marco">
         {item.poster_url ? (
           <img
             src={posterUrl(item.poster_url, 'w342')}
             alt={item.title}
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            className="poster-grande-img"
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64, opacity: 0.35 }}>
+          <div className="poster-grande-vacio">
             <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
           </div>
         )}
-        <div style={{ position: 'absolute', top: 10, right: 10 }}>
+        <div className="poster-grande-estado">
           <PosterStatusIcon status={item.local_status} />
         </div>
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, padding: '20px 12px 10px',
-          background: 'linear-gradient(to top, color-mix(in srgb, var(--overlay-dark) 85%, transparent), transparent)',
-        }}>
-          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.3, color: 'var(--text-on-color)' }}>{item.title}</div>
-          <div style={{ fontSize: 12, color: 'color-mix(in srgb, var(--overlay-light) 75%, transparent)', marginTop: 2 }}>
+        <div className="poster-grande-pie">
+          <div className="poster-grande-titulo">{item.title}</div>
+          <div className="poster-grande-anio">
             {item.year ?? '—'}
           </div>
         </div>

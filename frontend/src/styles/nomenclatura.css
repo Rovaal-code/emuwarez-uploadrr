@@ -1,0 +1,136 @@
+/* Modales de nomenclatura (NomenclatureModal) y preflight (UploadPreflightModal):
+   estilos que antes iban en línea. Prefijos nomen- y preflight-.
+   Se importa el último en main.tsx. Los selectores que retocan algo de
+   `.detail-panel__*`, `.detail-row`, `.badge`, `.error-text`, `.text-muted`,
+   `.modal-panel` o un input llevan la especificidad de la regla base o más:
+   una clase suelta perdería contra ellas. */
+
+/* ---- Nomenclatura ---- */
+p.text-muted.nomen-titulo { margin-bottom: 12px; }
+.nomen-estado { margin-bottom: 12px; }
+.detail-row > span.nomen-quiebra { word-break: break-all; }
+.detail-panel__section.nomen-sec-avisos { margin-top: 12px; }
+.detail-panel__section.nomen-sec-errores { margin-top: 8px; }
+.detail-panel__reasons li.nomen-error { color: var(--color-error); }
+.detail-panel__section.nomen-aplicar {
+  margin-top: 16px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--color-indigo) 8%, transparent);
+  border-radius: 6px;
+}
+.detail-panel__section-title.nomen-aplicar-titulo { margin-bottom: 8px; }
+p.nomen-ayuda {
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+.nomen-fila-botones { display: flex; gap: 8px; margin-bottom: 8px; }
+.nomen-fila-token { display: flex; gap: 8px; }
+.nomen-token-texto { margin-top: 8px; margin-bottom: 4px; font-size: 0.85rem; }
+input.nomen-token:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+.hud-app input.nomen-token:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+  flex: 1;
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--overlay-dark) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--overlay-light) 15%, transparent);
+  border-radius: 4px;
+  color: inherit;
+}
+p.nomen-procesando { margin-top: 8px; font-size: 0.85rem; }
+p.nomen-aplicar-error {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--color-error);
+}
+.nomen-resultado { margin-top: 8px; }
+.nomen-resultado-estado { margin-bottom: 4px; }
+.detail-row.nomen-resultado-fila { font-size: 0.8rem; }
+p.nomen-resultado-mensaje {
+  font-size: 0.8rem;
+  margin-top: 4px;
+  color: var(--text-secondary);
+}
+.detail-panel__reasons.nomen-lista { margin-top: 4px; }
+.detail-panel__reasons li.nomen-li-chico { font-size: 0.8rem; }
+.detail-panel__reasons li.nomen-li-chico.nomen-error { color: var(--color-error); }
+.detail-panel__section.nomen-seguridad {
+  margin-top: 16px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--color-warning-soft) 8%, transparent);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.detail-panel__actions.nomen-acciones { padding: 12px 16px; }
+
+/* ---- Preflight ---- */
+.modal-panel.preflight-modal { max-width: 680px; }
+p.text-muted.preflight-titulo { margin-bottom: 12px; }
+.preflight-estado { margin-bottom: 12px; }
+.badge.preflight-chip { margin-left: 6px; font-size: 0.7rem; }
+.detail-row > span.preflight-origen { word-break: break-all; font-size: 0.8rem; }
+.detail-panel__section.preflight-sec-avisos { margin-top: 12px; }
+.detail-panel__section.preflight-sec-errores { margin-top: 8px; }
+.detail-panel__reasons li.preflight-error { color: var(--color-error); }
+.detail-panel__section.preflight-advertencia {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
+}
+.detail-panel__section-title.preflight-advertencia-titulo {
+  color: var(--color-error);
+  margin-bottom: 8px;
+}
+ul.preflight-lista {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.83rem;
+  line-height: 1.6;
+}
+.preflight-confirmar { margin-top: 12px; }
+label.preflight-confirmar-texto {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.83rem;
+}
+input.preflight-token:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+.hud-app input.preflight-token:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+  width: 100%;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--overlay-light) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--overlay-light) 15%, transparent);
+  border-radius: 4px;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+input.preflight-token.preflight-token-ok:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+.hud-app input.preflight-token.preflight-token-ok:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+  border-color: var(--color-available-soft);
+}
+.detail-panel__section.preflight-resultado {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--color-available) 6%, transparent);
+  border-radius: 6px;
+}
+p.preflight-res-linea { margin: 4px 0; font-size: 0.85rem; }
+p.preflight-res-mensaje { margin: 4px 0; font-size: 0.83rem; }
+p.error-text.preflight-error-inicio { margin-top: 8px; }
+.detail-panel__section.preflight-seguro {
+  margin-top: 16px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--color-warning-soft) 8%, transparent);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.detail-panel__actions.preflight-acciones {
+  padding: 12px 16px;
+  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+}

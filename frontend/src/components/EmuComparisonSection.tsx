@@ -63,13 +63,13 @@ export function EmuFieldChip({ itemId }: { itemId: number }) {
   return (
     <>
       <ValueChip as="button" linkable blink={blink} onClick={() => setShowModal(true)} title="Ver comparación con eMuwarez">
-        <span className="brand-icon" style={{ display: 'inline-flex' }}>
+        <span className="brand-icon comp-icono-marca">
           <ServiceIcon type="emu" size={15} />
         </span>
         <span className="txt">{STATUS_LABEL[status]}</span>
       </ValueChip>
       {showModal && createPortal(
-        <Modal titulo="Comparación con eMuwarez" onClose={() => setShowModal(false)} className="modal-wide" style={{ maxWidth: 'calc(var(--vw100) * 0.95)', width: 'max-content' }}>
+        <Modal titulo="Comparación con eMuwarez" onClose={() => setShowModal(false)} className="modal-wide comp-modal-emu">
           <div className="modal-body">
             <EmuComparisonContent data={data} />
           </div>
@@ -111,7 +111,7 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
 
   if (!data || !data.available) {
     return (
-      <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+      <span className="comp-mensaje">
         {data?.message ?? 'Sincroniza con eMuwarez para ver la comparación.'}
       </span>
     )
@@ -119,17 +119,17 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div className="comp-veredicto">
         {!hasLocal ? (
           notInCatalog ? (
-            <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>No lo tienes descargado y no está en eMuwarez todavía</span>
+            <span className="comp-veredicto-txt comp-secundario">No lo tienes descargado y no está en eMuwarez todavía</span>
           ) : (
-            <span style={{ fontWeight: 600, color: 'var(--color-accent-soft)' }}>Está en eMuwarez, pero aún no lo tienes descargado</span>
+            <span className="comp-veredicto-txt comp-acento">Está en eMuwarez, pero aún no lo tienes descargado</span>
           )
         ) : notInCatalog ? (
-          <span style={{ fontWeight: 600, color: 'var(--color-available)' }}>No está en eMuwarez · Contenido único</span>
+          <span className="comp-veredicto-txt comp-disponible">No está en eMuwarez · Contenido único</span>
         ) : data.only_episodes ? (
-          <span style={{ fontWeight: 600, color: 'var(--color-req-pending)' }}>
+          <span className="comp-veredicto-txt comp-pendiente">
             Los capítulos ya están en eMuwarez (sueltos), no hay season pack{' '}
             {data.have_all_episodes
               ? '· tienes todos, podrías aportar el pack de temporada.'
@@ -137,60 +137,60 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
           </span>
         ) : aportes.length > 0 ? (
           <>
-            <span style={{ fontWeight: 600 }}>Ya está en eMuwarez, pero aportas:</span>
+            <span className="comp-veredicto-txt">Ya está en eMuwarez, pero aportas:</span>
             {aportes.map((a, i) => (
-              <span key={i} style={chipStyle}>{a.detail}</span>
+              <span key={i} className="comp-chip-aporte">{a.detail}</span>
             ))}
           </>
         ) : (
-          <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Ya está en eMuwarez con igual o mejor calidad</span>
+          <span className="comp-veredicto-txt comp-secundario">Ya está en eMuwarez con igual o mejor calidad</span>
         )}
       </div>
 
       {!notInCatalog && (
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table" style={{ fontSize: 12.5, width: 'calc(100% - 1px)' }}>
+        <div className="comp-scroll-x">
+          <table className="data-table comp-tabla">
             <thead>
               <tr>
                 <th>Contenido</th>
                 <th>Resolución</th>
                 <th>Source</th>
                 <th>Códec</th>
-                <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Español <InfoIcon text="El idioma español se deduce del nombre del torrent; «?» = desconocido." /></span></th>
+                <th><span className="comp-th-icono">Español <InfoIcon text="El idioma español se deduce del nombre del torrent; «?» = desconocido." /></span></th>
                 <th>Tamaño</th>
-                <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Nombre del Torrent <InfoIcon text="Si todos los campos coinciden con algún candidato, se presupone que tu copia proviene de eMuwarez." /></span></th>
+                <th><span className="comp-th-icono">Nombre del Torrent <InfoIcon text="Si todos los campos coinciden con algún candidato, se presupone que tu copia proviene de eMuwarez." /></span></th>
               </tr>
             </thead>
             <tbody>
               {mine && hasLocal && (
-                <tr style={{ background: 'color-mix(in srgb, var(--color-available) 6%, transparent)' }}>
-                  <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Tu copia</td>
-                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={ResolutionValueIcon} value={mine.resolution} /></td>
-                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SourceValueIcon} value={mine.source} /></td>
-                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={VideoCodecValueIcon} value={mine.codec} /></td>
-                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={LanguageValueIcon} value={mine.has_es ? 'Sí' : null} /></td>
-                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SizeValueIcon} value={formatBytes(mine.size)} /></td>
+                <tr className="comp-fila-tuya">
+                  <td className="comp-tuya">Tu copia</td>
+                  <td className="comp-nowrap"><TechChip icon={ResolutionValueIcon} value={mine.resolution} /></td>
+                  <td className="comp-nowrap"><TechChip icon={SourceValueIcon} value={mine.source} /></td>
+                  <td className="comp-nowrap"><TechChip icon={VideoCodecValueIcon} value={mine.codec} /></td>
+                  <td className="comp-nowrap"><TechChip icon={LanguageValueIcon} value={mine.has_es ? 'Sí' : null} /></td>
+                  <td className="comp-nowrap"><TechChip icon={SizeValueIcon} value={formatBytes(mine.size)} /></td>
                   {matchedCandidate ? (
                     <td
-                      style={{ maxWidth: 1000, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', textAlign: 'left' }}
+                      className="comp-nombre"
                       {...matchedNameTip.triggerProps}
                     >
                       {matchedCandidate.name}
                       {matchedNameTip.tooltipNode}
                     </td>
                   ) : (
-                    <td style={{ color: 'var(--text-muted)' }}>—</td>
+                    <td className="comp-vacio">—</td>
                   )}
                 </tr>
               )}
               {data.matches.map((m, i) => (
-                <tr key={i} style={m === matchedCandidate ? { background: 'color-mix(in srgb, var(--text-accent) 8%, transparent)' } : undefined}>
-                  <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>eMuwarez</td>
-                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={ResolutionValueIcon} value={m.resolution} /></td>
-                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SourceValueIcon} value={m.source} /></td>
-                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={VideoCodecValueIcon} value={m.codec} /></td>
-                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={LanguageValueIcon} value={m.has_spanish === 1 ? 'Sí' : m.has_spanish === 0 ? 'No' : '?'} /></td>
-                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SizeValueIcon} value={formatBytes(m.size)} /></td>
+                <tr key={i} className={m === matchedCandidate ? 'comp-fila-coincide' : undefined}>
+                  <td className="comp-origen">eMuwarez</td>
+                  <td className="comp-nowrap"><TechChip icon={ResolutionValueIcon} value={m.resolution} /></td>
+                  <td className="comp-nowrap"><TechChip icon={SourceValueIcon} value={m.source} /></td>
+                  <td className="comp-nowrap"><TechChip icon={VideoCodecValueIcon} value={m.codec} /></td>
+                  <td className="comp-nowrap"><TechChip icon={LanguageValueIcon} value={m.has_spanish === 1 ? 'Sí' : m.has_spanish === 0 ? 'No' : '?'} /></td>
+                  <td className="comp-nowrap"><TechChip icon={SizeValueIcon} value={formatBytes(m.size)} /></td>
                   <TorrentNameCell name={m.name} />
                 </tr>
               ))}
@@ -206,16 +206,11 @@ function TorrentNameCell({ name }: { name: string | null | undefined }) {
   const { triggerProps, tooltipNode } = useTooltip(name ?? null)
   return (
     <td
-      style={{ maxWidth: 1000, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', textAlign: 'left' }}
+      className="comp-nombre"
       {...triggerProps}
     >
       {name}
       {tooltipNode}
     </td>
   )
-}
-
-const chipStyle: React.CSSProperties = {
-  fontSize: 11.5, padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap',
-  background: 'color-mix(in srgb, var(--color-available) 14%, transparent)', color: 'var(--color-available)', border: '1px solid color-mix(in srgb, var(--color-available) 30%, transparent)',
 }

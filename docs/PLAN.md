@@ -133,6 +133,15 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     con `scaleX` calculado y la transición de la fila que se despide).
   Siguen en línea, con comentario, los valores calculados. La comparación visual con capturas de antes y después
   está pendiente.
+- **Oleada 3, tercera tanda de estilos a clases:** mismo método (sin cambio visual, solo tokens ya existentes, una hoja
+  por grupo, importadas al final de `main.tsx`; `Modal` pasa de `style` a `className`):
+  - `styles/biblioteca.css` (`bib-`): `LibraryPage` y `LibraryTreeRow` (de 66 `style={{` a 5: sangrías y anchos calculados);
+  - `styles/tareas-instancias.css`: `TasksPage` e `InstancesPage` (de 53 a 4: colores de estado);
+  - `styles/comparacion.css` (`comp-`): `EmuComparisonSection` y `SourceComparisonModal` (de 59 a 1);
+  - `styles/nomenclatura.css`: `NomenclatureModal` y `UploadPreflightModal` (de 54 a 0);
+  - `styles/componentes.css`: `DetailCard`, `LogsPage`, `ProviderPriorityPicker`, `RequestFormModal`, `LibraryDetailPage`,
+    `LargePosterCard`, `EmuSyncButton`, `DeleteUploadModal` y `LibraryChildrenSection` (de 99 a 8). El hover de
+    `EmuSyncButton` pasó de estado de React a `:hover` en CSS.
 - **Oleada 3, arreglos sueltos:**
   - #138: «Probar conexión» de eMuwarez no bloquea la base y acepta una clave nueva sin URL;
   - #139 y #147: el asistente de subida aguanta los fallos de red y las comprobaciones que llegan tarde (en una
@@ -144,11 +153,9 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 
 ## Siguiente (oleada 3)
 
-1. Los estilos en línea, a clases (tercera tanda). Hecho en el asistente de subida, Configuración, Peticiones,
-   detalle de subida, Guía, `SetupWizard`, Subidas y el Panel; quedan unos 400 `style={{`. Las siguientes, por
-   tamaño: `LibraryPage` con `LibraryTreeRow`, `TasksPage`, `EmuComparisonSection` con `SourceComparisonModal`,
-   `NomenclatureModal` con `UploadPreflightModal` e `InstancesPage`. Después, los componentes pequeños (`DetailCard`,
-   `LogsPage`, `ProviderPriorityPicker`, `RequestFormModal`, `LibraryDetailPage`…).
+1. Los estilos en línea, a clases: queda lo que no es de `style={{` de valores calculados, y los componentes
+   sueltos de unos pocos `style={{` (`FitText`, `ProviderIcon`, `NotificationBell`, `RequestsPage`, `SetupWizard`…).
+   La comparación visual con capturas de antes y después sigue pendiente.
 2. Issues abiertos:
    - #152: el asistente de subida encola capítulos bloqueados en una tanda y no avisa si falla `runUploadChecks` en
      una película;

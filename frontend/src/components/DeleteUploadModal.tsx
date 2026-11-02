@@ -26,25 +26,25 @@ export function DeleteUploadModal({ job, onClose, onDeleted }: {
   }
 
   return (
-    <Modal titulo="Borrar subida" onClose={onClose} style={{ maxWidth: 440 }}>
+    <Modal titulo="Borrar subida" onClose={onClose} className="delsub-modal">
       <div className="modal-body">
-        <p style={{ margin: 0, fontWeight: 600 }}>{job.title || `Job ${job.id}`}</p>
-        <div style={{ padding: '10px 14px', background: 'color-mix(in srgb, var(--color-error) 8%, transparent)', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)', margin: '12px 0' }}>
-          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>
+        <p className="delsub-titulo">{job.title || `Job ${job.id}`}</p>
+        <div className="delsub-aviso">
+          <p className="delsub-aviso-texto">
             Se va a borrar todo el material y todo lo que hay registrado de esta subida: registro de actividad,
             capturas y demás datos generados. Esta acción no se puede deshacer.
           </p>
           {(job.retry_count ?? 0) > 0 && (
-            <p style={{ margin: '8px 0 0', fontSize: 13.5, lineHeight: 1.5 }}>
+            <p className="delsub-aviso-texto delsub-aviso-extra">
               Incluye sus <strong>{job.retry_count} reintento(s)</strong>: se borra la subida entera, no un intento suelto.
             </p>
           )}
         </div>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+        <p className="delsub-nota">
           El archivo de vídeo de tu biblioteca no se toca. Solo se borra el registro en esta aplicación.
         </p>
-        {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+        {error && <p className="error-text delsub-error">{error}</p>}
+        <div className="delsub-botones">
           <button className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
           <button className="btn btn-danger" onClick={handleDelete} disabled={loading}>{loading ? 'Borrando…' : 'Borrar subida'}</button>
         </div>

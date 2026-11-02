@@ -52,7 +52,7 @@ interface LibraryTreeRowProps {
 // there (neutral gray), — = catalog not synced yet.
 export function EmuStatusCell({ item }: { item: LibraryItemResponse }) {
   if (item.emu_in_catalog == null) {
-    return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+    return <span className="bib-guion bib-guion-12">—</span>
   }
   // 0 = No, 1 = Sí, 2 = Parcial (series with some seasons on eMuwarez, some not).
   const status = item.emu_in_catalog === 0 ? 'No' : item.emu_in_catalog === 2 ? 'Parcial' : 'Sí'
@@ -68,7 +68,7 @@ export function EmuStatusCell({ item }: { item: LibraryItemResponse }) {
 export function SpanishAudioCell({ item }: { item: LibraryItemResponse }) {
   const estado = estadoCastellano(item)
   if (estado === 'desconocido') {
-    return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+    return <span className="bib-guion bib-guion-12">—</span>
   }
   const { label, cssClass } = CASTELLANO_INFO[estado]
   return <span className={`badge ${cssClass}`}>{label}</span>
@@ -171,8 +171,9 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   return (
     <>
       <tr className={canExpand ? 'clickable' : undefined} onClick={canExpand ? toggle : undefined}>
-        <td style={{ maxWidth: 340 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: indent, minWidth: 0 }}>
+        <td className="bib-celda-titulo">
+          {/* La sangría depende de la profundidad: se queda en línea. */}
+          <div className="bib-titulo-fila" style={{ paddingLeft: indent }}>
             {canExpand ? (
               // Sin recuadro: el triángulo se ilumina él solo al pasar por
               // encima (.tree-expander). Un botón con caja aquí competía
@@ -189,34 +190,33 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
               </button>
             ) : item.item_type === 'episode' && item.episode_number != null ? (
               // Episodes use the chevron's slot to show their episode number.
-              <span style={{ width: 22, flexShrink: 0, textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+              <span className="bib-num-episodio">
                 {item.episode_number}
               </span>
             ) : depth > 0 ? (
               // Una fila hoja ANIDADA sí reserva el hueco del triángulo, para
               // quedar un nivel más adentro que su padre.
-              <span style={{ width: 22, flexShrink: 0 }} />
+              <span className="bib-hueco-triangulo" />
             ) : null}
-            <div className="poster-thumb" style={{ flexShrink: 0, width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="poster-thumb bib-miniatura">
               {item.poster_url ? (
                 <img
                   src={posterUrl(item.poster_url, 'w154')}
                   alt=""
                   loading={priority ? 'eager' : 'lazy'}
                   fetchPriority={priority ? 'high' : 'auto'}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  className="bib-tarjeta-img"
                   onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                 />
               ) : (
-                <span style={{ fontSize: 14, opacity: 0.35 }}>
+                <span className="bib-miniatura-icono">
                   <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
                 </span>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0, flex: 1 }}>
+            <div className="bib-titulo-caja">
               <div
-                className="lib-title-link"
-                style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+                className="lib-title-link bib-titulo-enlace"
                 onClick={e => { e.stopPropagation(); onSelect(item) }}
                 {...titleTip}
               >
@@ -226,10 +226,10 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
             </div>
           </div>
         </td>
-        <td style={{ whiteSpace: 'nowrap' }}>
+        <td className="bib-nowrap">
           <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{formatItemType(item.item_type)}</span></ValueChip>
         </td>
-        <td style={{ whiteSpace: 'nowrap' }}>
+        <td className="bib-nowrap">
           {item.instance_type
             ? (
               <ValueChip linkable={!!deepLink}>
@@ -238,40 +238,40 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                   : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />}
               </ValueChip>
             )
-            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+            : <span className="bib-guion">—</span>}
         </td>
         <td><StatusBadge status={item.local_status} type="local" /></td>
         <td><StatusBadge status={item.request_status} type="request" /></td>
-        <td style={{ whiteSpace: 'nowrap' }}>
+        <td className="bib-nowrap">
           {item.resolution
             ? <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.resolution}</span></ValueChip>
-            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+            : <span className="bib-guion">—</span>}
         </td>
-        <td style={{ whiteSpace: 'nowrap' }}>
+        <td className="bib-nowrap">
           {item.provider
             ? <ValueChip linkable><ProviderTag code={item.provider} label={item.provider_label} size={16} /></ValueChip>
-            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+            : <span className="bib-guion">—</span>}
         </td>
-        <td style={{ whiteSpace: 'nowrap' }}>
+        <td className="bib-nowrap">
           {item.source
             ? <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source}</span></ValueChip>
-            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+            : <span className="bib-guion">—</span>}
         </td>
-        <td style={{ whiteSpace: 'nowrap' }}>
+        <td className="bib-nowrap">
           {item.release_group
             ? <ValueChip><ValueIcon><ReleaseGroupValueIcon /></ValueIcon><span className="txt">{item.release_group}</span></ValueChip>
-            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+            : <span className="bib-guion">—</span>}
         </td>
-        <td style={{ whiteSpace: 'nowrap' }}><SpanishAudioCell item={item} /></td>
-        <td style={{ whiteSpace: 'nowrap' }}><EmuStatusCell item={item} /></td>
-        <td style={{ whiteSpace: 'nowrap' }}>
+        <td className="bib-nowrap"><SpanishAudioCell item={item} /></td>
+        <td className="bib-nowrap"><EmuStatusCell item={item} /></td>
+        <td className="bib-nowrap">
           {item.size_bytes
             ? <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
-            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+            : <span className="bib-guion">—</span>}
         </td>
         {!compact && (
           <td className="col-actions" onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-start', alignItems: 'center' }}>
+            <div className="bib-acciones-fila">
               {/* Same multi-season wizard the series' own page opens: the
                   two used to disagree, and "Subir" on a series meaning two
                   different things depending on where you clicked it was the
@@ -283,14 +283,14 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
       </tr>
       {expanded && loadingChildren && (
         <tr>
-          <td colSpan={colSpan} style={{ textAlign: 'center', padding: 10, color: 'var(--text-muted)', fontSize: 12 }}>
+          <td colSpan={colSpan} className="bib-aviso">
             Cargando…
           </td>
         </tr>
       )}
       {expanded && !loadingChildren && errorHijos && (
         <tr>
-          <td colSpan={colSpan} style={{ textAlign: 'center', padding: 10, color: 'var(--text-muted)', fontSize: 12, paddingLeft: indent + 20 }}>
+          <td colSpan={colSpan} className="bib-aviso" style={{ paddingLeft: indent + 20 }}>
             No se pudo cargar{' '}
             <button type="button" className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); loadChildren(childOffset) }}>
               Reintentar
@@ -300,7 +300,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
       )}
       {expanded && !loadingChildren && !errorHijos && children.length === 0 && (
         <tr>
-          <td colSpan={colSpan} style={{ textAlign: 'center', padding: 10, color: 'var(--text-muted)', fontSize: 12, paddingLeft: indent + 20 }}>
+          <td colSpan={colSpan} className="bib-aviso" style={{ paddingLeft: indent + 20 }}>
             Sin {childType === 'season' ? 'temporadas' : 'episodios'}
           </td>
         </tr>
@@ -319,8 +319,8 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
       ))}
       {expanded && !loadingChildren && !isSeries && childTotal > NESTED_PAGE_SIZE && (
         <tr>
-          <td colSpan={colSpan} style={{ padding: '6px 10px' }}>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingLeft: indent }}>
+          <td colSpan={colSpan} className="bib-paginacion">
+            <div className="bib-paginacion-fila" style={{ paddingLeft: indent }}>
               <button
                 className="btn btn-secondary btn-sm"
                 disabled={childOffset === 0}
@@ -328,7 +328,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
               >
                 Anterior
               </button>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>
+              <span className="bib-paginacion-cuenta">
                 {Math.floor(childOffset / NESTED_PAGE_SIZE) + 1} / {Math.ceil(childTotal / NESTED_PAGE_SIZE)}
               </span>
               <button

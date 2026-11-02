@@ -83,16 +83,16 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
   const startTip = useTooltip(canStart ? `Escribe ${CONFIRMATION_TOKEN} para habilitar` : 'El preflight no está listo')
 
   return (
-    <Modal titulo="Preflight Uploadrr" onClose={onClose} style={{ maxWidth: 680 }}>
+    <Modal titulo="Preflight Uploadrr" onClose={onClose} className="preflight-modal">
       <div className="modal-body">
-        <p className="text-muted" style={{ marginBottom: 12 }}>{itemTitle}</p>
+        <p className="text-muted preflight-titulo">{itemTitle}</p>
 
         {loading && <p>Ejecutando preflight…</p>}
         {error && <p className="error-text">{error}</p>}
 
         {result && (
           <>
-            <div style={{ marginBottom: 12 }}>
+            <div className="preflight-estado">
               <span className={statusClass}>{statusLabel}</span>
             </div>
             {result.command_preview && (
@@ -102,12 +102,12 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                   <span>
                     {result.command_preview.runtime_type || '—'}
                     {result.command_preview.contract_valid === false && (
-                      <span className="badge req-not-compatible" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
+                      <span className="badge req-not-compatible preflight-chip">
                         contrato inválido
                       </span>
                     )}
                     {result.command_preview.contract_valid === true && (
-                      <span className="badge req-compatible" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
+                      <span className="badge req-compatible preflight-chip">
                         contrato válido
                       </span>
                     )}
@@ -131,32 +131,32 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                 </div>
                 <div className="detail-row">
                   <span className="text-muted">Archivo origen:</span>
-                  <span style={{ wordBreak: 'break-all', fontSize: '0.8rem' }}>
+                  <span className="preflight-origen">
                     {result.command_preview.source_path || '—'}
                     {result.command_preview.using_prepared_path && (
-                      <span className="badge req-filled" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
+                      <span className="badge req-filled preflight-chip">
                         preparado
                       </span>
                     )}
                     {result.command_preview.using_prepared_path === false && (
-                      <span className="badge req-partial" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
+                      <span className="badge req-partial preflight-chip">
                         original
                       </span>
                     )}
                   </span>
                 </div>
                 {(result.command_preview.contract_errors?.length ?? 0) > 0 && (
-                  <div className="detail-panel__section" style={{ marginTop: 8 }}>
+                  <div className="detail-panel__section preflight-sec-errores">
                     <div className="detail-panel__section-title">Errores de contrato Uploadrr-EMU</div>
                     <ul className="detail-panel__reasons">
                       {result.command_preview.contract_errors!.map((err, i) => (
-                        <li key={i} style={{ color: 'var(--color-error)' }}>{err}</li>
+                        <li key={i} className="preflight-error">{err}</li>
                       ))}
                     </ul>
                   </div>
                 )}
                 {(result.command_preview.contract_warnings?.length ?? 0) > 0 && (
-                  <div className="detail-panel__section" style={{ marginTop: 8 }}>
+                  <div className="detail-panel__section preflight-sec-errores">
                     <div className="detail-panel__section-title">Avisos de contrato Uploadrr-EMU</div>
                     <ul className="detail-panel__reasons">
                       {result.command_preview.contract_warnings!.map((w, i) => <li key={i}>{w}</li>)}
@@ -166,7 +166,7 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
               </>
             )}
             {result.warnings.length > 0 && (
-              <div className="detail-panel__section" style={{ marginTop: 12 }}>
+              <div className="detail-panel__section preflight-sec-avisos">
                 <div className="detail-panel__section-title">Avisos</div>
                 <ul className="detail-panel__reasons">
                   {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -174,11 +174,11 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
               </div>
             )}
             {result.errors.length > 0 && (
-              <div className="detail-panel__section" style={{ marginTop: 8 }}>
+              <div className="detail-panel__section preflight-sec-errores">
                 <div className="detail-panel__section-title">Errores</div>
                 <ul className="detail-panel__reasons">
                   {result.errors.map((err, i) => (
-                    <li key={i} style={{ color: 'var(--color-error)' }}>{err}</li>
+                    <li key={i} className="preflight-error">{err}</li>
                   ))}
                 </ul>
               </div>
@@ -187,18 +187,18 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
         )}
 
         {canStart && (
-          <div className="detail-panel__section" style={{ marginTop: 16, padding: '12px 14px', background: 'color-mix(in srgb, var(--color-error) 8%, transparent)', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)' }}>
-            <div className="detail-panel__section-title" style={{ color: 'var(--color-error)', marginBottom: 8 }}>
+          <div className="detail-panel__section preflight-advertencia">
+            <div className="detail-panel__section-title preflight-advertencia-titulo">
               Advertencia de seguridad
             </div>
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.83rem', lineHeight: 1.6 }}>
+            <ul className="preflight-lista">
               <li>Esta acción ejecutará Uploadrr y puede publicar/subir contenido a eMuwarez.</li>
               <li>No se crearán peticiones eMuwarez automáticamente.</li>
               <li>No se modificará el archivo original.</li>
               <li>No se modificará el título interno MKV.</li>
             </ul>
-            <div style={{ marginTop: 12 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: '0.83rem' }}>
+            <div className="preflight-confirmar">
+              <label className="preflight-confirmar-texto">
                 Escribe <strong>{CONFIRMATION_TOKEN}</strong> para habilitar la subida:
               </label>
               <input
@@ -206,39 +206,29 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                 value={confirmInput}
                 onChange={e => setConfirmInput(e.target.value)}
                 placeholder={CONFIRMATION_TOKEN}
-                style={{
-                  width: '100%',
-                  padding: '6px 10px',
-                  background: 'color-mix(in srgb, var(--overlay-light) 8%, transparent)',
-                  border: `1px solid ${confirmInput === CONFIRMATION_TOKEN ? 'var(--color-available-soft)' : 'color-mix(in srgb, var(--overlay-light) 15%, transparent)'}`,
-                  borderRadius: 4,
-                  color: 'inherit',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.9rem',
-                  boxSizing: 'border-box',
-                }}
+                className={`preflight-token${confirmInput === CONFIRMATION_TOKEN ? ' preflight-token-ok' : ''}`}
               />
             </div>
           </div>
         )}
 
         {startResult && (
-          <div className="detail-panel__section" style={{ marginTop: 12, padding: '10px 14px', background: 'color-mix(in srgb, var(--color-available) 6%, transparent)', borderRadius: 6 }}>
+          <div className="detail-panel__section preflight-resultado">
             <div className="detail-panel__section-title">Resultado</div>
-            <p style={{ margin: '4px 0', fontSize: '0.85rem' }}>
+            <p className="preflight-res-linea">
               <strong>Acción:</strong> {startResult.action} &nbsp;
               <strong>Estado:</strong> {startResult.status}
             </p>
-            {startResult.message && <p style={{ margin: '4px 0', fontSize: '0.83rem' }}>{startResult.message}</p>}
+            {startResult.message && <p className="preflight-res-mensaje">{startResult.message}</p>}
           </div>
         )}
-        {startError && <p className="error-text" style={{ marginTop: 8 }}>{startError}</p>}
+        {startError && <p className="error-text preflight-error-inicio">{startError}</p>}
 
-        <div className="detail-panel__section" style={{ marginTop: 16, padding: '8px 12px', background: 'color-mix(in srgb, var(--color-warning-soft) 8%, transparent)', borderRadius: 6, fontSize: '0.85rem' }}>
+        <div className="detail-panel__section preflight-seguro">
           Preflight seguro. {canStart ? 'Usa dry-run para previsualizar o confirma para iniciar la subida real.' : 'No se ha ejecutado Uploadrr.'}
         </div>
       </div>
-      <div className="detail-panel__actions" style={{ padding: '12px 16px', gap: 8, display: 'flex', flexWrap: 'wrap' }}>
+      <div className="detail-panel__actions preflight-acciones">
         {canStart && (
           <button
             className="btn btn-secondary"

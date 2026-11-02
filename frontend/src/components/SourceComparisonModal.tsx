@@ -9,11 +9,6 @@ import { Modal } from './Modal'
 // Shared by the manual wizard's Source field: both the icon button and the
 // blinking value inside "Ver MediaInfo". Same modal and same detail-toggle
 // semantics for both entry points, instead of each re-implementing its own.
-const thStyle: React.CSSProperties = {
-  textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: 'var(--text-muted)',
-  position: 'sticky', top: 0, background: 'var(--bg-surface)',
-}
-
 // Shown next to every "Internal Source Tool" column header, with the same
 // wording everywhere so it doesn't read as two different explanations of the
 // same thing.
@@ -24,20 +19,20 @@ export const INTERNAL_SOURCE_TOOL_INFO =
 // column per origin, single data row (there's only one Source field).
 function SourceCompareTable({ comparison, onShowEngineDetail }: { comparison: SourceComparison; onShowEngineDetail?: () => void }) {
   return (
-    <div className="detail-card" style={{ borderRadius: 8 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+    <div className="detail-card comp-caja">
+      <table className="comp-tabla-fuente">
         <thead>
           <tr>
-            <th style={thStyle}>Nombre del archivo</th>
-            <th style={thStyle}>Radarr/Sonarr</th>
-            <th style={thStyle}>Internal Source Tool <InfoIcon text={INTERNAL_SOURCE_TOOL_INFO} /></th>
+            <th className="comp-th">Nombre del archivo</th>
+            <th className="comp-th">Radarr/Sonarr</th>
+            <th className="comp-th">Internal Source Tool <InfoIcon text={INTERNAL_SOURCE_TOOL_INFO} /></th>
           </tr>
         </thead>
         <tbody>
-          <tr style={{ borderTop: '1px solid var(--border)' }}>
-            <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)' }}>{comparison.from_name || '—'}</td>
-            <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)' }}>{comparison.from_radarr || '—'}</td>
-            <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)' }}>
+          <tr className="comp-fila-borde">
+            <td className="comp-celda-mono">{comparison.from_name || '—'}</td>
+            <td className="comp-celda-mono">{comparison.from_radarr || '—'}</td>
+            <td className="comp-celda-mono">
               {onShowEngineDetail && comparison.from_mediainfo ? (
                 <Tooltip content="Ver comparación detallada">
                   <button
@@ -104,38 +99,36 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
   const orderedLabels = ranking.map(r => r.label)
 
   return (
-    <div style={{ marginTop: 14 }}>
-      <div className="detail-card" style={{ borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: 12.5 }}>
+    <div className="comp-detalle">
+      <div className="detail-card comp-caja-resumen">
+        <div className="comp-resumen">
           <span>Source estimado: <strong>{prediction.label}</strong></span>
           <span>Confianza: <strong>{formatNumero(prediction.confidence_score * 100, 1)}%</strong></span>
           <span>Segundo candidato: <strong>{prediction.runner_up}</strong> ({formatNumero(prediction.runner_up_score * 100, 1)}%)</span>
           <span>Margen: <strong>{formatNumero(prediction.margin * 100, 1)} pts</strong></span>
+          {/* En línea: el color sale del nivel de certeza (valor calculado). */}
           <span>Nivel de evidencia: <strong style={{ color: certaintyColor }}>{prediction.certainty}</strong></span>
           <span>Tiempo de análisis: <strong>{formatNumero(performance.duration_ms / 1000, 1)}s</strong></span>
         </div>
-        <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '10px 0 0' }}>{explanation.winner}</p>
-        <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '6px 0 0' }}>{explanation.winner_vs_runner_up}</p>
+        <p className="comp-explicacion">{explanation.winner}</p>
+        <p className="comp-explicacion comp-segunda">{explanation.winner_vs_runner_up}</p>
         {contradictions.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Contradicciones detectadas</span>
+          <div className="comp-contradicciones">
+            <span className="comp-contradicciones-titulo">Contradicciones detectadas</span>
             {contradictions.map((c, i) => (
-              <p key={i} style={{ fontSize: 12, color: 'var(--color-req-pending)', margin: '4px 0 0' }}><IconoAviso /> {c}</p>
+              <p key={i} className="comp-contradiccion"><IconoAviso /> {c}</p>
             ))}
           </div>
         )}
       </div>
 
-      <div className="detail-card" style={{ borderRadius: 8, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, minWidth: 820 }}>
+      <div className="detail-card comp-caja-scroll">
+        <table className="comp-tabla-evidencia">
           <thead>
             <tr>
-              <th style={{ ...thStyle, minWidth: 160 }}>Evidencia</th>
+              <th className="comp-th comp-th-evidencia">Evidencia</th>
               {orderedLabels.map(label => (
-                <th key={label} style={{
-                  ...thStyle, textAlign: 'right', minWidth: 68,
-                  color: label === prediction.label ? 'var(--color-available)' : thStyle.color,
-                }}>
+                <th key={label} className={`comp-th comp-th-etiqueta${label === prediction.label ? ' comp-th-ganadora' : ''}`}>
                   {label}
                 </th>
               ))}
@@ -143,9 +136,9 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
           </thead>
           <tbody>
             {evidence.map((ev, i) => (
-              <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                <td style={{ padding: '6px 10px' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <tr key={i} className="comp-fila-borde">
+                <td className="comp-celda-evidencia">
+                  <span className="comp-etiqueta-evidencia">
                     {EVIDENCE_LABELS[ev.feature] ?? ev.feature}
                     <InfoIcon text={ev.explanation} />
                   </span>
@@ -153,36 +146,25 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
                 {orderedLabels.map(label => {
                   const v = ev.contributions[label]
                   return (
-                    <td key={label} style={{
-                      padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)',
-                      color: !v ? 'var(--text-muted)' : v > 0 ? 'var(--color-available-soft)' : 'var(--color-error-soft)',
-                      background: label === prediction.label ? 'color-mix(in srgb, var(--color-available) 6%, transparent)' : undefined,
-                    }}>
+                    <td key={label} className={`comp-celda-valor ${!v ? 'comp-nulo' : v > 0 ? 'comp-positivo' : 'comp-negativo'}${label === prediction.label ? ' comp-ganadora' : ''}`}>
                       {v ? (v > 0 ? `+${formatNumero(v, 1)}` : formatNumero(v, 1)) : '0'}
                     </td>
                   )
                 })}
               </tr>
             ))}
-            <tr style={{ borderTop: '2px solid var(--border-hover)', fontWeight: 700 }}>
-              <td style={{ padding: '7px 10px' }}>SCORE TOTAL</td>
+            <tr className="comp-fila-total">
+              <td className="comp-celda-total">SCORE TOTAL</td>
               {ranking.map(c => (
-                <td key={c.label} style={{
-                  padding: '7px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)',
-                  color: c.label === prediction.label ? 'var(--color-available)' : undefined,
-                  background: c.label === prediction.label ? 'color-mix(in srgb, var(--color-available) 10%, transparent)' : undefined,
-                }}>
+                <td key={c.label} className={`comp-celda-total comp-valor${c.label === prediction.label ? ' comp-ganadora' : ''}`}>
                   {formatNumero(c.raw_score, 1)}
                 </td>
               ))}
             </tr>
             <tr>
-              <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--text-muted)' }}>Confianza normalizada</td>
+              <td className="comp-celda-confianza">Confianza normalizada</td>
               {ranking.map(c => (
-                <td key={c.label} style={{
-                  padding: '5px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 11,
-                  color: c.label === prediction.label ? 'var(--color-available)' : 'var(--text-muted)',
-                }}>
+                <td key={c.label} className={`comp-celda-confianza comp-valor${c.label === prediction.label ? ' comp-ganadora' : ''}`}>
                   {formatNumero(c.normalized_score * 100, 1)}%
                 </td>
               ))}
@@ -207,7 +189,7 @@ export function SourceComparisonModal({ comparison, initialShowDetail = false, o
 }) {
   const [showDetail, setShowDetail] = useState(initialShowDetail)
   return (
-    <Modal titulo="Comparación del Source" onClose={onClose} className="modal-wide" style={{ maxWidth: showDetail && comparison.engine ? 980 : 620 }}>
+    <Modal titulo="Comparación del Source" onClose={onClose} className={`modal-wide ${showDetail && comparison.engine ? 'comp-modal-fuente-detalle' : 'comp-modal-fuente'}`}>
       <div className="modal-body">
         <SourceCompareTable
           comparison={comparison}

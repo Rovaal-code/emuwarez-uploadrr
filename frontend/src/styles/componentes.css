@@ -1,0 +1,296 @@
+/* Componentes pequeños: estilos que antes iban en línea. Un prefijo por
+   componente (detcard-, logs-, provprio-, reqform-, bibdet-, poster-grande-,
+   emusync-, delsub-, hijos-). Se importa después de components.css en
+   main.tsx. Las reglas que retocan una clase base llevan el selector tan
+   específico como ella o más: una clase suelta perdería contra ella. */
+
+/* DetailCard */
+.detail-card.detcard-titulo-pagina {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-weight: 700;
+  font-size: 25px;
+  letter-spacing: -0.01em;
+}
+.detcard-anio { color: var(--text-muted); font-weight: 500; }
+.detail-card.detcard-tarjeta { border-radius: 10px; }
+.detail-card-title.detcard-titulo {
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detcard-icono { display: inline-flex; color: var(--text-accent); flex-shrink: 0; }
+.detcard-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.detcard-fila-etiqueta {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+.detcard-fila-valor { text-align: right; word-break: break-word; min-width: 0; overflow: hidden; }
+.detcard-plano { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.detcard-plano-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detcard-atenuado { color: var(--text-muted); }
+.detcard-check { flex-shrink: 0; }
+.detail-poster.detcard-poster {
+  flex-shrink: 0;
+  max-width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.detcard-poster-img { width: 100%; height: 100%; object-fit: cover; }
+.detcard-poster-vacio {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 88px;
+  opacity: 0.35;
+}
+
+/* LogsPage */
+.logs-pagina { height: 100%; }
+.logs-barra { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.form-input.logs-buscar { min-width: 240px; }
+.form-input.form-select.logs-nivel { width: 150px; }
+.checkbox-label.logs-auto { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.logs-contador { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+.activity-section.logs-caja { padding: 0; }
+.logs-aviso { padding: 20px; color: var(--text-muted); }
+.logs-aviso.logs-aviso-error { color: var(--color-missing); }
+.logs-lista {
+  max-height: calc(var(--vh100) * 0.7);
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.logs-linea {
+  display: flex;
+  gap: 10px;
+  padding: 3px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.logs-tiempo { color: var(--text-muted); flex-shrink: 0; }
+.logs-nivel-linea { font-weight: 700; flex-shrink: 0; width: 64px; }
+
+/* ProviderPriorityPicker */
+.provprio-sin-icono { display: inline-flex; opacity: 0.4; }
+.provprio-enlace { display: flex; flex-shrink: 0; }
+.provprio-quitar {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+}
+.provprio-aviso { font-size: 12px; color: var(--text-muted); margin: 0 0 8px; }
+.provprio-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  min-width: 0;
+  background: color-mix(in srgb, var(--color-uploading) 6%, transparent);
+  border: 1px solid var(--border);
+}
+.provprio-fila.provprio-fila-arrastrando {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  border-color: var(--text-accent);
+}
+.provprio-numero { color: var(--text-muted); font-size: 11px; width: 16px; text-align: center; flex-shrink: 0; }
+.drag-handle.provprio-asa {
+  color: var(--text-accent);
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+.provprio-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.provprio-codigo { color: var(--text-muted); font-size: 11px; }
+.provprio-todos { font-size: 13px; color: var(--text-muted); }
+.provprio-rejilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+  max-height: calc(var(--vh100) * 0.55);
+  overflow-y: auto;
+}
+.btn.btn-ghost.btn-sm.provprio-opcion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  justify-self: start;
+  font-size: 12px;
+}
+
+/* RequestFormModal */
+.modal-wide.reqform-modal { max-width: 640px; }
+.reqform-rejilla { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.reqform-rejilla-ids { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+.text-muted.reqform-nota { font-size: 12px; margin-top: 16px; }
+.reqform-botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.btn.reqform-abrir { text-decoration: none; }
+.reqform-etiqueta { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; display: block; }
+.form-input.reqform-lectura,
+.form-input.reqform-lectura:disabled { opacity: 0.7; }
+.reqform-id-etiqueta { display: block; font-size: 12px; margin-bottom: 4px; }
+.reqform-id-fila { display: flex; gap: 6px; align-items: center; }
+.form-input.reqform-id-valor { flex: 1; min-width: 0; }
+.btn.reqform-id-enlace {
+  flex-shrink: 0;
+  text-decoration: none;
+  line-height: 1;
+  padding: 0 10px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+}
+.btn.reqform-id-enlace.reqform-id-enlace-off { opacity: 0.4; pointer-events: none; }
+.reqform-flecha { font-size: 12px; }
+.modal-panel.provprio-modal { max-width: 480px; }
+
+/* LibraryDetailPage */
+.bibdet-pagina { width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.bibdet-cabecera { flex-shrink: 0; }
+.bibdet-barra {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.bibdet-volver { display: flex; gap: 8px; flex-wrap: wrap; }
+.bibdet-acciones { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+.bibdet-titulo { margin-bottom: 20px; }
+.bibdet-ficha { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.bibdet-ficha.bibdet-ficha-plegada { display: none; }
+.bibdet-tarjetas { flex: 1; min-width: 300px; }
+.bibdet-rejilla { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.bibdet-proveedores { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.modal-panel.bibdet-modal-ruta { width: max-content; max-width: calc(var(--vw100) * 0.9); min-width: 320px; }
+.bibdet-ruta {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+  word-break: break-all;
+  line-height: 1.6;
+}
+
+/* LargePosterCard */
+.clickable.poster-grande-tarjeta {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--overlay-dark) 15%, transparent);
+}
+.poster-grande-marco {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background: color-mix(in srgb, var(--overlay-light) 4%, transparent);
+}
+.poster-grande-img { width: 100%; height: 100%; object-fit: cover; }
+.poster-grande-vacio {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  opacity: 0.35;
+}
+.poster-grande-estado { position: absolute; top: 10px; right: 10px; }
+.poster-grande-pie {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 12px 10px;
+  background: linear-gradient(to top, color-mix(in srgb, var(--overlay-dark) 85%, transparent), transparent);
+}
+.poster-grande-titulo { font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--text-on-color); }
+.poster-grande-anio { font-size: 12px; color: color-mix(in srgb, var(--overlay-light) 75%, transparent); margin-top: 2px; }
+
+/* EmuSyncButton */
+.spinner.emusync-spinner { width: 12px; height: 12px; border-width: 2px; }
+.modal-panel.emusync-modal { max-width: 460px; }
+.modal-body.emusync-cuerpo { display: flex; flex-direction: column; gap: 12px; }
+.emusync-opcion {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  transition: background 0.12s, border-color 0.12s;
+}
+.emusync-opcion:hover:not(:disabled) {
+  border-color: var(--text-accent);
+  background: color-mix(in srgb, var(--overlay-light) 6%, transparent);
+}
+.emusync-opcion:disabled { cursor: not-allowed; opacity: 0.55; }
+.emusync-opcion-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.emusync-opcion-titulo { font-size: 14px; font-weight: 600; }
+.emusync-opcion-cadencia { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.emusync-opcion-desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+/* DeleteUploadModal */
+.modal-panel.delsub-modal { max-width: 440px; }
+.delsub-titulo { margin: 0; font-weight: 600; }
+.delsub-aviso {
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
+  margin: 12px 0;
+}
+.delsub-aviso-texto { margin: 0; font-size: 13.5px; line-height: 1.5; }
+.delsub-aviso-texto.delsub-aviso-extra { margin: 8px 0 0; }
+.delsub-nota { margin: 0; font-size: 12px; color: var(--text-muted); }
+.error-text.delsub-error { margin-top: 8px; }
+.delsub-botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* LibraryChildrenSection */
+.hijos-seccion { margin-top: 28px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.hijos-titulo {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.hijos-aviso { font-size: 12px; color: var(--text-muted); }
+.activity-section.hijos-caja { margin-bottom: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.hijos-scroll { overflow: auto; flex: 1; min-height: 0; }
+.data-table th.hijos-col-titulo { width: 100%; }

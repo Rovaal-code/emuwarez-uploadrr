@@ -33,14 +33,14 @@ export function EmuSyncButton({ label = 'Sincronizar eMuwarez' }: { label?: stri
       <Tooltip content="Sincroniza el catálogo de eMuwarez para comparar con tu biblioteca (elige rápido o completo).">
         <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)} disabled={isAnySyncing}>
           {catalogSyncing
-            ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
+            ? <><span className="spinner emusync-spinner" /> Comparando…</>
             : `↻ ${label}`}
         </button>
       </Tooltip>
 
       {open && (
-        <Modal titulo="Sincronizar eMuwarez" onClose={() => setOpen(false)} style={{ maxWidth: 460 }}>
-          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <Modal titulo="Sincronizar eMuwarez" onClose={() => setOpen(false)} className="emusync-modal">
+          <div className="modal-body emusync-cuerpo">
             <SyncOption
               icon="↻"
               title="Solo nuevos"
@@ -70,31 +70,20 @@ function SyncOption({ icon, title, desc, cadence, wait, blocked: externallyBlock
   icon: string; title: string; desc: string; cadence: string; wait: number; blocked?: boolean; onClick: () => void
 }) {
   const blocked = wait > 0 || externallyBlocked
-  const [hover, setHover] = useState(false)
-  const lit = hover && !blocked
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={blocked}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px',
-        border: `1px solid ${lit ? 'var(--text-accent)' : 'var(--border)'}`,
-        borderRadius: 10, cursor: blocked ? 'not-allowed' : 'pointer',
-        background: lit ? 'color-mix(in srgb, var(--overlay-light) 6%, transparent)' : 'var(--bg-card)',
-        color: 'var(--text-primary)', opacity: blocked ? 0.55 : 1,
-        transition: 'background 0.12s, border-color 0.12s',
-      }}
+      className="emusync-opcion"
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>{icon} {title}</span>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+      <div className="emusync-opcion-cabecera">
+        <span className="emusync-opcion-titulo">{icon} {title}</span>
+        <span className="emusync-opcion-cadencia">
           {wait > 0 ? `Disponible en ${fmtWait(wait)}` : blocked ? 'Otra sincronización en curso' : cadence}
         </span>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{desc}</div>
+      <div className="emusync-opcion-desc">{desc}</div>
     </button>
   )
 }

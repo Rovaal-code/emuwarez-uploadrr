@@ -70,29 +70,25 @@ const claveDeItem = (it: LibraryItemResponse) => it.id
 const PosterCard = memo(function PosterCard({ item, onSelect, priority }: { item: LibraryItemResponse; onSelect: (item: LibraryItemResponse) => void; priority?: boolean }) {
   return (
     <div
-      className="clickable"
+      className="clickable bib-tarjeta"
       onClick={() => onSelect(item)}
-      style={{
-        display: 'flex', flexDirection: 'column', borderRadius: 8, overflow: 'hidden',
-        background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer',
-      }}
     >
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', background: 'color-mix(in srgb, var(--overlay-light) 4%, transparent)' }}>
+      <div className="bib-tarjeta-marco">
         {item.poster_url ? (
           <img
             src={posterUrl(item.poster_url, 'w342')}
             alt={item.title}
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            className="bib-tarjeta-img"
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, opacity: 0.35 }}>
+          <div className="bib-tarjeta-sin-img">
             <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
           </div>
         )}
-        <div style={{ position: 'absolute', top: 6, right: 6 }}>
+        <div className="bib-tarjeta-estado">
           <PosterStatusIcon status={item.local_status} />
         </div>
       </div>
@@ -103,6 +99,7 @@ const PosterCard = memo(function PosterCard({ item, onSelect, priority }: { item
 // Ancho de cada barra, variado a propósito (no todas iguales) para que la
 // fila lea como texto esperando a llegar y no como un bloque gris plano.
 const SkeletonBar = ({ width }: { width: number | string }) => (
+  // El ancho es un valor calculado por fila: se queda en línea.
   <span className="skeleton-bar" style={{ width }} />
 )
 
@@ -118,8 +115,8 @@ function LibraryTableSkeleton({ rows = 14 }: { rows?: number }) {
       {Array.from({ length: rows }, (_, i) => (
         <tr key={i} aria-hidden="true">
           <td>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <div className="poster-thumb skeleton-bar" style={{ width: 30, height: 45, borderRadius: 4, flexShrink: 0 }} />
+            <div className="bib-esq-titulo">
+              <div className="poster-thumb skeleton-bar bib-esq-poster" />
               <SkeletonBar width={120 + (i % 3) * 40} />
             </div>
           </td>
@@ -134,10 +131,10 @@ function LibraryTableSkeleton({ rows = 14 }: { rows?: number }) {
 
 function LibraryGridSkeleton({ large }: { large?: boolean }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${large ? 220 : 140}px, 1fr))`, gap: large ? 20 : 16 }}>
+    <div className={`bib-esq-rejilla${large ? ' bib-esq-grande' : ''}`}>
       {Array.from({ length: large ? 12 : 24 }, (_, i) => (
-        <div key={i} aria-hidden="true" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
-          <div className="skeleton-bar" style={{ width: '100%', aspectRatio: '2 / 3', borderRadius: 0, display: 'block' }} />
+        <div key={i} aria-hidden="true" className="bib-esq-tarjeta">
+          <div className="skeleton-bar bib-esq-tarjeta-img" />
         </div>
       ))}
     </div>
@@ -486,9 +483,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // justo cuando va rápido. Con una biblioteca enorme sí tarda, y entonces el
   // apagado aparece y dice que el clic ha hecho algo.
   const tarda = useTardanza((loading || isPending) && !!data)
-  const refreshingStyle = tarda
-    ? { opacity: 0.5, pointerEvents: 'none' as const, transition: 'opacity 120ms' }
-    : undefined
+  const refrescando = tarda ? ' bib-refrescando' : ''
 
   // La lista solo pinta lo que se ve (FilasVirtuales). Las series desplegadas
   // se pintan siempre, para no perder lo que tienen abierto al salir de vista.
@@ -550,7 +545,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // when an item is selected, instead of a modal/card.
   if (selected) {
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div className="bib-pagina">
         <LibraryDetailPage
           item={selected}
           instances={instances}
@@ -568,7 +563,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // acaben diciendo cosas distintas.
   const tableHeadRow = (
     <tr>
-      <th style={{ width: '100%' }}>Título</th>
+      <th className="bib-col-titulo">Título</th>
       <th><HeaderFilter label="Tipo" value={filterType} onChange={v => { setFilterType(v); setOffset(0) }} options={[
         { value: '', label: 'Todos' }, ...(filterOptions?.types ?? []).map(t => ({ value: t, label: TYPE_LABELS[t] ?? t })),
       ]} /></th>
@@ -623,7 +618,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }
 
   return (
-    <div data-tour="library-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div data-tour="library-content" className="bib-pagina">
       <div className="page-header">
         <div>
           <div className="page-title">Biblioteca</div>
@@ -637,7 +632,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
               : loading && !data ? 'Contando archivos…' : 'Sin elementos'}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="bib-acciones">
           <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
             <button
               className="btn btn-primary btn-sm"
@@ -645,7 +640,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
               disabled={isAnySyncing}
             >
               {libSyncing
-                ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
+                ? <><span className="spinner bib-spinner" /> Sincronizando…</>
                 : '↻ Sincronizar biblioteca'}
             </button>
           </Tooltip>
@@ -656,14 +651,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       {/* Search by title + filters + view modes, all on one line */}
       <div className="filters-bar">
         <input
-          className="form-input"
+          className="form-input bib-buscar"
           placeholder="Buscar título…"
           value={search}
           onChange={e => { setSearch(e.target.value); if (!e.target.value) { setOffset(0) } }}
           onKeyDown={e => e.key === 'Enter' && applyFilters()}
-          style={{ width: 140 }}
         />
-        <select className="form-input form-select" value={sortBy} onChange={e => { setSortBy(e.target.value); setOffset(0) }} style={{ width: 'max-content', paddingRight: 26, backgroundPosition: 'right 8px center' }}>
+        <select className="form-input form-select bib-orden" value={sortBy} onChange={e => { setSortBy(e.target.value); setOffset(0) }}>
           <option value="title_asc">Orden: Título (A-Z)</option>
           <option value="title_desc">Orden: Título (Z-A)</option>
           <option value="updated_desc">Orden: RR (Reciente)</option>
@@ -674,8 +668,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         </select>
         {/* La tabla apagada sola no decía que estuviera cargando. */}
         {tarda && (
-          <span role="status" style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
-            <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Cargando…
+          <span role="status" className="bib-cargando">
+            <span className="spinner bib-spinner" /> Cargando…
           </span>
         )}
         {data && resumenResultados && <span className="text-muted">{resumenResultados}</span>}
@@ -685,11 +679,10 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </button>
         )}
         {fallaMas && <span className="text-muted">No se pudieron cargar más filas</span>}
-        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+        <div className="bib-vistas">
           <Tooltip content="Vista de pósters">
             <button
-              className="btn btn-primary btn-sm"
-              style={{ opacity: viewMode === 'grid' ? 1 : 0.55 }}
+              className={`btn btn-primary btn-sm${viewMode === 'grid' ? '' : ' bib-vista-apagada'}`}
               onClick={() => setViewMode('grid')}
               aria-label="Vista de pósters"
             >
@@ -698,8 +691,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </Tooltip>
           <Tooltip content="Vista de pósters grandes">
             <button
-              className="btn btn-primary btn-sm"
-              style={{ opacity: viewMode === 'grid-lg' ? 1 : 0.55 }}
+              className={`btn btn-primary btn-sm${viewMode === 'grid-lg' ? '' : ' bib-vista-apagada'}`}
               onClick={() => setViewMode('grid-lg')}
               aria-label="Vista de pósters grandes"
             >
@@ -708,8 +700,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </Tooltip>
           <Tooltip content="Vista de lista">
             <button
-              className="btn btn-primary btn-sm"
-              style={{ opacity: viewMode === 'list' ? 1 : 0.55 }}
+              className={`btn btn-primary btn-sm${viewMode === 'list' ? '' : ' bib-vista-apagada'}`}
               onClick={() => setViewMode('list')}
               aria-label="Vista de lista"
             >
@@ -721,8 +712,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
       {(loading || isPending) && !items.length ? (
         viewMode === 'list' ? (
-          <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
-            <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+          <div className="activity-section bib-bloque-lista">
+            <div className="bib-scroll">
               <table className="data-table">
                 <thead>{tableHeadRow}</thead>
                 <tbody><LibraryTableSkeleton /></tbody>
@@ -730,7 +721,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
             </div>
           </div>
         ) : (
-          <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
+          <div className="activity-section bib-bloque-rejilla">
             <LibraryGridSkeleton large={viewMode === 'grid-lg'} />
           </div>
         )
@@ -745,7 +736,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       ) : items.length === 0 && viewMode !== 'list' ? (
         <EmptyState icon={<IconoLibros />} {...sinResultados} />
       ) : viewMode !== 'list' ? (
-        <div ref={rejillaRef} className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0, ...refreshingStyle }}>
+        <div ref={rejillaRef} className={`activity-section bib-bloque-rejilla${refrescando}`}>
           <RejillaVirtual
             items={items}
             clave={claveDeItem}
@@ -758,8 +749,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           />
         </div>
       ) : (
-        <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0, ...refreshingStyle }}>
-          <div ref={listaRef} style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+        <div className={`activity-section bib-bloque-lista${refrescando}`}>
+          <div ref={listaRef} className="bib-scroll">
             <table className="data-table">
               <thead ref={cabeceraRef}>{tableHeadRow}</thead>
               {items.length === 0 ? (

@@ -221,6 +221,12 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     trataba `.current` como posiblemente nulo y no cambia de comportamiento. El chunk `react` del bundle pasa de
     139,84 kB (gzip 45,32) a 218,78 kB (gzip 68,26); `index` queda igual. Pendiente de ver en el navegador:
     Biblioteca con scroll rápido en pósters (`RejillaVirtual`).
+- **Peticiones sin castellano no están «listas para subir»:** eMuwarez es un tracker español y solo admite contenido con
+  castellano, en el audio o, si no, en los subtítulos (la regla de la comprobación «Tiene castellano» de la subida y de
+  `has_spanish_ok` en la biblioteca). El criterio de preparación de las peticiones no la miraba, así que el carril del Panel,
+  el aviso de peticiones nuevas y el contador del widget podían contar una copia que la subida iba a rechazar. Ahora
+  `_evaluate_readiness` da el estado `no_castellano` («Sin castellano», acción «Revisar en Radarr/Sonarr») cuando
+  `has_spanish_ok = 0`; si aún no se ha leído (`NULL`) todo sigue igual y lo decide la comprobación previa.
 
 ## Siguiente (oleada 3)
 

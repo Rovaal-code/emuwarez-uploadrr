@@ -108,6 +108,24 @@ def test_score_usa_la_clasificacion_de_la_lista_de_peticiones(db_conn):
     assert result["readiness_status"] == "ready_to_upload"
 
 
+@pytest.mark.parametrize("castellano,esperado", [
+    (1, "ready_to_upload"),      # castellano en el audio o en los subtítulos
+    (None, "ready_to_upload"),   # sin leer aún: lo decide la comprobación previa, como hasta ahora
+    (0, "no_castellano"),        # confirmado sin castellano en ninguno de los dos
+])
+def test_una_copia_sin_castellano_no_esta_lista_para_subir(db_conn, castellano, esperado):
+    """eMuwarez solo admite contenido con castellano (audio o, si no, subtítulos): la misma regla que la
+    comprobación «Tiene castellano» de la subida y las cifras de la biblioteca."""
+    from emuwarez_uploadrr.services.request_readiness import score_request_candidate
+    req, lib = _par()
+    lib["has_spanish_ok"] = castellano
+    result = score_request_candidate(req, lib)
+    assert result["readiness_status"] == esperado
+    if castellano == 0:
+        assert result["recommended_action"] == "review_arr"
+        assert "castellano" in result["blockers"][0]
+
+
 def test_una_peticion_abierta_no_se_guarda_como_llena(db_conn):
     """PET-2: «unfilled» contiene «filled» y toda petición abierta salía «Llena»."""
     from emuwarez_uploadrr.services.request_readiness import score_request_candidate
@@ -382,6 +400,18 @@ def test_el_id_gana_a_un_titulo_que_esta_listo(db_conn):
 def _dune_lista(db_conn, **copia):
     return _insert_library(db_conn, title="Dune", tmdb_id="d1", nomenclature_status="Correcta",
                            prepared_path="/data/prepared/dune.mkv", **copia)
+
+
+@pytest.mark.parametrize("castellano,esperado", [(1, "ready_to_upload"), (0, "no_castellano")])
+def test_el_castellano_de_la_biblioteca_decide_si_la_peticion_esta_lista(db_conn, castellano, esperado):
+    """De punta a punta: la columna `has_spanish_ok` de la biblioteca (la que rellena la sincronización) es la que
+    cuenta, tanto al evaluar una petición como en la lista de candidatas."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    item_id = _dune_lista(db_conn, resolution="1080p", source="WEB-DL")
+    db_conn.execute("UPDATE library_items SET has_spanish_ok = ? WHERE id = ?", (castellano, item_id))
+    db_conn.commit()
+    req_id = _insert_request(db_conn, emu_id="emu-c", title="Dune", tmdb_id="d1", emu_status="unfilled")
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == esperado
 
 
 def test_una_copia_de_menos_resolucion_y_fuente_no_esta_lista_para_la_peticion(db_conn):

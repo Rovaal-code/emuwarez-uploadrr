@@ -105,6 +105,7 @@ const READINESS_STATUS_LABELS: Record<string, string> = {
   uploading: 'Subiendo',
   partially_available: 'Parcialmente disponible',
   spec_mismatch: 'La copia no cumple lo pedido',
+  no_castellano: 'Sin castellano',
   no_local_match: 'Sin copia en la biblioteca',
   file_missing: 'Archivo no encontrado',
   import_error: 'Error de importación',

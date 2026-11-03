@@ -247,6 +247,18 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   una con su estado y un enlace a Peticiones). Solo en `GET /api/library/{id}` (`peticion`, `peticiones_debajo`), no
   en la lista; la URL va sin consulta ni usuario.
 
+- **Reanudar a mitad de Uploadrr-EMU (contrato cambiado en los dos repos):** Uploadrr-EMU dice qué pasos terminó con una
+  línea fija por paso, `Step done: screenshots` y `Step done: torrent` (la ficha, `Torrent URL:`, cierra la subida al
+  tracker), y la app los apunta en `upload_jobs.pasos_uploadrr_json` (migración 51). Un reintento que reutiliza los
+  ficheros de la subida anterior, y cuya anterior llegó a lanzar Uploadrr-EMU (su `tmp` es el de esos ficheros), lo
+  lanza con `--resume` (columna `reanuda_uploadrr`) y este reutiliza las
+  capturas y el torrent marcados como hechos; el detalle de la subida enseña los subpasos (capturas, torrent, subida a
+  eMuwarez) y el botón de reintentar dice lo que no repetirá. **Cambio de comportamiento:** sin `--resume`, Uploadrr-EMU
+  borra su `tmp/<nombre>` al empezar cada elemento, así que unos ficheros rehechos con el mismo nombre ya no se
+  encuentran con un `BASE.torrent` o unas capturas viejas. Si la ficha ya estaba en eMuwarez (`tracker` hecho) el
+  reintento no ofrece reutilizar nada: chocaría con el duplicado. Aplazado: que un reintento recupere solo el añadido a
+  qBittorrent de una subida que ya estaba en eMuwarez.
+
 ## Siguiente (oleada 3)
 
 1. Comparar con capturas de antes y después las tandas de estilos a clases (Configuración, asistente, Peticiones, detalle
@@ -271,8 +283,6 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 
 ## Aplazado / ideas
 
-- Reanudar a mitad de Uploadrr-EMU (capturas, torrent, subida al tracker): hace falta que el subproceso diga qué
-  pasos terminó y cambiar el contrato en los dos repositorios a la vez. Hoy un reintento reanuda solo en la verificación.
 - Límite de concurrencia compartido entre el CLI y el servidor (hoy cada proceso tiene el suyo, en memoria). Hace
   falta un cerrojo en fichero o en la base.
 - Que la columna «Petición» de la lista de Biblioteca (y su filtro) cuente la petición heredada: hoy la temporada de

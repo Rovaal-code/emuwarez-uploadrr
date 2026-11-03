@@ -23,6 +23,14 @@ describe('opcionesDeReintento', () => {
     expect(opcionesDeReintento({})).toHaveLength(1)
   })
 
+  it('dice qué reutiliza el reintento que reanuda, si Uploadrr dejó algo hecho', () => {
+    const [reanudar, principio] = opcionesDeReintento({
+      reintento_desde_nombre: 'Verificar antes de subir', reintento_reutiliza: ['Capturas', 'Torrent'] })
+    expect(reanudar.ayuda).toBe('Reutiliza lo ya hecho si los ficheros no han cambiado: capturas, torrent')
+    expect(principio.ayuda).toBeUndefined()
+    expect(opcionesDeReintento({ reintento_desde_nombre: 'X', reintento_reutiliza: [] })[0].ayuda).toBeUndefined()
+  })
+
   it('si se puede reanudar, ofrece reanudar desde el paso y empezar de cero', () => {
     expect(opcionesDeReintento({ reintento_desde_nombre: 'Verificar antes de subir' })).toEqual([
       { etiqueta: 'Reintentar desde «Verificar antes de subir»', desdeElPrincipio: false },

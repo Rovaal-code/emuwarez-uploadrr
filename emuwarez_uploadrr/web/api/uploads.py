@@ -23,7 +23,7 @@ from ...services.upload_execution import (
     retry_upload_job,
     compute_progress_phase,
 )
-from ...services.subida_pasos import NOMBRES, pasos_de_subida, reanudar_desde
+from ...services.subida_pasos import NOMBRES, pasos_de_subida, reanudar_desde, subpasos_que_reutilizaria
 from ...services.upload_queue import get_queue_positions
 from ..dependencies import require_auth
 from ..runtime import _db_path
@@ -187,7 +187,8 @@ def _job_to_detail(
         runtime_type=_extract_runtime_type(j),
         command_preview=_extract_command_preview(j),
         progress_phase=compute_progress_phase(j.get("status", ""), j.get("stage")),
-        pasos=pasos_de_subida(j.get("status"), j.get("stage"), j.get("etapa_parada")),
+        pasos=pasos_de_subida(j.get("status"), j.get("stage"), j.get("etapa_parada"), j.get("pasos_uploadrr_json")),
+        reintento_reutiliza=subpasos_que_reutilizaria(j.get("status"), j.get("etapa_parada"), j.get("pasos_uploadrr_json")),
         reintento_desde=_reintento_desde(j),
         reintento_desde_nombre=NOMBRES.get(_reintento_desde(j) or ""),
         queue_position=queue_position,

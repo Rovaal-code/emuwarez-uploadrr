@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 50
+SCHEMA_VERSION = 51
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1279,6 +1279,22 @@ def _migrate_upload_jobs_pasos(conn: sqlite3.Connection) -> None:
                 raise
 
 
+def _migrate_upload_jobs_pasos_uploadrr(conn: sqlite3.Connection) -> None:
+    """Esquema 51: qué pasos dijo Uploadrr-EMU que había terminado (`pasos_uploadrr_json`, las líneas
+    `Step done:` de su salida) y si lanzarlo con `--resume` para que reutilice lo que dejó la subida anterior
+    (`reanuda_uploadrr`)."""
+    columnas = {fila[1] for fila in conn.execute("PRAGMA table_info(upload_jobs)")}
+    for nombre, definicion in (("pasos_uploadrr_json", "TEXT"), ("reanuda_uploadrr", "INTEGER NOT NULL DEFAULT 0")):
+        if nombre in columnas:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {nombre} {definicion}")
+        except sqlite3.OperationalError:
+            # Solo se calla si la columna ya está (la añadió otro init_db a la vez), no un «database is locked».
+            if nombre not in {fila[1] for fila in conn.execute("PRAGMA table_info(upload_jobs)")}:
+                raise
+
+
 def _migrate_quitar_registro_arr(conn: sqlite3.Connection) -> None:
     """Esquema 48: el registro entero de la cola y el historial de Radarr/Sonarr ya no se guarda (nadie lo leía, y
     trae el enlace del indexador con su clave, como el ?apikey= de Prowlarr). Se borra el que había."""
@@ -1862,6 +1878,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_quitar_registro_arr(conn)
         _migrate_request_items_aviso_pendiente(conn)
         _migrate_perfil_historial(conn)
+        _migrate_upload_jobs_pasos_uploadrr(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

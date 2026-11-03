@@ -2,7 +2,7 @@
 """Fake Uploadrr-EMU CLI for Phase 10F controlled-execution testing.
 
 TEST-ONLY. Accepts the real Uploadrr-EMU flag contract (-tk/-mt/-tmdb/-ua/
--c/-res/-season/-episode) so it can be invoked with the exact argv built by
+-c/-res/-season/-episode/--resume) so it can be invoked with the exact argv built by
 emuwarez_uploadrr/services/uploadrr_contract.py::build_uploadrr_emu_command.
 
 Safety:
@@ -16,6 +16,7 @@ Failure/slowness simulation (for exercising cancel/timeout/failed paths):
   --fake-sleep SECONDS        sleep between each log line
   FAKE_UPLOADRR_FAIL=1        same as --fake-fail (env fallback)
   FAKE_UPLOADRR_SLEEP=N       same as --fake-sleep (env fallback)
+  FAKE_UPLOADRR_FAIL_EARLY=1  exit 1 before any `Step done:` line
   FAKE_UPLOADRR_LINES=N       print N more stdout lines (enough to fill the pipe)
   FAKE_UPLOADRR_GRANDCHILD=F  start a child that keeps stdout/stderr open for 60 s
                               (like mkbrr/ffmpeg) and write its pid to file F
@@ -42,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-episode", dest="episode", default=None)
     parser.add_argument("-t", dest="release_type", default=None)
     parser.add_argument("-fd", dest="full_dir", action="store_true")
+    parser.add_argument("--resume", "-rs", dest="resume", action="store_true")
     parser.add_argument("--fake-fail", dest="fake_fail", action="store_true")
     parser.add_argument("--fake-sleep", dest="fake_sleep", type=float, default=None)
     args, _unknown = parser.parse_known_args(argv)
@@ -65,11 +67,20 @@ def main(argv: list[str] | None = None) -> int:
         if sleep_s:
             time.sleep(sleep_s)
 
+    if os.environ.get("FAKE_UPLOADRR_FAIL_EARLY") == "1":
+        print("[EMU] ERROR: fallo simulado antes de terminar ningún paso", file=sys.stderr, flush=True)
+        return 1
+
     emit("[EMU] Preparando subida")
     emit(f"[EMU] Archivo: {args.path}")
     emit(f"[EMU] Tracker: {args.trackers or 'EMU'}  Categoria: {args.category or '-'}  Resolucion: {args.resolution or '-'}")
     emit("[EMU] Validando archivo")
+    if args.resume:
+        emit("[EMU] Reanudando: se reutiliza lo que dejó hecho la ejecución anterior")
+    # Las líneas fijas con que el Uploadrr-EMU real (upload.py) dice que ha terminado un paso.
+    print("Step done: screenshots", flush=True)
     emit("[EMU] Generando torrent")
+    print("Step done: torrent", flush=True)
     emit("[EMU] Generando descripcion")
     emit("[EMU] Subiendo a tracker")
     for i in range(int(os.environ.get("FAKE_UPLOADRR_LINES", "0") or 0)):

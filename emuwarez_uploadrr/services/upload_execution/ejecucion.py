@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..subida_pasos import leer_subpasos, subpaso_de_linea
 from ..upload_result_parser import classify_upload_result
 from ..uploadrr_contract import RUNTIME_EMU, get_runtime_settings
 from ..uploadrr_progress import parse_uploadrr_progress
@@ -229,6 +230,20 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                         stream="system",
                     )
 
+        # Un trabajo que reanuda parte de los pasos que dejó hechos el anterior (queue: _paso_preparar).
+        subpasos_hechos: list[str] = leer_subpasos((get_upload_job(job_id) or {}).get("pasos_uploadrr_json"))
+
+        def _apuntar_subpaso(line: str) -> None:
+            """Apunta en el trabajo cada paso que Uploadrr-EMU dice haber terminado (`Step done:`, `Torrent URL:`):
+            un reintento que reanuda sabe así qué no tiene que repetir."""
+            clave = subpaso_de_linea(line)
+            with progress_lock:
+                if clave is None or clave in subpasos_hechos:
+                    return
+                subpasos_hechos.append(clave)
+                crudo = json.dumps(subpasos_hechos)
+            _avanzar_job(job_id, "running", pasos_uploadrr_json=crudo)
+
         def _read_stream(stream, level, stream_name, buf):
             for line in stream:
                 line = line.rstrip("\n")
@@ -247,6 +262,10 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                     _track_uploadrr_progress(line)
                 except Exception:
                     logger.exception("Subida %s: no se pudo actualizar el progreso", job_id)
+                try:
+                    _apuntar_subpaso(line)
+                except Exception:
+                    logger.exception("Subida %s: no se pudo apuntar el paso que terminó Uploadrr", job_id)
 
         t_out = threading.Thread(
             target=_read_stream,

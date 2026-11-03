@@ -140,6 +140,7 @@ a.btn.dsub-sin-subrayado { text-decoration: none; }
   border: 1px solid var(--color-paso);
   color: var(--color-paso);
 }
+.dsub-subpasos { font-size: 11px; opacity: 0.85; }
 .dsub-paso-hecho,
 .dsub-paso-en_curso { --color-paso: var(--color-available); }
 .dsub-paso-fallido { --color-paso: var(--color-error-pale); }

@@ -34,6 +34,65 @@
 .panel-tabla-scroll { overflow: auto; flex: 1; }
 .panel-atenuado { color: var(--text-muted); }
 
+/* Peticiones listas para subir: una fila de hasta cinco, encima de la
+   cuadrícula, cada una en una sola línea (título y recompensa). Las columnas
+   son siempre cinco, haya las que haya, para que cada una mida lo mismo y no
+   se estire cuando hay pocas. */
+.activity-section.panel-listas { flex-shrink: 0; }
+.panel-listas-carril {
+  list-style: none;
+  margin: 0;
+  padding: 6px 10px 10px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.panel-listas-carril > li { min-width: 0; }
+/* Con la interfaz estrecha las cifras van de tres en tres (dashboard.css) y
+   cinco títulos ya no se leen: tres, las de más recompensa. display:none las
+   saca también del orden de Tab. */
+.ui-estrecha .panel-listas-carril { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ui-estrecha .panel-listas-carril > li:nth-child(n + 4) { display: none; }
+.panel-listas-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.panel-listas-fila:hover { background: var(--bg-card-hover); }
+/* Dentro de un bloque de esquinas recortadas: el anillo, por dentro. */
+.panel-listas-fila:focus-visible { outline-offset: -2px; }
+.panel-listas-titulo {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-listas-fila:hover .panel-listas-titulo { color: var(--text-accent); }
+.panel-listas-recompensa {
+  display: flex;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+/* La moneda dorada de la columna «Puntos / recompensa» de Peticiones. */
+.panel-listas-recompensa .vicon { color: var(--color-warning); }
+/* Mismo borde y resaltado que una fila de las tablas del Panel. */
+.hud-app .panel-listas-fila { border-color: color-mix(in srgb, var(--hud-sky) 9%, transparent); }
+.hud-app .panel-listas-fila:hover { background: color-mix(in srgb, var(--hud-cyan) 6%, transparent); }
+
 /* Recomendaciones */
 .panel-rec-titulo {
   display: flex;

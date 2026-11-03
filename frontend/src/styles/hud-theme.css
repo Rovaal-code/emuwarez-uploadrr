@@ -396,9 +396,7 @@
 }
 
 /* ---- Sidebar System Status (CPU/RAM/disk/GPU/VRAM + network) ---- */
-/* Una línea compacta pegada al pie de la barra, bajo la navegación: cada
-   medida es "Nombre 12%" y, si no caben en el ancho (con GPU, o con los tres
-   al 100 %), baja a una segunda fila en vez de cortarse. */
+/* Medidas en una línea al pie de la barra; si no caben, bajan a otra fila. */
 .hud-app .sidebar-nav {
   flex: 0 0 auto;
 }
@@ -457,8 +455,7 @@
   color: var(--hud-cyan);
 }
 
-/* Collapsed sidebar (icon-only nav, 64px wide): las medidas se apilan, con el
-   nombre pequeño encima del valor, centradas. */
+/* Barra contraída: las medidas se apilan, con el nombre encima del valor. */
 .hud-app .sidebar.collapsed .sys-status {
   padding: 8px 4px;
 }

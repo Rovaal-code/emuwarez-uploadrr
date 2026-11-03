@@ -1,7 +1,5 @@
 // @vitest-environment jsdom
-/**
- * La línea de medidores al pie de la barra lateral: formatos, valores ausentes y lo que lee un lector de pantalla.
- */
+// La línea de medidores al pie de la barra lateral: formatos, valores ausentes y lo que lee un lector de pantalla.
 import { act } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 

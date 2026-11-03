@@ -175,6 +175,12 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     closeDetailPath('library')
     setSelected(null)
   }, [])
+  // La petición de la ficha, en su ficha de Peticiones: por el mismo camino que
+  // la campana y el Panel (Peticiones lo recoge al entrar, useAlEntrar).
+  const openRequest = useCallback((requestId: number) => {
+    try { sessionStorage.setItem('emuwarez_open_request', String(requestId)) } catch { /* ignore */ }
+    onNavigate?.('requests')
+  }, [onNavigate])
   // Only opened from the "Pósters grandes" view — the small modal (grid/list) stays as-is.
   const [nomenclatureItem, setNomenclatureItem] = useState<LibraryItemResponse | null>(null)
   const [fieldsItem, setFieldsItem] = useState<LibraryItemResponse | null>(null)
@@ -552,6 +558,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           onBack={closeDetail}
           onSelect={openDetail}
           onAction={handleTreeAction}
+          onOpenRequest={onNavigate ? openRequest : undefined}
         />
         {modals}
       </div>

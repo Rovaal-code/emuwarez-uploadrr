@@ -124,7 +124,33 @@ export interface InstanceTestResponse {
   error: string | null
 }
 
+// Una petición de eMuwarez vista desde la ficha de Biblioteca (PeticionDeLaFichaResponse).
+export interface PeticionDeLaFicha {
+  id: number
+  title: string | null
+  // Solo si eMuwarez enseña el autor; si lo oculta, null.
+  author: string | null
+  is_mine: boolean
+  points: number | null
+  // La página pública de la petición en eMuwarez (sin consulta ni clave).
+  url: string | null
+  emu_status: string | null
+  created_at: string | null
+  req_scope: string | null
+  req_season: number | null
+  req_episode: number | null
+  // null si es de la propia fila; si la cubre la de su temporada o su serie, de cuál.
+  heredada_de: 'temporada' | 'serie' | null
+  // El estado guardado en la fila que la tiene, y esa fila.
+  estado: string | null
+  library_item_id: number | null
+}
+
 export interface LibraryItemResponse {
+  // La petición del elemento (o la que lo cubre desde su temporada o serie) y,
+  // en una serie o temporada, las de lo que tiene debajo. Solo en la ficha.
+  peticion?: PeticionDeLaFicha | null
+  peticiones_debajo?: PeticionDeLaFicha[] | null
   // Todos los valores técnicos presentes bajo una serie o temporada
   // ("x264, x265"), solo para enseñar. Los campos sueltos siguen guardando el
   // valor único (o null cuando los capítulos no coinciden), que es lo que usa

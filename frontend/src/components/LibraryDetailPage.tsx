@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { getLibraryItem } from '../api/library'
 import { StatusBadge } from './StatusBadge'
+import { CampoPeticion, PeticionesDebajo } from './CampoPeticion'
 import { LibraryChildrenSection } from './LibraryChildrenSection'
 import { EmuFieldChip } from './EmuComparisonSection'
 import { LibraryActionButtons } from './LibraryActionButtons'
@@ -27,12 +28,14 @@ import { Modal } from './Modal'
 // back button, a compact header (title + actions, fixed-size poster) and the
 // item's fields grouped into semantic cards instead of one long grid.
 
-export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction }: {
+export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction, onOpenRequest }: {
   item: LibraryItemResponse
   instances: InstanceSafeResponse[]
   onBack: () => void
   onSelect: (item: LibraryItemResponse) => void
   onAction: (kind: LibraryActionKind, item: LibraryItemResponse) => void
+  /** Abre una petición en su ficha de Peticiones (la fila «Petición»). */
+  onOpenRequest?: (requestId: number) => void
 }) {
   const deepLink = buildDeepLink(item, instances)
   const isRollup = item.item_type === 'series' || item.item_type === 'season'
@@ -147,7 +150,11 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                   : <span className="muted">—</span>}
               </FieldRow>
               <FieldRow label="Estado"><StatusBadge status={item.local_status} type="local" /></FieldRow>
-              <FieldRow label="Petición"><StatusBadge status={item.request_status} type="request" /></FieldRow>
+              <FieldRow label="Petición">
+                <CampoPeticion itemType={item.item_type} requestStatus={item.request_status} peticion={item.peticion}
+                  onAbrirPeticion={onOpenRequest} />
+              </FieldRow>
+              <PeticionesDebajo itemType={item.item_type} debajo={item.peticiones_debajo} onAbrirPeticion={onOpenRequest} />
               {isEmuComparable && (
                 <FieldRow label="eMuwarez">
                   <EmuFieldChip itemId={item.id} />

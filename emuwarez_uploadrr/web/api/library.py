@@ -15,7 +15,7 @@ from emuwarez_uploadrr.services.library import content_display_title, episode_ow
 
 from ..schemas import (
     LibraryItemResponse, LibraryListResponse,
-    MissingItemResponse, MissingListResponse,
+    MissingItemResponse, MissingListResponse, PeticionDeLaFichaResponse,
     SyncRequest, SyncResponse,
 )
 from ...services.library import (  # agregación y filtros, movidos aquí
@@ -480,6 +480,13 @@ def library_detail(
         if codigos:
             response.providers_all = [{"code": c, "label": _provider_label(c)} for c in codigos]
         response.rollup_all = todos or None
+        # Quién la pidió y el enlace: también solo en la ficha.
+        from emuwarez_uploadrr.services.requests import peticiones_de_la_ficha
+        peticiones = peticiones_de_la_ficha(conn, row)
+        if peticiones["peticion"]:
+            response.peticion = PeticionDeLaFichaResponse(**peticiones["peticion"])
+        response.peticiones_debajo = [
+            PeticionDeLaFichaResponse(**p) for p in peticiones["peticiones_debajo"]] or None
         return response
 
 

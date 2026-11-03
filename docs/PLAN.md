@@ -233,6 +233,13 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   el aviso de peticiones nuevas y el contador del widget podían contar una copia que la subida iba a rechazar. Ahora
   `_evaluate_readiness` da el estado `no_castellano` («Sin castellano», acción «Revisar en Radarr/Sonarr») cuando
   `has_spanish_ok = 0`; si aún no se ha leído (`NULL`) todo sigue igual y lo decide la comprobación previa.
+- **La ficha de Biblioteca dice qué petición tiene:** la fila «Petición» enseña, además de la insignia, quién la pidió
+  (si eMuwarez enseña el autor), la recompensa, «Ver petición» (la abre en Peticiones, como la campana) y el icono de
+  eMuwarez con su página. Una temporada o un capítulo sin petición propia enseñan la de su temporada o su serie si los
+  cubre («Petición de la serie», con el estado de la serie; su estado guardado sigue siendo «Sin petición»), y una
+  serie o temporada lista en una fila aparte las de sus temporadas o capítulos («Peticiones de sus temporadas»: cada
+  una con su estado y un enlace a Peticiones). Solo en `GET /api/library/{id}` (`peticion`, `peticiones_debajo`), no
+  en la lista; la URL va sin consulta ni usuario.
 
 ## Siguiente (oleada 3)
 
@@ -262,6 +269,9 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   pasos terminó y cambiar el contrato en los dos repositorios a la vez. Hoy un reintento reanuda solo en la verificación.
 - Límite de concurrencia compartido entre el CLI y el servidor (hoy cada proceso tiene el suyo, en memoria). Hace
   falta un cerrojo en fichero o en la base.
+- Que la columna «Petición» de la lista de Biblioteca (y su filtro) cuente la petición heredada: hoy la temporada de
+  una serie pedida entera dice «Sin petición» en la lista aunque su ficha enseñe la de la serie. `request_id` guarda
+  una petición por fila, la que se escribe donde la petición pide.
 
 ## Datos útiles
 

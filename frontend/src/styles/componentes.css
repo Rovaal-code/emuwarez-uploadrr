@@ -189,6 +189,50 @@
 .bibdet-tarjetas { flex: 1; min-width: 300px; }
 .bibdet-rejilla { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .bibdet-proveedores { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+/* Fila «Petición» (CampoPeticion): la insignia arriba y, debajo, quién la pidió,
+   la recompensa y los dos enlaces, alineados a la derecha como el resto de
+   valores. El valor de la fila recorta lo que se sale (overflow: hidden), así
+   que el anillo de foco de los enlaces va por dentro. */
+.bibdet-pet { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 100%; }
+.bibdet-pet-linea,
+.bibdet-pet-datos,
+.bibdet-pet-grupo {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px 8px;
+  max-width: 100%;
+}
+.bibdet-pet-enlaces { flex-wrap: nowrap; gap: 6px; }
+.bibdet-pet-datos { font-size: 12.5px; color: var(--text-secondary); }
+/* PeticionesDebajo: su propia fila de la tarjeta, una petición por línea, el
+   alcance (enlace) a la izquierda y su estado a la derecha. */
+.bibdet-pet-debajo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.bibdet-pet-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.bibdet-pet-lista > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  min-width: 0;
+}
+.bibdet-pet-lista > li > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.bibdet-pet-nota { font-size: 12.5px; color: var(--text-muted); }
+.bibdet-pet-mio { color: var(--color-available); font-weight: 600; }
+.bibdet-pet-puntos { display: inline-flex; }
+.hover-link.bibdet-pet-ver {
+  background: none;
+  border: 0;
+  padding: 1px 2px;
+  font: inherit;
+  color: var(--text-accent);
+  border-radius: 3px;
+}
+.hover-link.bibdet-pet-emu { display: inline-flex; align-items: center; padding: 1px; border-radius: 3px; }
+.hover-link.bibdet-pet-ver:focus-visible,
+.hover-link.bibdet-pet-emu:focus-visible { outline-offset: -2px; }
 .modal-panel.bibdet-modal-ruta { width: max-content; max-width: calc(var(--vw100) * 0.9); min-width: 320px; }
 .bibdet-ruta {
   font-family: var(--font-mono);

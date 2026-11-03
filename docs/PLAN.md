@@ -278,6 +278,24 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   apunta a `npm:@typescript/typescript6` porque typescript-eslint aún no admite TS 7.0 (no hay API JS hasta 7.1, issue
   typescript-eslint#10940) y `@typescript/native` es el TS 7 que usa `tsc`; se puede volver a un solo `typescript` cuando
   typescript-eslint admita 7.1. `frontend/src/vite-env.d.ts` existe porque TS 7 comprueba por defecto los `import './x.css'`.
+- **Oleada 4, rediseño P1: el Panel (#189, #190, #192):** sigue llamándose «Panel» (Gabriel descartó «Hoy»; los ficheros `hoy/`
+  y `AvisoHoy` conservan el nombre interno).
+  - Cabecera: el perfil de eMuwarez (`CuentaEmu`), un solo «Sincronizar todo» y «Última sincronización… · próxima…».
+    «Sincronizar todo» encadena biblioteca, catálogo incremental y peticiones con la misma barra de la topbar; se salta lo que
+    eMuwarez limita a una vez por hora, un 429 del catálogo no corta la cadena y cualquier otro error sí.
+  - Dos carriles, «Listo para subir» (las peticiones *Compatible* por recompensa; «Subir» abre el asistente sobre lo que la
+    petición cubre, con un plegable «Otras ideas (sin petición)» para los grupos 2 y 3 de Recomendaciones) y «En curso».
+  - «Necesita atención» es una banda fina bajo los carriles: una línea («Todo en orden») si no hay nada; con avisos, cuatro en dos
+    columnas y «y N más»: instancias caídas (vigilancia #157; «no responde», no «apagada desde ayer», porque su estado vive en
+    memoria), subidas fallidas de 3 días y versión nueva. Sin vigilancia activada no afirma ninguna caída. `aria-live="polite"`.
+  - Franja de cinco cifras (en biblioteca, en disco, únicos sin subir, peticiones abiertas, tus subidas) con el `StatCard` de
+    siempre, en una fila. Las otras diez tarjetas, las de peticiones incluidas, están arriba de Estadísticas.
+  - Se van «Últimas tareas ejecutadas» (siguen en Tareas), «Conexiones» y «Actividad de subida» como estaban: su contenido pasa a los carriles.
+  - Un solo `Tooltip` global se abre por arriba si no cabe por abajo; `StatCard` con `info` pasa a `role="group"` con nombre.
+  - #189: CPU, RAM y disco, en una línea al pie de la barra lateral (disco = el sistema de ficheros de la carpeta de subidas).
+  - #192: los recuadres del HUD pasan de esquinas cortadas a redondeadas (`--radius-card` 12 px, `--radius-small` 7 px) y con
+    borde y resplandor más suaves, en toda la app.
+  - Sigue sin verse: el perfil real a 2000 px, la banda con más de cuatro instancias caídas y con el tour abierto.
 
 ## Siguiente
 
@@ -295,8 +313,9 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
   - resumen de duplicados y trumps;
   - «Mejoras posibles»;
   - estadísticas del tracker por subida.
-- Rediseño de la interfaz: Hoy, detalle de subida, resumen del asistente, Biblioteca, Peticiones y Configuración.
-  Espera las capturas de Gabriel; las funciones que tocan Biblioteca, Panel y el asistente van junto a él.
+- Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): ~~P1 Panel~~ (hecho), P4 detalle de
+  subida, P5 asistente con Resumen, P2 Biblioteca, P3 Peticiones, P6 Configuración. P7 móvil, pendiente de decidir. Las funciones que
+  tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: esquinas redondeadas y poco contraste, nada plano.
 
 ## Aplazado / ideas
 

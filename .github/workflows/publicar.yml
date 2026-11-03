@@ -9,7 +9,7 @@
 #
 # Con «ref» (un commit de master, una rama o una etiqueta) publica la versión de ESE commit: sin tests (la CI solo corre sobre
 # la punta), con la versión y su etiqueta en la rama release/vX.Y.Z en vez de en master (que ya avanzó; se fusiona después) y sin
-# mover :edge, que sigue siendo la punta de master.
+# mover :edge, que sigue siendo la punta de master. Si falla después de subir la versión, se reanuda con ref=release/vX.Y.Z.
 #
 # Necesita el secreto UPLOADRR_VERSION_TOKEN: un token con permiso de escritura
 # solo en Kisnov/uploadrr-version (GITHUB_TOKEN no puede escribir en otro repo).
@@ -54,12 +54,15 @@ jobs:
     outputs:
       accion: ${{ steps.d.outputs.accion }}
       escala: ${{ steps.d.outputs.escala }}
+      commit: ${{ steps.c.outputs.commit }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ inputs.ref }}
+      - id: c
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - id: d
         env:
           EVENTO: ${{ github.event_name }}
@@ -133,7 +136,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4  # zizmor: ignore[artipacked]
         with:
           fetch-depth: 0
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref != '' && needs.decidir.outputs.commit || '' }}
 
       - id: version
         if: env.ACCION == 'publicar'
@@ -150,6 +153,9 @@ jobs:
           subida=""
           if [ -z "$REF" ]; then
             subida="$(git log --first-parent --reverse --format='%H %P %s' "$GITHUB_SHA"..origin/master | head -n1 | grep -E "^[0-9a-f]{40} $GITHUB_SHA chore: versión " | cut -d' ' -f1)"
+          elif git log -1 --format=%s | grep -q '^chore: versión '; then
+            # Reanudar una publicación con ref que falló tras subir la versión: ref=release/vX.Y.Z, que ya es la versión.
+            subida="$(git rev-parse HEAD)"
           fi
           if [ -n "$subida" ]; then
             git checkout -q "$subida"

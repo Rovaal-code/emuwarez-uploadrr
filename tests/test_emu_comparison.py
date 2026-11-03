@@ -99,3 +99,88 @@ def test_started_but_never_finished_reports_unavailable_not_unique(db_conn):
     assert result["available"] is False
     assert "sincroniza" in result["message"].lower()
     assert result["matches"] == []
+
+
+def _catalogo_con(conn, tmdb_id, resolucion, fuente, nombre, codec="H.264"):
+    conn.execute(
+        """INSERT INTO emu_catalog
+           (torrent_id, category, tmdb_id, resolution, source, codec, has_spanish, size, name)
+           VALUES (?, 'Peliculas', ?, ?, ?, ?, 1, 1000000000, ?)""",
+        (nombre, str(tmdb_id), resolucion, fuente, codec, nombre),
+    )
+    conn.commit()
+
+
+def test_cada_torrent_dice_si_el_tuyo_es_mejor_igual_o_peor(db_conn):
+    """El asistente de subida enseña «mejor / igual / peor» por torrent, así que sale ya calculado."""
+    item_id = _movie(db_conn, "Película", tmdb_id=560, resolution="1080p", source="WEB-DL")
+    _catalogo_con(db_conn, 560, "720p", "HDTV", "Película 720p HDTV")
+    _catalogo_con(db_conn, 560, "1080p", "WEB-DL", "Película 1080p WEB-DL")
+    _catalogo_con(db_conn, 560, "2160p", "WEB-DL", "Película 2160p WEB-DL")
+    set_state(db_conn, SYNC_COMPLETED_STATE_KEY, "2026-01-01T00:00:00Z")
+    db_conn.commit()
+    veredictos = {m["name"]: m["veredicto"] for m in get_item_comparison(db_conn, item_id)["matches"]}
+    assert veredictos == {
+        "Película 720p HDTV": "mejor", "Película 1080p WEB-DL": "igual", "Película 2160p WEB-DL": "peor",
+    }
+
+
+def test_a_igual_resolucion_decide_el_source(db_conn):
+    item_id = _movie(db_conn, "Película", tmdb_id=561, resolution="1080p", source="BluRay")
+    _catalogo_con(db_conn, 561, "1080p", "WEB-DL", "Película 1080p WEB-DL")
+    set_state(db_conn, SYNC_COMPLETED_STATE_KEY, "2026-01-01T00:00:00Z")
+    db_conn.commit()
+    assert get_item_comparison(db_conn, item_id)["matches"][0]["veredicto"] == "mejor"
+
+
+def test_sin_nada_que_comparar_no_hay_veredicto(db_conn):
+    """Si la copia no dice resolución, source ni códec, no se inventa un «igual»."""
+    item_id = _movie(db_conn, "Película", tmdb_id=562, resolution=None, source=None, video_codec=None)
+    _catalogo_con(db_conn, 562, "1080p", "WEB-DL", "Película 1080p WEB-DL")
+    set_state(db_conn, SYNC_COMPLETED_STATE_KEY, "2026-01-01T00:00:00Z")
+    db_conn.commit()
+    assert get_item_comparison(db_conn, item_id)["matches"][0]["veredicto"] is None
+
+
+def test_la_resolucion_y_el_source_del_asistente_sustituyen_a_los_de_la_copia(db_conn):
+    """Lo que se sube es lo que el asistente pone en el nombre, no lo que dijo Radarr."""
+    item_id = _movie(db_conn, "Película", tmdb_id=563, resolution="720p", source="HDTV")
+    _catalogo_con(db_conn, 563, "1080p", "WEB-DL", "Película 1080p WEB-DL")
+    set_state(db_conn, SYNC_COMPLETED_STATE_KEY, "2026-01-01T00:00:00Z")
+    db_conn.commit()
+    assert get_item_comparison(db_conn, item_id)["matches"][0]["veredicto"] == "peor"
+    resultado = get_item_comparison(db_conn, item_id, resolution="2160p", source="WEB-DL")
+    assert resultado["matches"][0]["veredicto"] == "mejor"
+    assert resultado["mine"]["resolution"] == "2160p"
+
+
+def test_el_endpoint_pasa_resolucion_y_source_a_la_comparacion(client, auth_headers):
+    from unittest.mock import patch
+    with patch("emuwarez_uploadrr.services.emu_catalog.get_item_comparison",
+               return_value={"available": False, "message": None, "matches": []}) as comparar:
+        resp = client.get("/api/library/7/emu-comparison?resolution=2160p&source=WEB-DL", headers=auth_headers)
+        assert resp.status_code == 200
+        assert comparar.call_args.kwargs == {"resolution": "2160p", "source": "WEB-DL"}
+        client.get("/api/library/7/emu-comparison", headers=auth_headers)
+        assert comparar.call_args.kwargs == {"resolution": None, "source": None}
+
+
+def test_un_capitulo_suelto_no_se_compara_con_el_pack_de_la_temporada(db_conn):
+    ins = ("INSERT INTO library_items (item_type, title, local_status, request_status, nomenclature_status, "
+           "tvdb_id, tmdb_id, season_number, parent_id, resolution, source, video_codec, updated_at) "
+           "VALUES (?, ?, 'Disponible', 'Sin petición', 'N/A', '8', '9', ?, ?, '1080p', 'WEB-DL', 'H.264', CURRENT_TIMESTAMP)")
+    db_conn.execute(ins, ("series", "Serie", None, None))
+    serie = db_conn.execute("SELECT id FROM library_items ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    db_conn.execute(ins, ("season", "Serie - Temporada 1", 1, serie))
+    temporada = db_conn.execute("SELECT id FROM library_items ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    db_conn.execute("INSERT INTO library_items (item_type, title, local_status, request_status, nomenclature_status, parent_id, "
+                    "resolution, source, video_codec, size_bytes, updated_at) VALUES ('episode', 'Serie S01E01', 'Disponible', "
+                    "'Sin petición', 'N/A', ?, '720p', 'WEB-DL', 'H.264', 1, CURRENT_TIMESTAMP)", (temporada,))
+    for tid, nombre in (("p", "Serie S01 720p WEB-DL"), ("e", "Serie S01E01 720p WEB-DL")):
+        db_conn.execute(
+            "INSERT INTO emu_catalog (torrent_id, category, tvdb_id, tmdb_id, season_number, resolution, source, codec, "
+            "has_spanish, size, name) VALUES (?, 'Series', '8', '9', 1, '720p', 'WEB-DL', 'H.264', 1, 1, ?)", (tid, nombre))
+    set_state(db_conn, SYNC_COMPLETED_STATE_KEY, "2026-01-01T00:00:00Z")
+    db_conn.commit()
+    veredictos = {m["name"]: m["veredicto"] for m in get_item_comparison(db_conn, temporada)["matches"]}
+    assert veredictos == {"Serie S01 720p WEB-DL": "igual", "Serie S01E01 720p WEB-DL": None}

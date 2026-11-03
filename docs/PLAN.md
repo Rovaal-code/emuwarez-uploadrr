@@ -144,6 +144,15 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   y salta a una sección o abre la ficha de una película o serie de la Biblioteca (`/library/:id`, por el mismo camino
   que la campana, con la pregunta de «cambios sin guardar»). Flechas, Intro y Escape. Lógica pura en `utils/paleta.ts`.
   Busca solo el nivel de arriba (películas y series), con 8 resultados como máximo.
+- **Oleada 4, carril de «listas» por recompensa:** el Panel abre, encima de la cuadrícula, con «Peticiones listas para
+  subir»: una fila con las cinco (tres con la interfaz estrecha) de más recompensa, en una línea cada una (título con
+  año o temporada y puntos), y cuántas listas hay. Cada una es un botón que abre su ficha en Peticiones, como la
+  campana. Sin ninguna lista no se pinta. Los datos salen de `GET /api/requests?readiness=ready_to_upload&sort=points_desc`
+  (filtro `readiness` nuevo sobre la preparación ya guardada, el mismo criterio de la lista y del aviso
+  `request_new_ready`) y se recargan con el resto del Panel y al terminar una subida. Sin «Ver todas»: Peticiones
+  no deja fijar el orden ni filtrar por preparación desde fuera. Visto en el navegador con datos de prueba a 1440 y
+  1280 px. A 1280×800 la cuadrícula ya iba justa (las cifras van de tres en tres) y el carril le quita unos 115 px
+  a Recomendaciones.
 - **Pendientes pequeños de la oleada 4:** el build usa `build.rolldownOptions.output.codeSplitting` (el chunk `react` sale igual)
   en vez del `manualChunks` obsoleto; y una selección vacía de eventos guardada (`notify.<canal>.events` = "") ya
   no se lee como «sin configurar»: ese canal no recibe ningún evento (`channel_events` lee la clave tal cual).
@@ -223,7 +232,6 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 - Funciones nuevas que faltan:
   - subida por lotes;
   - resumen de duplicados y trumps;
-  - carril de «listas» ordenado por recompensa;
   - «Mejoras posibles»;
   - estadísticas del tracker por subida.
 - Rediseño de la interfaz: Hoy, detalle de subida, resumen del asistente, Biblioteca, Peticiones y Configuración.

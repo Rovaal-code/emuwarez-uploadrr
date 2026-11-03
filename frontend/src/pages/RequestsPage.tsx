@@ -34,6 +34,7 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { HeaderSort } from '../components/HeaderSort'
 import { formatBytes, timeAgo, formatDate, formatNumero } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
+import { requestDisplayTitle } from '../utils/peticiones'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
 import { IconoBloqueado, IconoDocumental, IconoPelicula, IconoSerie } from '../components/Iconos'
@@ -45,29 +46,6 @@ import { Modal } from '../components/Modal'
 const EMU_REQUESTS_FALLBACK_URL = `${EMU_URL}/requests`
 
 // A request's category maps to a friendly "Tipo" with an icon.
-// The raw eMuwarez title is whatever the requester typed there — for a
-// season/episode-scoped request it doesn't reliably say WHICH one, so the
-// suffix is appended here, same format as the one this app itself builds
-// when creating a petición (RequestFormModal): " - Temporada X" / " - SxxExx".
-// Skipped if the title already ends in something matching that pattern (the
-// requester already spelled it out on eMuwarez's own site).
-// The year (when matched to a library item) is inserted right after `base`,
-// before the " - Temporada X"/" - SxxEyy" suffix — same "Serie (Año) - …"
-// convention as every other table/dedicated page (see DetailTitleText,
-// which the callers below wrap this in for the muted-gray styling).
-function requestDisplayTitle(item: RequestItemResponse): string {
-  const base = item.title || ''
-  const year = item.library_year ? ` (${item.library_year})` : ''
-  if (item.req_scope === 'season' && item.req_season != null && !/temporada\s*\d+\s*$/i.test(base)) {
-    return `${base}${year} - Temporada ${item.req_season}`
-  }
-  if (item.req_scope === 'episode' && item.req_season != null && item.req_episode != null && !/S\d{1,2}E\d{1,3}\s*$/i.test(base)) {
-    const code = `S${String(item.req_season).padStart(2, '0')}E${String(item.req_episode).padStart(2, '0')}`
-    return `${base}${year} - ${code}`
-  }
-  return `${base}${year}`
-}
-
 // eMuwarez categories arrive in whatever wording the tracker uses ("TV",
 // "Movie", "Películas"…), so they're normalised once here and everything else
 // keys off the result. Reading the raw string in several places is what let

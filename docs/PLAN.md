@@ -58,7 +58,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   póster que no fuera 2:3 (o el hueco de línea de una `img` en línea) alargaba el marco (240, 244, 257, 277 px). Ahora
   la imagen va en `position: absolute` dentro del marco (`.bib-tarjeta-marco` y `.poster-grande-marco`) y el alto lo
   fija solo `aspect-ratio`: todas miden 240 (pósters pequeños) o 370 (grandes) a ese ancho. Comprobado en el
-  navegador con el CSS real, antes y después. Pendiente: ver que el aviso ya no sale en la aplicación real.
+  navegador con el CSS real, antes y después. Comprobado en la aplicación real el 03/11: el aviso no sale.
 - **Sugerencia de proveedor por TMDb para episodios y temporadas antiguos:** si un episodio o una temporada no traen
   `tmdb_id` (la sincronización ya se lo copia de la serie, pero los guardados antes de eso no lo tienen),
   `suggest_provider_for_item` usa el de la serie de la que cuelgan (`_tmdb_id_de_la_serie`, por `parent_id`, solo si el
@@ -153,7 +153,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - #151: Panel, `DashboardPage` (`styles/panel.css`, prefijo `panel-`): de 58 `style={{` a 2 (la barra de progreso
     con `scaleX` calculado y la transición de la fila que se despide).
   Siguen en línea, con comentario, los valores calculados. La comparación visual con capturas de antes y después
-  está pendiente.
+  se hizo el 03/11: sin diferencias.
 - **Oleada 4, Ctrl+K:** `components/CommandPalette.tsx` (Ctrl+K o Cmd+K desde cualquier sección, en `AppShell`): escribes
   y salta a una sección o abre la ficha de una película o serie de la Biblioteca (`/library/:id`, por el mismo camino
   que la campana, con la pregunta de «cambios sin guardar»). Flechas, Intro y Escape. Lógica pura en `utils/paleta.ts`.
@@ -231,8 +231,8 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - React 19.3 (`react`, `react-dom` y sus tipos). Solo hizo falta tipar los `RefObject` de `FilasVirtuales` como
     `RefObject<HTMLElement | null>` (en React 19 `useRef<T>(null)` devuelve `RefObject<T | null>`); el código ya
     trataba `.current` como posiblemente nulo y no cambia de comportamiento. El chunk `react` del bundle pasa de
-    139,84 kB (gzip 45,32) a 218,78 kB (gzip 68,26); `index` queda igual. Pendiente de ver en el navegador:
-    Biblioteca con scroll rápido en pósters (`RejillaVirtual`).
+    139,84 kB (gzip 45,32) a 218,78 kB (gzip 68,26); `index` queda igual. Comprobado en el navegador el 03/11:
+    Biblioteca con scroll rápido en pósters (`RejillaVirtual`) va bien.
 - **Peticiones sin castellano no están «listas para subir»:** eMuwarez es un tracker español y solo admite contenido con
   castellano, en el audio o, si no, en los subtítulos (la regla de la comprobación «Tiene castellano» de la subida y de
   `has_spanish_ok` en la biblioteca). El criterio de preparación de las peticiones no la miraba, así que el carril del Panel,
@@ -258,21 +258,38 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   encuentran con un `BASE.torrent` o unas capturas viejas. Si la ficha ya estaba en eMuwarez (`tracker` hecho) el
   reintento no ofrece reutilizar nada: chocaría con el duplicado. Aplazado: que un reintento recupere solo el añadido a
   qBittorrent de una subida que ya estaba en eMuwarez.
+- **Oleada 3 y 4, comprobación visual (03/11):** dos instancias en Docker con los mismos datos de prueba, una con el
+  commit anterior a las tandas de estilos (19a3add, esquema 47, padre de #137) y otra con `master` (f3fef2c, esquema 50).
+  Se compararon capturas y las ~100 propiedades computadas y el rectángulo de cada elemento de Panel, Biblioteca (póster,
+  póster grande, lista, árbol, ficha), Peticiones y su detalle, Subidas y su detalle, Guía, Tareas, Instancias, Logs,
+  Configuración, asistente de subida (película y temporada), modales, campana, tour y asistente de primera
+  configuración, a 1440×900 y, salvo Setup y tour, a 1280×800. Las tandas de estilos a clases no cambian nada:
+  Guía, Instancias, detalle de petición, Tareas, Setup, modales, pasos del asistente, Configuración y la lista y el
+  árbol de Biblioteca salen idénticos; el resto de diferencias vienen de funciones nuevas. Lo demás:
+  - widget de Homepage (#161): la clave se genera y se enseña una sola vez; `/api/widget` da 404 sin clave configurada,
+    401 con clave mala, sin cabecera o por `?api_key=`, y 200 con `X-Api-Key` o `Bearer`; la clave no abre ningún otro
+    endpoint;
+  - aviso de peticiones nuevas (#158): sale en la campana, con contador, y lleva a Peticiones;
+  - Biblioteca en pósters con React 19 y scroll rápido (rueda, barra y saltos, de 390 a 1440 px): el aviso «RejillaVirtual
+    no se calma» y el error 185 no salen, y la altura del scroller no oscila.
+  Sin ver: Setup pasos 4 a 9 por el flujo real (el paso 3 pide una clave real de eMuwarez), una subida real de extremo a
+  extremo, hover y foco, y los pasos 4 a 6 del asistente de temporada.
+- **TypeScript 7 (#178):** `tsc` pasa de ~4,7 s a ~1,3 s y `npm run build` de 5,5 s a 1,4 s; mismo bundle. `typescript`
+  apunta a `npm:@typescript/typescript6` porque typescript-eslint aún no admite TS 7.0 (no hay API JS hasta 7.1, issue
+  typescript-eslint#10940) y `@typescript/native` es el TS 7 que usa `tsc`; se puede volver a un solo `typescript` cuando
+  typescript-eslint admita 7.1. `frontend/src/vite-env.d.ts` existe porque TS 7 comprueba por defecto los `import './x.css'`.
 
-## Siguiente (oleada 3)
+## Siguiente
 
-1. Comparar con capturas de antes y después las tandas de estilos a clases (Configuración, asistente, Peticiones, detalle
-   de subida, Guía, `SetupWizard`, Subidas, Panel, Biblioteca, Tareas, Instancias, comparación, modales y componentes).
-   Ya no queda nada convertible: los 67 `style={{` que siguen en línea son valores calculados (colores de estado,
-   sangrías, posiciones, `transform`) o van a `Tooltip`/`Modal`, que solo admiten un objeto de estilo.
-2. Pequeños pendientes de la primera tanda de la oleada 4:
-   - ver en marcha la tarjeta del widget (#161) y el aviso de peticiones nuevas (#158). «Rellenar petición» y
-     Estadísticas sí se vieron en una instancia local con datos de prueba; de ahí salió el arreglo del modal, que
-     quedaba atrapado bajo la columna fija de acciones.
+Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que quedaba por ver se comprobó el 03/11 (ver en
+«Hecho»). Lo siguiente es la oleada 4. Tres detalles que salieron de la comprobación, ninguno por los estilos (ya estaban antes):
+- el paso «Configuración» del tour no resalta nada si Configuración se dejó en otra pestaña (`data-tour="settings-content"`
+  solo existe en la pestaña Configuración);
+- a 1280×800 el pie del asistente de subida queda cortado y el cuerpo del modal hace scroll por dentro;
+- a 390 px el sidebar no se pliega.
 
 ## Oleada 4
 
-- React 19 y TypeScript 7 (Vite 8, Vitest 5 y React 19 ya están; falta TypeScript 7).
 - Funciones nuevas que faltan:
   - subida por lotes;
   - resumen de duplicados y trumps;

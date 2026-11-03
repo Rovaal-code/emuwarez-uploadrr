@@ -1,0 +1,24 @@
+/* Paleta de búsqueda Ctrl+K (CommandPalette). Prefijo paleta-. Se importa el último en main.tsx. */
+.modal-panel.paleta-modal { max-width: 560px; }
+.form-input.paleta-entrada { width: 100%; }
+.paleta-lista {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.paleta-opcion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.paleta-opcion.paleta-activa { background: color-mix(in srgb, var(--overlay-light) 12%, transparent); }
+.paleta-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paleta-etiqueta { flex-shrink: 0; font-size: 12px; color: var(--text-muted); }
+.paleta-vacio { padding: 8px 12px; color: var(--text-muted); }
+.paleta-ayuda { margin: 12px 0 0; font-size: 12px; color: var(--text-muted); }

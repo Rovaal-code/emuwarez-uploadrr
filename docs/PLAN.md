@@ -133,6 +133,10 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     con `scaleX` calculado y la transición de la fila que se despide).
   Siguen en línea, con comentario, los valores calculados. La comparación visual con capturas de antes y después
   está pendiente.
+- **Oleada 4, Ctrl+K:** `components/CommandPalette.tsx` (Ctrl+K o Cmd+K desde cualquier sección, en `AppShell`): escribes
+  y salta a una sección o abre la ficha de una película o serie de la Biblioteca (`/library/:id`, por el mismo camino
+  que la campana, con la pregunta de «cambios sin guardar»). Flechas, Intro y Escape. Lógica pura en `utils/paleta.ts`.
+  Busca solo el nivel de arriba (películas y series), con 8 resultados como máximo.
 - **Pendientes pequeños de la oleada 4:** el build usa `build.rolldownOptions.output.codeSplitting` (el chunk `react` sale igual)
   en vez del `manualChunks` obsoleto; y una selección vacía de eventos guardada (`notify.<canal>.events` = "") ya
   no se lee como «sin configurar»: ese canal no recibe ningún evento (`channel_events` lee la clave tal cual).
@@ -206,7 +210,6 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - carril de «listas» ordenado por recompensa;
   - «Mejoras posibles»;
   - estadísticas del tracker por subida;
-  - Ctrl+K.
 - Rediseño de la interfaz: Hoy, detalle de subida, resumen del asistente, Biblioteca, Peticiones y Configuración.
   Espera las capturas de Gabriel; las funciones que tocan Biblioteca, Panel y el asistente van junto a él.
 

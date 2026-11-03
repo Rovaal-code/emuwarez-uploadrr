@@ -1,7 +1,7 @@
 import type { DashboardSummaryResponse } from '../../types/api'
 import { formatNumero } from '../../utils/format'
 
-// La franja de cinco números de «Hoy». El resto de cifras del Panel están arriba de Estadísticas.
+// La franja de cinco números del Panel. El resto de cifras del Panel están arriba de Estadísticas.
 export function Franja({ resumen: s }: { resumen: DashboardSummaryResponse }) {
   const cifras: [string, number][] = [
     ['en biblioteca', s.library_total],

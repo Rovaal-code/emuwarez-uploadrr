@@ -15,7 +15,7 @@ import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
 import { CarrilListo } from '../components/hoy/CarrilListo'
 import { CarrilEnCurso } from '../components/hoy/CarrilEnCurso'
-import { CarrilAtencion } from '../components/hoy/CarrilAtencion'
+import { BandaAtencion } from '../components/hoy/BandaAtencion'
 import { Franja } from '../components/hoy/Franja'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { queSalieron, soloVivas, idsDe, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
@@ -31,7 +31,7 @@ interface DashboardPageProps {
   onNavigate?: (page: string) => void
 }
 
-// «Hoy» (antes Panel): lo que se puede subir ahora, lo que está subiéndose y lo que hay que mirar, y debajo cinco números.
+// El Panel: lo que se puede subir ahora y lo que está subiéndose, una banda con lo que hay que mirar y debajo cinco números.
 export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // Abrir una ficha o una subida: se apunta el id y se cambia de sección; el destino lo recoge al entrar.
   const abrirFicha = (item: DashboardRecommendationItem) => {
@@ -247,24 +247,29 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       )}
 
       <div className="page-header panel-cabecera">
-        <div>
-          <div className="page-title">Hoy</div>
-          <div className="page-subtitle">{lineaSincronizacion(s.last_sync_at, s.next_sync_at)}</div>
-        </div>
+        <div className="page-title">Panel</div>
         <CuentaEmu />
-        <SyncCard />
+        <div className="panel-sincronizar">
+          <SyncCard />
+          <div className="panel-sincronizacion">
+            {lineaSincronizacion(s.last_sync_at, s.next_sync_at).split(' · ').map((parte, i) => (
+              <span key={i}>{i > 0 && <span className="solo-lector"> · </span>}{parte}</span>
+            ))}
+          </div>
+        </div>
       </div>
 
       {errorAccion && <div className="panel-error-accion" role="alert">{errorAccion}</div>}
 
-      {/* Los tres carriles llenan el alto que sobra (la página no se desplaza); cada uno se desplaza por dentro. */}
+      {/* Los dos carriles llenan el alto que sobra (la página no se desplaza); cada uno se desplaza por dentro. */}
       <div className="panel-carriles">
         <CarrilListo recomendaciones={reparto}
           onSubir={item => abrir(item, 'peticion')} onVerPeticion={abrirPeticion} onVerFicha={abrirFicha}
           onSubirUnico={item => abrir(item, 'unico')} onPedir={item => abrir(item, 'pedir')} />
         <CarrilEnCurso filas={filasDeSubida} onOpen={goToUpload} onVerTodas={() => onNavigate?.('uploads')} />
-        <CarrilAtencion avisos={avisos} onVerSubida={goToUpload} onVerSubidas={() => onNavigate?.('uploads')} onVerVersion={() => onNavigate?.('settings')} />
       </div>
+
+      <BandaAtencion avisos={avisos} onVerSubida={goToUpload} onVerSubidas={() => onNavigate?.('uploads')} onVerVersion={() => onNavigate?.('settings')} />
 
       <Franja resumen={s} />
     </div>

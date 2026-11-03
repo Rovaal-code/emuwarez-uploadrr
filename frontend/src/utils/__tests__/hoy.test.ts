@@ -1,5 +1,5 @@
 /**
- * La lógica de «Hoy»: cómo se reparten las recomendaciones en carriles, en qué orden salen las subidas en curso,
+ * La lógica del Panel: cómo se reparten las recomendaciones en carriles, en qué orden salen las subidas en curso,
  * qué sube a «Necesita atención» y qué dicen las líneas de texto.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

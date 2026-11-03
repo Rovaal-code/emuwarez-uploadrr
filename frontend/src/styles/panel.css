@@ -1,4 +1,4 @@
-/* Hoy (DashboardPage y components/hoy/): estilos que antes iban en línea. Prefijo panel-.
+/* El Panel (DashboardPage y components/hoy/): estilos que antes iban en línea. Prefijo panel-.
    Se importa el último en main.tsx. Las reglas que retocan un `.badge`, un `.spinner`, un `.poster-thumb` o un
    bloque `.upload-panel` llevan el selector tan específico como la regla base o más
    (`.hud-app .upload-panel`...): una clase suelta perdería contra ellas. */
@@ -10,7 +10,24 @@
   flex-direction: column;
   overflow: hidden;
 }
-.page-header.panel-cabecera { flex-shrink: 0; }
+.page-header.panel-cabecera { flex-shrink: 0; gap: 0; }
+.panel-cabecera .page-title { flex-shrink: 0; white-space: nowrap; }
+/* «Sincronizar todo» y debajo, a su derecha, cuándo fue y cuándo toca; en dos líneas para no quitarle sitio a tu cuenta. */
+.panel-sincronizar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 230px;
+  margin-left: auto;
+}
+.panel-sincronizacion {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+}
+.panel-sincronizacion span { display: block; }
 .panel-error-accion {
   flex-shrink: 0;
   margin-bottom: 12px;
@@ -18,13 +35,13 @@
   color: var(--color-warning);
 }
 
-/* Los tres carriles llenan el alto que sobra. `minmax(0, …)`: sin el 0, una columna no encoge por debajo de su
+/* Los dos carriles llenan el alto que sobra. `minmax(0, …)`: sin el 0, una columna no encoge por debajo de su
    contenido y empuja fuera de la pantalla a la de al lado (el arreglo de #175). */
 .panel-carriles {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 20px;
   margin-bottom: 20px;
 }
@@ -82,7 +99,56 @@
   cursor: pointer;
 }
 
-/* Necesita atención */
+/* Necesita atención: una banda fina entre los carriles y la franja */
+.panel-atencion {
+  flex-shrink: 0;
+  margin-bottom: 20px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-card);
+}
+.panel-atencion-vacia {
+  margin-bottom: 12px;
+  padding: 2px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+}
+.panel-atencion-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.panel-atencion-titulo {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.panel-atencion-cuenta { margin-left: 6px; font-weight: 400; color: var(--text-muted); }
+.panel-atencion-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  max-height: 168px;
+  overflow-y: auto;
+}
+.panel-atencion .panel-aviso { align-items: center; padding: 3px 4px; border-bottom: 0; }
+.panel-atencion .panel-punto { margin-top: 0; }
+.panel-atencion .panel-aviso-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-aviso-detalle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 .panel-punto {
   width: 8px;
   height: 8px;

@@ -1,5 +1,5 @@
 /**
- * La lógica de «Hoy» (el Panel): cómo se reparten las recomendaciones, qué va en cada carril y qué dice cada línea.
+ * La lógica del Panel: cómo se reparten las recomendaciones, qué va en cada carril y qué dice cada línea.
  * El servidor ya da cada lista en su orden (las peticiones por recompensa); aquí solo se reparte y se redacta.
  */
 import type { DashboardRecommendationItem } from '../api/dashboard'

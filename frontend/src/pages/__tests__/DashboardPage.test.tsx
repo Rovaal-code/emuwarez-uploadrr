@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * «Hoy» con el servidor simulado: los tres carriles con datos y vacíos, la franja de cinco números, y lo que hace
- * «Subir» (abrir el asistente sobre la fila de la petición, con la petición).
+ * El Panel con el servidor simulado: los dos carriles y la banda de avisos con datos y vacíos, la franja de cinco
+ * números, la cuenta de eMuwarez en la cabecera y lo que hace «Subir» (abrir el asistente sobre la fila de la petición).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -13,7 +13,11 @@ vi.mock('../../api/library', () => ({ getLibraryItem: vi.fn() }))
 vi.mock('../../api/eventos', () => ({
   suscribirse: vi.fn(() => () => {}), canalVivo: vi.fn(() => true), observarCanal: vi.fn(() => () => {}),
 }))
-vi.mock('../../components/CuentaEmu', () => ({ CuentaEmu: () => null }))
+// La cuenta de eMuwarez: sin perfil no pinta nada (como el componente real); con perfil, un hueco reconocible.
+const cuenta = vi.hoisted(() => ({ hayPerfil: false }))
+vi.mock('../../components/CuentaEmu', () => ({
+  CuentaEmu: () => (cuenta.hayPerfil ? <section data-testid="cuenta">Ratio 17,31</section> : null),
+}))
 vi.mock('../../components/SyncCard', () => ({ SyncCard: () => <button>↻ Sincronizar todo</button> }))
 vi.mock('../../components/UploadWizardModal', () => ({
   UploadWizardModal: (p: { item: { id: number }; preselect?: unknown; requestId?: number }) => (
@@ -63,11 +67,13 @@ async function pagina() {
 
 const carril = (titulo: string) =>
   [...document.querySelectorAll('section.panel-carril')].find(s => s.querySelector('h2')?.textContent === titulo)!
+const banda = () => document.querySelector('section.panel-atencion')!
 const filas = (titulo: string) => [...carril(titulo).querySelectorAll('.panel-item')]
 const botonDe = (donde: Element, nombre: string) =>
   [...donde.querySelectorAll('button')].find(b => b.textContent?.trim() === nombre)
 
 beforeEach(() => {
+  cuenta.hayPerfil = false
   vi.mocked(getDashboardSummary).mockResolvedValue(resumen())
   vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [] })
   vi.mocked(getUploads).mockResolvedValue([])
@@ -79,8 +85,8 @@ beforeEach(() => {
 })
 afterEach(desmontar)
 
-describe('Hoy', () => {
-  it('con datos: los tres carriles en su orden y la franja de cinco números', async () => {
+describe('Panel', () => {
+  it('con datos: los dos carriles en su orden y la franja de cinco números', async () => {
     vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
       rec({ id: 1, content_name: 'La bola negra (2026)', rec_request_id: 11, rec_points: 120000, resolution: '1080p', source: 'WEB-DL', has_spanish_audio: 1, has_spanish_subs: 0, size_bytes: 6 * 1024 ** 3 }),
       rec({ id: 2, content_name: 'Kill Bill (2011)', rec_request_id: 12, rec_points: 10000 }),
@@ -92,9 +98,10 @@ describe('Hoy', () => {
     await pagina()
     await esperar(() => filas('En curso').length === 0 && carril('En curso').querySelectorAll('.upload-row').length === 2)
 
-    expect(texto()).toContain('Hoy')
+    expect(document.querySelector('.page-title')!.textContent).toBe('Panel')
+    expect(texto()).not.toContain('Hoy')
     expect([...document.querySelectorAll('section.panel-carril h2')].map(h => h.textContent))
-      .toEqual(['Listo para subir', 'En curso', 'Necesita atención'])
+      .toEqual(['Listo para subir', 'En curso'])
 
     // Las peticiones salen en el orden del servidor (por recompensa), con su línea de datos y su recompensa.
     const peticiones = filas('Listo para subir')
@@ -113,13 +120,29 @@ describe('Hoy', () => {
     expect(franja).toEqual(['en biblioteca51.372', 'en disco15.861', 'únicos sin subir283', 'peticiones abiertas322', 'tus subidas14'])
   })
 
-  it('vacío: dice qué falta en cada carril y no inventa avisos', async () => {
+  it('vacío: dice qué falta en cada carril y la banda de avisos es una sola línea', async () => {
     await pagina()
     expect(carril('Listo para subir').textContent).toContain('Ninguna petición lista')
     expect(carril('En curso').textContent).toContain('Sin subidas en curso')
-    expect(carril('Necesita atención').textContent).toContain('Nada que revisar')
     expect(document.querySelector('.panel-mas')).toBeNull()
-    expect(carril('Necesita atención').querySelector('.panel-aviso')).toBeNull()
+    expect(banda().textContent).toBe('Todo en orden')
+    expect(banda().classList.contains('panel-atencion-vacia')).toBe(true)
+    expect(banda().querySelector('h2, .panel-aviso, button')).toBeNull()
+  })
+
+  it('la cuenta de eMuwarez va en la cabecera, entre el título y «Sincronizar todo»; sin perfil no sale nada', async () => {
+    await pagina()
+    expect(document.querySelector('[data-testid="cuenta"]')).toBeNull()
+    await desmontar()
+
+    cuenta.hayPerfil = true
+    await pagina()
+    const cabecera = document.querySelector('.panel-cabecera')!
+    expect([...cabecera.children].map(c => c.className || c.getAttribute('data-testid')))
+      .toEqual(['page-title', 'cuenta', 'panel-sincronizar'])
+    // «Sincronizar todo» y la línea de la última sincronización, juntos a la derecha.
+    expect(cabecera.querySelector('.panel-sincronizar')!.textContent).toContain('Sincronizar todo')
+    expect(cabecera.querySelector('.panel-sincronizacion')!.textContent).toBe('Aún no se ha sincronizado')
   })
 
   it('«Necesita atención» enseña la instancia caída, la subida fallida y la versión nueva; nada en verde', async () => {
@@ -131,22 +154,44 @@ describe('Hoy', () => {
     ])
     vi.mocked(getVersionInfo).mockResolvedValue({ version: '0.14.0', estado: 'hay_novedad', ultima: { version: '0.14.1' } })
     await pagina()
-    await esperar(() => carril('Necesita atención').querySelectorAll('.panel-aviso').length === 3)
+    await esperar(() => banda().querySelectorAll('.panel-aviso').length === 3)
 
-    const avisos = [...carril('Necesita atención').querySelectorAll('.panel-aviso')].map(a => a.textContent)
+    const avisos = [...banda().querySelectorAll('.panel-aviso')].map(a => a.textContent)
     expect(avisos[0]).toContain('Radarr up no responde')
     expect(avisos[0]).toContain('Biblioteca de hace 26 h · se sincroniza sola al volver')
     expect(avisos[1]).toContain('Subida fallida · Youjo Senki S01E12')
     expect(avisos[1]).toContain('Duplicado en eMuwarez')
     expect(avisos[2]).toContain('Versión nueva 0.14.1 publicada')
     expect(texto()).not.toContain('Configurado')
-    expect(carril('Necesita atención').querySelector('.panel-carril-nota')!.textContent).toBe('3')
+    expect(banda().querySelector('h2')!.textContent).toBe('Necesita atención 3')
+    expect(banda().querySelector('button')).toBeNull()
 
     // «Ver motivo» abre esa subida en Subidas.
-    const ver = [...carril('Necesita atención').querySelectorAll('[role="link"]')].find(l => l.textContent === 'Ver motivo')!
+    const ver = [...banda().querySelectorAll('[role="link"]')].find(l => l.textContent === 'Ver motivo')!
     await pulsar(ver)
     expect(sessionStorage.getItem('emuwarez_open_upload')).toBe('9')
     expect(navegar).toHaveBeenCalledWith('uploads')
+  })
+
+  it('con más de cuatro avisos enseña cuatro y «y N más» despliega el resto', async () => {
+    vi.mocked(getDashboardSummary).mockResolvedValue(resumen({
+      instancias_caidas: [
+        { id: 3, nombre: 'Radarr up', tipo: 'radarr', ultima_sincronizacion: null },
+        { id: 4, nombre: 'Sonarr up', tipo: 'sonarr', ultima_sincronizacion: null },
+      ],
+    }))
+    vi.mocked(getUploads).mockResolvedValue([1, 2, 3].map(n =>
+      trabajo({ id: 20 + n, status: 'failed', title: `Fallida ${n}`, error_message: 'Motivo', finished_at: new Date().toISOString() })))
+    vi.mocked(getVersionInfo).mockResolvedValue({ version: '0.14.0', estado: 'hay_novedad', ultima: { version: '0.14.1' } })
+    await pagina()
+    await esperar(() => banda().querySelector('.panel-atencion-mas'))
+
+    expect(banda().querySelectorAll('.panel-aviso')).toHaveLength(4)
+    const mas = banda().querySelector('.panel-atencion-mas')!
+    expect(mas.textContent).toBe('y 2 más')
+    await pulsar(mas)
+    expect(banda().querySelectorAll('.panel-aviso')).toHaveLength(6)
+    expect(banda().querySelector('.panel-atencion-mas')!.textContent).toBe('Ver menos')
   })
 
   it('«Subir» abre el asistente sobre la temporada de la petición, con su selección y la petición', async () => {

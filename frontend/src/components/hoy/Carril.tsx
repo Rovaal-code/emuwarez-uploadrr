@@ -1,6 +1,6 @@
 import { useId } from 'react'
 
-// El marco de un carril de «Hoy»: título, una nota a su derecha y el cuerpo, que se desplaza por dentro.
+// El marco de un carril del Panel: título, una nota a su derecha y el cuerpo, que se desplaza por dentro.
 export function Carril({ titulo, nota, tour, children }: {
   titulo: string; nota?: string; tour?: string; children: React.ReactNode
 }) {

@@ -21,6 +21,7 @@ import { posterUrl, idVerifyUrl, buildDeepLink } from '../utils/libraryItem'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { ExternalIdLink } from '../components/ExternalIdLink'
 import { InfoIcon } from '../components/InfoIcon'
+import { GruposDeRelease } from '../components/GruposDeRelease'
 import {
   Card, FieldRow, DetailPoster, ValueChip, ValueIcon, PlainValue, TechChip, CheckStatusIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle, DetailTitleText,
   StatusCardIcon, RequestCardIcon, ExternalIdsCardIcon,
@@ -484,7 +485,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
                 <table className="data-table pet-tabla-comparar">
                   <thead>
                     <tr>
-                      <th>Contenido</th><th>Título</th><th>Resolución</th><th>Source</th>
+                      <th>Contenido</th><th>Título</th><th>Resolución</th><th>Source</th><th>Grupo</th>
                       <th><span className="pet-th-flex">Códec <InfoIcon text="El códec no se puede comparar de forma fiable: en eMuwarez suele indicarse en la descripción del torrent, no en los campos." /></span></th>
                       <th><span className="pet-th-flex">Idiomas <InfoIcon text="El audio/idiomas no se pueden comparar de forma fiable: suelen indicarse en la descripción del torrent." /></span></th>
                       <th>Tamaño</th>
@@ -502,6 +503,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
                       </td>
                       <td className="pet-nowrap"><SpecValueChip value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
                       <td className="pet-nowrap"><SpecValueChip value={item.requested_source} icon={SourceValueIcon} /></td>
+                      <td className="pet-muted">—</td>
                       <td className="pet-muted">—</td>
                       <td className="pet-muted">—</td>
                       <td className="pet-muted">—</td>
@@ -526,6 +528,11 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
                       </td>
                       <td className="pet-nowrap"><TechChip icon={ResolutionValueIcon} value={m.local_resolution} />{cellMark(satisfies(item.requested_resolution, m.local_resolution, m.resolution_match))}</td>
                       <td className="pet-nowrap"><TechChip icon={SourceValueIcon} value={m.local_source} />{cellMark(satisfies(item.requested_source, m.local_source, m.source_match))}</td>
+                      <td className="pet-nowrap">
+                        {m.local_release_groups?.length
+                          ? <GruposDeRelease grupos={m.local_release_groups} junto />
+                          : <span className="detcard-atenuado">—</span>}
+                      </td>
                       <td className="pet-nowrap"><TechChip icon={VideoCodecValueIcon} value={m.local_video_codec} /></td>
                       <td className="pet-nowrap"><TechChip icon={LanguageValueIcon} value={m.local_audio_languages} /></td>
                       <td className="pet-nowrap"><TechChip icon={SizeValueIcon} value={m.local_size ? formatBytes(m.local_size) : null} /></td>

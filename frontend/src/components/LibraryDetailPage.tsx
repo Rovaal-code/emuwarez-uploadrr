@@ -11,6 +11,7 @@ import { formatBytes, formatDate, formatItemType } from '../utils/format'
 import { buildDeepLink, posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from './ExternalIdLink'
 import { ProviderTag } from './ProviderIcon'
+import { GruposDeRelease, gruposDeRelease } from './GruposDeRelease'
 import { ServiceLabel } from './ServiceIcon'
 import { useTooltip } from './Tooltip'
 import {
@@ -195,6 +196,10 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction,
               </FieldRow>
               <FieldRow label="Source" help={rollupHelp}>
                 <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.source || item.source || '—'}</span></ValueChip>
+              </FieldRow>
+              {/* No lleva `help`: a diferencia del resto, aquí salen los de todos los capítulos, no solo si coinciden. */}
+              <FieldRow label="Grupo">
+                <GruposDeRelease grupos={gruposDeRelease(item)} />
               </FieldRow>
               <FieldRow label="Códec de vídeo" help={rollupHelp}>
                 <ValueChip><ValueIcon><VideoCodecValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.video_codec || item.video_codec || '—'}</span></ValueChip>

@@ -87,8 +87,7 @@
   user-select: none;
 }
 
-/* El HUD recorta las esquinas con clip-path, que se comería un anillo por
-   fuera: aquí va por dentro. */
+/* El anillo de foco va por dentro: la lista del menú recorta lo que sale por los lados. */
 .nav-item:focus-visible {
   outline-offset: -3px;
 }
@@ -352,7 +351,7 @@
      page show through the floating panel. */
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   /* Above .modal-overlay (1000, components.css) AND the other 2000-level
      floating layers (Tooltip.tsx, HeaderFilter.tsx) — notifications must

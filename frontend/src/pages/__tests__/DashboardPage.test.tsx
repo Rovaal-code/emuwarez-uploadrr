@@ -143,6 +143,7 @@ describe('Panel', () => {
     expect(document.querySelector('.panel-mas')).toBeNull()
     expect(banda().textContent).toBe('Todo en orden')
     expect(banda().classList.contains('panel-atencion-vacia')).toBe(true)
+    expect(banda().getAttribute('aria-live')).toBe('polite')
     expect(banda().querySelector('h2, .panel-aviso, button')).toBeNull()
   })
 

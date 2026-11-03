@@ -23,7 +23,7 @@ export function BandaAtencion({ avisos, onVerSubida, onVerSubidas, onVerVersion 
 
   if (avisos.length === 0) {
     return (
-      <section className="panel-atencion panel-atencion-vacia" aria-label="Necesita atención" data-tour="dashboard-attention">
+      <section className="panel-atencion panel-atencion-vacia" aria-label="Necesita atención" aria-live="polite" data-tour="dashboard-attention">
         Todo en orden
       </section>
     )
@@ -32,7 +32,7 @@ export function BandaAtencion({ avisos, onVerSubida, onVerSubidas, onVerVersion 
   const vistos = todos ? avisos : avisos.slice(0, VISIBLES)
   const ocultos = avisos.length - vistos.length
   return (
-    <section className="panel-atencion" aria-label="Necesita atención" data-tour="dashboard-attention">
+    <section className="panel-atencion" aria-label="Necesita atención" aria-live="polite" data-tour="dashboard-attention">
       <div className="panel-atencion-cabecera">
         <h2 className="panel-atencion-titulo">Necesita atención <span className="panel-atencion-cuenta">{avisos.length}</span></h2>
         {(ocultos > 0 || todos) && (

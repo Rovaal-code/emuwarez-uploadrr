@@ -15,7 +15,7 @@ import logging
 import sqlite3
 from typing import Optional
 
-from .settings import get_setting_canonical
+from .settings import get_setting_canonical, get_setting_raw
 from .notifications import send_discord, send_telegram
 from .eventos import EVENTO_NOTIFICACION, publicar
 
@@ -85,8 +85,9 @@ def channel_events(conn: sqlite3.Connection, channel: str) -> set[str]:
 
     Sin configurar, la campana recibe todo y los canales externos todo menos
     los de SOLO_UI_POR_DEFECTO. Configurado, se respeta exactamente lo que el
-    usuario guardó: si desmarcó algo, desmarcado se queda."""
-    raw = get_setting_canonical(conn, f"notify.{channel}.events")
+    usuario guardó: si desmarcó algo, desmarcado se queda, y una selección vacía
+    guardada ("") es un canal sin eventos, no uno sin configurar."""
+    raw = get_setting_raw(conn, f"notify.{channel}.events")
     if raw is None:
         return set(_ALL_EVENTS) if channel == "ui" else set(_ALL_EVENTS - SOLO_UI_POR_DEFECTO)
     return {c.strip() for c in raw.split(",") if c.strip() and c.strip() in EVENT_TYPES}

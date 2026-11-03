@@ -176,6 +176,24 @@ def test_el_aviso_de_version_llega_a_la_campana_pero_no_a_los_bots(client, auth_
         conn.close()
 
 
+def test_una_seleccion_vacia_guardada_no_recibe_eventos(client, auth_headers):
+    """Vaciar todas las casillas de un canal es una elección: no se lee como «sin configurar»."""
+    from emuwarez_uploadrr.services.notification_center import channel_events
+    from emuwarez_uploadrr.database import connect, db_path
+
+    resp = client.put("/api/settings", json={"notify_ui_events": [], "notify_discord_events": []}, headers=auth_headers)
+    assert resp.status_code == 200
+    conn = connect(db_path())
+    try:
+        assert channel_events(conn, "ui") == set()
+        assert channel_events(conn, "discord") == set()
+        assert channel_events(conn, "telegram")  # este no se guardó: sigue con los de por defecto
+    finally:
+        conn.close()
+    s = client.get("/api/settings", headers=auth_headers).json()
+    assert s["notify_ui_events"] == []
+
+
 def test_settings_save_event_selection(client, auth_headers):
     client.put("/api/settings", json={"notify_discord_events": ["upload_completed", "bogus"]}, headers=auth_headers)
     s = client.get("/api/settings", headers=auth_headers).json()

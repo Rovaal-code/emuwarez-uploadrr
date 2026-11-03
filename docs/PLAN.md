@@ -133,6 +133,9 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     con `scaleX` calculado y la transición de la fila que se despide).
   Siguen en línea, con comentario, los valores calculados. La comparación visual con capturas de antes y después
   está pendiente.
+- **Pendientes pequeños de la oleada 4:** el build usa `build.rolldownOptions.output.codeSplitting` (el chunk `react` sale igual)
+  en vez del `manualChunks` obsoleto; y una selección vacía de eventos guardada (`notify.<canal>.events` = "") ya
+  no se lee como «sin configurar»: ese canal no recibe ningún evento (`channel_events` lee la clave tal cual).
 - **Oleada 3, última tanda de estilos y HTTPS (#141):** `LoginPage` y los componentes menores pasan a clases
   (`styles/paginas.css`, `styles/componentes-menores.css`, prefijo `menores-`); de 92 `style={{` quedan 67, todos
   dinámicos. «Probar conexión» de eMuwarez rechaza una URL `http://` (estado `insecure_url`) antes de enviar la API
@@ -188,10 +191,6 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
    Ya no queda nada convertible: los 67 `style={{` que siguen en línea son valores calculados (colores de estado,
    sangrías, posiciones, `transform`) o van a `Tooltip`/`Modal`, que solo admiten un objeto de estilo.
 2. Pequeños pendientes de la primera tanda de la oleada 4:
-   - `manualChunks` pasa a `build.rolldownOptions.output.codeSplitting`: Vite 8 lo marca como obsoleto (nitpick de
-     CodeRabbit en #156);
-   - una selección vacía de eventos de la campana se lee como «sin configurar» y recibe todos los eventos
-     (`notification_center.py`; ya era así antes, lo señaló CodeRabbit en #158);
    - probar en el NAS el seeding (#160): que el estado, la ratio y los bytes cuadren con la WebUI de qBittorrent y que
      el casamiento por ruta funcione con la carpeta de subidas que ve qBittorrent;
    - ver en marcha la tarjeta del widget (#161) y el aviso de peticiones nuevas (#158). «Rellenar petición» y

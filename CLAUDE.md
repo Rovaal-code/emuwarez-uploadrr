@@ -87,7 +87,7 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   the full CI on master's tip, bumps `__version__` (`auto`: minor if any `feat/` PR, else patch), pushes that commit
   and `vX.Y.Z`, builds `:X.Y.Z`, `:<sha>`, `:latest` and `:edge`, publishes the manifest (secret
   `UPLOADRR_VERSION_TOKEN`) and creates the GitHub release with the PRs merged since the previous tag. Release when Gabriel asks: `gh workflow run publicar.yml -f notas="…"`, with a
-  neutral public note. `solo_prueba=true` builds `:edge` from master's tip only. `scripts/desplegar.sh` is
+  neutral public note. `solo_prueba=true` builds `:edge` from master's tip only. `ref=<commit|branch|tag>` publishes that commit's version instead (no tests; the version commit and tag go to `release/vX.Y.Z`, to merge into master afterwards; `:edge` isn't moved). `scripts/desplegar.sh` is
   the local fallback (no Actions minutes, no tests) and pushes in the same order; `--solo-prueba` pushes only
   `:edge`. Pass `--build-arg UPLOADRR_COMMIT=…` or
   the Uploadrr-EMU clone layer comes from cache.

@@ -234,7 +234,7 @@ function ReadinessBadge({ status }: { status: string | null | undefined }) {
     status === 'downloading' ? 'var(--color-downloading)' :
     status === 'uploaded' ? 'var(--color-available-pale)' :
     status === 'no_local_match' || status === 'claimed' || status === 'filled' ? 'var(--text-muted)' :
-    status === 'spec_mismatch' ? 'var(--color-warning)' :
+    status === 'spec_mismatch' || status === 'no_castellano' ? 'var(--color-warning)' :
     status.includes('error') || status.includes('missing') || status === 'blocked' ? 'var(--color-missing)' :
     'var(--text-secondary)'
   return <span className="pet-estado-11" style={{ color }}>{getReadinessLabel(status)}</span>

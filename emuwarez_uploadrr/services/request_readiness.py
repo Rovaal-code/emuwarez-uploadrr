@@ -104,15 +104,16 @@ _STATUS_RANK: dict[str, int] = {
     "uploading": 5,
     "partially_available": 6,
     "spec_mismatch": 7,
-    "no_local_match": 8,
-    "file_missing": 9,
-    "import_error": 10,
-    "claimed": 11,
-    "claimed_unknown": 12,
-    "pending_approval": 13,
-    "filled": 14,
-    "already_exists": 15,
-    "uploaded": 16,
+    "no_castellano": 8,
+    "no_local_match": 9,
+    "file_missing": 10,
+    "import_error": 11,
+    "claimed": 12,
+    "claimed_unknown": 13,
+    "pending_approval": 14,
+    "filled": 15,
+    "already_exists": 16,
+    "uploaded": 17,
 }
 
 # Por qué una petición que no está abierta para ti no es «lista para subir». La reclamada por ti no está aquí:
@@ -228,6 +229,13 @@ def _evaluate_readiness(
         blockers.append(f"la copia no cumple lo pedido ({', '.join(faltan)})")
         return {"status": "spec_mismatch", "action": "review_arr", "blockers": blockers, "reasons": reasons}
 
+    # eMuwarez es un tracker español: solo admite contenido con castellano, en el audio o, si no, en los subtítulos
+    # (la misma regla que la comprobación «Tiene castellano» de la subida y las cifras de la biblioteca). Solo bloquea
+    # lo confirmado sin castellano en ninguno de los dos; si aún no se ha leído, lo decide la comprobación previa.
+    if lib.get("has_spanish_ok") == 0:
+        blockers.append("sin castellano: ni el audio ni los subtítulos están en castellano")
+        return {"status": "no_castellano", "action": "review_arr", "blockers": blockers, "reasons": reasons}
+
     # Nomenclature
     if nomenclature in ("No adaptada", "not_adapted"):
         return {"status": "needs_nomenclature", "action": "adapt_nomenclature", "blockers": [], "reasons": reasons}
@@ -296,8 +304,8 @@ def select_best_candidate(candidates: list[dict]) -> Optional[dict]:
 # Lo que se puntúa de la fila que pide la petición; ids, título y tipo siguen siendo los de la fila emparejada.
 _LEER_FILA_PEDIDA = (
     "SELECT item_type, local_status, resolution, source, nomenclature_status, prepared_path, file_exists, "
-    "arr_queue_status, arr_history_status, arr_history_event_type, arr_history_error, emu_in_catalog, emu_aportes "
-    "FROM library_items WHERE id = ?"
+    "arr_queue_status, arr_history_status, arr_history_event_type, arr_history_error, emu_in_catalog, emu_aportes, "
+    "has_spanish_ok FROM library_items WHERE id = ?"
 )
 
 
@@ -309,7 +317,7 @@ def _biblioteca(conn: sqlite3.Connection) -> list[dict]:
                resolution, source, nomenclature_status, prepared_path,
                file_exists, arr_queue_status, arr_history_status,
                arr_history_event_type, arr_history_error, season_number,
-               emu_in_catalog, emu_aportes
+               emu_in_catalog, emu_aportes, has_spanish_ok
         FROM library_items
         WHERE item_type != 'episode'
         ORDER BY updated_at DESC

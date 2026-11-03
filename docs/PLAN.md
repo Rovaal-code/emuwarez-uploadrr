@@ -250,7 +250,8 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 - **Reanudar a mitad de Uploadrr-EMU (contrato cambiado en los dos repos):** Uploadrr-EMU dice qué pasos terminó con una
   línea fija por paso, `Step done: screenshots` y `Step done: torrent` (la ficha, `Torrent URL:`, cierra la subida al
   tracker), y la app los apunta en `upload_jobs.pasos_uploadrr_json` (migración 51). Un reintento que reutiliza los
-  ficheros de la subida anterior lanza Uploadrr-EMU con `--resume` (columna `reanuda_uploadrr`) y este reutiliza las
+  ficheros de la subida anterior, y cuya anterior llegó a lanzar Uploadrr-EMU (su `tmp` es el de esos ficheros), lo
+  lanza con `--resume` (columna `reanuda_uploadrr`) y este reutiliza las
   capturas y el torrent marcados como hechos; el detalle de la subida enseña los subpasos (capturas, torrent, subida a
   eMuwarez) y el botón de reintentar dice lo que no repetirá. **Cambio de comportamiento:** sin `--resume`, Uploadrr-EMU
   borra su `tmp/<nombre>` al empezar cada elemento, así que unos ficheros rehechos con el mismo nombre ya no se

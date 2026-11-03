@@ -114,6 +114,20 @@ def subpasos_que_reutilizaria(status: Optional[str], etapa_parada: Optional[str]
     return [SUBPASOS_NOMBRES[c] for c in SUBPASOS_REUTILIZABLES if c in hechos]
 
 
+def uploadrr_puede_reanudar(status: Optional[str], etapa_parada: Optional[str], crudo: Optional[str]) -> bool:
+    """Si el reintento de esta subida puede lanzar Uploadrr-EMU con `--resume`.
+
+    El `tmp/<nombre>` de Uploadrr-EMU es del último trabajo que lo lanzó. Solo vale para unos ficheros preparados
+    si fue el propio trabajo anterior quien lo lanzó (se paró dentro del paso `subida`): uno que falló antes, en la
+    verificación, no lo tocó, y lo que haya ahí es de una preparación más vieja que quizá ya no es esta. Y con la
+    ficha ya en eMuwarez no se reanuda nada: chocaría con el duplicado."""
+    if reanudar_desde(status, etapa_parada) is None:
+        return False
+    if indice_de_fase(etapa_parada) != CLAVES.index(SUBIDA):
+        return False
+    return "tracker" not in leer_subpasos(crudo)
+
+
 def pasos_de_subida(status: Optional[str], stage: Optional[str], etapa_parada: Optional[str],
                     pasos_uploadrr: Optional[str] = None) -> list[dict]:
     """La lista de pasos con su estado, para enseñar en el detalle de una subida.
@@ -171,5 +185,5 @@ __all__ = [
     "HECHO", "EN_CURSO", "FALLIDO", "CANCELADO", "PENDIENTE",
     "SUBPASOS", "SUBPASOS_NOMBRES", "SUBPASOS_REUTILIZABLES",
     "indice_de_fase", "pasos_de_subida", "reanudar_desde",
-    "subpaso_de_linea", "leer_subpasos", "subpasos_de_subida", "subpasos_que_reutilizaria",
+    "uploadrr_puede_reanudar", "subpaso_de_linea", "leer_subpasos", "subpasos_de_subida", "subpasos_que_reutilizaria",
 ]

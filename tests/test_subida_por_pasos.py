@@ -424,6 +424,22 @@ def test_el_reintento_reutiliza_la_preparacion_que_sigue_valiendo(db_conn, pipel
     assert _reanuda(db_conn, nuevo) == 1
 
 
+@pytest.mark.parametrize("extra", [
+    # Falló en la verificación, sin lanzar Uploadrr-EMU: su tmp es de una preparación más vieja.
+    {"etapa_parada": "verificacion_presubida"},
+    # La ficha ya estaba en eMuwarez.
+    {"pasos_uploadrr_json": json.dumps(["screenshots", "torrent", "tracker"])},
+])
+def test_el_reintento_reutiliza_los_ficheros_pero_uploadrr_no_reanuda(db_conn, pipeline, extra):
+    os.link(pipeline.origen, pipeline.destino)
+    _anterior_id, nuevo = _retry_en_marcha(db_conn, pipeline, originales={"Peli.2024.mkv": pipeline.origen}, **extra)
+
+    uq._run_queued_job(nuevo)
+
+    assert pipeline.preparados == []                 # la preparación sí se reutiliza
+    assert _reanuda(db_conn, nuevo) == 0             # pero Uploadrr-EMU empieza de cero
+
+
 def test_el_reintento_dice_que_uploadrr_no_repetira_lo_que_termino(db_conn, pipeline):
     os.link(pipeline.origen, pipeline.destino)
     anterior, nuevo = _retry_en_marcha(db_conn, pipeline, originales={"Peli.2024.mkv": pipeline.origen},

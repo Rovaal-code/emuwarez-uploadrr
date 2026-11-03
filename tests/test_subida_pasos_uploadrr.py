@@ -192,3 +192,19 @@ def test_solo_un_trabajo_que_reanuda_lanza_resume(db_conn, tmp_path, fake_upload
     assert job["status"] == "completed"
     assert any("--resume" in m for m in _logs(db_conn, jid))
     assert any("Reanudando" in m for m in _logs(db_conn, jid))
+
+
+@pytest.mark.parametrize("status, parada, crudo, esperado", [
+    ("failed", "running", '["screenshots"]', True),
+    ("failed", "running", None, True),                  # lo lanzó y no llegó a terminar nada: su tmp es suyo
+    ("cancelled", "finalizing", '["screenshots", "torrent"]', True),
+    # Falló antes de lanzar Uploadrr-EMU: su tmp es de una preparación más vieja.
+    ("failed", "verificacion_presubida", '["screenshots"]', False),
+    ("failed", "preflight", None, False),
+    ("failed", "remux", None, False),
+    # Con la ficha ya en eMuwarez no se reanuda.
+    ("failed", "running", '["screenshots", "torrent", "tracker"]', False),
+    ("running", "running", None, False),
+])
+def test_cuando_uploadrr_puede_reanudar(status, parada, crudo, esperado):
+    assert sp.uploadrr_puede_reanudar(status, parada, crudo) is esperado

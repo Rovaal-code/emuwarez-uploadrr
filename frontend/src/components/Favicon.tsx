@@ -1,13 +1,9 @@
 import { useState } from 'react'
+import { iconoDe } from '../utils/iconosSitios'
 
-// Shows a website's real favicon, falling back to `fallback` if nothing loads.
-// Two-step chain: `src` (a known-good direct icon URL, e.g. one resolved by
-// hand from the site's own <link rel="icon">) is tried first — Google's s2
-// favicon proxy often returns a wrong/generic icon for low-traffic sites, so
-// it's now only the fallback for domains without a verified direct URL.
-export function Favicon({ domain, src, size = 16, fallback = null, radius = 3, background }: {
+// El icono de un sitio, el que va dentro del proyecto (utils/iconosSitios), o `fallback` si no hay o no carga.
+export function Favicon({ domain, size = 16, fallback = null, radius = 3, background }: {
   domain?: string | null
-  src?: string | null
   size?: number
   fallback?: React.ReactNode
   radius?: number
@@ -15,21 +11,19 @@ export function Favicon({ domain, src, size = 16, fallback = null, radius = 3, b
   // marks stay visible on a dark UI.
   background?: string
 }) {
-  const [stage, setStage] = useState<'direct' | 'google' | 'failed'>(src ? 'direct' : 'google')
-  const google = domain ? `https://www.google.com/s2/favicons?sz=64&domain=${domain}` : null
-  const current = stage === 'direct' ? src : stage === 'google' ? google : null
-  if (!current) return <>{fallback}</>
-  const onError = () => setStage(s => (s === 'direct' && google ? 'google' : 'failed'))
+  const [falla, setFalla] = useState(false)
+  const url = domain ? iconoDe(domain) : null
+  if (!url || falla) return <>{fallback}</>
+  const onError = () => setFalla(true)
   if (background) {
     return (
       <span className="menores-icono-caja" style={{ width: size, height: size, borderRadius: radius, background }}>
-        <img src={current} alt="" loading="lazy" onError={onError}
-          className="menores-icono-img menores-icono-img-caja" />
+        <img src={url} alt="" onError={onError} className="menores-icono-img menores-icono-img-caja" />
       </span>
     )
   }
   return (
-    <img src={current} width={size} height={size} alt="" loading="lazy" onError={onError}
+    <img src={url} width={size} height={size} alt="" onError={onError}
       style={{ borderRadius: radius, display: 'block', flexShrink: 0 }} />
   )
 }

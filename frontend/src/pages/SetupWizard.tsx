@@ -905,7 +905,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                     ) : <span className="setup-hueco" />}
                     <input type="checkbox" aria-label={`Usar ${h.label}`} checked={enabled || isDefault} disabled={isDefault}
                       onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [h.id, ...p])} />
-                    <Favicon domain={domainOf(h.url)} src={h.favicon} size={14} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={14} />} />
+                    <Favicon domain={domainOf(h.url)} size={14} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={14} />} />
                     <span className="setup-t13">{h.label}</span>
                     {isDefault && <span className="badge status-available">por defecto</span>}
                     {h.needs_key && <span className="badge nom-na">API key</span>}

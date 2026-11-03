@@ -59,6 +59,15 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   la imagen va en `position: absolute` dentro del marco (`.bib-tarjeta-marco` y `.poster-grande-marco`) y el alto lo
   fija solo `aspect-ratio`: todas miden 240 (pósters pequeños) o 370 (grandes) a ese ancho. Comprobado en el
   navegador con el CSS real, antes y después. Pendiente: ver que el aviso ya no sale en la aplicación real.
+- **Iconos de los sitios, dentro del proyecto:** los de proveedores de imágenes y de vídeo, eMuwarez y las webs de las
+  fichas (TMDb, IMDb, TVDB, MAL, TVmaze) son ficheros en `frontend/src/assets/iconos/<dominio>.<ext>` (48 de 50 sitios; 240 KB),
+  y `Favicon` los pinta sin pedir nada fuera: antes cada navegador los pedía al sitio y a Google, y con un DNS que bloquea
+  esos nombres salían decenas de `ERR_NAME_NOT_RESOLVED` en Configuración. Los logos no cambian y la lista es cerrada, así
+  que no hace falta servidor (se probó y se descartó: ~600 líneas por unas imágenes). Para un proveedor nuevo: añadirlo a
+  su lista y correr `python scripts/descargar_iconos.py` (baja el que falta y avisa de lo que no encuentra);
+  `tests/test_iconos_frontend.py` falla si falta el icono de un sitio de las listas, si sobra uno, o si pesa más de 20 KB.
+  Sin icono, y por tanto con el de reserva de siempre: Crunchyroll y VRV. El campo `favicon` de `image_hosts` ya solo lo
+  usa el script.
 - **Oleada 3, subida por pasos (#127):** `_run_queued_job` es un bucle sobre `PASOS` (`upload_queue.py`): comprobar,
   nombre, preparar e iniciar, cada uno con su `stage` (que es su punto de cancelación), su fila de Fases y lo que
   deja en `_Trabajo` para el siguiente. Mismo comportamiento que antes; lo fijan

@@ -59,6 +59,11 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   la imagen va en `position: absolute` dentro del marco (`.bib-tarjeta-marco` y `.poster-grande-marco`) y el alto lo
   fija solo `aspect-ratio`: todas miden 240 (pósters pequeños) o 370 (grandes) a ese ancho. Comprobado en el
   navegador con el CSS real, antes y después. Pendiente: ver que el aviso ya no sale en la aplicación real.
+- **Sugerencia de proveedor por TMDb para episodios y temporadas antiguos:** si un episodio o una temporada no traen
+  `tmdb_id` (la sincronización ya se lo copia de la serie, pero los guardados antes de eso no lo tienen),
+  `suggest_provider_for_item` usa el de la serie de la que cuelgan (`_tmdb_id_de_la_serie`, por `parent_id`, solo si el
+  antepasado es una serie) y pregunta a TMDb como serie. Un `tmdb_id` propio sigue ganando, y sin ninguno en la cadena no
+  se sugiere nada.
 - **Iconos de los sitios, dentro del proyecto:** los de proveedores de imágenes y de vídeo, eMuwarez y las webs de las
   fichas (TMDb, IMDb, TVDB, MAL, TVmaze) son ficheros en `frontend/src/assets/iconos/<dominio>.<ext>` (50 de 52 sitios; 240 KB),
   y `Favicon` los pinta sin pedir nada fuera: antes cada navegador los pedía al sitio y a Google, y con un DNS que bloquea
@@ -209,6 +214,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - #160 (N11): `GET /api/uploads/seeding` lee de qBittorrent el estado, la ratio y lo subido de cada subida
     completada (columna en Subidas y bloque en el detalle). Solo lectura, caché de 60 s, sin migración. Casa por la
     ruta de contenido (la app no guarda el info-hash) y, si es ambiguo, dice «No se encuentra» en vez de adivinar.
+    Probado en el NAS (03/11): la ratio que enseña la app es la misma que la de la WebUI de qBittorrent.
   - #161 (N16): `GET /api/widget` con cinco contadores para el widget `customapi` de Homepage y su propia clave de
     solo lectura (`X-Api-Key` o `Bearer`; la base solo guarda su hash). Se genera en Configuración y solo abre ese
     endpoint; sin clave responde 404. Ejemplo de `services.yaml` en `docs/DEPLOYMENT_DOCKER.md`.
@@ -229,8 +235,6 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
    Ya no queda nada convertible: los 67 `style={{` que siguen en línea son valores calculados (colores de estado,
    sangrías, posiciones, `transform`) o van a `Tooltip`/`Modal`, que solo admiten un objeto de estilo.
 2. Pequeños pendientes de la primera tanda de la oleada 4:
-   - probar en el NAS el seeding (#160): que el estado, la ratio y los bytes cuadren con la WebUI de qBittorrent y que
-     el casamiento por ruta funcione con la carpeta de subidas que ve qBittorrent;
    - ver en marcha la tarjeta del widget (#161) y el aviso de peticiones nuevas (#158). «Rellenar petición» y
      Estadísticas sí se vieron en una instancia local con datos de prueba; de ahí salió el arreglo del modal, que
      quedaba atrapado bajo la columna fija de acciones.
@@ -252,7 +256,6 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   pasos terminó y cambiar el contrato en los dos repositorios a la vez. Hoy un reintento reanuda solo en la verificación.
 - Límite de concurrencia compartido entre el CLI y el servidor (hoy cada proceso tiene el suyo, en memoria). Hace
   falta un cerrojo en fichero o en la base.
-- Sugerencia de proveedor por TMDb con el `tmdb_id` de la serie para episodios antiguos sin el suyo.
 
 ## Datos útiles
 

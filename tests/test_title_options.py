@@ -230,6 +230,9 @@ def test_season_pack_offers_the_tmdb_original_when_sonarr_has_none(season, monke
     set_setting(conn, "tmdb.api_key", "fake-key")
     conn.commit()
     monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_title", lambda tid, **kw: "The Tudors")
+    # La serie tiene tmdb_id y clave: el plan también busca la plataforma por TMDb, que aquí no se prueba.
+    from emuwarez_uploadrr.services import source_assistant
+    monkeypatch.setattr(source_assistant, "get_tmdb_available_providers", lambda *a, **kw: [])
 
     plan = build_season_pack_plan(season_id, conn=conn)
     assert [o["value"] for o in plan["title_options"]] == ["Los Tudor", "The Tudors"]

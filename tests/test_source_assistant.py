@@ -223,6 +223,102 @@ def test_suggest_provider_no_tmdb(tmp_path):
     assert "suggested" in result or "error" in result or result.get("suggested") is None
 
 
+def _insert_arbol(conn, tmdb_serie="555", tmdb_temporada=None, tmdb_episodio=None):
+    """Una serie con una temporada y un episodio; devuelve (serie, temporada, episodio)."""
+    def _fila(tipo, tmdb, padre=None, nombre="x"):
+        conn.execute(
+            "INSERT INTO library_items (title, item_type, tmdb_id, parent_id, local_status, path) VALUES (?,?,?,?,?,?)",
+            (nombre, tipo, tmdb, padre, "downloaded", None))
+        conn.commit()
+        return conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+    serie = _fila("series", tmdb_serie, nombre="Serie")
+    temporada = _fila("season", tmdb_temporada, serie, "Temporada 1")
+    episodio = _fila("episode", tmdb_episodio, temporada, "Episodio 1")
+    return serie, temporada, episodio
+
+
+@pytest.mark.parametrize("quien", ["episodio", "temporada"])
+def test_suggest_provider_usa_el_tmdb_de_la_serie_si_el_episodio_o_la_temporada_no_lo_tienen(tmp_path, quien):
+    """Un episodio o una temporada antiguos (guardados antes de copiarles el de la serie) no traen `tmdb_id`: se
+    pregunta a TMDb por el de la serie, como serie de televisión."""
+    conn = _make_conn(tmp_path)
+    _, temporada, episodio = _insert_arbol(conn)
+    from emuwarez_uploadrr.services import source_assistant as sa
+    with patch.object(sa, "get_tmdb_available_providers", return_value=["NF"]) as tmdb:
+        result = sa.suggest_provider_for_item({"episodio": episodio, "temporada": temporada}[quien], conn=conn)
+    assert result["suggested"] == "NF"
+    tmdb.assert_called_once()
+    assert tmdb.call_args.args[0] == 555 and tmdb.call_args.args[1] != "movie"
+
+
+def test_suggest_provider_ignora_el_tmdb_de_una_temporada_que_no_es_el_de_la_serie(tmp_path):
+    """Solo vale el id de un antepasado que sea una serie: el de una temporada histórica podría ser otro."""
+    conn = _make_conn(tmp_path)
+    _, _, episodio = _insert_arbol(conn, tmdb_serie="555", tmdb_temporada="999")
+    from emuwarez_uploadrr.services import source_assistant as sa
+    with patch.object(sa, "get_tmdb_available_providers", return_value=["NF"]) as tmdb:
+        sa.suggest_provider_for_item(episodio, conn=conn)
+    assert tmdb.call_args.args[0] == 555
+
+
+def test_suggest_provider_prefiere_el_tmdb_propio_del_episodio(tmp_path):
+    conn = _make_conn(tmp_path)
+    _, _, episodio = _insert_arbol(conn, tmdb_episodio="777")
+    from emuwarez_uploadrr.services import source_assistant as sa
+    with patch.object(sa, "get_tmdb_available_providers", return_value=["NF"]) as tmdb:
+        sa.suggest_provider_for_item(episodio, conn=conn)
+    assert tmdb.call_args.args[0] == 777
+
+
+def test_suggest_provider_sin_tmdb_en_ningun_nivel_sigue_sin_sugerir(tmp_path):
+    conn = _make_conn(tmp_path)
+    _, _, episodio = _insert_arbol(conn, tmdb_serie=None)
+    from emuwarez_uploadrr.services import source_assistant as sa
+    with patch.object(sa, "get_tmdb_available_providers", return_value=["NF"]) as tmdb:
+        result = sa.suggest_provider_for_item(episodio, conn=conn)
+    assert result["suggested"] is None and result["reason"] == "Sin TMDb ID"
+    tmdb.assert_not_called()
+
+
+def test_suggest_provider_con_un_padre_que_ya_no_existe_no_sugiere(tmp_path):
+    conn = _make_conn(tmp_path)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("INSERT INTO library_items (title, item_type, parent_id, local_status) VALUES ('Huérfano','episode',99999,'downloaded')")
+    conn.commit()
+    huerfano = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+    from emuwarez_uploadrr.services import source_assistant as sa
+    with patch.object(sa, "get_tmdb_available_providers", return_value=["NF"]) as tmdb:
+        result = sa.suggest_provider_for_item(huerfano, conn=conn)
+    assert result["reason"] == "Sin TMDb ID"
+    tmdb.assert_not_called()
+
+
+def test_suggest_provider_una_cadena_sin_ninguna_serie_no_sugiere(tmp_path):
+    """Episodio -> temporada -> temporada -> temporada: tres niveles y ninguno es una serie con id."""
+    conn = _make_conn(tmp_path)
+    def fila(tipo, tmdb, padre):
+        conn.execute("INSERT INTO library_items (title, item_type, tmdb_id, parent_id, local_status) VALUES ('x',?,?,?,'downloaded')",
+                     (tipo, tmdb, padre))
+        conn.commit()
+        return conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+    a = fila("season", "999", None)
+    b = fila("season", "999", a)
+    c = fila("season", "999", b)
+    episodio = fila("episode", None, c)
+    from emuwarez_uploadrr.services import source_assistant as sa
+    with patch.object(sa, "get_tmdb_available_providers", return_value=["NF"]) as tmdb:
+        result = sa.suggest_provider_for_item(episodio, conn=conn)
+    assert result["reason"] == "Sin TMDb ID"
+    tmdb.assert_not_called()
+
+
+def test_suggest_provider_una_pelicula_sin_tmdb_no_busca_padre(tmp_path):
+    conn = _make_conn(tmp_path)
+    item_id = _insert_library_item(conn, title="Peli", tmdb_id=None)
+    from emuwarez_uploadrr.services import source_assistant as sa
+    assert sa.suggest_provider_for_item(item_id, conn=conn)["reason"] == "Sin TMDb ID"
+
+
 # ---------------------------------------------------------------------------
 # check_auto_upload_source — automated-upload source-disparity gate
 # ---------------------------------------------------------------------------

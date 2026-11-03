@@ -288,6 +288,52 @@ def test_requests_list_column_filters_take_several_values(client, auth_headers, 
     assert titulos("status=Compatible&status=Sin coincidencia&category=Movies&sort=title") == (["A", "B"], 2)
 
 
+def test_requests_list_filters_by_readiness_sorted_by_reward(client, auth_headers, isolated_db):
+    """El carril «Peticiones listas para subir» del Panel: solo las que la preparación guardada ya da por
+    `ready_to_upload` (la misma columna que pinta la lista y que usa el aviso `request_new_ready`), la de más
+    recompensa primero, las que no dicen puntos al final y, a igual recompensa, la más nueva delante."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.requests import upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    import os
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    conn = connect()
+    init_db(conn)
+    filas = {
+        # título: (puntos, creada, preparación)
+        "Sin puntos": (None, "2026-10-05", "ready_to_upload"),
+        "Poca": (100, "2026-10-04", "ready_to_upload"),
+        "Mucha vieja": (5000, "2026-10-01", "ready_to_upload"),
+        "Mucha nueva": (5000, "2026-10-03", "ready_to_upload"),
+        "Media": (800, "2026-10-02", "ready_to_upload"),
+        "Rica sin preparar": (99999, "2026-10-06", "needs_nomenclature"),
+        "Rica llena": (88888, "2026-10-06", "filled"),
+        "Sin evaluar": (77777, "2026-10-06", None),
+    }
+    for title, (puntos, creada, preparacion) in filas.items():
+        rid = upsert_request(conn, RequestItem(id=None, emu_id=f"listas-{title}", title=title,
+                                               points=puntos, created_at=creada))
+        conn.execute("UPDATE request_items SET readiness_status = ? WHERE id = ?", (preparacion, rid))
+    conn.commit()
+    conn.close()
+
+    def titulos(qs: str) -> tuple[list[str], int]:
+        resp = client.get(f"/api/requests?{qs}", headers=auth_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        return [i["title"] for i in data["items"]], data["total"]
+
+    # El total es de todas las listas, aunque el carril enseñe solo las primeras.
+    assert titulos("readiness=ready_to_upload&sort=points_desc&limit=3") == (
+        ["Mucha nueva", "Mucha vieja", "Media"], 5)
+    assert titulos("readiness=ready_to_upload&sort=points_desc") == (
+        ["Mucha nueva", "Mucha vieja", "Media", "Poca", "Sin puntos"], 5)
+    # Varios valores suman, como los demás filtros de columna; sin el filtro salen todas.
+    assert titulos("readiness=ready_to_upload&readiness=filled&sort=points_desc&limit=2") == (
+        ["Rica llena", "Mucha nueva"], 6)
+    assert titulos("sort=points_desc&limit=1") == (["Rica sin preparar"], len(filas))
+
+
 # ---------------------------------------------------------------------------
 # POST /api/requests/sync
 # ---------------------------------------------------------------------------

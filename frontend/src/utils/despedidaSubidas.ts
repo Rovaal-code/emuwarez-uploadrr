@@ -45,3 +45,18 @@ export function soloVivas(todas: UploadJob[]): UploadJob[] {
 export function idsDe(subidas: UploadJob[]): Set<number> {
   return new Set(subidas.map(j => j.id).filter((id): id is number => id != null))
 }
+
+/** Cuántas terminadas enseña «Recientes» en «En curso». */
+export const RECIENTES_MAX = 5
+
+const FINALES = new Set(['completed', 'failed', 'cancelled'])
+
+/** Las últimas terminadas, la más reciente primero, sin las que aún se despiden arriba ni los fallos ya reintentados. */
+export function ultimasTerminadas(todas: UploadJob[], excluir: Set<number>): UploadJob[] {
+  const reintentadas = new Set(todas.map(j => j.retry_of_job_id))
+  const cuando = (j: UploadJob) => j.finished_at ?? j.updated_at ?? j.created_at ?? ''
+  return todas
+    .filter(j => j.id != null && FINALES.has(j.status) && !excluir.has(j.id) && !reintentadas.has(j.id))
+    .sort((a, b) => cuando(b).localeCompare(cuando(a)))
+    .slice(0, RECIENTES_MAX)
+}

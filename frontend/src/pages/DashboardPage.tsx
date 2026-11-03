@@ -18,7 +18,7 @@ import { CarrilEnCurso } from '../components/hoy/CarrilEnCurso'
 import { BandaAtencion } from '../components/hoy/BandaAtencion'
 import { Franja } from '../components/hoy/Franja'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
-import { queSalieron, soloVivas, idsDe, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
+import { queSalieron, soloVivas, idsDe, ultimasTerminadas, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
 import {
   avisosDeAtencion, fallidasRecientes, lineaSincronizacion, ordenarEnCurso, repartirRecomendaciones,
 } from '../utils/hoy'
@@ -206,6 +206,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
 
   const s = summary
   const reparto = repartirRecomendaciones(recommendations)
+  // Las que aún se despiden salen arriba, no se repiten en «Recientes».
+  const recientes = ultimasTerminadas(todasLasSubidas, idsDe(despidiendose.map(d => d.job)))
   const avisos = avisosDeAtencion({
     instancias: s.instancias_caidas ?? [],
     fallidas: fallidasRecientes(todasLasSubidas, idsDe(despidiendose.map(d => d.job))),
@@ -266,7 +268,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         <CarrilListo recomendaciones={reparto}
           onSubir={item => abrir(item, 'peticion')} onVerPeticion={abrirPeticion} onVerFicha={abrirFicha}
           onSubirUnico={item => abrir(item, 'unico')} onPedir={item => abrir(item, 'pedir')} />
-        <CarrilEnCurso filas={filasDeSubida} onOpen={goToUpload} onVerTodas={() => onNavigate?.('uploads')} />
+        <CarrilEnCurso filas={filasDeSubida} recientes={recientes} onOpen={goToUpload} onVerTodas={() => onNavigate?.('uploads')} />
       </div>
 
       <BandaAtencion avisos={avisos} onVerSubida={goToUpload} onVerSubidas={() => onNavigate?.('uploads')} onVerVersion={() => onNavigate?.('settings')} />

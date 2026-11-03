@@ -174,7 +174,14 @@
 .panel-franja .stat-card-value { font-size: 20px; text-shadow: none; }
 .panel-franja .stat-card-label { overflow-wrap: anywhere; }
 
-/* Subidas en curso */
+/* Subidas en curso y recientes */
+.panel-sin-curso {
+  margin: 0;
+  padding: 10px 8px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.panel-recientes-titulo { margin: 0; }
 .upload-row.panel-fila-saliendo {
   opacity: 0;
   pointer-events: none;

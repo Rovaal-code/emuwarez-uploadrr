@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { UploadJob } from '../../types/api'
 import { DESVANECER_MS } from '../../utils/despedidaSubidas'
 import { timeAgo } from '../../utils/format'
@@ -11,10 +12,10 @@ import { HoverTitle } from '../Tooltip'
 import { Carril } from './Carril'
 import { Cartel } from './Cartel'
 
-// Una fila de «En curso»: entera es un enlace al detalle de la subida en Subidas. Lleva su propio reloj para que el
-// tiempo corra sin repintar el Panel entero cada segundo.
-function FilaSubida({ job, yendose = false, onOpen }: {
-  job: UploadJob; yendose?: boolean; onOpen: (jobId: number) => void
+// Una fila de «En curso» o de «Recientes» (`compacta`, sin barra, con la carátula pequeña): entera es un enlace al
+// detalle de la subida en Subidas. Lleva su propio reloj para que el tiempo corra sin repintar el Panel entero cada segundo.
+function FilaSubida({ job, yendose = false, compacta = false, onOpen }: {
+  job: UploadJob; yendose?: boolean; compacta?: boolean; onOpen: (jobId: number) => void
 }) {
   useTicker(ACTIVE_JOB_STATUSES.has(job.status))
   const isPreparingOrRunning = job.status === 'preparing' || job.status === 'running'
@@ -34,7 +35,7 @@ function FilaSubida({ job, yendose = false, onOpen }: {
     // En línea solo la duración, que es una constante del código.
     <HoverTitle className={`upload-row${yendose ? ' panel-fila-saliendo' : ''}`} tip="Ver detalle de la subida" onClick={() => onOpen(job.id!)}
       style={{ transition: `opacity ${DESVANECER_MS}ms ease-out` }}>
-      <Cartel url={job.poster_url} serie={job.media_type === 'series' || job.media_type === 'episode'} />
+      <Cartel url={job.poster_url} pequeno={compacta} serie={job.media_type === 'series' || job.media_type === 'episode'} />
       <div className="panel-fila-texto">
         <div className="panel-fila-titulo">
           <span className="upload-row-title">{job.title ?? `Job #${job.id}`}</span>
@@ -88,22 +89,34 @@ export function notaEnCurso(filas: { job: UploadJob }[]): string | undefined {
   return [subiendo && `${subiendo} subiendo`, enCola && `${enCola} en cola`].filter(Boolean).join(' · ') || undefined
 }
 
-// «En curso»: las subidas vivas con su fase y su progreso, y las que acaban de terminar un rato más, hasta que se
-// van. Las terminadas y fallidas de antes están en Subidas (y las fallidas, también en «Necesita atención»).
-export function CarrilEnCurso({ filas, onOpen, onVerTodas }: {
+// «En curso»: las subidas vivas con su fase y su progreso y las que acaban de terminar, hasta que se van; debajo,
+// «Recientes»: las últimas terminadas (también las fallidas, que además salen en «Necesita atención»).
+export function CarrilEnCurso({ filas, recientes, onOpen, onVerTodas }: {
   filas: { job: UploadJob; yendose: boolean }[]
+  recientes: UploadJob[]
   onOpen: (jobId: number) => void
   onVerTodas: () => void
 }) {
+  const idRecientes = useId()
   return (
     <Carril titulo="En curso" nota={notaEnCurso(filas)} tour="dashboard-running">
-      {filas.length === 0 ? (
+      {filas.length === 0 && recientes.length === 0 && (
         <EmptyState
           icon={<IconoSubida />}
           title="Sin subidas en curso"
           body="Sube algo de «Listo para subir» o desde Biblioteca y lo verás aquí con su progreso."
         />
-      ) : filas.map(({ job, yendose }) => <FilaSubida key={job.id} job={job} yendose={yendose} onOpen={onOpen} />)}
+      )}
+      {filas.length === 0 && recientes.length > 0 && <p className="panel-sin-curso">Sin subidas en curso</p>}
+      {filas.map(({ job, yendose }) => <FilaSubida key={job.id} job={job} yendose={yendose} onOpen={onOpen} />)}
+      {recientes.length > 0 && (
+        <>
+          <h3 className="upload-panel-group panel-recientes-titulo" id={idRecientes}>Recientes</h3>
+          <ul className="panel-lista" aria-labelledby={idRecientes}>
+            {recientes.map(job => <li key={job.id}><FilaSubida job={job} compacta onOpen={onOpen} /></li>)}
+          </ul>
+        </>
+      )}
       <div className="panel-pie">
         <HoverTitle as="span" className="hover-link" onClick={onVerTodas} tip="Abrir Subidas">Ver todas las subidas</HoverTitle>
       </div>

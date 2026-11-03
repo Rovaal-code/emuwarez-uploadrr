@@ -80,6 +80,33 @@
   font-size: 12px;
   color: var(--text-muted);
 }
+/* Metadatos de la fila: altura mínima uniforme y «Ver petición» sin recorte. */
+.panel-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 22px;
+  margin-top: 3px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.panel-idiomas { display: inline-flex; min-width: 0; flex-shrink: 1; }
+.panel-rg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 15em;
+  padding: 1px 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--overlay-light) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--overlay-light) 12%, transparent);
+  border-radius: 6px;
+}
+.panel-rg-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-item-ver { flex-shrink: 0; white-space: nowrap; color: var(--text-muted); }
 .panel-item-accion {
   display: flex;
   align-items: center;
@@ -140,6 +167,7 @@
   overflow-y: auto;
 }
 .panel-atencion .panel-aviso { align-items: center; padding: 3px 4px; border-bottom: 0; }
+.panel-atencion .panel-aviso-ancho { grid-column: 1 / -1; }
 .panel-atencion .panel-punto { margin-top: 0; }
 .panel-atencion .panel-aviso-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-aviso-detalle {
@@ -174,7 +202,14 @@
 .panel-franja .stat-card-value { font-size: 20px; text-shadow: none; }
 .panel-franja .stat-card-label { overflow-wrap: anywhere; }
 
-/* Subidas en curso */
+/* Subidas en curso y recientes */
+.panel-sin-curso {
+  margin: 0;
+  padding: 10px 8px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.panel-recientes-titulo { margin: 0; }
 .upload-row.panel-fila-saliendo {
   opacity: 0;
   pointer-events: none;

@@ -541,6 +541,11 @@ class DashboardRecommendationItem(BaseModel):
     library_target_id: Optional[int] = None
     has_spanish_audio: Optional[int] = None
     has_spanish_subs: Optional[int] = None
+    # La copia que se subiría: su grupo de release (None si no se sabe o si la temporada mezcla varios) y sus idiomas
+    # de audio y subtítulos como códigos de eMuwarez, con ESP primero.
+    release_group: Optional[str] = None
+    audio_languages: list[str] = []
+    subtitle_languages: list[str] = []
 
 
 class DashboardRecommendationsResponse(BaseModel):

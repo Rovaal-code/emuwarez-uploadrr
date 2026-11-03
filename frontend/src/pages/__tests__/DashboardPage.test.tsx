@@ -211,6 +211,171 @@ describe('Panel', () => {
     expect(banda().querySelector('.panel-atencion-mas')!.textContent).toBe('Ver menos')
   })
 
+  describe('Recientes', () => {
+    const hace = (dias: number) => new Date(Date.now() - dias * 24 * 3600e3).toISOString()
+    const terminada = (id: number, status: string, dias: number, extra: Partial<UploadJob> = {}) =>
+      trabajo({ id, status, title: `Subida ${id}`, finished_at: hace(dias), ...extra })
+    const recientes = () => carril('En curso').querySelector('ul[aria-labelledby]')!
+
+    it('enseña las terminadas de cada estado con su antigüedad, insignia y duración, y cada fila abre su detalle', async () => {
+      vi.mocked(getUploads).mockResolvedValue([
+        terminada(1, 'completed', 2, { duration_seconds: 260 }),
+        terminada(2, 'failed', 1, { error_message: 'Duplicado' }),
+        terminada(3, 'cancelled', 4),
+      ])
+      await pagina()
+      await esperar(() => carril('En curso').querySelector('ul[aria-labelledby]'))
+
+      expect(carril('En curso').querySelector('h3')!.textContent).toBe('Recientes')
+      expect(recientes().getAttribute('aria-labelledby')).toBe(carril('En curso').querySelector('h3')!.id)
+      const filas = [...recientes().querySelectorAll('li')]
+      expect(filas.map(f => f.querySelector('.upload-row-title')!.textContent)).toEqual(['Subida 2', 'Subida 1', 'Subida 3'])
+      expect(filas.map(f => f.querySelector('.badge')!.textContent)).toEqual(['Fallido', 'Completado', 'Cancelado'])
+      expect(filas.map(f => f.querySelector('.panel-fila-tiempo')!.textContent)).toEqual(['hace 1 día', 'hace 2 días', 'hace 4 días'])
+      expect(filas[1].querySelector('.panel-fila-duracion')!.textContent).toBe('en 4m 20s')
+      expect(filas[0].querySelector('.panel-fila-duracion')).toBeNull()
+      expect(filas.every(f => f.querySelector('.panel-poster-peq'))).toBe(true)
+
+      await pulsar(filas[1].querySelector('[role="link"]')!)
+      expect(sessionStorage.getItem('emuwarez_open_upload')).toBe('1')
+      expect(navegar).toHaveBeenCalledWith('uploads')
+    })
+
+    it('sin nada en curso, «Sin subidas en curso» es una línea discreta y Recientes ocupa el carril', async () => {
+      vi.mocked(getUploads).mockResolvedValue([terminada(1, 'completed', 1)])
+      await pagina()
+      await esperar(() => recientes())
+      expect(carril('En curso').querySelector('.empty-state')).toBeNull()
+      expect(carril('En curso').querySelector('.panel-sin-curso')!.textContent).toBe('Sin subidas en curso')
+      expect(carril('En curso').querySelector('.panel-carril-nota')).toBeNull()
+    })
+
+    it('con una en curso, esa va primero y Recientes detrás, sin repetirla', async () => {
+      vi.mocked(getUploads).mockResolvedValue([
+        terminada(1, 'completed', 1),
+        trabajo({ id: 2, status: 'running', title: 'En marcha', progress_phase: 'hash_torrent', started_at: new Date().toISOString() }),
+      ])
+      await pagina()
+      await esperar(() => recientes())
+      const cuerpo = carril('En curso')
+      expect([...cuerpo.querySelectorAll('.upload-row-title')].map(t => t.textContent)).toEqual(['En marcha', 'Subida 1'])
+      expect(cuerpo.querySelector('.panel-sin-curso')).toBeNull()
+      expect(cuerpo.querySelectorAll('ul li')).toHaveLength(1)
+      expect(cuerpo.querySelector('h3')!.compareDocumentPosition(cuerpo.querySelector('.upload-row')!))
+        .toBe(Node.DOCUMENT_POSITION_PRECEDING)
+      expect(cuerpo.textContent).toContain('1 subiendo')
+    })
+
+    it('sin ninguna subida: el vacío de siempre, sin «Recientes»', async () => {
+      await pagina()
+      expect(carril('En curso').querySelector('.empty-state')).not.toBeNull()
+      expect(carril('En curso').querySelector('h3')).toBeNull()
+      expect(carril('En curso').querySelector('ul')).toBeNull()
+    })
+
+    it('enseña como mucho cinco y sin los fallos ya reintentados', async () => {
+      vi.mocked(getUploads).mockResolvedValue([
+        ...[1, 2, 3, 4, 5, 6].map(n => terminada(n, 'completed', n)),
+        terminada(7, 'failed', 0.5),
+        terminada(8, 'completed', 0.2, { retry_of_job_id: 7 }),
+      ])
+      await pagina()
+      await esperar(() => recientes())
+      expect([...recientes().querySelectorAll('.upload-row-title')].map(t => t.textContent))
+        .toEqual(['Subida 8', 'Subida 1', 'Subida 2', 'Subida 3', 'Subida 4'])
+    })
+  })
+
+  it('un solo aviso ocupa todo el ancho de la banda, con su acción a la derecha', async () => {
+    vi.mocked(getVersionInfo).mockResolvedValue({ version: '0.14.0', estado: 'hay_novedad', ultima: { version: '0.14.1' } })
+    await pagina()
+    await esperar(() => banda().querySelector('.panel-aviso'))
+    const avisos = [...banda().querySelectorAll('.panel-aviso')]
+    expect(avisos).toHaveLength(1)
+    expect(avisos[0].classList.contains('panel-aviso-ancho')).toBe(true)
+  })
+
+  it('con un número impar de avisos solo el último ocupa todo el ancho', async () => {
+    vi.mocked(getDashboardSummary).mockResolvedValue(resumen({
+      instancias_caidas: [{ id: 3, nombre: 'Radarr up', tipo: 'radarr', ultima_sincronizacion: null }],
+    }))
+    vi.mocked(getUploads).mockResolvedValue([
+      trabajo({ id: 9, status: 'failed', title: 'Fallida', error_message: 'Motivo', finished_at: new Date().toISOString() }),
+    ])
+    vi.mocked(getVersionInfo).mockResolvedValue({ version: '0.14.0', estado: 'hay_novedad', ultima: { version: '0.14.1' } })
+    await pagina()
+    await esperar(() => banda().querySelectorAll('.panel-aviso').length === 3)
+    expect([...banda().querySelectorAll('.panel-aviso')].map(a => a.classList.contains('panel-aviso-ancho')))
+      .toEqual([false, false, true])
+  })
+
+  it('con un número par de avisos ninguno ocupa todo el ancho', async () => {
+    vi.mocked(getDashboardSummary).mockResolvedValue(resumen({
+      instancias_caidas: [{ id: 3, nombre: 'Radarr up', tipo: 'radarr', ultima_sincronizacion: null }],
+    }))
+    vi.mocked(getVersionInfo).mockResolvedValue({ version: '0.14.0', estado: 'hay_novedad', ultima: { version: '0.14.1' } })
+    await pagina()
+    await esperar(() => banda().querySelectorAll('.panel-aviso').length === 2)
+    expect(banda().querySelector('.panel-aviso-ancho')).toBeNull()
+  })
+
+  describe('grupo de release e idiomas en «Listo para subir»', () => {
+    const meta = (i: number) => filas('Listo para subir')[i].querySelector('.panel-item-meta')!
+
+    it('con grupo e idiomas: el grupo en su chip, el audio, los subtítulos y «Ver petición», en la segunda línea', async () => {
+      vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+        rec({ id: 1, rec_request_id: 11, rec_points: 9, content_name: 'Con datos', release_group: 'Ryodan',
+          audio_languages: ['ESP', 'ING'], subtitle_languages: ['ESP'], resolution: '1080p', source: 'WEB-DL', size_bytes: 6 * 1024 ** 3 }),
+      ] })
+      await pagina()
+      const fila = filas('Listo para subir')[0]
+      // La primera línea sigue siendo la de siempre; el grupo no se mezcla con ella.
+      expect(fila.querySelector('.panel-item-spec')!.textContent).toBe('Película · 1080p WEB-DL · 6,0 GB')
+      expect(meta(0).querySelector('.panel-rg')!.textContent).toBe('Grupo de release: Ryodan')
+      expect(meta(0).querySelector('.panel-rg-texto')!.textContent).toBe('Ryodan')
+      const idiomas = [...meta(0).querySelectorAll('.detcard-plano')].map(p => p.textContent)
+      expect(idiomas).toEqual(['Audio: ESP, ING', 'Subtítulos: ESP'])
+      expect(meta(0).querySelector('[role="link"]')!.textContent).toBe('Ver petición')
+    })
+
+    it('sin grupo ni idiomas no sale nada en su lugar, solo «Ver petición»', async () => {
+      vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+        rec({ id: 1, rec_request_id: 11, rec_points: 9, release_group: null, audio_languages: [], subtitle_languages: [] }),
+        rec({ id: 2, rec_request_id: 12, rec_points: 8, release_group: '  ' }),
+      ] })
+      await pagina()
+      for (const i of [0, 1]) {
+        expect(meta(i).querySelector('.panel-rg')).toBeNull()
+        expect(meta(i).querySelector('.detcard-plano')).toBeNull()
+        expect(meta(i).textContent).toBe('Ver petición')
+      }
+      expect(texto()).not.toContain('—')
+    })
+
+    it('con solo el grupo, o solo el audio, enseña únicamente lo que hay', async () => {
+      vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+        rec({ id: 1, rec_request_id: 11, rec_points: 9, release_group: 'Ryodan' }),
+        rec({ id: 2, rec_request_id: 12, rec_points: 8, audio_languages: ['ESP'] }),
+      ] })
+      await pagina()
+      expect(meta(0).querySelector('.panel-rg')).not.toBeNull()
+      expect(meta(0).querySelector('.detcard-plano')).toBeNull()
+      expect(meta(1).querySelector('.panel-rg')).toBeNull()
+      expect([...meta(1).querySelectorAll('.detcard-plano')].map(p => p.textContent)).toEqual(['Audio: ESP'])
+    })
+
+    it('una idea sin petición ni datos no pinta la segunda línea; con grupo, sí', async () => {
+      vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+        rec({ id: 20, rec_group: 2, content_name: 'Sin datos (2001)' }),
+        rec({ id: 21, rec_group: 2, content_name: 'Con grupo (2002)', release_group: 'Ryodan' }),
+      ] })
+      await pagina()
+      const ideas = [...document.querySelectorAll('details.panel-mas .panel-item')]
+      expect(ideas[0].querySelector('.panel-item-meta')).toBeNull()
+      expect(ideas[1].querySelector('.panel-rg-texto')!.textContent).toBe('Ryodan')
+    })
+  })
+
   it('«Subir» abre el asistente sobre la temporada de la petición, con su selección y la petición', async () => {
     vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
       rec({ id: 5, library_target_id: 55, item_type: 'season', season_number: 2, episode_number: null, rec_request_id: 77, rec_points: 500, content_name: 'Serie (2016) - Temporada 2' }),

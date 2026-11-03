@@ -42,8 +42,9 @@ export function BandaAtencion({ avisos, onVerSubida, onVerSubidas, onVerVersion 
         )}
       </div>
       <ul className="panel-atencion-lista">
-        {vistos.map(a => (
-          <li key={a.clave} className="panel-aviso">
+        {/* Un último aviso sin pareja ocupa las dos columnas, para que su acción quede a la borde derecho. */}
+        {vistos.map((a, i) => (
+          <li key={a.clave} className={`panel-aviso${i === vistos.length - 1 && vistos.length % 2 === 1 ? ' panel-aviso-ancho' : ''}`}>
             <span className={`panel-punto ${PUNTO[a.tipo]}`} aria-hidden="true" />
             <div className="panel-item-texto">
               <div className="panel-aviso-titulo">{a.titulo}</div>

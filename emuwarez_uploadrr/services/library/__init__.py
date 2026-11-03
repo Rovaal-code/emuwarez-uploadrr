@@ -102,6 +102,7 @@ from .rollups import (  # noqa: F401
     _aggregate_path,
     _aggregate_quality,
     _aggregate_size,
+    grupos_de_release,
     _PROVIDER_NAME_BY_CODE,
     _provider_label,
     _specials_clause,

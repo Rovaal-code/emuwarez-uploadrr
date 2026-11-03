@@ -101,6 +101,7 @@ def _campos_de_fila(row: dict, conn=None, rollups: Optional[dict] = None) -> dic
     audio_codec = row.get("audio_codec")
     audio_languages = row.get("audio_languages")
     subtitle_languages = row.get("subtitle_languages")
+    release_groups = None
     if row["item_type"] in ("season", "series"):
         if rollups is not None:
             # library_list() already batched every season/series' rollup in
@@ -136,6 +137,8 @@ def _campos_de_fila(row: dict, conn=None, rollups: Optional[dict] = None) -> dic
         resolution = resolution or rq["resolution"]
         source = source or rq["source"]
         release_group = release_group or rq["release_group"]
+        # Los de todos los capítulos (la columna de arriba solo se rellena si coinciden todos).
+        release_groups = rq.get("release_groups") or None
         video_codec = rq["video_codec"]
         audio_codec = rq["audio_codec"]
         audio_languages = rq["audio_languages"]
@@ -179,6 +182,7 @@ def _campos_de_fila(row: dict, conn=None, rollups: Optional[dict] = None) -> dic
         resolution=resolution,
         source=source,
         release_group=release_group,
+        release_groups=release_groups,
         provider=provider,
         provider_label=_provider_label(provider),
         video_codec=video_codec,

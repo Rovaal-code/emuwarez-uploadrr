@@ -12,8 +12,13 @@ from ..source_assistant import EMU_PROVIDERS
 
 _ROLLUP_EMPTY = {
     "provider": None, "resolution": None, "source": None, "release_group": None, "video_codec": None,
-    "audio_codec": None, "audio_languages": None, "subtitle_languages": None,
+    "audio_codec": None, "audio_languages": None, "subtitle_languages": None, "release_groups": None,
 }
+
+
+def grupos_de_release(rows: list) -> list[str]:
+    """Los grupos de release distintos de unos capítulos, sin los que no tienen."""
+    return sorted({r["release_group"] for r in rows if r["release_group"]}, key=str.casefold)
 
 
 def _aggregate_local_status(statuses: list) -> Optional[str]:
@@ -86,6 +91,7 @@ def _aggregate_quality(rows: list[dict]) -> dict:
         "resolution": uniq("resolution"),
         "source": uniq("source"),
         "release_group": uniq("release_group"),
+        "release_groups": grupos_de_release(rows),
         "video_codec": uniq("video_codec"),
         "audio_codec": uniq("audio_codec"),
         "audio_languages": uniq("audio_languages"),
@@ -311,6 +317,7 @@ def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: b
         "resolution": uniq("resolution"),
         "source": uniq("source"),
         "release_group": uniq("release_group"),
+        "release_groups": grupos_de_release(rows),
         "video_codec": uniq("video_codec"),
         "audio_codec": uniq("audio_codec"),
         "audio_languages": uniq("audio_languages"),

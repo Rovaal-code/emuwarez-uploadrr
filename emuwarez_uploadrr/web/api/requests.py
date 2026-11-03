@@ -92,6 +92,7 @@ def _match_dict_to_response(match_data: dict | None) -> RequestMatchResponse | N
         local_video_codec=match_data.get("local_video_codec"),
         local_audio_languages=match_data.get("local_audio_languages"),
         local_size=match_data.get("local_size"),
+        local_release_groups=match_data.get("local_release_groups") or [],
         local_tmdb_id=match_data.get("local_tmdb_id"),
         local_imdb_id=match_data.get("local_imdb_id"),
         local_tvdb_id=match_data.get("local_tvdb_id"),

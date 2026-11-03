@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Modal } from './Modal'
 import { PasoArchivo } from './asistente/PasoArchivo'
 import { PasoSeleccion } from './asistente/PasoSeleccion'
@@ -5,6 +6,15 @@ import { PasoSubida } from './asistente/PasoSubida'
 import { PasoSubidaTanda } from './asistente/PasoSubidaTanda'
 import { PasoTemporada } from './asistente/PasoTemporada'
 import { useAsistente, type PropsAsistente } from './asistente/useAsistente'
+
+// Los pasos que de verdad tiene cada camino: «Contenido» solo existe al abrir una serie o una temporada.
+function pasosDelAsistente(needsSelection: boolean): { paso: 0 | 1 | 2; nombre: string }[] {
+  return [
+    ...(needsSelection ? [{ paso: 0 as const, nombre: 'Contenido' }] : []),
+    { paso: 1, nombre: 'Nombre y pistas' },
+    { paso: 2, nombre: 'Resumen' },
+  ]
+}
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -22,16 +32,34 @@ export function UploadWizardModal(props: PropsAsistente) {
   const a = useAsistente(props)
   const { item, step, needsSelection, targetIsSeason, batchQueue, seasonQueue, episodeQueue } = a
   const { cerrarModal, confirmandoCierre, setConfirmandoCierre, onClose } = a
-  const clasePaso = (n: number) => (step === n ? 'asist-paso asist-paso-actual' : 'asist-paso')
+  const pasos = pasosDelAsistente(needsSelection)
+  // Al cambiar de paso el foco pasa al paso nuevo, para que el lector lo anuncie y Tab siga desde arriba.
+  const pasoActual = useRef<HTMLLIElement>(null)
+  const primerPintado = useRef(true)
+  useEffect(() => {
+    if (primerPintado.current) { primerPintado.current = false; return }
+    pasoActual.current?.focus()
+  }, [step])
   return (
     <Modal titulo={item.title} onClose={cerrarModal} className="modal-wide asist-modal-ancho">
 
-      <div className="asist-pasos">
-        {needsSelection && <><span className={clasePaso(0)}>0. Selección</span><span className="asist-paso-flecha">→</span></>}
-        <span className={clasePaso(1)}>1. Nomenclatura</span>
-        <span className="asist-paso-flecha">→</span>
-        <span className={clasePaso(2)}>2. Subida a eMuwarez</span>
-      </div>
+      <nav aria-label="Pasos de la subida" className="asist-pasos">
+        <ol>
+          {pasos.map(({ paso, nombre }, i) => {
+            const estado = paso < step ? 'hecho' : paso === step ? 'actual' : 'pendiente'
+            return (
+              <li
+                key={paso} className={`asist-paso asist-paso-${estado}`}
+                aria-current={estado === 'actual' ? 'step' : undefined}
+                ref={estado === 'actual' ? pasoActual : undefined} tabIndex={estado === 'actual' ? -1 : undefined}
+              >
+                {estado === 'hecho' && <span aria-hidden="true">✓ </span>}{i + 1} · {nombre}
+                {estado === 'hecho' && <span className="solo-lector"> (hecho)</span>}
+              </li>
+            )
+          })}
+        </ol>
+      </nav>
 
       {step === 0 && <PasoSeleccion a={a} />}
       {step === 1 && targetIsSeason && <PasoTemporada a={a} />}

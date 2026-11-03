@@ -189,6 +189,11 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - #161 (N16): `GET /api/widget` con cinco contadores para el widget `customapi` de Homepage y su propia clave de
     solo lectura (`X-Api-Key` o `Bearer`; la base solo guarda su hash). Se genera en Configuración y solo abre ese
     endpoint; sin clave responde 404. Ejemplo de `services.yaml` en `docs/DEPLOYMENT_DOCKER.md`.
+  - React 19.3 (`react`, `react-dom` y sus tipos). Solo hizo falta tipar los `RefObject` de `FilasVirtuales` como
+    `RefObject<HTMLElement | null>` (en React 19 `useRef<T>(null)` devuelve `RefObject<T | null>`); el código ya
+    trataba `.current` como posiblemente nulo y no cambia de comportamiento. El chunk `react` del bundle pasa de
+    139,84 kB (gzip 45,32) a 218,78 kB (gzip 68,26); `index` queda igual. Pendiente de ver en el navegador:
+    Biblioteca con scroll rápido en pósters (`RejillaVirtual`).
 
 ## Siguiente (oleada 3)
 
@@ -205,7 +210,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 
 ## Oleada 4
 
-- React 19 y TypeScript 7 (Vite 8 y Vitest 5 ya están).
+- React 19 y TypeScript 7 (Vite 8, Vitest 5 y React 19 ya están; falta TypeScript 7).
 - Funciones nuevas que faltan:
   - subida por lotes;
   - resumen de duplicados y trumps;

@@ -178,3 +178,79 @@ def test_cada_ajuste_sencillo_se_guarda_en_su_clave_y_se_lee(client, auth_header
     assert guardado == reg.a_texto(a, valor)
     if a.tipo == BOOL:
         assert guardado == ("true" if valor else "false")
+
+
+# --- Lecturas de sí/no fuera del API ----------------------------------------
+
+_BOOLEANOS = [a for a in AJUSTES.values() if a.tipo == BOOL]
+
+
+@pytest.fixture
+def conn_ajustes(isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    init_db(conn)
+    yield conn
+    conn.close()
+
+
+@pytest.mark.parametrize("ajuste", _BOOLEANOS, ids=[a.campo for a in _BOOLEANOS])
+def test_leer_ajuste_de_un_si_no_usa_el_defecto_del_registro(conn_ajustes, ajuste):
+    """El defecto vive solo en el registro: `leer_ajuste` lo da sin fila, con la
+    fila vacía o con un texto que no es "true"/"false"; y solo el contrario
+    escrito tal cual lo cambia."""
+    from emuwarez_uploadrr.services.settings import leer_ajuste, set_setting
+    assert leer_ajuste(conn_ajustes, ajuste.campo) is ajuste.defecto
+    for raro in ("", "False", "TRUE", "1", "no", " false"):
+        set_setting(conn_ajustes, ajuste.clave, raro)
+        assert leer_ajuste(conn_ajustes, ajuste.campo) is ajuste.defecto, raro
+    set_setting(conn_ajustes, ajuste.clave, "true")
+    assert leer_ajuste(conn_ajustes, ajuste.campo) is True
+    set_setting(conn_ajustes, ajuste.clave, "false")
+    assert leer_ajuste(conn_ajustes, ajuste.campo) is False
+
+
+def test_series_ignore_specials_se_lee_con_el_registro(conn_ajustes):
+    """El caso que había en seis sitios a mano: encendido de fábrica, y solo un
+    "false" guardado lo apaga."""
+    from emuwarez_uploadrr.services.settings import set_setting
+    from emuwarez_uploadrr.web.api.library import _ignore_specials
+    assert _ignore_specials(conn_ajustes) is True
+    set_setting(conn_ajustes, "series.ignore_specials", "false")
+    assert _ignore_specials(conn_ajustes) is False
+    set_setting(conn_ajustes, "series.ignore_specials", "true")
+    assert _ignore_specials(conn_ajustes) is True
+
+
+def test_ningun_si_no_del_registro_se_lee_a_mano():
+    """Un sí/no que está en el registro se lee con `leer_ajuste`, no con
+    `(get_setting_canonical(...) or "true") != "false"` y parecidos: cada copia
+    llevaba su propio defecto y podía desfasarse del registro."""
+    import pathlib
+    import re
+
+    raiz = pathlib.Path(__file__).resolve().parents[1] / "emuwarez_uploadrr"
+    lectura = re.compile(r"get_(?:setting\w*|secret_setting)\(\s*\w+\s*,\s*(f?)(['\"])([^'\"]+)\2")
+    idioma = re.compile(r"(?:==|!=)\s*['\"](?:true|false)['\"]|\bor\s+['\"](?:true|false)['\"]")
+    claves = {a.clave for a in _BOOLEANOS}
+    exentos = {"services/settings.py", "database.py", "services/ajustes_registro.py"}
+
+    def es_del_registro(texto: str, es_fstring: bool) -> bool:
+        if not es_fstring:
+            return texto in claves
+        # f"notify.{canal}.enabled": el hueco puede ser cualquier tramo sin punto.
+        molde = re.escape(re.sub(r"\{[^}]*\}", "\0", texto)).replace("\0", "[^.]+")
+        return any(re.fullmatch(molde, c) for c in claves)
+
+    sueltas = []
+    for f in sorted(raiz.rglob("*.py")):
+        rel = f.relative_to(raiz).as_posix()
+        if rel in exentos:
+            continue
+        for n, linea in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            m = lectura.search(linea)
+            if m and idioma.search(linea[m.end():]) and es_del_registro(m.group(3), bool(m.group(1))):
+                sueltas.append(f"{rel}:{n}: {linea.strip()}")
+    assert not sueltas, (
+        "\nLectura de sí/no a mano de un ajuste del registro; usa "
+        "services.settings.leer_ajuste(conn, <campo>):\n  " + "\n  ".join(sueltas))

@@ -43,15 +43,22 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   (campo del API, clave, tipo, defecto, opciones o mínimo, secreto). De él salen los defectos y la conversión del
   GET, la validación y la escritura del PUT, el enmascarado y `es_secreto`. Lo que no cabe en un tipo sencillo
   (listas JSON, hosts de imágenes, eventos por canal) está en `FUERA_DEL_REGISTRO` de `web/api/settings.py`, y un
-  test falla si aparece un campo nuevo que no esté en uno de los dos sitios. Faltan las lecturas sueltas de sí/no
-  fuera de la API (p. ej. `series.ignore_specials` en `library.py`).
+  test falla si aparece un campo nuevo que no esté en uno de los dos sitios. Las lecturas sueltas de sí/no fuera de
+  la API (`series.ignore_specials` en seis sitios, `emu.add_logo`, `notify.*.enabled`…) ya pasan por
+  `settings.leer_ajuste`, así que el defecto vive solo en el registro; un test falla si reaparece
+  `(get_setting_canonical(…) or "true") != "false"` para una clave del registro.
 - **Biblioteca, vista de pósters en negro al desplazarse deprisa:** `RejillaVirtual` repintaba sin fin si su medida
   oscilaba (error 185 de React) y la pantalla quedaba en negro hasta F5. Las correcciones seguidas ahora tienen
   tope, y cada página va dentro de `LimiteDeErrores`, que enseña un mensaje en vez de dejar la pantalla en negro.
-  Reproducido con un arnés de navegador forzando la oscilación; no se ha visto aún qué la provoca en la aplicación
-  real. Cuando el tope corta una oscilación, la consola avisa una vez con «RejillaVirtual no se calma: 3×300 →
-  3×330 → …» y el ancho, el alto real, el zoom y el scroll; si el fallo es de otro componente, dirá «Error de render»
-  con la pila de componentes. Pendiente: mirar ese aviso en la aplicación real.
+  Cuando el tope corta una oscilación, la consola avisa una vez con «RejillaVirtual no se calma: 3×300 → 3×330 → …»
+  y el ancho, el alto real, el zoom y el scroll; si el fallo es de otro componente, dirá «Error de render» con la
+  pila de componentes. **Causa (vista en `:edge` con React 19, 03/11):** el aviso salió con «3×245 → 3×240 → …» y
+  514 px de ancho. La rejilla mide el alto en la primera tarjeta que pinta y cuál es la primera depende de ese alto,
+  y las tarjetas no medían lo mismo: la `img` iba dentro de un marco `aspect-ratio: 2/3` y, una vez cargada, un
+  póster que no fuera 2:3 (o el hueco de línea de una `img` en línea) alargaba el marco (240, 244, 257, 277 px). Ahora
+  la imagen va en `position: absolute` dentro del marco (`.bib-tarjeta-marco` y `.poster-grande-marco`) y el alto lo
+  fija solo `aspect-ratio`: todas miden 240 (pósters pequeños) o 370 (grandes) a ese ancho. Comprobado en el
+  navegador con el CSS real, antes y después. Pendiente: ver que el aviso ya no sale en la aplicación real.
 - **Oleada 3, subida por pasos (#127):** `_run_queued_job` es un bucle sobre `PASOS` (`upload_queue.py`): comprobar,
   nombre, preparar e iniciar, cada uno con su `stage` (que es su punto de cancelación), su fila de Fases y lo que
   deja en `_Trabajo` para el siguiente. Mismo comportamiento que antes; lo fijan

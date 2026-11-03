@@ -90,6 +90,14 @@
   height: 100%;
   object-fit: cover;
 }
+/* La imagen no cuenta para el alto de la tarjeta: lo fija solo aspect-ratio. Si pesara, una imagen cargada
+   que no fuera 2:3 (o el hueco de línea de una `img` en línea) alargaría la tarjeta de 240 a 244, 257…, y
+   RejillaVirtual, que mide el alto en la primera tarjeta que pinta, no se calmaba (oscilaba 245 ↔ 240). */
+.bib-tarjeta-marco > .bib-tarjeta-img {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
 .bib-tarjeta-sin-img {
   width: 100%;
   height: 100%;

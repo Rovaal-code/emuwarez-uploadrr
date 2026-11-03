@@ -19,8 +19,8 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
     contribute 10, not 11 by also counting the series row itself)."""
     # When "ignorar especiales" is on, missing episodes of a special season
     # (season 0) don't count as Faltantes on the dashboard.
-    from ...database import get_setting_canonical
-    ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
+    from ..settings import leer_ajuste
+    ignore_specials = leer_ajuste(conn, "series_ignore_specials")
 
     row = conn.execute(
         """

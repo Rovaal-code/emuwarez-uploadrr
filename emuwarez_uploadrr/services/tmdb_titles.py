@@ -15,8 +15,7 @@ from typing import Callable, Optional
 
 from ..database import get_setting_canonical, get_state, set_state
 from ..integrations import tmdb
-
-_SETTING_KEY = "tmdb.localize_series_titles"
+from .settings import leer_ajuste
 
 # Un título que TMDb no tenía se vuelve a preguntar al cabo de 30 días: puede
 # que lo hayan añadido. Los que sí tenía se quedan.
@@ -26,7 +25,7 @@ _VIGENTE = " AND (title IS NOT NULL OR fetched_at >= datetime('now', '-30 days')
 def series_titles_localized(conn: sqlite3.Connection) -> bool:
     """Whether to replace Sonarr/TVDB series titles with TMDb localized ones.
     Default ON — only an explicit "false" disables it."""
-    return (get_setting_canonical(conn, _SETTING_KEY) or "true") != "false"
+    return leer_ajuste(conn, "tmdb_localize_series_titles")
 
 
 def _configured_language(conn: sqlite3.Connection) -> str:

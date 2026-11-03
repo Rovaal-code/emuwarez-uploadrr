@@ -86,7 +86,7 @@
 /* Instancias */
 .wizard-fields.setup-caja {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   padding: 14px;
 }
 .setup-caja-titulo {

@@ -97,7 +97,7 @@
 .asist-rejilla-alta { max-height: 320px; overflow-y: auto; }
 
 /* Tarjetas con datos */
-.asist-tarjeta { padding: 12px 14px; border-radius: 8px; }
+.asist-tarjeta { padding: 12px 14px; border-radius: var(--radius-card); }
 
 /* Avisos bajo un campo y sueltos */
 .asist-aviso-campo {
@@ -208,7 +208,7 @@
 .asist-tono-error { --tono: var(--color-error); }
 
 /* Tablas de MediaInfo y de pistas */
-.asist-tabla-caja { overflow: auto; border-radius: 8px; }
+.asist-tabla-caja { overflow: auto; border-radius: var(--radius-card); }
 .asist-tabla-caja-mediainfo { max-height: 420px; }
 .asist-tabla-caja-pistas { max-height: 260px; margin-top: 12px; }
 .asist-tabla {
@@ -247,7 +247,7 @@
 /* Capítulo desplegable */
 .asist-acordeon {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   margin-bottom: 8px;
   overflow: hidden;
 }

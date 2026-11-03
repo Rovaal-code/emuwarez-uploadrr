@@ -77,7 +77,7 @@ a.btn.dsub-sin-subrayado { text-decoration: none; }
 }
 .dsub-panel-clic { cursor: pointer; user-select: none; }
 .dsub-en-directo { color: var(--color-available); font-weight: 400; }
-.detail-card.dsub-caja { padding: 16px 18px; border-radius: 10px; }
+.detail-card.dsub-caja { padding: 16px 18px; border-radius: var(--radius-card); }
 
 /* Tablas (las reglas de `td`/`th` de .data-table pesan (0,1,1): por eso `.data-table td.dsub-…`) */
 .dsub-scroll-x { overflow-x: auto; }

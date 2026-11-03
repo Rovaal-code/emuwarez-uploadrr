@@ -135,7 +135,8 @@
   --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.6);
 
   /* Radii */
-  --radius-card:   8px;
+  --radius-card:   12px;
+  --radius-small:  7px;
   --radius-badge:  6px;
   --radius-input:  6px;
   --radius-button: 6px;

@@ -8,6 +8,7 @@ import re
 import sqlite3
 import threading
 import unicodedata
+import urllib.parse
 from typing import Optional, Sequence
 
 from ..database import borrar_peticiones, get_json_state, get_setting_canonical, get_state, set_state
@@ -1011,6 +1012,123 @@ def get_request_item(conn: sqlite3.Connection, request_id: int) -> Optional[dict
     """Return a single request_item dict (no match info)."""
     row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
     return _safe_request_dict(dict(row), mi_usuario_emu(conn) or "") if row else None
+
+
+# ---------------------------------------------------------------------------
+# La petición en la ficha de Biblioteca
+# ---------------------------------------------------------------------------
+
+_CAMPOS_DE_LA_FICHA = (
+    "ri.id AS peticion_id, ri.title, ri.author, ri.author_visible, ri.points, ri.url, ri.emu_status, "
+    "ri.created_at, ri.req_scope, ri.req_season, ri.req_episode"
+)
+
+
+def _url_publica(url: Optional[str]) -> Optional[str]:
+    """La página de la petición en eMuwarez, sin nada que pueda llevar una clave.
+
+    `normalize_request` guarda la página pública (`…/requests/<id>`), que no lleva consulta; aun así no se devuelve
+    tal cual: la clave de eMuwarez viaja en la consulta (`api_token=…`) y una fila escrita por otra versión podría
+    traerla. Se quitan la consulta, el fragmento y el usuario:contraseña; lo que no sea http(s), fuera."""
+    if not url:
+        return None
+    try:
+        partes = urllib.parse.urlsplit(str(url).strip())
+    except ValueError:
+        return None
+    if partes.scheme.lower() not in ("http", "https") or not partes.hostname:
+        return None
+    return urllib.parse.urlunsplit((partes.scheme, partes.netloc.rpartition("@")[2], partes.path, "", ""))
+
+
+def _resumen_para_la_ficha(fila: dict, mi_usuario: str) -> dict:
+    """Lo que la ficha enseña de una petición. El autor, solo si eMuwarez lo deja ver (la misma regla que
+    `_safe_request_dict`): una petición anónima no tiene autor que enseñar."""
+    autor = (fila.get("author") or "").strip() if fila.get("author_visible") else ""
+    return {
+        "id": int(fila["peticion_id"]),
+        "title": fila.get("title"),
+        "author": autor or None,
+        "is_mine": bool(autor and mi_usuario and autor.lower() == mi_usuario.strip().lower()),
+        "points": fila.get("points"),
+        "url": _url_publica(fila.get("url")),
+        "emu_status": fila.get("emu_status"),
+        "created_at": fila.get("created_at"),
+        "req_scope": fila.get("req_scope"),
+        "req_season": fila.get("req_season"),
+        "req_episode": fila.get("req_episode"),
+    }
+
+
+def _cubre(peticion: dict, fila: dict) -> bool:
+    """Si la petición guardada en un antepasado (serie o temporada) pide también esta temporada o capítulo."""
+    temporada = peticion.get("req_season")
+    if temporada is None:
+        return True  # la serie entera
+    if fila.get("season_number") != temporada:
+        return False
+    if peticion.get("req_scope") == "episode":
+        return fila.get("item_type") == "episode" and fila.get("episode_number") == peticion.get("req_episode")
+    return True
+
+
+def peticiones_de_la_ficha(conn: sqlite3.Connection, fila: dict) -> dict:
+    """La petición de una fila de la biblioteca para su ficha, y las de lo que tiene debajo.
+
+    `peticion`: la de `library_items.request_id` de la fila (una por fila: la escribe `_guardar_casamientos` en la
+    fila que la petición pide de verdad). Si la fila no tiene una propia, una temporada o un capítulo heredan la de
+    su temporada o su serie cuando esa petición los cubre (la de la serie entera cubre todas sus temporadas), con
+    `heredada_de` = «temporada» o «serie». Su estado guardado no cambia: la lista sigue diciendo «Sin petición».
+    `estado` es el de la fila que la guarda.
+
+    `peticiones_debajo`: en una serie o una temporada, las que guardan sus temporadas y capítulos (una serie con
+    una petición por temporada), en orden. Solo para la ficha: son unas pocas consultas por elemento."""
+    mi_usuario = mi_usuario_emu(conn) or ""
+
+    def leer(peticion_id) -> Optional[dict]:
+        if peticion_id is None:
+            return None
+        r = conn.execute(f"SELECT {_CAMPOS_DE_LA_FICHA} FROM request_items ri WHERE ri.id = ?",
+                         (peticion_id,)).fetchone()
+        return dict(r) if r else None
+
+    peticion = None
+    propia = leer(fila.get("request_id"))
+    if propia:
+        peticion = {**_resumen_para_la_ficha(propia, mi_usuario), "heredada_de": None,
+                    "estado": fila.get("request_status"), "library_item_id": fila.get("id")}
+    elif fila.get("item_type") in ("season", "episode"):
+        padre, vistos = fila.get("parent_id"), set()
+        while padre is not None and padre not in vistos:
+            vistos.add(padre)
+            p = conn.execute("SELECT id, item_type, parent_id, request_id, request_status FROM library_items "
+                             "WHERE id = ?", (padre,)).fetchone()
+            if not p:
+                break
+            p = dict(p)
+            suya = leer(p.get("request_id"))
+            if suya and _cubre(suya, fila):
+                peticion = {**_resumen_para_la_ficha(suya, mi_usuario),
+                            "heredada_de": "serie" if p["item_type"] == "series" else "temporada",
+                            "estado": p.get("request_status"), "library_item_id": p["id"]}
+                break
+            padre = p.get("parent_id")
+
+    debajo: list[dict] = []
+    if fila.get("item_type") in ("series", "season"):
+        filas = conn.execute(
+            f"""SELECT {_CAMPOS_DE_LA_FICHA}, li.id AS library_item_id, li.request_status AS estado
+                FROM library_items li JOIN request_items ri ON ri.id = li.request_id
+                WHERE li.parent_id = ?
+                   OR li.parent_id IN (SELECT id FROM library_items WHERE parent_id = ?)
+                ORDER BY li.season_number, COALESCE(li.episode_number, -1), li.id""",
+            (fila["id"], fila["id"]),
+        ).fetchall()
+        for r in filas:
+            r = dict(r)
+            debajo.append({**_resumen_para_la_ficha(r, mi_usuario), "heredada_de": None,
+                           "estado": r.get("estado"), "library_item_id": r["library_item_id"]})
+    return {"peticion": peticion, "peticiones_debajo": debajo}
 
 
 def _series_title_year(conn, lib: dict) -> tuple:

@@ -564,7 +564,34 @@ class EstadisticasCuentaResponse(BaseModel):
 # Library
 # ---------------------------------------------------------------------------
 
+class PeticionDeLaFichaResponse(BaseModel):
+    """Una petición de eMuwarez vista desde la ficha de Biblioteca (services.requests.peticiones_de_la_ficha)."""
+    id: int
+    title: Optional[str] = None
+    # Solo si eMuwarez enseña el autor (author_visible); si no, None.
+    author: Optional[str] = None
+    is_mine: bool = False
+    points: Optional[int] = None
+    # La página pública de la petición, sin consulta: nunca una URL de la API con clave.
+    url: Optional[str] = None
+    emu_status: Optional[str] = None
+    created_at: Optional[str] = None
+    req_scope: Optional[str] = None
+    req_season: Optional[int] = None
+    req_episode: Optional[int] = None
+    # None si es de la propia fila; «temporada» o «serie» si la cubre la de un antepasado.
+    heredada_de: Optional[str] = None
+    # El estado guardado en la fila que la tiene (library_items.request_status) y esa fila.
+    estado: Optional[str] = None
+    library_item_id: Optional[int] = None
+
+
 class LibraryItemResponse(BaseModel):
+    # La petición de la fila (o la que la cubre desde su temporada o serie) y,
+    # en una serie o temporada, las de lo que tiene debajo. Solo en la ficha
+    # (GET /library/{id}): en la lista serían consultas por fila.
+    peticion: Optional[PeticionDeLaFichaResponse] = None
+    peticiones_debajo: Optional[list[PeticionDeLaFichaResponse]] = None
     # Todos los valores técnicos presentes bajo una serie o temporada
     # ("x264, x265"), solo para enseñar en la ficha. Las columnas de siempre
     # siguen siendo la señal de acuerdo que usa la regla del pack, así que no

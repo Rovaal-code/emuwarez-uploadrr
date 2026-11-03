@@ -43,8 +43,10 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   (campo del API, clave, tipo, defecto, opciones o mínimo, secreto). De él salen los defectos y la conversión del
   GET, la validación y la escritura del PUT, el enmascarado y `es_secreto`. Lo que no cabe en un tipo sencillo
   (listas JSON, hosts de imágenes, eventos por canal) está en `FUERA_DEL_REGISTRO` de `web/api/settings.py`, y un
-  test falla si aparece un campo nuevo que no esté en uno de los dos sitios. Faltan las lecturas sueltas de sí/no
-  fuera de la API (p. ej. `series.ignore_specials` en `library.py`).
+  test falla si aparece un campo nuevo que no esté en uno de los dos sitios. Las lecturas sueltas de sí/no fuera de
+  la API (`series.ignore_specials` en seis sitios, `emu.add_logo`, `notify.*.enabled`…) ya pasan por
+  `settings.leer_ajuste`, así que el defecto vive solo en el registro; un test falla si reaparece
+  `(get_setting_canonical(…) or "true") != "false"` para una clave del registro.
 - **Biblioteca, vista de pósters en negro al desplazarse deprisa:** `RejillaVirtual` repintaba sin fin si su medida
   oscilaba (error 185 de React) y la pantalla quedaba en negro hasta F5. Las correcciones seguidas ahora tienen
   tope, y cada página va dentro de `LimiteDeErrores`, que enseña un mensaje en vez de dejar la pantalla en negro.

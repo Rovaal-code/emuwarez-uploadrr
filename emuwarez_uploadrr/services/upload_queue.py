@@ -36,6 +36,7 @@ logger = logging.getLogger("emuwarez.upload")
 # new "Subir"/automático click must not create an unrelated second job while
 # one of these is in flight, it has to wait or be told to view the existing
 # one instead.
+from .ajustes_registro import AJUSTES as _AJUSTES
 from .subida_pasos import reanudar_desde
 from .upload_states import ACTIVE_JOB_STATUSES, asignacion_etapa_parada, escribir_estado  # noqa: E402
 from .eventos import EVENTO_SUBIDA_ESTADO, publicar
@@ -818,7 +819,7 @@ def _motivo_para_no_tocar(origen: str) -> str | None:
 
 
 # Con "true", un fichero compartido nunca se copia por reflink: sus ediciones se omiten.
-AJUSTE_SIN_COPIAS_REFLINK = "remux.no_reflink_copies"
+AJUSTE_SIN_COPIAS_REFLINK = _AJUSTES["remux_no_reflink_copies"].clave
 
 
 def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo: str, conn, *,
@@ -919,8 +920,8 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
 
     if en_su_sitio:
         return sin_copia("no cabe una copia donde ya está el archivo", "sin copia")
-    from .settings import get_setting_canonical
-    if get_setting_canonical(conn, AJUSTE_SIN_COPIAS_REFLINK) == "true":
+    from .settings import leer_ajuste
+    if leer_ajuste(conn, "remux_no_reflink_copies"):
         return sin_copia(f"el original {motivo}, y el ajuste «No hacer nunca copias reflink» está activado",
                          "sin reflink por el ajuste")
     try:

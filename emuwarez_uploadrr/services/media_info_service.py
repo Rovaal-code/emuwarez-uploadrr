@@ -41,13 +41,13 @@ def source_engine_enabled() -> bool:
     try:
         conn = connect()
         try:
-            from .settings import get_setting_canonical
-            valor = get_setting_canonical(conn, "source_engine.enabled")
+            from .settings import leer_ajuste
+            valor = leer_ajuste(conn, "source_engine_enabled")
         finally:
             conn.close()
     except Exception:                      # nunca romper una lectura de MediaInfo por esto
         return False
-    return (valor or "") == "true"
+    return valor
 
 
 def mediainfo_available() -> bool:

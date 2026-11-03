@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 
 from ...database import get_setting_canonical
+from ..settings import leer_ajuste
 from ..image_hosts import fallback_order, get_host_key
 from ..uploadrr_config_staging import (
     SCREENS_API_KEY_HOSTS,
@@ -62,9 +63,9 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         qbit_url = get_setting_canonical(conn, "qbit.url")
         qbit_tag = get_setting_canonical(conn, "qbit.tag")
         # El logo va en la descripción salvo que se haya apagado a mano.
-        add_logo = get_setting_canonical(conn, "emu.add_logo") != "false"
+        add_logo = leer_ajuste(conn, "emu_add_logo")
         # Las capturas de un pack, solo del primer capítulo salvo que se pidan todas.
-        per_episode_screens = get_setting_canonical(conn, "emu.per_episode_screens") == "true"
+        per_episode_screens = leer_ajuste(conn, "emu_per_episode_screens")
         qbit_username = get_setting_canonical(conn, "qbit.username")
         qbit_password = get_setting_canonical(conn, "qbit.password")
         qbit_qui = get_setting_canonical(conn, "qbit.qui_proxy_url")

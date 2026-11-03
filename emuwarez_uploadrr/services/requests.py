@@ -11,6 +11,7 @@ import unicodedata
 from typing import Optional, Sequence
 
 from ..database import borrar_peticiones, get_json_state, get_setting_canonical, get_state, set_state
+from .settings import leer_ajuste
 from . import cli_config, emu_catalog
 from .emu_perfil import PERFIL_STATE_KEY
 from ..integrations import emu, tmdb
@@ -578,7 +579,7 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
     it = dict(matched_item)
     if it.get("item_type") not in ("series", "season"):
         return it
-    ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
+    ignore_specials = leer_ajuste(conn, "series_ignore_specials")
     eps = [dict(e) for e in _relevant_episodes(
         conn, it["id"], it["item_type"], req.get("req_scope"),
         req.get("req_season"), req.get("req_episode"), ignore_specials)]

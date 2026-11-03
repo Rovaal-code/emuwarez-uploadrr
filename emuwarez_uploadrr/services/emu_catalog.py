@@ -20,6 +20,7 @@ import threading
 from typing import Optional
 
 from ..database import get_setting_canonical, get_state, set_state, get_json_state, set_json_state
+from .settings import leer_ajuste
 from ..integrations import emu
 from ..integrations.base import IntegrationError
 from .tasks import start_task, finish_task
@@ -387,7 +388,7 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
     # Honor the same "Ignorar especiales" setting the Estado/Nomenclatura
     # rollups use, so the three series statuses stay consistent. Default True
     # (only an explicit "false" counts specials).
-    ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
+    ignore_specials = leer_ajuste(conn, "series_ignore_specials")
 
     updated = 0
 
@@ -587,7 +588,7 @@ def catalogo_cubre(conn: sqlite3.Connection, item_id: int, resolucion: Optional[
     if item["item_type"] != "series":
         return bool(cumplen)
     # Una serie entera está cubierta si cada temporada que cuenta (como en el resumen de la serie) tiene la variante.
-    ignorar_especiales = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
+    ignorar_especiales = leer_ajuste(conn, "series_ignore_specials")
     temporadas = [n for (n,) in conn.execute(
         "SELECT season_number FROM library_items WHERE parent_id = ? AND item_type = 'season' "
         "AND season_number IS NOT NULL", (item_id,)) if not (ignorar_especiales and n == 0)]

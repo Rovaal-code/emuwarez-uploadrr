@@ -1,7 +1,7 @@
 import type { DashboardRecommendationItem } from '../../api/dashboard'
 import { lineaDeEspecificaciones, type RecomendacionesRepartidas } from '../../utils/hoy'
 import { recompensaDeRecomendacion } from '../../utils/recomendaciones'
-import { DetailTitleText, PlainValue } from '../DetailCard'
+import { DetailTitleText, LanguageValueIcon, PlainValue, ReleaseGroupValueIcon, SubtitleValueIcon } from '../DetailCard'
 import { EmptyState } from '../EmptyState'
 import { IconoEstrella, IconoPuntos } from '../Iconos'
 import { HoverTitle } from '../Tooltip'
@@ -19,6 +19,9 @@ function Fila({ item, extra, verPeticion, accion, onVerFicha }: {
 }) {
   const recompensa = recompensaDeRecomendacion(item)
   const spec = [lineaDeEspecificaciones(item), extra].filter(Boolean).join(' · ')
+  const grupo = item.release_group?.trim()
+  const audio = item.audio_languages ?? []
+  const subs = item.subtitle_languages ?? []
   return (
     <li className="panel-item">
       <Cartel url={item.poster_url} serie={esSerie(item)} pequeno />
@@ -26,10 +29,28 @@ function Fila({ item, extra, verPeticion, accion, onVerFicha }: {
         <HoverTitle className="hover-link panel-item-titulo" onClick={() => onVerFicha(item)} tip="Ver ficha del contenido">
           <DetailTitleText title={item.content_name} />
         </HoverTitle>
-        <div className="panel-item-spec">
-          {spec}
-          {verPeticion && <> · <HoverTitle as="span" className="hover-link" onClick={verPeticion} tip="Abrir la petición en Peticiones">Ver petición</HoverTitle></>}
-        </div>
+        <div className="panel-item-spec">{spec}</div>
+        {(grupo || audio.length > 0 || subs.length > 0 || verPeticion) && (
+          <div className="panel-item-meta">
+            {grupo && (
+              <span className="panel-rg" title={grupo}>
+                <span className="vicon"><ReleaseGroupValueIcon /></span>
+                <span className="solo-lector">Grupo de release: </span><span className="panel-rg-texto">{grupo}</span>
+              </span>
+            )}
+            {audio.length > 0 && (
+              <span className="panel-idiomas" title={`Audio: ${audio.join(', ')}`}>
+                <PlainValue icon={<LanguageValueIcon />}><span className="solo-lector">Audio: </span>{audio.join(', ')}</PlainValue>
+              </span>
+            )}
+            {subs.length > 0 && (
+              <span className="panel-idiomas" title={`Subtítulos: ${subs.join(', ')}`}>
+                <PlainValue icon={<SubtitleValueIcon />}><span className="solo-lector">Subtítulos: </span>{subs.join(', ')}</PlainValue>
+              </span>
+            )}
+            {verPeticion && <HoverTitle as="span" className="hover-link panel-item-ver" onClick={verPeticion} tip="Abrir la petición en Peticiones">Ver petición</HoverTitle>}
+          </div>
+        )}
       </div>
       <div className="panel-item-accion">
         {recompensa !== null && <PlainValue icon={<IconoPuntos />}>{recompensa}</PlainValue>}

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from ...models import LocalStatus
 
+from ..emu_format import _split_languages
 from .listado import _MISSING_STATUSES
 
 
@@ -342,8 +343,8 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
 
     cols = ("id, item_type, title, year, poster_url, local_status, added_at, missing_since, "
             "season_number, episode_number, parent_id, size_bytes, "
-            "resolution, source, tmdb_id, imdb_id, tvdb_id, instance_type, "
-            "instance_id, title_slug")
+            "resolution, source, release_group, audio_languages, subtitle_languages, "
+            "tmdb_id, imdb_id, tvdb_id, instance_type, instance_id, title_slug")
 
     # Group 1 — every *compatible* eMuwarez request, sourced from the match
     # table (library_items.request_status only records one request per item, so
@@ -407,7 +408,8 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         target_id = _scoped_library_id(conn, lib, {"req_scope": scope, "req_season": season, "req_episode": episode})
         d["library_target_id"] = target_id
         target = conn.execute(
-            "SELECT resolution, source, has_spanish_audio, has_spanish_subs FROM library_items WHERE id = ?",
+            "SELECT resolution, source, release_group, audio_languages, subtitle_languages, "
+            "has_spanish_audio, has_spanish_subs FROM library_items WHERE id = ?",
             (target_id,),
         ).fetchone()
         d.update(dict(target))
@@ -532,4 +534,8 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
     for d in recs:
         d.pop("_added", None)
     recs = g1_recs + recs
+    # Los idiomas salen ya como códigos de eMuwarez (ESP primero), los mismos que lleva el nombre del torrent.
+    for d in recs:
+        d["audio_languages"] = _split_languages(d.get("audio_languages"))
+        d["subtitle_languages"] = _split_languages(d.get("subtitle_languages"))
     return recs if limit <= 0 else recs[:limit]

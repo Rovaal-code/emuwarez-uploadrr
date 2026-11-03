@@ -303,6 +303,36 @@ def test_dashboard_recommendations_point_a_season_request_at_its_season(client, 
     assert (item["has_spanish_audio"], item["has_spanish_subs"]) == (1, 0)
 
 
+def test_dashboard_recommendations_llevan_grupo_de_release_e_idiomas_de_la_copia(client, auth_headers):
+    """La fila de «Listo para subir» enseña el grupo de release y los idiomas de la copia que se subiría: los de la
+    temporada de la petición (no los de la serie), con los idiomas como códigos de eMuwarez y ESP primero."""
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    conn = connect(db_path())
+    init_db(conn)
+    conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok, "
+                 "release_group, audio_languages) VALUES ('Serie', 'series', 'Disponible', 0, 1, 'DeLaSerie', 'jpn')")
+    serie = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+                 "season_number, release_group, audio_languages, subtitle_languages, has_spanish_ok) "
+                 "VALUES ('Serie T2', 'season', 'Disponible', 0, ?, 2, 'Ryodan', 'eng / spa / cat', 'spa', 1)", (serie,))
+    conn.execute("INSERT INTO request_items (emu_id, title, points, req_scope, req_season) "
+                 "VALUES ('r1', 'Serie T2', 900, 'season', 2)")
+    req_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO request_matches (library_item_id, request_item_id, status, confidence) "
+                 "VALUES (?, ?, 'Compatible', 1.0)", (serie, req_id))
+    conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok, "
+                 "audio_languages) VALUES ('Unica', 'movie', 'Disponible', 0, 1, 'spa')")
+    conn.commit()
+    conn.close()
+
+    items = client.get("/api/dashboard/recommendations", headers=auth_headers).json()["items"]
+    pedida, unica = items[0], items[1]
+    assert (pedida["release_group"], pedida["audio_languages"], pedida["subtitle_languages"]) == (
+        "Ryodan", ["ESP", "ING", "CAT"], ["ESP"])
+    # Sin grupo ni subtítulos: None y lista vacía, no una raya.
+    assert (unica["release_group"], unica["audio_languages"], unica["subtitle_languages"]) == (None, ["ESP"], [])
+
+
 def test_dashboard_summary_lleva_las_instancias_caidas_y_la_proxima_sincronizacion(client, auth_headers):
     from emuwarez_uploadrr.services import vigilancia_instancias as vig
     resp = client.get("/api/dashboard/summary", headers=auth_headers)

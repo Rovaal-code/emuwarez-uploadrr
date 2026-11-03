@@ -30,6 +30,10 @@ export interface DashboardRecommendationItem {
   library_target_id?: number | null
   has_spanish_audio?: number | null
   has_spanish_subs?: number | null
+  // La copia que se subiría: su grupo de release y sus idiomas como códigos de eMuwarez (ESP primero).
+  release_group?: string | null
+  audio_languages?: string[]
+  subtitle_languages?: string[]
 }
 
 export async function getDashboardRecommendations(limit = 60): Promise<{ items: DashboardRecommendationItem[] }> {

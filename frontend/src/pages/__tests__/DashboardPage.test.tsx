@@ -319,6 +319,63 @@ describe('Panel', () => {
     expect(banda().querySelector('.panel-aviso-ancho')).toBeNull()
   })
 
+  describe('grupo de release e idiomas en «Listo para subir»', () => {
+    const meta = (i: number) => filas('Listo para subir')[i].querySelector('.panel-item-meta')!
+
+    it('con grupo e idiomas: el grupo en su chip, el audio, los subtítulos y «Ver petición», en la segunda línea', async () => {
+      vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+        rec({ id: 1, rec_request_id: 11, rec_points: 9, content_name: 'Con datos', release_group: 'Ryodan',
+          audio_languages: ['ESP', 'ING'], subtitle_languages: ['ESP'], resolution: '1080p', source: 'WEB-DL', size_bytes: 6 * 1024 ** 3 }),
+      ] })
+      await pagina()
+      const fila = filas('Listo para subir')[0]
+      // La primera línea sigue siendo la de siempre; el grupo no se mezcla con ella.
+      expect(fila.querySelector('.panel-item-spec')!.textContent).toBe('Película · 1080p WEB-DL · 6,0 GB')
+      expect(meta(0).querySelector('.panel-rg')!.textContent).toBe('Grupo de release: Ryodan')
+      expect(meta(0).querySelector('.panel-rg-texto')!.textContent).toBe('Ryodan')
+      const idiomas = [...meta(0).querySelectorAll('.detcard-plano')].map(p => p.textContent)
+      expect(idiomas).toEqual(['Audio: ESP, ING', 'Subtítulos: ESP'])
+      expect(meta(0).querySelector('[role="link"]')!.textContent).toBe('Ver petición')
+    })
+
+    it('sin grupo ni idiomas no sale nada en su lugar, solo «Ver petición»', async () => {
+      vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+        rec({ id: 1, rec_request_id: 11, rec_points: 9, release_group: null, audio_languages: [], subtitle_languages: [] }),
+        rec({ id: 2, rec_request_id: 12, rec_points: 8, release_group: '  ' }),
+      ] })
+      await pagina()
+      for (const i of [0, 1]) {
+        expect(meta(i).querySelector('.panel-rg')).toBeNull()
+        expect(meta(i).querySelector('.detcard-plano')).toBeNull()
+        expect(meta(i).textContent).toBe('Ver petición')
+      }
+      expect(texto()).not.toContain('—')
+    })
+
+    it('con solo el grupo, o solo el audio, enseña únicamente lo que hay', async () => {
+      vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+        rec({ id: 1, rec_request_id: 11, rec_points: 9, release_group: 'Ryodan' }),
+        rec({ id: 2, rec_request_id: 12, rec_points: 8, audio_languages: ['ESP'] }),
+      ] })
+      await pagina()
+      expect(meta(0).querySelector('.panel-rg')).not.toBeNull()
+      expect(meta(0).querySelector('.detcard-plano')).toBeNull()
+      expect(meta(1).querySelector('.panel-rg')).toBeNull()
+      expect([...meta(1).querySelectorAll('.detcard-plano')].map(p => p.textContent)).toEqual(['Audio: ESP'])
+    })
+
+    it('una idea sin petición ni datos no pinta la segunda línea; con grupo, sí', async () => {
+      vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+        rec({ id: 20, rec_group: 2, content_name: 'Sin datos (2001)' }),
+        rec({ id: 21, rec_group: 2, content_name: 'Con grupo (2002)', release_group: 'Ryodan' }),
+      ] })
+      await pagina()
+      const ideas = [...document.querySelectorAll('details.panel-mas .panel-item')]
+      expect(ideas[0].querySelector('.panel-item-meta')).toBeNull()
+      expect(ideas[1].querySelector('.panel-rg-texto')!.textContent).toBe('Ryodan')
+    })
+  })
+
   it('«Subir» abre el asistente sobre la temporada de la petición, con su selección y la petición', async () => {
     vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
       rec({ id: 5, library_target_id: 55, item_type: 'season', season_number: 2, episode_number: null, rec_request_id: 77, rec_points: 500, content_name: 'Serie (2016) - Temporada 2' }),

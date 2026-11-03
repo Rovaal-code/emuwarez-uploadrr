@@ -20,7 +20,7 @@ export function SyncCard() {
         <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
           <button className="btn btn-primary btn-sm" onClick={startLibrarySync} disabled={isAnySyncing}>
             {libSyncing
-              ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
+              ? <><span className="spinner emusync-spinner" /> Sincronizando…</>
               : '↻ Biblioteca'}
           </button>
         </Tooltip>
@@ -36,7 +36,7 @@ export function SyncCard() {
             disabled={isAnySyncing || requestsWait > 0}
           >
             {requestsSyncing
-              ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
+              ? <><span className="spinner emusync-spinner" /> Sincronizando…</>
               : requestsWait
                 ? `↻ Peticiones (${requestsWait} min)`
                 : '↻ Peticiones'}

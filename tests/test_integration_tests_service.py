@@ -124,6 +124,43 @@ class TestEmuwarezConnection:
         assert result["ok"] is False
         assert result["status"] == "invalid_url"
 
+    def test_http_remoto_se_rechaza_sin_enviar_la_clave(self, http_falso):
+        result = svc_test_emu(api_key="key123", base_url="http://emu-warez.com")
+        assert result["ok"] is False
+        assert result["status"] == "insecure_url"
+        assert "key123" not in str(result)
+        assert http_falso.peticiones == []
+
+    def test_url_con_corchete_roto_es_invalida_y_no_revienta(self):
+        result = svc_test_emu(api_key="key123", base_url="http://[::1")
+        assert result["ok"] is False
+        assert result["status"] == "invalid_url"
+        assert "key123" not in str(result)
+
+    def test_una_redireccion_a_http_no_lleva_la_clave(self, http_falso):
+        from tests.http_falso import respuesta
+        http_falso.responde(respuesta(302, headers={"Location": "http://otro.example/api?api_token=key123"}))
+        result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com")
+        assert result["ok"] is False
+        assert result["status"] == "connection_error"
+        assert len(http_falso.peticiones) == 1  # no se pidió el salto inseguro
+        assert "key123" not in str(result)
+
+    def test_una_redireccion_a_https_se_sigue(self, http_falso):
+        from tests.http_falso import respuesta
+        http_falso.responde(
+            respuesta(301, headers={"Location": "https://www.emu-warez.com/api/torrents/filter?perPage=1"}),
+            respuesta(200),
+        )
+        result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com")
+        assert result["ok"] is True
+        assert len(http_falso.peticiones) == 2
+
+    def test_http_tampoco_se_admite_en_loopback(self, http_falso):
+        result = svc_test_emu(api_key="key123", base_url="http://localhost:8080")
+        assert result["status"] == "insecure_url"
+        assert http_falso.peticiones == []
+
     def test_success(self, http_falso):
         http_falso.responde(_mock_response(200))
         result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com")

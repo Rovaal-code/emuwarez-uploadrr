@@ -106,7 +106,7 @@ function SyncChip({ error, icon, label, detail, percent, bar }: {
     <div className="sync-chip" {...triggerProps}>
       {error
         ? <span className="sync-chip-error">✗</span>
-        : <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />}
+        : <span className="spinner emusync-spinner" />}
       {icon}
       <span className="sync-chip-label">{label}</span>
       <span className={`sync-chip-detail${error ? ' sync-chip-detail-error' : ''}`}>{detail}</span>

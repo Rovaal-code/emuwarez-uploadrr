@@ -77,7 +77,7 @@ export function CuentaEmu() {
         <Tooltip content={`${perfil.updated_at ? `Leído de eMuwarez ${timeAgo(perfil.updated_at)}` : 'Aún sin leer de eMuwarez'}. Se vuelve a leer solo cada hora.`}>
           <button type="button" className="btn btn-ghost btn-sm" onClick={pulsar}
             disabled={actualizando || espera.active} aria-label="Actualizar tu cuenta de eMuwarez">
-            {actualizando ? <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> : '↻'}
+            {actualizando ? <span className="spinner emusync-spinner" /> : '↻'}
           </button>
         </Tooltip>
       )}

@@ -212,10 +212,22 @@ def test_emuwarez_connection(
     if not _base.startswith(("http://", "https://")):
         return _fail("emuwarez", "invalid_url", f"URL de eMuwarez inválida: {_base}")
 
+    # La clave viaja en la query: por http se vería en claro (o iría a un proxy del entorno). Solo https.
+    try:
+        _partes = urllib.parse.urlsplit(_base)
+    except ValueError:  # p. ej. «http://[::1»
+        return _fail("emuwarez", "invalid_url", "URL de eMuwarez inválida")
+    if _partes.scheme == "http":
+        return _fail(
+            "emuwarez",
+            "insecure_url",
+            "La URL de eMuwarez debe usar https:// para no enviar la API key sin cifrar",
+        )
+
     # Rate-limit: at most one live probe per minute, to avoid saturating the
     # real eMuwarez server from the "Probar conexión" button. Only enforced
     # when we have a DB connection to persist the timestamp; the early
-    # not_configured/invalid_url returns above never reach the network and are
+    # not_configured/invalid_url/insecure_url returns above never reach the network and are
     # deliberately not throttled.
     if conn is not None and enforce_rate_limit:
         wait = _emu_test_wait_seconds(conn)
@@ -240,7 +252,7 @@ def test_emuwarez_connection(
 
     url = f"{_base}/api/torrents/filter?api_token={urllib.parse.quote(_key)}&perPage=1"
     try:
-        resp = http_cliente.pedir("GET", url, cabeceras=_CABECERAS_PRUEBA, timeout=_TIMEOUT)
+        resp = http_cliente.pedir("GET", url, cabeceras=_CABECERAS_PRUEBA, timeout=_TIMEOUT, solo_seguras=True)
         return _ok("emuwarez", details={"base_url": _base, "http_status": resp.status_code})
     except http_cliente.ErrorHTTP as exc:
         if exc.status == 429:

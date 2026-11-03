@@ -80,7 +80,7 @@ function NotifTitleIcon({ eventType, level }: { eventType: string; level: string
 // read as the same visual family.
 function PosterBox({ children }: { children: React.ReactNode }) {
   return (
-    <div className="poster-thumb" style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <div className="poster-thumb menores-notif-poster">
       {children}
     </div>
   )
@@ -95,11 +95,11 @@ function NotifPoster({ url }: { url: string | null }) {
           src={posterUrl(url, 'w154')}
           alt=""
           loading="lazy"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          className="menores-notif-poster-img"
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
         />
       ) : (
-        <span style={{ display: 'inline-flex', fontSize: 14, opacity: 0.35 }}><IconoPelicula /></span>
+        <span className="menores-notif-poster-vacio"><IconoPelicula /></span>
       )}
     </PosterBox>
   )
@@ -323,7 +323,7 @@ export function NotificationBell() {
         <div className="notif-dropdown" role="dialog" aria-label="Notificaciones">
           <div className="notif-dropdown-header">
             <span className="notif-dropdown-title">Notificaciones</span>
-            <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span className="menores-notif-acciones">
               {unread > 0 && (
                 <button className="notif-markall" onClick={handleMarkAll}>Marcar todo como leído</button>
               )}

@@ -28,6 +28,7 @@ import http.cookiejar
 import logging
 import ssl
 import threading
+import urllib.parse
 from typing import Any, Callable, Optional, TypeVar
 
 import httpx
@@ -152,6 +153,27 @@ def _leer_hasta(usar: httpx.Client, metodo: str, url: str, cabeceras: dict[str, 
         return httpx.Response(recibida.status_code, headers=propias, content=bytes(cuerpo), request=recibida.request)
 
 
+def _es_segura(url: str) -> bool:
+    return urllib.parse.urlsplit(url).scheme == "https"
+
+
+def _pedir_solo_seguras(usar: httpx.Client, metodo: str, url: str, cabeceras: dict[str, str],
+                        contenido: Optional[bytes], timeout: float) -> httpx.Response:
+    """Sigue las redirecciones a mano para mirar el destino de cada salto antes de pedirlo."""
+    respuesta = usar.request(metodo, url, headers=cabeceras, content=contenido,
+                             timeout=httpx.Timeout(timeout), follow_redirects=False)
+    for _ in range(_MAX_REDIRECCIONES):
+        siguiente = respuesta.next_request
+        if siguiente is None:
+            return respuesta
+        if not _es_segura(str(siguiente.url)):
+            raise ErrorConexion("redirección a una dirección sin https")
+        respuesta = usar.send(siguiente, follow_redirects=False)
+    if respuesta.next_request is not None:
+        raise ErrorConexion("demasiadas redirecciones")
+    return respuesta
+
+
 def pedir(
     metodo: str,
     url: str,
@@ -162,6 +184,7 @@ def pedir(
     verify: bool = True,
     en_sesion: Optional[httpx.Client] = None,
     limite: Optional[int] = None,
+    solo_seguras: bool = False,
 ) -> httpx.Response:
     """Hace la petición y devuelve la respuesta ya leída entera (2xx/3xx tras seguir las redirecciones).
 
@@ -169,13 +192,22 @@ def pedir(
     en memoria el cuerpo enorme de un servidor ajeno cuando solo interesa el principio.
 
     Lanza `ErrorHTTP` con un 4xx/5xx y `ErrorConexion` si no hay respuesta. Cualquier otra excepción (una URL mal
-    formada, por ejemplo) sale tal cual. `en_sesion` es un cliente de `sesion()`, para que viajen sus cookies."""
+    formada, por ejemplo) sale tal cual. `en_sesion` es un cliente de `sesion()`, para que viajen sus cookies.
+
+    Con `solo_seguras` cada redirección se comprueba antes de seguirla y una que baje a `http://` corta con
+    `ErrorConexion`: la URL de la petición puede llevar una clave y no debe viajar en claro (tampoco hacia un proxy
+    del entorno, por eso no hay excepción para loopback)."""
+    if solo_seguras and limite is not None:
+        # La lectura limitada sigue las redirecciones sin mirarlas: mejor negarse que fingir que protege.
+        raise ValueError("solo_seguras no se puede combinar con limite")
     cabeceras = dict(cabeceras or {})
     if contenido is not None and not any(k.lower() == "content-type" for k in cabeceras):
         cabeceras["Content-Type"] = "application/x-www-form-urlencoded"
     usar = en_sesion if en_sesion is not None else cliente(verify)
     try:
-        if limite is None:
+        if solo_seguras:
+            respuesta = _pedir_solo_seguras(usar, metodo.upper(), url, cabeceras, contenido, timeout)
+        elif limite is None:
             respuesta = usar.request(
                 metodo.upper(), url, headers=cabeceras, content=contenido, timeout=httpx.Timeout(timeout),
             )

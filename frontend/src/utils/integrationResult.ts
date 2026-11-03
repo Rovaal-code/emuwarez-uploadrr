@@ -10,6 +10,7 @@ const STATUS_LABELS: Record<string, string> = {
   invalid_key: '✗ API key inválida',
   invalid_kind: '✗ Tipo inválido',
   invalid_url: '✗ URL inválida',
+  insecure_url: '✗ La URL debe usar https://',
   timeout: '✗ Timeout',
   not_found: '✗ No encontrado',
   connection_error: '✗ Error de conexión',
@@ -19,7 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 // Statuses that mean the probe never reached the network (so the client must
 // NOT start a cooldown — the backend didn't record a timestamp either).
-const EMU_TEST_NO_NETWORK = new Set(['not_configured', 'invalid_url'])
+const EMU_TEST_NO_NETWORK = new Set(['not_configured', 'invalid_url', 'insecure_url'])
 
 /**
  * How many seconds the eMuwarez "Probar conexión" button should stay on

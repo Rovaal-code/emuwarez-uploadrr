@@ -251,3 +251,16 @@ def test_arr_request_traduce_los_errores(http_falso, fallo, tipo, texto):
     assert texto in str(info.value)
     if tipo == "ArrApiError" and info.value.status_code:
         assert info.value.status_code == 500 and info.value.body == "boom"
+
+
+def test_solo_seguras_corta_una_redireccion_a_http(http_falso):
+    http_falso.responde(respuesta(302, headers={"Location": "http://otro.example/x"}))
+    with pytest.raises(http_cliente.ErrorConexion):
+        http_cliente.pedir("GET", "https://a.example/x?api_token=k", timeout=5, solo_seguras=True)
+    assert len(http_falso.peticiones) == 1
+
+
+def test_solo_seguras_con_limite_se_niega_en_vez_de_fingir(http_falso):
+    with pytest.raises(ValueError):
+        http_cliente.pedir("GET", "https://a.example/x", timeout=5, solo_seguras=True, limite=100)
+    assert http_falso.peticiones == []

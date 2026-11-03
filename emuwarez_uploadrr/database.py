@@ -991,7 +991,7 @@ def _activar_evento_en_la_campana(conn: sqlite3.Connection, evento: str) -> None
     except sqlite3.OperationalError:
         return
     if not fila or not fila["value"]:
-        return                      # sin configurar: ya lo recibe todo
+        return                      # sin configurar lo recibe todo; con la selección vacía, el usuario no quiere ninguno
     codigos = [c.strip() for c in fila["value"].split(",") if c.strip()]
     if evento in codigos:
         return

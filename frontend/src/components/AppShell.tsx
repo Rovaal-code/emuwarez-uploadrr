@@ -8,6 +8,8 @@ import { UnsavedChangesModal } from './UnsavedChangesModal'
 import { TourOverlay } from './TourOverlay'
 import { useTour } from '../context/TourContext'
 import { TOUR_STEPS } from '../tour/steps'
+import { CommandPalette } from './CommandPalette'
+import { esAtajoDePaleta } from '../utils/paleta'
 
 // The very first time the app is ready to use (right after finishing setup,
 // or on any later reload before it's been seen), the guided tour launches on
@@ -156,6 +158,7 @@ function pageFromPath(): string {
 export function AppShell({ user, onLogout }: AppShellProps) {
   const [activePage, setActivePage] = useState<string>(pageFromPath)
   const { start: startTour } = useTour()
+  const [paletaAbierta, setPaletaAbierta] = useState(false)
 
   useEffect(() => {
     if (localStorage.getItem(TOUR_SEEN_KEY) !== '1') {
@@ -177,6 +180,35 @@ export function AppShell({ user, onLogout }: AppShellProps) {
       }
     })
   }, [])
+
+  // Ctrl+K / Cmd+K abre (o cierra) la paleta de búsqueda desde cualquier sección.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!esAtajoDePaleta(e)) return
+      e.preventDefault()
+      setPaletaAbierta(abierta => !abierta)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
+  // La ficha de la Biblioteca se abre por la URL (/library/:id), como hace la campana.
+  const abrirElemento = useCallback((id: number) => {
+    guardedLeave(() => {
+      window.history.pushState({}, '', `/library/${id}`)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+  }, [])
+
+  // Elegir una sección en la paleta. Si ya estás en ella con una ficha abierta (/library/42), vuelve a la lista:
+  // `navigate` no hace nada cuando la sección es la misma.
+  const abrirSeccion = useCallback((id: string) => {
+    if (id !== pageFromPath() || window.location.pathname === `/${id}`) { navigate(id); return }
+    guardedLeave(() => {
+      window.history.pushState({}, '', `/${id}`)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+  }, [navigate])
 
   // Keep the tab in sync with browser back/forward.
   const paginaVigente = useRef(activePage)
@@ -256,6 +288,14 @@ export function AppShell({ user, onLogout }: AppShellProps) {
         </main>
       </div>
       <TourOverlay activePage={activePage} navigate={navigate} />
+      {paletaAbierta && (
+        <CommandPalette
+          secciones={Object.entries(PAGE_TITLE).map(([id, titulo]) => ({ id, titulo }))}
+          onSeccion={abrirSeccion}
+          onElemento={abrirElemento}
+          onClose={() => setPaletaAbierta(false)}
+        />
+      )}
     </div>
   )
 }

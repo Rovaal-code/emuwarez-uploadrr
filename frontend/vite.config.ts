@@ -26,11 +26,11 @@ export default defineConfig({
     sourcemap: false,
     // El bundle de la app ronda los 500 kB; sin esto Vite 8 avisa por unos pocos kB.
     chunkSizeWarningLimit: 600,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        // Vite 8 (Rolldown) solo admite manualChunks como función.
-        manualChunks(id) {
-          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react'
+        codeSplitting: {
+          // React y su planificador en un chunk propio, que cambia mucho menos que la app.
+          groups: [{ name: 'react', test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/ }],
         },
       },
     },

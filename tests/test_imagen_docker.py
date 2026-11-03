@@ -53,10 +53,10 @@ def test_dockerfile_npm_ci_sin_alternativa_y_nada_de_uploadrr_escribible():
     assert "chmod 1777 /opt/Uploadrr/data" in DOCKERFILE
 
 
-def test_node_22_en_la_imagen_y_en_los_workflows():
-    assert "FROM node:22-alpine" in DOCKERFILE
+def test_node_26_en_la_imagen_y_en_los_workflows():
+    assert "FROM node:26-alpine" in DOCKERFILE
     for nombre in ("ci.yml", "bundle.yml"):
-        assert 'node-version: "22"' in (WORKFLOWS / nombre).read_text(encoding="utf-8")
+        assert 'node-version: "26"' in (WORKFLOWS / nombre).read_text(encoding="utf-8")
 
 
 def test_todos_los_jobs_tienen_limite_de_tiempo():

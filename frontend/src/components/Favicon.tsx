@@ -11,10 +11,11 @@ export function Favicon({ domain, size = 16, fallback = null, radius = 3, backgr
   // marks stay visible on a dark UI.
   background?: string
 }) {
-  const [falla, setFalla] = useState(false)
+  // La URL que falló, no un sí/no: si el mismo componente recibe otro dominio, su icono se intenta de nuevo.
+  const [fallida, setFallida] = useState<string | null>(null)
   const url = domain ? iconoDe(domain) : null
-  if (!url || falla) return <>{fallback}</>
-  const onError = () => setFalla(true)
+  if (!url || fallida === url) return <>{fallback}</>
+  const onError = () => setFallida(url)
   if (background) {
     return (
       <span className="menores-icono-caja" style={{ width: size, height: size, borderRadius: radius, background }}>

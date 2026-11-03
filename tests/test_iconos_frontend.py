@@ -54,6 +54,14 @@ def test_las_webs_de_las_fichas_estan_en_el_script():
     assert enlazados <= set(_script().WEBS_DE_FICHAS), enlazados - set(_script().WEBS_DE_FICHAS)
 
 
+def test_ningun_icono_es_el_globo_generico_de_google():
+    """Google devuelve ese globo para un sitio que no conoce: no es su logo y debe salir el icono de reserva."""
+    import hashlib
+    genericas = _script().HUELLAS_GENERICAS
+    for p in CARPETA.iterdir():
+        assert hashlib.sha256(p.read_bytes()).hexdigest() not in genericas, f"{p.name} es el globo genérico de Google"
+
+
 def test_los_iconos_son_imagenes_y_no_pesan_de_mas():
     for p in CARPETA.iterdir():
         datos = p.read_bytes()

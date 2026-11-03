@@ -38,6 +38,9 @@ CARPETA = RAIZ / "frontend" / "src" / "assets" / "iconos"
 WEBS_DE_FICHAS = ("www.themoviedb.org", "www.imdb.com", "thetvdb.com", "myanimelist.net", "www.tvmaze.com")
 
 _LIMITE = 300_000
+# sha256 del icono genérico (el globo, 649 bytes) que Google devuelve a 64 px para un sitio que no conoce. Con esto se
+# descarta aunque sea el único de la tanda; repetido entre varios dominios también se descarta (otro tamaño u otro globo).
+HUELLAS_GENERICAS = frozenset({"beaa2f87e130b8b83363dc30f9143c3712094be82f61d2c4037b91fceff86b85"})
 _AGENTE = "Mozilla/5.0 (compatible; emuwarez-uploadrr/iconos)"
 _FIRMAS = (
     (b"\x89PNG\r\n\x1a\n", "png"),
@@ -129,7 +132,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     for d, (origen, _, datos) in hallados.items():
         if origen == "google":
             huellas.setdefault(hashlib.sha256(datos).hexdigest(), []).append(d)
-    genericos = {d for ds in huellas.values() if len(ds) > 1 for d in ds}
+    genericos = {d for h, ds in huellas.items() if len(ds) > 1 or h in HUELLAS_GENERICAS for d in ds}
 
     for d, (origen, ext, datos) in sorted(hallados.items()):
         if d in genericos:

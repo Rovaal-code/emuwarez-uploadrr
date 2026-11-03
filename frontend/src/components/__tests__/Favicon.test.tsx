@@ -3,10 +3,11 @@
  * Favicon: el icono del sitio sale de los ficheros del proyecto (assets/iconos), sin pedir nada fuera; si el sitio
  * no tiene, o el fichero no carga, se enseña el icono de reserva.
  */
+import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Favicon, domainOf } from '../Favicon'
 import { iconoDe } from '../../utils/iconosSitios'
-import { desmontar, montar } from './dom'
+import { boton, desmontar, montar, pulsar } from './dom'
 
 afterEach(desmontar)
 
@@ -50,6 +51,22 @@ describe('Favicon', () => {
     await act(async () => { document.querySelector('img')!.dispatchEvent(new Event('error')) })
     expect(document.querySelector('img')).toBeNull()
     expect(document.body.textContent).toContain('reserva')
+  })
+})
+
+describe('Favicon con otro dominio', () => {
+  it('tras un fallo, el dominio nuevo vuelve a intentar su icono', async () => {
+    function Cambia() {
+      const [d, setD] = useState('netflix.com')
+      return <><button onClick={() => setD('imgbb.com')}>cambiar</button><Favicon domain={d} fallback={<b>reserva</b>} /></>
+    }
+    await montar(<Cambia />)
+    const { act } = await import('react')
+    await act(async () => { document.querySelector('img')!.dispatchEvent(new Event('error')) })
+    expect(document.body.textContent).toContain('reserva')
+    await pulsar(boton('cambiar'))
+    expect(document.querySelector('img')?.getAttribute('src')).toBe(iconoDe('imgbb.com'))
+    expect(document.body.textContent).not.toContain('reserva')
   })
 })
 

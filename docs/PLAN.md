@@ -209,12 +209,14 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - resumen de duplicados y trumps;
   - carril de «listas» ordenado por recompensa;
   - «Mejoras posibles»;
-  - estadísticas del tracker por subida;
+  - estadísticas del tracker por subida.
 - Rediseño de la interfaz: Hoy, detalle de subida, resumen del asistente, Biblioteca, Peticiones y Configuración.
   Espera las capturas de Gabriel; las funciones que tocan Biblioteca, Panel y el asistente van junto a él.
 
 ## Aplazado / ideas
 
+- La prueba de conexión de eMuwarez sigue una redirección a otro host por `https` llevando el `api_token` de la query
+  (solo corta las que bajan a `http://`). Si hiciera falta, comprobar también que el host de cada salto es el mismo.
 - Reanudar a mitad de Uploadrr-EMU (capturas, torrent, subida al tracker): hace falta que el subproceso diga qué
   pasos terminó y cambiar el contrato en los dos repositorios a la vez. Hoy un reintento reanuda solo en la verificación.
 - Límite de concurrencia compartido entre el CLI y el servidor (hoy cada proceso tiene el suyo, en memoria). Hace

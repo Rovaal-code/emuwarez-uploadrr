@@ -33,8 +33,6 @@ EMU_TEST_STATE_KEY = "last_emu_test_utc"
 MIN_EMU_TEST_SECONDS = 60
 
 
-_HOSTS_LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
-
 def _emu_test_wait_seconds(conn) -> int:
     """Seconds remaining before another live eMuwarez probe is allowed (0 = now)."""
     from emuwarez_uploadrr.database import get_state
@@ -215,8 +213,12 @@ def test_emuwarez_connection(
         return _fail("emuwarez", "invalid_url", f"URL de eMuwarez inválida: {_base}")
 
     # La clave viaja en la query: por http se vería en claro. Solo se admite en loopback (instancia de pruebas local).
-    _partes = urllib.parse.urlsplit(_base)
-    if _partes.scheme == "http" and (_partes.hostname or "") not in _HOSTS_LOOPBACK:
+    try:
+        _partes = urllib.parse.urlsplit(_base)
+        _host = _partes.hostname or ""
+    except ValueError:  # p. ej. «http://[::1»
+        return _fail("emuwarez", "invalid_url", "URL de eMuwarez inválida")
+    if _partes.scheme == "http" and _host not in http_cliente.HOSTS_LOOPBACK:
         return _fail(
             "emuwarez",
             "insecure_url",
@@ -251,7 +253,7 @@ def test_emuwarez_connection(
 
     url = f"{_base}/api/torrents/filter?api_token={urllib.parse.quote(_key)}&perPage=1"
     try:
-        resp = http_cliente.pedir("GET", url, cabeceras=_CABECERAS_PRUEBA, timeout=_TIMEOUT)
+        resp = http_cliente.pedir("GET", url, cabeceras=_CABECERAS_PRUEBA, timeout=_TIMEOUT, solo_seguras=True)
         return _ok("emuwarez", details={"base_url": _base, "http_status": resp.status_code})
     except http_cliente.ErrorHTTP as exc:
         if exc.status == 429:

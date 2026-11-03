@@ -255,6 +255,15 @@ def test_las_instancias_caidas_salen_con_su_ultima_sincronizacion(conn, arr, ins
     assert vig.instancias_caidas(conn) == []
 
 
+def test_con_la_tarea_de_vigilancia_apagada_no_se_afirma_ninguna_caida(conn, arr, instancias, reloj, sincronizaciones):
+    vig.vigilar_instancias(conn)
+    instancias["radarr"] = False
+    vig.vigilar_instancias(conn)
+    assert vig.instancias_caidas(conn)
+    conn.execute("UPDATE scheduled_tasks SET enabled = 0 WHERE task_key = ?", (scheduler.TASK_INSTANCE_WATCH,))
+    assert vig.instancias_caidas(conn) == []
+
+
 def test_una_caida_con_otra_sincronizacion_en_marcha_no_se_da_por_caida(conn, arr, instancias, reloj, sincronizaciones):
     """La vigilancia aplaza la sincronización de la que vuelve si hay otra en marcha, pero la instancia responde."""
     vig.vigilar_instancias(conn)

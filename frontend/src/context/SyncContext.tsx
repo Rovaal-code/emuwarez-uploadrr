@@ -14,6 +14,7 @@ import { syncRequests, getSyncStatus, getRequestsSyncProgress, type RequestsSync
 import { suscribirse, canalVivo } from '../api/eventos'
 import type { RequestSyncStatusResponse } from '../types/api'
 import { formatNumero } from '../utils/format'
+import { ApiClientError } from '../api/client'
 import { pasosDeSincronizarTodo, type PasoSincronizacion } from '../utils/sincronizarTodo'
 
 // Global sync state, shared by every page (Dashboard / Biblioteca / Peticiones).
@@ -228,7 +229,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     emuSync(mode)
       .then(() => followCatalog())
       .catch((e: unknown) => {
-        showMessage(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez', true)
+        // El límite de 1 por hora (429) no es un fallo: «Sincronizar todo» sigue con lo demás.
+        showMessage(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez', !(e instanceof ApiClientError && e.status === 429))
         setCatalogProgress(null)
         setCatalogSyncing(false)
         catalogBusy.current = false

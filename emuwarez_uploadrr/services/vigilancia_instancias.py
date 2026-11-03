@@ -114,7 +114,10 @@ def instancias_caidas(conn: sqlite3.Connection) -> list[dict]:
     if not leer_ajuste(conn, "sincronizar_al_volver_instancia"):
         return []
     from .scheduler import TASK_INSTANCE_WATCH, get_scheduled_task
-    vigencia = timedelta(minutes=get_scheduled_task(conn, TASK_INSTANCE_WATCH)["interval_minutes"] * VIGENCIA_MIRADA_VUELTAS)
+    tarea = get_scheduled_task(conn, TASK_INSTANCE_WATCH)
+    if not tarea["enabled"]:
+        return []
+    vigencia = timedelta(minutes=tarea["interval_minutes"] * VIGENCIA_MIRADA_VUELTAS)
     caidas = []
     for instancia in list_instances(conn, enabled_only=True):
         mirada = _mirada.get(instancia.id)

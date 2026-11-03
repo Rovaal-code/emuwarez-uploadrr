@@ -75,8 +75,8 @@ def recompute_spanish_flags(conn: sqlite3.Connection, ignore_specials: Optional[
     from ..emu_format import has_castellano
 
     if ignore_specials is None:
-        from ...database import get_setting_canonical
-        ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
+        from ..settings import leer_ajuste
+        ignore_specials = leer_ajuste(conn, "series_ignore_specials")
     held = ",".join("?" * len(_HELD_STATUSES))
 
     # Read once, reused by all three flags.

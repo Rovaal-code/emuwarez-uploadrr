@@ -40,8 +40,8 @@ def _ignore_specials(conn) -> bool:
     are rarely on the tracker); only an explicit "false" turns it off."""
     if conn is None:
         return True
-    from ...database import get_setting_canonical
-    return (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
+    from ...services.settings import leer_ajuste
+    return leer_ajuste(conn, "series_ignore_specials")
 
 
 

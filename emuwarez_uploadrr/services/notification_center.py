@@ -15,7 +15,7 @@ import logging
 import sqlite3
 from typing import Optional
 
-from .settings import get_setting_canonical, get_setting_raw
+from .settings import get_setting_canonical, get_setting_raw, leer_ajuste
 from .notifications import send_discord, send_telegram
 from .eventos import EVENTO_NOTIFICACION, publicar
 
@@ -61,13 +61,13 @@ _ALL_EVENTS = set(EVENT_TYPES)
 # --- Channel preferences -----------------------------------------------------
 
 def _channel_enabled(conn: sqlite3.Connection, channel: str) -> bool:
-    return (get_setting_canonical(conn, f"notify.{channel}.enabled") or "") == "true"
+    return leer_ajuste(conn, f"notify_{channel}_enabled")
 
 
 def ui_enabled(conn: sqlite3.Connection) -> bool:
     """The in-app bell channel is ON by default (unlike Discord/Telegram, which
     must be opted into with credentials). Only an explicit "false" disables it."""
-    return (get_setting_canonical(conn, "notify.ui.enabled") or "true") != "false"
+    return leer_ajuste(conn, "notify_ui_enabled")
 
 
 def _ui_stores(conn: sqlite3.Connection, event_type: str) -> bool:

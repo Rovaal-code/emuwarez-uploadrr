@@ -7,6 +7,10 @@
 # la última versión se han fusionado al menos 3 PR de ramas feat/ o fix/ (aquí o en Uploadrr-EMU). Con «solo prueba» construye
 # :edge de la punta de master, sin tests, versión ni manifiesto.
 #
+# Con «ref» (un commit de master, una rama o una etiqueta) publica la versión de ESE commit: sin tests (la CI solo corre sobre
+# la punta), con la versión y su etiqueta en la rama release/vX.Y.Z en vez de en master (que ya avanzó; se fusiona después) y sin
+# mover :edge, que sigue siendo la punta de master. Si falla después de subir la versión, se reanuda con ref=release/vX.Y.Z.
+#
 # Necesita el secreto UPLOADRR_VERSION_TOKEN: un token con permiso de escritura
 # solo en Kisnov/uploadrr-version (GITHUB_TOKEN no puede escribir en otro repo).
 name: Publicar versión
@@ -27,6 +31,10 @@ on:
         description: "Solo construir :edge, sin tests, versión ni manifiesto"
         type: boolean
         default: false
+      ref:
+        description: "Publicar la versión de este commit en vez de la punta de master (sin tests; la versión va a release/vX.Y.Z)"
+        type: string
+        required: false
   schedule:
     - cron: "17 4 */2 * *"
 
@@ -46,19 +54,33 @@ jobs:
     outputs:
       accion: ${{ steps.d.outputs.accion }}
       escala: ${{ steps.d.outputs.escala }}
+      commit: ${{ steps.c.outputs.commit }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.ref }}
+      - id: c
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - id: d
         env:
           EVENTO: ${{ github.event_name }}
           ESCALA: ${{ inputs.escala || 'auto' }}
           PRUEBA: ${{ inputs.solo_prueba || false }}
+          REF: ${{ inputs.ref }}
           NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
           TOKEN: ${{ secrets.UPLOADRR_VERSION_TOKEN }}
         run: |
+          if [ "$PRUEBA" = true ] && [ -n "$REF" ]; then
+            echo "::error::solo_prueba y ref no se combinan: :edge es la punta de master."
+            exit 1
+          fi
+          # El flujo ejecuta los scripts del commit elegido: uno anterior a --solo-comprobar no sirve.
+          if [ -n "$REF" ] && ! grep -q -- '--solo-comprobar' scripts/publicar_version.py 2>/dev/null; then
+            echo "::error::El commit de ref es demasiado antiguo: su scripts/publicar_version.py no admite --solo-comprobar."
+            exit 1
+          fi
           if [ "$PRUEBA" = true ]; then
             echo "accion=prueba" >> "$GITHUB_OUTPUT"
             exit 0
@@ -99,7 +121,7 @@ jobs:
 
   tests:
     needs: decidir
-    if: needs.decidir.outputs.accion == 'publicar'
+    if: needs.decidir.outputs.accion == 'publicar' && inputs.ref == ''
     permissions:
       contents: read
     uses: ./.github/workflows/ci.yml  # zizmor: ignore[self-repository]
@@ -108,7 +130,7 @@ jobs:
     needs: [decidir, tests]
     if: >-
       !cancelled() &&
-      ((needs.decidir.outputs.accion == 'publicar' && needs.tests.result == 'success') ||
+      ((needs.decidir.outputs.accion == 'publicar' && (needs.tests.result == 'success' || (inputs.ref != '' && needs.tests.result == 'skipped'))) ||
        needs.decidir.outputs.accion == 'prueba')
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -117,10 +139,14 @@ jobs:
       packages: write
     env:
       ACCION: ${{ needs.decidir.outputs.accion }}
+      REF: ${{ inputs.ref }}
     steps:
-      # Con credenciales: este job sube a master el commit de la versión y su
+      # Con credenciales: este job sube a master (o a release/vX.Y.Z, con ref) el commit de la versión y su
       # etiqueta. .dockerignore excluye .git, así que no llegan a la imagen.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4  # zizmor: ignore[artipacked]
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref != '' && needs.decidir.outputs.commit || '' }}
 
       - id: version
         if: env.ACCION == 'publicar'
@@ -134,7 +160,13 @@ jobs:
           git fetch -q origin master
           # Re-ejecución de un intento que falló después de subir la versión: se completa esa, no otra, aunque
           # master ya haya avanzado. La versión es el primer commit de master sobre el que se lanzó este flujo.
-          subida="$(git log --first-parent --reverse --format='%H %P %s' "$GITHUB_SHA"..origin/master | head -n1 | grep -E "^[0-9a-f]{40} $GITHUB_SHA chore: versión " | cut -d' ' -f1)"
+          subida=""
+          if [ -z "$REF" ]; then
+            subida="$(git log --first-parent --reverse --format='%H %P %s' "$GITHUB_SHA"..origin/master | head -n1 | grep -E "^[0-9a-f]{40} $GITHUB_SHA chore: versión " | cut -d' ' -f1)"
+          elif git log -1 --format=%s | grep -q '^chore: versión '; then
+            # Reanudar una publicación con ref que falló tras subir la versión: ref=release/vX.Y.Z, que ya es la versión.
+            subida="$(git rev-parse HEAD)"
+          fi
           if [ -n "$subida" ]; then
             git checkout -q "$subida"
             echo "subida=true" >> "$GITHUB_OUTPUT"
@@ -202,7 +234,12 @@ jobs:
       - if: env.ACCION == 'publicar' && steps.version.outputs.subida != 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: git push --atomic origin HEAD:master "v$VERSION"
+        run: |
+          if [ -n "$REF" ]; then
+            git push --atomic origin "HEAD:refs/heads/release/v$VERSION" "v$VERSION"
+          else
+            git push --atomic origin HEAD:master "v$VERSION"
+          fi
 
       - id: etiquetas
         if: env.ACCION == 'publicar' && steps.version.outputs.hecha != 'true'
@@ -216,7 +253,9 @@ jobs:
           # y pudo salir una versión más nueva (p. ej. con desplegar.sh). Así :latest y :edge no vuelven atrás.
           python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
           imagen=ghcr.io/kisnov/emuwarez-uploadrr
-          docker buildx imagetools create --tag "$imagen:$VERSION" --tag "$imagen:latest" --tag "$imagen:edge" "$imagen:$COMMIT"
+          # Con ref no se mueve :edge: sigue siendo la punta de master.
+          edge=(--tag "$imagen:edge"); [ -z "$REF" ] || edge=()
+          docker buildx imagetools create --tag "$imagen:$VERSION" --tag "$imagen:latest" "${edge[@]}" "$imagen:$COMMIT"
           echo "digest=$(docker buildx imagetools inspect "$imagen:latest" --format '{{json .Manifest}}' | jq -r .digest)" >> "$GITHUB_OUTPUT"
 
       - if: env.ACCION == 'publicar' && steps.version.outputs.hecha != 'true'

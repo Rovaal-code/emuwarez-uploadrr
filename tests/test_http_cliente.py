@@ -260,6 +260,77 @@ def test_solo_seguras_corta_una_redireccion_a_http(http_falso):
     assert len(http_falso.peticiones) == 1
 
 
+def test_solo_seguras_sigue_una_redireccion_https_al_mismo_servidor(http_falso):
+    http_falso.responde(
+        respuesta(301, headers={"Location": "https://a.example/nueva?api_token=k"}),
+        respuesta(200, cuerpo=b"ok"),
+    )
+    r = http_cliente.pedir("GET", "https://a.example/x?api_token=k", timeout=5, solo_seguras=True)
+    assert r.content == b"ok"
+    assert http_falso.urls == ["https://a.example/x?api_token=k", "https://a.example/nueva?api_token=k"]
+
+
+@pytest.mark.parametrize("destino", [
+    "HTTPS://A.EXAMPLE/nueva",  # el nombre no distingue mayúsculas
+    "https://a.example:443/nueva",  # el puerto por defecto de https es el mismo que no ponerlo
+    "/nueva",  # relativa
+])
+def test_solo_seguras_normaliza_mayusculas_y_puerto_por_defecto(http_falso, destino):
+    http_falso.responde(respuesta(302, headers={"Location": destino}), respuesta(200))
+    http_cliente.pedir("GET", "https://a.example/x?api_token=k", timeout=5, solo_seguras=True)
+    assert len(http_falso.peticiones) == 2
+
+
+@pytest.mark.parametrize("destino,servidor", [
+    ("https://otro.example/x?api_token=k", "otro.example"),
+    ("https://www.a.example/x?api_token=k", "www.a.example"),  # www. es otro servidor
+    ("https://sub.a.example/x", "sub.a.example"),
+    ("https://a.example:8443/x?api_token=k", "a.example"),  # mismo nombre, otro puerto
+])
+def test_solo_seguras_corta_una_redireccion_a_otro_servidor_sin_pedirla(http_falso, destino, servidor):
+    http_falso.responde(respuesta(302, headers={"Location": destino}), respuesta(200))
+    with pytest.raises(http_cliente.ErrorConexion) as info:
+        http_cliente.pedir("GET", "https://a.example/x?api_token=CLAVESECRETA", timeout=5, solo_seguras=True)
+    assert len(http_falso.peticiones) == 1  # la segunda petición no llegó a salir
+    assert servidor in info.value.motivo and "otro servidor" in info.value.motivo
+    # Sin la URL ni la clave en el mensaje (la clave viaja en la query).
+    assert "api_token" not in info.value.motivo
+    assert "CLAVESECRETA" not in repr(info.value) and "/x" not in info.value.motivo
+
+
+def test_solo_seguras_no_enseña_la_clave_si_el_otro_servidor_la_pone_en_su_nombre(http_falso):
+    http_falso.responde(respuesta(302, headers={"Location": "https://CLAVESECRETA.malo.example/x"}), respuesta(200))
+    with pytest.raises(http_cliente.ErrorConexion) as info:
+        http_cliente.pedir("GET", "https://a.example/x?api_token=CLAVESECRETA", timeout=5, solo_seguras=True)
+    assert len(http_falso.peticiones) == 1
+    assert "CLAVESECRETA" not in info.value.motivo and "CLAVESECRETA" not in repr(info.value)
+    assert "***.malo.example" in info.value.motivo  # el resto del nombre sigue identificando el destino
+
+
+def test_solo_seguras_corta_el_salto_a_otro_servidor_en_medio_de_la_cadena(http_falso):
+    http_falso.responde(
+        respuesta(302, headers={"Location": "https://a.example/uno"}),
+        respuesta(302, headers={"Location": "https://malo.example/dos?api_token=k"}),
+        respuesta(200),
+    )
+    with pytest.raises(http_cliente.ErrorConexion, match="otro servidor"):
+        http_cliente.pedir("GET", "https://a.example/x?api_token=k", timeout=5, solo_seguras=True)
+    assert http_falso.urls == ["https://a.example/x?api_token=k", "https://a.example/uno"]
+
+
+def test_solo_seguras_corta_una_bajada_a_http_aunque_sea_el_mismo_nombre(http_falso):
+    http_falso.responde(respuesta(302, headers={"Location": "http://a.example/x?api_token=k"}), respuesta(200))
+    with pytest.raises(http_cliente.ErrorConexion, match="sin https"):
+        http_cliente.pedir("GET", "https://a.example/x?api_token=k", timeout=5, solo_seguras=True)
+    assert len(http_falso.peticiones) == 1
+
+
+def test_sin_solo_seguras_una_redireccion_a_otro_servidor_se_sigue(http_falso):
+    http_falso.responde(respuesta(302, headers={"Location": "https://otro.example/x"}), respuesta(200))
+    http_cliente.pedir("GET", "https://a.example/x", timeout=5)
+    assert len(http_falso.peticiones) == 2
+
+
 def test_solo_seguras_con_limite_se_niega_en_vez_de_fingir(http_falso):
     with pytest.raises(ValueError):
         http_cliente.pedir("GET", "https://a.example/x", timeout=5, solo_seguras=True, limite=100)

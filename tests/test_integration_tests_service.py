@@ -149,12 +149,25 @@ class TestEmuwarezConnection:
     def test_una_redireccion_a_https_se_sigue(self, http_falso):
         from tests.http_falso import respuesta
         http_falso.responde(
-            respuesta(301, headers={"Location": "https://www.emu-warez.com/api/torrents/filter?perPage=1"}),
+            respuesta(301, headers={"Location": "https://emu-warez.com/api/torrents/filter?perPage=1"}),
             respuesta(200),
         )
         result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com")
         assert result["ok"] is True
         assert len(http_falso.peticiones) == 2
+
+    def test_una_redireccion_a_otro_servidor_no_lleva_la_clave(self, http_falso):
+        from tests.http_falso import respuesta
+        http_falso.responde(
+            respuesta(301, headers={"Location": "https://www.emu-warez.com/api/torrents/filter?api_token=key123"}),
+            respuesta(200),
+        )
+        result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com")
+        assert result["ok"] is False
+        assert result["status"] == "connection_error"
+        assert "redirección a otro servidor (www.emu-warez.com)" in result["message"]
+        assert len(http_falso.peticiones) == 1  # no se pidió el otro servidor
+        assert "key123" not in str(result)
 
     def test_http_tampoco_se_admite_en_loopback(self, http_falso):
         result = svc_test_emu(api_key="key123", base_url="http://localhost:8080")

@@ -157,17 +157,33 @@ def _es_segura(url: str) -> bool:
     return urllib.parse.urlsplit(url).scheme == "https"
 
 
+def _mismo_servidor(a: httpx.URL, b: httpx.URL) -> bool:
+    """¿Las dos URL apuntan al mismo servidor? Esquema, nombre y puerto iguales, y nada más.
+
+    Es estricto a propósito: `www.x.com` no es `x.com`, otro puerto es otro servicio y un punto final
+    (`x.com.`) tampoco se unifica. httpx ya baja el nombre a minúsculas y deja el puerto en `None` cuando es el
+    del esquema (443 en https), así que `HTTPS://X.com:443/a` y `https://x.com/b` salen iguales. Quien necesite
+    seguir una redirección así (la URL guardada es el dominio pelado y el sitio manda a `www.`) corrige la URL."""
+    return a.scheme == b.scheme and a.host == b.host and a.port == b.port
+
+
 def _pedir_solo_seguras(usar: httpx.Client, metodo: str, url: str, cabeceras: dict[str, str],
                         contenido: Optional[bytes], timeout: float) -> httpx.Response:
-    """Sigue las redirecciones a mano para mirar el destino de cada salto antes de pedirlo."""
+    """Sigue las redirecciones a mano para mirar el destino de cada salto antes de pedirlo.
+
+    Cada salto debe ser https y del mismo servidor que la petición original: la clave viaja en la URL y un
+    destino ajeno la recibiría. Los mensajes llevan, como mucho, el nombre del servidor destino, nunca la URL."""
     respuesta = usar.request(metodo, url, headers=cabeceras, content=contenido,
                              timeout=httpx.Timeout(timeout), follow_redirects=False)
+    origen = respuesta.request.url
     for _ in range(_MAX_REDIRECCIONES):
         siguiente = respuesta.next_request
         if siguiente is None:
             return respuesta
         if not _es_segura(str(siguiente.url)):
             raise ErrorConexion("redirección a una dirección sin https")
+        if not _mismo_servidor(origen, siguiente.url):
+            raise ErrorConexion(f"redirección a otro servidor ({siguiente.url.host})")
         respuesta = usar.send(siguiente, follow_redirects=False)
     if respuesta.next_request is not None:
         raise ErrorConexion("demasiadas redirecciones")
@@ -194,9 +210,10 @@ def pedir(
     Lanza `ErrorHTTP` con un 4xx/5xx y `ErrorConexion` si no hay respuesta. Cualquier otra excepción (una URL mal
     formada, por ejemplo) sale tal cual. `en_sesion` es un cliente de `sesion()`, para que viajen sus cookies.
 
-    Con `solo_seguras` cada redirección se comprueba antes de seguirla y una que baje a `http://` corta con
-    `ErrorConexion`: la URL de la petición puede llevar una clave y no debe viajar en claro (tampoco hacia un proxy
-    del entorno, por eso no hay excepción para loopback)."""
+    Con `solo_seguras` cada redirección se comprueba antes de seguirla y corta con `ErrorConexion` una que baje a
+    `http://` o que vaya a otro servidor (otro nombre, otro puerto; ver `_mismo_servidor`): la URL de la petición
+    puede llevar una clave y no debe viajar en claro (tampoco hacia un proxy del entorno, por eso no hay excepción
+    para loopback) ni a un tercero."""
     if solo_seguras and limite is not None:
         # La lectura limitada sigue las redirecciones sin mirarlas: mejor negarse que fingir que protege.
         raise ValueError("solo_seguras no se puede combinar con limite")

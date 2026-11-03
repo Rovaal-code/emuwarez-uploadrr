@@ -187,6 +187,10 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - #161 (N16): `GET /api/widget` con cinco contadores para el widget `customapi` de Homepage y su propia clave de
     solo lectura (`X-Api-Key` o `Bearer`; la base solo guarda su hash). Se genera en Configuración y solo abre ese
     endpoint; sin clave responde 404. Ejemplo de `services.yaml` en `docs/DEPLOYMENT_DOCKER.md`.
+  - «Probar conexión» de eMuwarez ya no sigue una redirección a otro servidor aunque sea por `https` (la clave va en
+    la query): cada salto debe tener el mismo esquema, nombre y puerto que la petición original (el 443 de https
+    equivale a no ponerlo; `www.` y otro puerto cuentan como otro servidor). Si el sitio redirige el dominio pelado
+    a `www.`, el resultado dice «redirección a otro servidor (www…)» y hay que guardar esa URL en Configuración.
 
 ## Siguiente (oleada 3)
 
@@ -215,8 +219,6 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 
 ## Aplazado / ideas
 
-- La prueba de conexión de eMuwarez sigue una redirección a otro host por `https` llevando el `api_token` de la query
-  (solo corta las que bajan a `http://`). Si hiciera falta, comprobar también que el host de cada salto es el mismo.
 - Reanudar a mitad de Uploadrr-EMU (capturas, torrent, subida al tracker): hace falta que el subproceso diga qué
   pasos terminó y cambiar el contrato en los dos repositorios a la vez. Hoy un reintento reanuda solo en la verificación.
 - Límite de concurrencia compartido entre el CLI y el servidor (hoy cada proceso tiene el suyo, en memoria). Hace

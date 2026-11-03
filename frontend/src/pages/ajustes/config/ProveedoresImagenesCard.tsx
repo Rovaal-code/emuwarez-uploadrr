@@ -91,7 +91,7 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                 <a href={h.url} target="_blank" rel="noreferrer" title={`Abrir ${h.label}`}
                   onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}
                   className="aj-inline-flex">
-                  <Favicon domain={domainOf(h.url)} src={h.favicon} size={15} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={15} />} />
+                  <Favicon domain={domainOf(h.url)} size={15} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={15} />} />
                 </a>
                 <span className="aj-ellipsis-nowrap-13">{h.label}</span>
                 {isDefault && <span className="badge status-available">por defecto</span>}
@@ -234,7 +234,7 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                       {notConfigured.map(h => (
                         <button key={h.id} className="btn btn-ghost btn-sm aj-add-btn" type="button"
                           onClick={() => toggleImgHost(h.id)}>
-                          <Favicon domain={domainOf(h.url)} src={h.favicon} size={16} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na">API key</span>}
+                          <Favicon domain={domainOf(h.url)} size={16} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na">API key</span>}
                         </button>
                       ))}
                     </div>

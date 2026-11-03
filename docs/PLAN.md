@@ -63,6 +63,15 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `tmdb_id` (los episodios guardados antes de copiarles el de la serie, y las temporadas, que nunca lo tuvieron),
   `suggest_provider_for_item` usa el de la serie de la que cuelgan (`_tmdb_id_de_la_serie`, por `parent_id`) y pregunta
   a TMDb como serie. Un `tmdb_id` propio sigue ganando, y sin ninguno en la cadena no se sugiere nada.
+- **Iconos de los sitios, dentro del proyecto:** los de proveedores de imágenes y de vídeo, eMuwarez y las webs de las
+  fichas (TMDb, IMDb, TVDB, MAL, TVmaze) son ficheros en `frontend/src/assets/iconos/<dominio>.<ext>` (50 de 52 sitios; 240 KB),
+  y `Favicon` los pinta sin pedir nada fuera: antes cada navegador los pedía al sitio y a Google, y con un DNS que bloquea
+  esos nombres salían decenas de `ERR_NAME_NOT_RESOLVED` en Configuración. Los logos no cambian y la lista es cerrada, así
+  que no hace falta servidor (se probó y se descartó: ~600 líneas por unas imágenes). Para un proveedor nuevo: añadirlo a
+  su lista y correr `python scripts/descargar_iconos.py` (baja el que falta y avisa de lo que no encuentra);
+  `tests/test_iconos_frontend.py` falla si falta el icono de un sitio de las listas, si sobra uno, o si pesa más de 20 KB.
+  Sin icono, y por tanto con el de reserva de siempre: Crunchyroll y VRV. El campo `favicon` de `image_hosts` ya solo lo
+  usa el script.
 - **Oleada 3, subida por pasos (#127):** `_run_queued_job` es un bucle sobre `PASOS` (`upload_queue.py`): comprobar,
   nombre, preparar e iniciar, cada uno con su `stage` (que es su punto de cancelación), su fila de Fases y lo que
   deja en `_Trabajo` para el siguiente. Mismo comportamiento que antes; lo fijan

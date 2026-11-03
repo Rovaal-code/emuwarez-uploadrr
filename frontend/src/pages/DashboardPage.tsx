@@ -625,7 +625,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                 const imgIds = Array.from(new Set(['imgbox', ...(connSettings?.image_hosts_enabled ?? [])]))
                 for (const id of imgIds) {
                   const meta = connSettings?.image_hosts_available?.find(h => h.id === id)
-                  rows.push(<ConnRow key={`img-${id}`} icon={<Favicon domain={domainOf(meta?.url)} src={meta?.favicon} size={16} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={16} />} />}
+                  rows.push(<ConnRow key={`img-${id}`} icon={<Favicon domain={domainOf(meta?.url)} size={16} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={16} />} />}
                     label={meta?.label ?? id} href={meta?.url} />)
                 }
                 if (connSettings?.notify_discord_webhook_configured)

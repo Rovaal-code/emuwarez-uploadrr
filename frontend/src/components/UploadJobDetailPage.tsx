@@ -2,27 +2,19 @@ import { useState, useEffect, useRef } from 'react'
 import type { PasoSubida, UploadJob, UploadJobLog, UploadProgressPhase } from '../types/api'
 import { getUploadJobLogs } from '../api/uploads'
 import { aplicarLineas, ultimaSecuenciaDe } from '../utils/registroSubida'
-import { estadoDePaso, opcionesDeReintento } from '../utils/pasosSubida'
+import { estadoDePaso } from '../utils/pasosSubida'
 import { posterUrl } from '../utils/libraryItem'
-import { formatDate, formatDateTimeSeconds, parseServerDate } from '../utils/format'
+import { formatDate, parseServerDate } from '../utils/format'
+import { segundosDeFase } from '../utils/lineaDeTiempo'
 import { InfoIcon } from './InfoIcon'
-import { PeticionDeSubida } from './PeticionDeSubida'
 import { SeedingBloque } from './SaludSeeding'
 import type { SeedingEstado } from '../hooks/useSeeding'
-import { RellenarPeticion } from './RellenarPeticion'
-import { ExternalIdLink } from './ExternalIdLink'
-import { ServiceLabel } from './ServiceIcon'
-import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle, DetailTitleText,
-  StatusCardIcon, ClockCardIcon, UploadButtonIcon, LibraryButtonIcon, ExternalLinkButtonIcon, RetryButtonIcon, CancelButtonIcon, DeleteButtonIcon,
-  TypeValueIcon, CalendarValueIcon, ProgressValueIcon,
-  NomenclatureValueIcon, AudioCodecValueIcon, ChecksValueIcon, LogsValueIcon,
-} from './DetailCard'
+import { DetailPoster, DetailHero, DetailTitle, DetailTitleText } from './DetailCard'
+import { ResultadoSubida, type Consulta } from './detalle-subida/ResultadoSubida'
+import { DondeSeFueElTiempo } from './detalle-subida/DondeSeFueElTiempo'
 import { RemuxTable } from './asistente/RemuxTable'
 import { EpisodeAccordionRow } from './asistente/Capitulos'
-import {
-  UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo, progressCounter, formatElapsed, queuedWaitText, formatSecondsHM,
-} from '../utils/uploadStatus'
+import { formatSecondsHM } from '../utils/uploadStatus'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { IconoDesplegar, IconoTipo } from './Iconos'
 import { Modal } from './Modal'
@@ -61,18 +53,17 @@ function Panel({ title, live, loading, help, collapsible, defaultExpanded = fals
   const open = !collapsible || expanded
   return (
     <div className={fill ? 'dsub-panel dsub-panel-llena' : 'dsub-panel'}>
-      <div
-        onClick={collapsible ? () => setExpanded(e => !e) : undefined}
-        className={collapsible ? 'dsub-panel-titulo dsub-panel-clic' : 'dsub-panel-titulo'}
-      >
-        {collapsible && (
-          <IconoDesplegar abierto={open} size={12} />
-        )}
-        {title}
-        {help && <span onClick={e => e.stopPropagation()}><InfoIcon text={help} /></span>}
+      <h2 className="dsub-panel-titulo">
+        {collapsible ? (
+          <button type="button" className="dsub-panel-boton" aria-expanded={open} onClick={() => setExpanded(e => !e)}>
+            <IconoDesplegar abierto={open} size={12} />
+            {title}
+          </button>
+        ) : title}
+        {help && <InfoIcon text={help} />}
         {loading && <span className="spinner dsub-spinner-13" />}
         {live && <span className="dsub-en-directo">(en directo)</span>}
-      </div>
+      </h2>
       {open && (
         <div
           className={fill ? 'detail-card dsub-caja dsub-panel-llena' : 'detail-card dsub-caja'}
@@ -337,12 +328,8 @@ const DEFAULT_PHASES: UploadProgressPhase[] = [
 // it, a stuck "running" phase's duration keeps counting up from Date.now()
 // forever, long after the job itself has stopped.
 function formatPhaseDuration(startedAt?: string | null, finishedAt?: string | null, fallbackEnd?: string | null): string {
-  if (!startedAt) return '—'
-  const start = parseServerDate(startedAt).getTime()
-  const endSource = finishedAt ?? fallbackEnd
-  const end = endSource ? parseServerDate(endSource).getTime() : Date.now()
-  const secs = Math.max(0, Math.round((end - start) / 1000))
-  return formatSecondsHM(secs)
+  const secs = segundosDeFase(startedAt, finishedAt, fallbackEnd)
+  return secs == null ? '—' : formatSecondsHM(secs)
 }
 
 const JOB_TERMINAL_PHASE_STATUS: Record<string, string> = { failed: 'failed', cancelled: 'cancelled' }
@@ -468,37 +455,20 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   const isQueued = job.status === 'queued'
   const isPreparing = job.status === 'preparing'
   const isStaging = job.status === 'staging'
-  const canCancel = isRunning || isQueued || isStaging
-  // Mirrors the backend's delete_upload_job() gate exactly: only a terminal,
-  // dead-end job (never running/queued/staging, nothing left to interrupt).
-  const canDelete = job.status === 'failed' || job.status === 'cancelled'
-  // Which section is currently "working" — staging advances through its own
-  // sub-steps (stage: nomenclature -> remux -> checks) one snapshot at a
-  // time; once queued, "Progreso de la subida" covers everything else until
-  // the upload finishes (its own phase table already breaks that down).
-  const stagingLoadingNomenclature = isStaging && job.stage === 'nomenclature'
-  const stagingLoadingRemux = isStaging && job.stage === 'remux'
-  const stagingLoadingChecks = isStaging && job.stage === 'checks'
+  const completada = job.status === 'completed'
   const progressIsActive = isQueued || isPreparing || isRunning
-  // The Progreso field's own icon: a live spinner while genuinely doing
-  // something (staging included, unlike progressIsActive above which only
-  // covers the panel below it), the plain pulse icon once there's nothing
-  // left to show progress of.
-  const progressValueLoading = isStaging || isQueued || isPreparing || isRunning
 
-  // The 4 sections that used to be their own collapsible Panel below now
-  // live as mini-card fields in "Estado de la subida" (same visual pattern
-  // as Proveedor/Origen) — clicking one opens its content in a modal instead
-  // of expanding an accordion. "Progreso de la subida" stays its own
-  // always-expanded section (see the Panel usage further down, now with no
-  // `collapsible` prop at all).
+  // Nomenclatura, pistas, verificación y registro se abren en un modal desde el bloque de resultado.
   const [showNomenclatura, setShowNomenclatura] = useState(false)
   const [showRemux, setShowRemux] = useState(false)
   const [showChecks, setShowChecks] = useState(false)
   const [showActividad, setShowActividad] = useState(false)
-  const checksReady = job.checks_snapshot?.ready
-  const checksFailed = job.checks_snapshot != null && checksReady === false
-  const checksLabel = !job.checks_snapshot ? 'Pendiente' : checksReady ? 'OK' : 'Error'
+  const abrirConsulta = (c: Consulta) => {
+    if (c === 'nomenclatura') setShowNomenclatura(true)
+    else if (c === 'remux') setShowRemux(true)
+    else if (c === 'checks') setShowChecks(true)
+    else setShowActividad(true)
+  }
 
   // El registro solo se pide con «Actividad» abierta: las últimas líneas al abrir y luego solo las posteriores a la
   // última que se tiene (`sequence`). Antes se bajaba entero cada segundo de una subida, aunque nadie lo mirara.
@@ -564,42 +534,20 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   const progress = job.progress
   const mediaIcon = <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
 
+  const pasosDeSubida = !isStaging && job.pasos && job.pasos.length > 0 ? <PasosDeSubida pasos={job.pasos} /> : null
+  const fases = <PhasesSection phases={progress?.phases?.length ? progress.phases : DEFAULT_PHASES} globalPct={progress?.global_pct ?? 0} job={job} />
+
   return (
     <div className="dsub-pagina">
       <div className="dsub-cabecera">
       <DetailHero backdropUrl={job.backdrop_url}>
       <div className="dsub-barra-sup">
-        <div className="dsub-botones">
-          <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a Subidas</button>
-        </div>
-        <div className="dsub-botones dsub-botones-fijos">
-          {job.result_url && (
-            <a className="btn btn-primary btn-sm dsub-sin-subrayado" href={job.result_url} target="_blank" rel="noreferrer">
-              <ExternalLinkButtonIcon /> Ver en eMuwarez
-            </a>
-          )}
-          <RellenarPeticion job={job} />
-          {job.library_item_id != null && (
-            <button className="btn btn-primary btn-sm" onClick={() => onOpenLibraryItem?.(job.library_item_id!)}><LibraryButtonIcon /> Ver en Biblioteca</button>
-          )}
-          {job.status === 'ready' && <button className="btn btn-primary btn-sm" onClick={() => onStart(job)}><UploadButtonIcon /> Iniciar subida</button>}
-          {['failed', 'cancelled'].includes(job.status) && opcionesDeReintento(job).map((o, i) => (
-            <button key={o.etiqueta} className={`btn ${i === 0 ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              onClick={() => onRetry(job, o.desdeElPrincipio)}
-              title={o.desdeElPrincipio && i > 0
-                ? 'Vuelve a preparar los ficheros y a empezar Uploadrr, en vez de reutilizar lo que ya estaba hecho'
-                : o.ayuda}>
-              <RetryButtonIcon /> {o.etiqueta}
-            </button>
-          ))}
-          {canCancel && <button className="btn btn-danger btn-sm" onClick={() => onCancel(jobId)}><CancelButtonIcon /> Cancelar</button>}
-          {canDelete && <button className="btn btn-danger btn-sm" onClick={() => onDelete(job)}><DeleteButtonIcon /> Borrar</button>}
-        </div>
+        <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a Subidas</button>
       </div>
 
       <div className="dsub-titulo-caja">
         <DetailTitle>
-          <DetailTitleText title={job.display_title || job.title || `Job ${jobId}`} />
+          <h1 className="dsub-h1"><DetailTitleText title={job.display_title || job.title || `Job ${jobId}`} /></h1>
           {isRunning && <span className="dsub-en-vivo">● en vivo</span>}
         </DetailTitle>
       </div>
@@ -608,129 +556,33 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
         <DetailPoster url={job.poster_url ? posterUrl(job.poster_url, 'w500') : null} alt={job.title || `Job ${jobId}`} fallbackIcon={mediaIcon} />
 
         <div className="dsub-columna">
-          {retryError && (
-            <div className="dsub-error-reintento">
-              {retryError}
-            </div>
-          )}
-
-          {/* El alto sale de una constante de DetailCard: se queda en línea. */}
-          <div className="dsub-tarjetas" style={{ minHeight: DETAIL_CARD_HEIGHT }}>
-            <Card title="Estado de la subida" icon={<StatusCardIcon />}>
-              <FieldRow label="Estado"><span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>{statusLabel(job.status)}</span></FieldRow>
-              <FieldRow label="Tipo">
-                <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{UPLOAD_TYPE_LABEL[job.media_type ?? ''] ?? '—'}</span></ValueChip>
-              </FieldRow>
-              <FieldRow label="Origen">
-                {job.instance_type
-                  ? <ValueChip><ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={15} /></ValueChip>
-                  : <span className="muted">—</span>}
-              </FieldRow>
-              <FieldRow label="Petición"><PeticionDeSubida job={job} /></FieldRow>
-              {job.result_url && (
-                <FieldRow label="Torrent" help="La ficha del torrent en eMuwarez, con su número.">
-                  <ValueChip linkable>
-                    <ExternalIdLink id={job.result_torrent_id ? `#${job.result_torrent_id}` : 'Ver torrent'} href={job.result_url} label="eMuwarez" />
-                  </ValueChip>
-                </FieldRow>
-              )}
-              <FieldRow label="Nomenclatura" help="Los campos que componen el nombre final del torrent, del archivo y de su título interno.">
-                <ValueChip as="button" linkable onClick={() => setShowNomenclatura(true)} title="Ver nomenclatura">
-                  {stagingLoadingNomenclature
-                    ? <span className="spinner dsub-spinner-14" />
-                    : <ValueIcon><NomenclatureValueIcon /></ValueIcon>}
-                  <span className="txt">{job.nomenclature_snapshot ? 'Ver' : 'Pendiente'}</span>
-                </ValueChip>
-              </FieldRow>
-              <FieldRow label="Reordenación/Renombrado" help="Antes de subir se hace un remux para reordenar las pistas de audio y subtítulos y ponerles el nombre adecuado, siguiendo la prioridad de idioma: Español (Castellano) → Català → Inglés → el resto.">
-                <ValueChip as="button" linkable onClick={() => setShowRemux(true)} title="Ver reordenación de pistas">
-                  {stagingLoadingRemux
-                    ? <span className="spinner dsub-spinner-14" />
-                    : <ValueIcon><AudioCodecValueIcon /></ValueIcon>}
-                  <span className="txt">
-                    {job.remux_snapshot?.omitida ? `Omitida (${job.remux_snapshot.omitida})` : job.remux_snapshot ? 'Ver' : 'Pendiente'}
-                  </span>
-                </ValueChip>
-              </FieldRow>
-              <FieldRow label="Verificación pre-subida" help="Las comprobaciones que se hacen antes de subir: que el archivo se pueda renombrar o enlazar, que el directorio de salida sea escribible, y que qBittorrent, el repositorio de imágenes y eMuwarez estén disponibles. Si alguna falla (no las que se omiten), la subida no continúa.">
-                <ValueChip as="button" linkable blink={checksFailed ? 'alert' : undefined} onClick={() => setShowChecks(true)} title="Ver verificación pre-subida">
-                  {stagingLoadingChecks
-                    ? <span className="spinner dsub-spinner-14" />
-                    : <ValueIcon><ChecksValueIcon /></ValueIcon>}
-                  <span className="txt">{checksLabel}</span>
-                </ValueChip>
-              </FieldRow>
-              <FieldRow label="Actividad" help="El registro de lo que va haciendo la subida en tiempo real: si se ha cancelado, si ha dado error en alguna fase y por qué, o si se ha completado con éxito.">
-                <ValueChip as="button" linkable blink={isRunning ? 'live' : undefined} onClick={() => setShowActividad(true)} title="Ver registro de actividad">
-                  <ValueIcon><LogsValueIcon /></ValueIcon>
-                  <span className="txt">Ver Logs</span>
-                </ValueChip>
-              </FieldRow>
-            </Card>
-
-            <Card title="Tiempos" icon={<ClockCardIcon />}>
-              <FieldRow label="Progreso">
-                <ValueChip>
-                  {progressValueLoading
-                    ? <span className="spinner dsub-spinner-14" />
-                    : <ValueIcon><ProgressValueIcon /></ValueIcon>}
-                  <span className="txt">
-                    {isStaging
-                      ? 'Generando nomenclatura'
-                      : isQueued
-                      ? `En cola · ${queuedWaitText(job)}`
-                      : (job.status === 'preparing' || job.status === 'running')
-                      ? (() => {
-                          const info = currentPhaseInfo(job)
-                          const label = info?.label ?? phaseLabel(job.progress_phase)
-                          const counter = info?.counterText ? ` (${info.counterText})` : ''
-                          const elapsed = progressCounter(job)
-                          return `${label}${counter}${elapsed ? ` · ${elapsed}` : ''}`
-                        })()
-                      : '—'}
-                  </span>
-                </ValueChip>
-              </FieldRow>
-              <FieldRow label="Creado">
-                <ValueChip><ValueIcon><CalendarValueIcon /></ValueIcon><span className="txt">{formatDateTimeSeconds(job.created_at ?? null)}</span></ValueChip>
-              </FieldRow>
-              <FieldRow label="Finalizado">
-                <ValueChip><ValueIcon><CalendarValueIcon /></ValueIcon><span className="txt">{formatDateTimeSeconds(job.finished_at ?? null)}</span></ValueChip>
-              </FieldRow>
-              <FieldRow label="Duración">
-                <ValueChip><ValueIcon><ClockCardIcon /></ValueIcon><span className="txt">{formatElapsed(job)}</span></ValueChip>
-              </FieldRow>
-              <FieldRow label="Reintentos">
-                <ValueChip><ValueIcon><RetryButtonIcon /></ValueIcon><span className="txt">{(job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '—'}</span></ValueChip>
-              </FieldRow>
-            </Card>
-          </div>
+          <ResultadoSubida
+            job={job} seeding={seeding} retryError={retryError}
+            onStart={onStart} onRetry={onRetry} onCancel={onCancel} onDelete={onDelete}
+            onOpenLibraryItem={onOpenLibraryItem} onConsulta={abrirConsulta}
+          />
+          {completada ? <DondeSeFueElTiempo job={job} /> : pasosDeSubida}
         </div>
       </div>
       </DetailHero>
       </div>
 
-      {/* Only "Progreso de la subida" keeps its own always-expanded section —
-          no `collapsible` prop at all, same fixed pattern Temporadas/
-          Capítulos use in Biblioteca (LibraryChildrenSection). The other 4
-          (Nomenclatura, Reordenación/Renombrado, Verificación pre-subida,
-          Actividad) moved into "Estado de la subida" above as mini-card
-          fields — each opens its own modal below instead. */}
       <SeedingBloque job={job} seeding={seeding} />
 
-      <Panel
-        title="Progreso de la subida" loading={progressIsActive} fill
-        help="Cada fase por la que pasa la subida (comprobación de integridad, nomenclatura, remux, subida a eMuwarez…), con su estado, cuándo empezó y terminó, y el porcentaje global de la subida completa."
-      >
-        {isStaging ? (
-          <GeneratingSpinner text="Esperando a que termine la verificación previa…" />
-        ) : (
-          <>
-            {job.pasos && job.pasos.length > 0 && <PasosDeSubida pasos={job.pasos} />}
-            <PhasesSection phases={progress?.phases?.length ? progress.phases : DEFAULT_PHASES} globalPct={progress?.global_pct ?? 0} job={job} />
-          </>
-        )}
-      </Panel>
+      {completada ? (
+        // Terminada, las fases ya no son la noticia: quedan a un clic.
+        <Panel title="Ver todas las fases" collapsible>
+          {pasosDeSubida}
+          {fases}
+        </Panel>
+      ) : (
+        <Panel
+          title="Progreso de la subida" loading={progressIsActive} fill
+          help="Cada fase por la que pasa la subida (comprobación de integridad, nomenclatura, remux, subida a eMuwarez…), con su estado, cuándo empezó y terminó, y el porcentaje global de la subida completa."
+        >
+          {isStaging ? <GeneratingSpinner text="Esperando a que termine la verificación previa…" /> : fases}
+        </Panel>
+      )}
 
       {showNomenclatura && (
         <Modal titulo="Nomenclatura" onClose={() => setShowNomenclatura(false)} className="modal-wide dsub-modal-720">

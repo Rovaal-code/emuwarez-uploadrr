@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getDashboardSummary, getDashboardActivity, getDashboardRecommendations, type DashboardRecommendationItem } from '../api/dashboard'
 import { getUploads } from '../api/uploads'
-import { getRequests } from '../api/requests'
 import { fetchSettings, type SettingsData } from '../api/settings'
 import { getInstances } from '../api/instances'
 import type { InstanceSafeResponse } from '../types/api'
-import type { DashboardSummaryResponse, DashboardActivityResponse, RequestItemResponse, UploadJob } from '../types/api'
-import { CarrilPeticionesListas, CARRIL_LISTAS_MAX, LISTA_PARA_SUBIR } from '../components/CarrilPeticionesListas'
+import type { DashboardSummaryResponse, DashboardActivityResponse, UploadJob } from '../types/api'
 import { StatCard } from '../components/StatCard'
 import { SyncCard } from '../components/SyncCard'
 import { CuentaEmu } from '../components/CuentaEmu'
@@ -247,20 +245,16 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     onNavigate?.('uploads')
   }
 
-  // Una petición, en su ficha de Peticiones: la de una recomendación y la del
-  // carril de listas para subir, por el mismo camino que la campana.
-  const openRequest = (requestId: number) => {
-    try { sessionStorage.setItem('emuwarez_open_request', String(requestId)) } catch { /* ignore */ }
-    onNavigate?.('requests')
-  }
-
   // "Acción" column, group-specific: group 1 → open the existing request;
   // group 2 → open the upload wizard; group 3 → open the request form. Groups
   // 2 & 3 fetch the full library item first.
   const handleRecAction = async (item: DashboardRecommendationItem) => {
     const meta = REC_GROUP_META[item.rec_group] ?? REC_GROUP_META[2]
     if (meta.action === 'view-request') {
-      if (item.rec_request_id != null) openRequest(item.rec_request_id)
+      if (item.rec_request_id != null) {
+        try { sessionStorage.setItem('emuwarez_open_request', String(item.rec_request_id)) } catch { /* ignore */ }
+        onNavigate?.('requests')
+      }
       return
     }
     try {
@@ -290,21 +284,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // — the completion message itself is shown centrally in the topbar (see
   // SyncProgressBanner), not duplicated here.
   const { lastInvalidatedAt } = useSync()
-
-  // Carril «Peticiones listas para subir»: las de más recompensa primero (el
-  // orden y el tope, del servidor) y cuántas listas hay en total. Va con el
-  // resto del Panel (loadData: al terminar una sincronización, al volver a la
-  // pestaña y en la red de seguridad) y además cuando termina una subida. Con
-  // número de orden, como las subidas: una respuesta vieja no pisa una nueva.
-  const [carril, setCarril] = useState<{ items: RequestItemResponse[]; total: number }>({ items: [], total: 0 })
-  const carrilSeq = useRef(0)
-  const loadCarril = useCallback(async () => {
-    const seq = ++carrilSeq.current
-    try {
-      const r = await getRequests({ readiness: [LISTA_PARA_SUBIR], sort: 'points_desc', limit: CARRIL_LISTAS_MAX })
-      if (seq === carrilSeq.current) setCarril({ items: r.items, total: r.total })
-    } catch { /* se queda lo que había; la siguiente vuelta lo reintenta */ }
-  }, [])
 
   // Toda la respuesta, para sacar de ella las que han terminado hace poco.
   const [todasLasSubidas, setTodasLasSubidas] = useState<UploadJob[]>([])
@@ -342,10 +321,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       relojes.current.push(setTimeout(() => setDespidiendose(
         prev => prev.filter(d => d.job.id !== job.id)), ESPERA_MS + DESVANECER_MS))
     }
-    // Una subida que termina puede haber sido la de una petición del carril.
-    if (salieron.length) void loadCarril()
     return vivas
-  }, [loadCarril])
+  }, [])
 
   // Lo que se pinta: primero las vivas y detrás las que se van. En ese orden
   // porque al quitarse una no mueve de sitio a las de arriba.
@@ -395,8 +372,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       getDashboardSummary(),
       getDashboardActivity(),
       getDashboardRecommendations(recentLimit),
-      // A la vez que el resto, para que el carril salga en el mismo pintado.
-      loadCarril(),
     ])
     if (s.status === 'fulfilled') setSummary(s.value)
     else {
@@ -405,7 +380,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     if (a.status === 'fulfilled') setTaskActivity(a.value)
     if (la.status === 'fulfilled') setRecommendations(la.value.items)
     setLoadingData(false)
-  }, [loadActiveUploads, loadCarril])
+  }, [loadActiveUploads])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -463,10 +438,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         <CuentaEmu />
         <SyncCard />
       </div>
-
-      {/* Lo primero, porque es lo que se hace: qué petición lista para subir
-          paga más. Una sola fila; sin ninguna lista no ocupa nada. */}
-      <CarrilPeticionesListas items={carril.items} total={carril.total} onOpen={openRequest} />
 
       {/* Main grid — fills the remaining height exactly (flex:1, minHeight:0)
           so the page itself never scrolls; each panel below keeps its own

@@ -70,6 +70,10 @@ export interface DashboardSummaryResponse {
   radarr_items: number
   sonarr_items: number
   last_sync_at: string | null
+  // La próxima sincronización programada de la biblioteca (null si la tarea está apagada o aún sin hora).
+  next_sync_at: string | null
+  // Las instancias activas que la vigilancia no vio responder en su última mirada.
+  instancias_caidas?: { id: number; nombre: string; tipo: string; ultima_sincronizacion: string | null }[]
   // Phase 8B — request readiness (used by "Peticiones eMuwarez")
   requests_ready_to_upload?: number
   requests_need_nomenclature?: number
@@ -83,19 +87,6 @@ export interface DashboardSummaryResponse {
   requests_mine?: number
   requests_reclaimed?: number
   requests_last_sync_at?: string | null
-}
-
-export interface DashboardActivityItem {
-  id: number
-  name: string
-  status: string
-  started_at: string | null
-  finished_at: string | null
-  summary: string | null
-}
-
-export interface DashboardActivityResponse {
-  items: DashboardActivityItem[]
 }
 
 export interface InstanceSafeResponse {

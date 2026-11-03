@@ -137,28 +137,6 @@ def test_el_frontend_conoce_todas_las_fases_de_la_subida():
     )
 
 
-def test_toda_tarea_programada_tiene_nombre_en_espanol():
-    """El Panel enseña `task_runs.name`, que es la clave interna. Sin su
-    traducción sale en crudo ("check-version"), que fue justo lo que ocurrió al
-    añadir la comprobación de versión."""
-    from emuwarez_uploadrr.services.scheduler import DEFAULT_TASKS
-
-    fuente = _texto("pages/DashboardPage.tsx")
-    m = re.search(r"TASK_NAME_LABEL:\s*Record<string, string>\s*=\s*\{(.*?)\n\}", fuente, re.S)
-    assert m, "no se encontró TASK_NAME_LABEL"
-    traducidas = dict(re.findall(r"'([^']+)':\s*'([^']+)'", m.group(1)))
-
-    faltan = [clave for clave, *_ in DEFAULT_TASKS if clave not in traducidas]
-    assert not faltan, f"\nTareas que el Panel enseñaría con su clave interna: {faltan}"
-
-    # Y con el MISMO nombre que usa Ajustes -> Tareas programadas, para que no
-    # se llame de dos maneras según la pantalla.
-    distintas = [f"{clave}: Panel='{traducidas[clave]}' Tareas='{nombre}'"
-                 for clave, nombre, *_ in DEFAULT_TASKS
-                 if clave in traducidas and traducidas[clave] != nombre]
-    assert not distintas, "\n" + "\n".join(distintas)
-
-
 def test_las_fases_de_la_ficha_dicen_lo_mismo_que_el_backend():
     """DEFAULT_PHASES es el esqueleto que la ficha de una subida enseña ANTES
     de que haya progreso real, y es una copia literal de PHASES.

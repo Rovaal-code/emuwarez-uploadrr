@@ -60,7 +60,7 @@ export function EstadisticasPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Estadísticas</div>
-          <div className="page-subtitle">Cómo evoluciona tu cuenta de eMuwarez: una instantánea al día, que se guarda sola al leer tu perfil.</div>
+          <div className="page-subtitle">Tu biblioteca y tus peticiones, y cómo evoluciona tu cuenta de eMuwarez: una instantánea al día, que se guarda sola al leer tu perfil.</div>
         </div>
         <div className="est-rangos" role="group" aria-label="Rango de días">
           {RANGOS.map(r => (

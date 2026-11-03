@@ -1,9 +1,7 @@
-/* Panel (DashboardPage): estilos que antes iban en línea. Prefijo panel-.
-   Se importa el último en main.tsx. Las reglas que retocan una celda de
-   `.data-table`, un `.badge`, un `.spinner`, un `.poster-thumb` o un bloque
-   `.activity-section`/`.upload-panel` llevan el selector tan específico como
-   la regla base o más (`.data-table td`, `.hud-app .activity-section`...):
-   una clase suelta perdería contra ellas. */
+/* Hoy (DashboardPage y components/hoy/): estilos que antes iban en línea. Prefijo panel-.
+   Se importa el último en main.tsx. Las reglas que retocan un `.badge`, un `.spinner`, un `.poster-thumb` o un
+   bloque `.upload-panel` llevan el selector tan específico como la regla base o más
+   (`.hud-app .upload-panel`...): una clase suelta perdería contra ellas. */
 
 /* Página */
 .panel-pagina {
@@ -13,75 +11,119 @@
   overflow: hidden;
 }
 .page-header.panel-cabecera { flex-shrink: 0; }
-.dashboard-grid.panel-rejilla { flex: 1; min-height: 0; }
-.panel-columna {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-height: 0;
+.panel-error-accion {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--color-warning);
 }
-.activity-section.panel-bloque,
+
+/* Los tres carriles llenan el alto que sobra. `minmax(0, …)`: sin el 0, una columna no encoge por debajo de su
+   contenido y empuja fuera de la pantalla a la de al lado (el arreglo de #175). */
+.panel-carriles {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  margin-bottom: 20px;
+}
 .upload-panel.panel-bloque {
-  display: flex;
-  flex-direction: column;
   min-height: 0;
   margin-bottom: 0;
 }
-.activity-section.panel-bloque.panel-grande,
-.upload-panel.panel-bloque.panel-grande { flex: 2; }
-.activity-section.panel-bloque.panel-chico,
-.upload-panel.panel-bloque.panel-chico { flex: 1; }
-.panel-tabla-scroll { overflow: auto; flex: 1; }
-.panel-atenuado { color: var(--text-muted); }
+.panel-carril-nota {
+  flex-shrink: 0;
+  margin-left: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
 
-/* Recomendaciones */
-.panel-rec-titulo {
+/* Filas de los carriles */
+.panel-lista { list-style: none; margin: 0; padding: 0; }
+.panel-item,
+.panel-aviso {
+  display: flex;
+  gap: 10px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-item { align-items: center; }
+.panel-aviso { align-items: flex-start; }
+.panel-item-texto { flex: 1; min-width: 0; }
+.hover-link.panel-item-titulo {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.panel-item-spec {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.panel-item-accion {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
-.hover-link.panel-rec-nombre { font-weight: 500; min-width: 0; }
-.data-table td.panel-nowrap { white-space: nowrap; }
-/* Recompensa: con 6 px de relleno lateral (no 12) la tabla sigue cabiendo a 1440 px. */
-.data-table th.panel-recompensa,
-.data-table td.panel-recompensa {
-  padding-left: 6px;
-  padding-right: 6px;
-  white-space: nowrap;
+.panel-pie {
+  margin-top: auto;
+  padding: 12px 8px 6px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
-.badge.panel-cat-1,
-.badge.panel-cat-2,
-.badge.panel-cat-3 {
-  color: var(--panel-cat);
-  background: color-mix(in srgb, var(--panel-cat) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--panel-cat) 35%, transparent);
-}
-.badge.panel-cat-1 { --panel-cat: var(--color-available); }
-.badge.panel-cat-2 { --panel-cat: var(--color-uploading); }
-.badge.panel-cat-3 { --panel-cat: var(--color-error); }
-
-/* Últimas tareas ejecutadas */
-.data-table td.panel-tarea-resumen {
+.panel-mas summary {
+  padding: 12px 8px;
+  font-size: 12px;
   color: var(--text-secondary);
-  font-size: 12px;
-}
-.data-table td.panel-tarea-fecha {
-  color: var(--text-muted);
-  font-size: 12px;
-  white-space: nowrap;
+  cursor: pointer;
 }
 
-/* Actividad de subida */
-.panel-ver-todas {
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
+/* Necesita atención */
+.panel-punto {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
-.panel-sin-subidas {
-  font-size: 12px;
-  color: var(--text-muted);
-  padding: 10px 8px;
+.panel-punto-apagada { background: var(--color-neutral); }
+.panel-punto-mala { background: var(--color-error); }
+.panel-punto-aviso { background: var(--color-warning); }
+.panel-aviso-titulo { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.panel-aviso-accion { flex-shrink: 0; font-size: 12px; white-space: nowrap; }
+
+/* Franja de cinco números */
+.panel-franja {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 14px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
 }
+.panel-franja-cifra {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+}
+.panel-franja-cifra dt { font-size: 12px; color: var(--text-muted); }
+.panel-franja-cifra dd {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subidas en curso */
 .upload-row.panel-fila-saliendo {
   opacity: 0;
   pointer-events: none;
@@ -173,47 +215,7 @@
   flex-shrink: 0;
 }
 
-/* Conexiones */
-.panel-conexiones-cuerpo {
-  padding: 10px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-  flex: 1;
-}
-.panel-sin-conexiones { font-size: 12px; color: var(--text-muted); }
-.panel-conn-fila {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.panel-conn-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-.panel-conn-icono {
-  display: flex;
-  width: 18px;
-  justify-content: center;
-}
-.panel-conn-etiqueta {
-  flex: 1;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Tarjetas de cifras */
-.stat-cards-row.panel-cifras-fijas { flex-shrink: 0; }
-.panel-cifras-peticiones {
-  margin-bottom: 20px;
-  flex-shrink: 0;
-}
+/* Tarjetas de cifras (arriba de Estadísticas) */
 .panel-sub-lista {
   display: flex;
   flex-direction: column;

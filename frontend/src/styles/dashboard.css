@@ -1,25 +1,5 @@
 /* Dashboard-specific styles */
 
-.dashboard-grid {
-  display: grid;
-  /* Right column ("Actividad de subida") matches the width of a single
-     "Completadas" stat card: the stat rows above are 5 equal columns with a
-     16px gap, so one card is (100% - 4*16px) / 5. */
-  grid-template-columns: minmax(0, 1fr) calc((100% - 64px) / 5);
-  gap: 20px;
-}
-
-/* Below 1400px the stat rows collapse to 3 columns (see components.css),
-   so a single card becomes (100% - 2*16px) / 3 — keep the panel in step. */
-/* Antes esto era un @media (max-width: 1400px). Las media queries miran la
-   ventana REAL y el zoom del tamaño de interfaz no existe para ellas: al 150%
-   en una pantalla de 1920 el contenido solo dispone de 1280 y necesita la
-   disposición estrecha, pero la media query sigue viendo 1920 y no salta. El
-   corte lo decide ahora utils/uiScale.ts y lo publica como esta clase. */
-.ui-estrecha .dashboard-grid {
-  grid-template-columns: minmax(0, 1fr) calc((100% - 32px) / 3);
-}
-
 /* «Sincronizar todo»: el botón de la cabecera del Panel. */
 .sync-card {
   display: flex;

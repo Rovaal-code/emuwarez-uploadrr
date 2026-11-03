@@ -17,6 +17,7 @@ import time
 import psutil
 
 from ..constants import CONFIG_DIR
+from . import carpeta_subida
 
 _cpu_name_cache: str | None = None
 
@@ -338,6 +339,15 @@ def _resolve_library_disk_path(conn) -> str:
     return path
 
 
+def _ruta_disco(conn) -> str:
+    """Carpeta que mide el medidor de disco: la de subidas, donde van los
+    enlaces, las copias y los remux, no la raíz del contenedor ni la biblioteca.
+    Si todavía no existe, la ruta de siempre (la de la biblioteca)."""
+    if os.path.isdir(carpeta_subida.RAIZ_SUBIDAS):
+        return carpeta_subida.RAIZ_SUBIDAS
+    return _library_disk_path(conn)
+
+
 # Rough per-slot resource assumptions for "Subidas en paralelo" — there's no
 # in-repo profiling data for these, just informed estimates of how the heavy
 # tail of one queued upload (screenshots via ffmpeg frame extraction,
@@ -408,7 +418,7 @@ def get_system_stats(conn) -> dict:
     cgroup_cpu_percent = _cgroup_cpu_percent()
     cpu_percent = cgroup_cpu_percent if cgroup_cpu_percent is not None else host_cpu_percent
 
-    disk_path = _library_disk_path(conn)
+    disk_path = _ruta_disco(conn)
     try:
         du = shutil.disk_usage(disk_path)
         disk_total, disk_used = du.total, du.used

@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import threading
 import time
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from emuwarez_uploadrr.services import system_stats
@@ -42,6 +43,42 @@ def test_library_disk_path_falls_back_when_empty(isolated_db):
         init_db(conn)
         path = system_stats._library_disk_path(conn)
     assert path == str(CONFIG_DIR)
+
+
+def test_disco_mide_la_carpeta_de_subidas(isolated_db, tmp_path):
+    from emuwarez_uploadrr.database import connect, init_db, db_path
+    from emuwarez_uploadrr.services import carpeta_subida
+    with patch.object(carpeta_subida, "RAIZ_SUBIDAS", str(tmp_path)),          patch.object(system_stats, "_library_disk_path", side_effect=AssertionError("no debe mirar la biblioteca")),          patch("shutil.disk_usage", return_value=SimpleNamespace(total=1000 * 1024**3, used=250 * 1024**3, free=750 * 1024**3)) as du:
+        with connect(db_path()) as conn:
+            init_db(conn)
+            stats = system_stats.get_system_stats(conn)
+    du.assert_called_once_with(str(tmp_path))
+    assert stats["disk_path"] == str(tmp_path)
+    assert stats["disk_percent"] == 25.0
+    assert stats["disk_total_gb"] == 1000.0
+
+
+def test_disco_cae_a_la_ruta_de_antes_si_no_existe_la_carpeta_de_subidas(isolated_db, tmp_path):
+    from emuwarez_uploadrr.database import connect, init_db, db_path
+    from emuwarez_uploadrr.services import carpeta_subida
+    with patch.object(carpeta_subida, "RAIZ_SUBIDAS", str(tmp_path / "no-existe")),          patch.object(system_stats, "_library_disk_path", return_value=str(tmp_path)):
+        with connect(db_path()) as conn:
+            init_db(conn)
+            stats = system_stats.get_system_stats(conn)
+    assert stats["disk_path"] == str(tmp_path)
+    assert stats["disk_total_gb"] > 0
+
+
+def test_disco_si_falla_la_medida_no_rompe_el_estado(isolated_db, tmp_path):
+    from emuwarez_uploadrr.database import connect, init_db, db_path
+    from emuwarez_uploadrr.services import carpeta_subida
+    with patch.object(carpeta_subida, "RAIZ_SUBIDAS", str(tmp_path)),          patch("shutil.disk_usage", side_effect=OSError("sin acceso")):
+        with connect(db_path()) as conn:
+            init_db(conn)
+            stats = system_stats.get_system_stats(conn)
+    assert stats["disk_path"] == str(tmp_path)
+    assert stats["disk_total_gb"] == 0.0
+    assert stats["disk_percent"] == 0.0
 
 
 class _ExplodingConn:

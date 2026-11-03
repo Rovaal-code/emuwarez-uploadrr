@@ -396,85 +396,41 @@
 }
 
 /* ---- Sidebar System Status (CPU/RAM/disk/GPU/VRAM + network) ---- */
-/* Fills 100% of whatever room is left below the nav (no title, no
-   margin-top:auto gap) — every gauge gets an equal flex share of that
-   height, and its ring scales to fill its own share (capped by the
-   sidebar's width so it never grows wider than the column). */
+/* Medidas en una línea al pie de la barra; si no caben, bajan a otra fila. */
 .hud-app .sidebar-nav {
   flex: 0 0 auto;
 }
 .hud-app .sys-status {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 8px 14px 8px;
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding: 8px 12px;
   border-top: 1px solid color-mix(in srgb, var(--hud-blue) 35%, transparent);
 }
-.hud-app .sys-gauge-list {
-  flex: 1;
-  min-height: 0;
+.hud-app .sys-med-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 8px;
 }
-.hud-app .sys-gauge-row {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: default;
-}
-.hud-app .sys-gauge {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.hud-app .sys-gauge svg {
-  height: 80%;
-  width: auto;
-  max-width: 80%;
-  aspect-ratio: 1 / 1;
-}
-.hud-app .sys-gauge-track {
-  fill: none;
-  stroke: color-mix(in srgb, var(--hud-sky) 15%, transparent);
-  stroke-width: 8;
-}
-.hud-app .sys-gauge-fill {
-  fill: none;
-  stroke-width: 8;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 4px currentColor);
-  transition: stroke-dashoffset .4s ease;
-}
-.hud-app .sys-gauge-center {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-}
-.hud-app .sys-gauge-pct {
-  font-family: var(--hud-font);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--hud-ice);
-  line-height: 1;
-}
-.hud-app .sys-gauge-label {
+.hud-app .sys-med {
+  white-space: nowrap;
   font-family: var(--hud-font);
   font-size: 11px;
-  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
-  line-height: 1;
+  cursor: default;
+  border-radius: 3px;
+}
+.hud-app .sys-med:focus-visible {
+  outline: 1px solid var(--hud-cyan);
+  outline-offset: 2px;
+}
+.hud-app .sys-med-valor {
+  font-weight: 700;
+  color: var(--hud-ice);
 }
 .hud-app .sys-net-row {
   flex-shrink: 0;
@@ -499,19 +455,24 @@
   color: var(--hud-cyan);
 }
 
-/* Collapsed sidebar (icon-only nav, 64px wide): the gauges stay in the same
-   spot and order, just shrunk to fit — no horizontal room is wasted on
-   padding, and the percent/label text scales down with the ring instead of
-   disappearing (see Sidebar.tsx: SystemStatusPanel used to be skipped
-   entirely while collapsed). */
+/* Barra contraída: las medidas se apilan, con el nombre encima del valor. */
 .hud-app .sidebar.collapsed .sys-status {
   padding: 8px 4px;
 }
-.hud-app .sidebar.collapsed .sys-gauge-pct {
-  font-size: 9px;
+.hud-app .sidebar.collapsed .sys-med-lista {
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
-.hud-app .sidebar.collapsed .sys-gauge-label {
-  font-size: 6px;
+.hud-app .sidebar.collapsed .sys-med {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 9px;
+  line-height: 1.2;
+}
+.hud-app .sidebar.collapsed .sys-med-nombre {
+  font-size: 7px;
 }
 .hud-app .sys-net-row.collapsed {
   justify-content: center;

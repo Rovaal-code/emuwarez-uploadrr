@@ -4,8 +4,6 @@ import { formatBytes } from '../utils/format'
 import { Tooltip, useTooltip } from './Tooltip'
 
 const POLL_MS = 4000
-const RADIUS = 44
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
 // The backend already reports *_gb as a float — feeding it back through
 // formatBytes (which expects raw bytes) picks the right unit on its own
@@ -14,28 +12,19 @@ function formatGb(gb: number): string {
   return formatBytes(gb * 1024 ** 3)
 }
 
-function Gauge({ percent, label, color, title }: { percent: number; label: string; color: string; title?: string }) {
-  const clamped = Math.max(0, Math.min(100, percent))
-  const offset = CIRCUMFERENCE * (1 - clamped / 100)
-  const { triggerProps, tooltipNode } = useTooltip(title ?? null)
+// Sin dato (nulo o no finito) no se pinta un 0 %, que diría "vacío".
+function porcentaje(valor: number | null | undefined): string | null {
+  if (typeof valor !== 'number' || !Number.isFinite(valor)) return null
+  return `${Math.round(Math.max(0, Math.min(100, valor)))}%`
+}
+
+function Medida({ nombre, valor, detalle }: { nombre: string; valor: string | null; detalle: React.ReactNode }) {
+  const { triggerProps, tooltipNode } = useTooltip(detalle)
   return (
-    <div className="sys-gauge-row" {...triggerProps}>
-      <div className="sys-gauge">
-        <svg aria-hidden="true" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r={RADIUS} className="sys-gauge-track" />
-          <circle
-            cx="50" cy="50" r={RADIUS} className="sys-gauge-fill"
-            style={{ stroke: color, strokeDasharray: CIRCUMFERENCE, strokeDashoffset: offset }}
-            transform="rotate(-90 50 50)"
-          />
-        </svg>
-        <div className="sys-gauge-center">
-          <div className="sys-gauge-pct">{Math.round(clamped)}%</div>
-          <div className="sys-gauge-label">{label}</div>
-        </div>
-      </div>
+    <li className="sys-med" tabIndex={0} aria-label={`${nombre} ${valor ?? 'sin datos'}`} {...triggerProps}>
+      <span className="sys-med-nombre">{nombre}</span> <span className="sys-med-valor">{valor ?? '—'}</span>
       {tooltipNode}
-    </div>
+    </li>
   )
 }
 
@@ -72,6 +61,31 @@ function NetRow({ down, up, collapsed }: { down: number; up: number; collapsed: 
   )
 }
 
+// Una sola línea al pie de la barra: el valor de cada medida y, en su tooltip, el detalle.
+export function ResumenSistema({ stats, collapsed = false }: { stats: SystemStats; collapsed?: boolean }) {
+  const discoLeible = stats.disk_total_gb > 0
+  return (
+    <div data-tour="sidebar-gauges" className={`sys-status${collapsed ? ' collapsed' : ''}`}>
+      <ul className="sys-med-lista" aria-label="Uso de recursos">
+        <Medida nombre="CPU" valor={porcentaje(stats.cpu_percent)} detalle={stats.cpu_name || null} />
+        <Medida nombre="RAM" valor={porcentaje(stats.ram_percent)}
+          detalle={`${formatGb(stats.ram_used_gb)} / ${formatGb(stats.ram_total_gb)}`} />
+        <Medida nombre="Disco" valor={discoLeible ? porcentaje(stats.disk_percent) : null}
+          detalle={discoLeible ? (
+            <>
+              <div>{formatGb(stats.disk_used_gb)} / {formatGb(stats.disk_total_gb)}</div>
+              <div>{stats.disk_path}</div>
+            </>
+          ) : 'No se pudo medir el disco'} />
+        {stats.gpu && <Medida nombre="GPU" valor={porcentaje(stats.gpu.percent)} detalle={stats.gpu.name} />}
+        {stats.gpu && <Medida nombre="VRAM" valor={porcentaje(stats.gpu.vram_percent)}
+          detalle={`${formatGb(stats.gpu.vram_used_gb)} / ${formatGb(stats.gpu.vram_total_gb)}`} />}
+      </ul>
+      <NetRow down={stats.net_down_bps} up={stats.net_up_bps} collapsed={collapsed} />
+    </div>
+  )
+}
+
 export function SystemStatusPanel({ collapsed = false }: { collapsed?: boolean }) {
   const [stats, setStats] = useState<SystemStats | null>(null)
 
@@ -99,24 +113,5 @@ export function SystemStatusPanel({ collapsed = false }: { collapsed?: boolean }
   }, [])
 
   if (!stats) return null
-
-  return (
-    <div data-tour="sidebar-gauges" className={`sys-status${collapsed ? ' collapsed' : ''}`}>
-      <div className="sys-gauge-list">
-        <Gauge percent={stats.cpu_percent} label="CPU" color="var(--hud-cyan)" title={stats.cpu_name} />
-        <Gauge percent={stats.ram_percent} label="RAM" color="var(--hud-cyan)"
-          title={`${formatGb(stats.ram_used_gb)} / ${formatGb(stats.ram_total_gb)}`} />
-        <Gauge percent={stats.disk_percent} label="Disco" color="var(--hud-ice)"
-          title={`Biblioteca: ${formatGb(stats.disk_used_gb)} / ${formatGb(stats.disk_total_gb)}`} />
-        {stats.gpu && (
-          <>
-            <Gauge percent={stats.gpu.percent} label="GPU" color="var(--hud-cyan)" title={stats.gpu.name} />
-            <Gauge percent={stats.gpu.vram_percent} label="VRAM" color="var(--hud-ice)"
-              title={`${formatGb(stats.gpu.vram_used_gb)} / ${formatGb(stats.gpu.vram_total_gb)}`} />
-          </>
-        )}
-      </div>
-      <NetRow down={stats.net_down_bps} up={stats.net_up_bps} collapsed={collapsed} />
-    </div>
-  )
+  return <ResumenSistema stats={stats} collapsed={collapsed} />
 }

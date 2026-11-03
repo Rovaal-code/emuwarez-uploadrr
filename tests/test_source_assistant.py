@@ -280,6 +280,38 @@ def test_suggest_provider_sin_tmdb_en_ningun_nivel_sigue_sin_sugerir(tmp_path):
     tmdb.assert_not_called()
 
 
+def test_suggest_provider_con_un_padre_que_ya_no_existe_no_sugiere(tmp_path):
+    conn = _make_conn(tmp_path)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("INSERT INTO library_items (title, item_type, parent_id, local_status) VALUES ('Huérfano','episode',99999,'downloaded')")
+    conn.commit()
+    huerfano = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+    from emuwarez_uploadrr.services import source_assistant as sa
+    with patch.object(sa, "get_tmdb_available_providers", return_value=["NF"]) as tmdb:
+        result = sa.suggest_provider_for_item(huerfano, conn=conn)
+    assert result["reason"] == "Sin TMDb ID"
+    tmdb.assert_not_called()
+
+
+def test_suggest_provider_una_cadena_sin_ninguna_serie_no_sugiere(tmp_path):
+    """Episodio -> temporada -> temporada -> temporada: tres niveles y ninguno es una serie con id."""
+    conn = _make_conn(tmp_path)
+    def fila(tipo, tmdb, padre):
+        conn.execute("INSERT INTO library_items (title, item_type, tmdb_id, parent_id, local_status) VALUES ('x',?,?,?,'downloaded')",
+                     (tipo, tmdb, padre))
+        conn.commit()
+        return conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+    a = fila("season", "999", None)
+    b = fila("season", "999", a)
+    c = fila("season", "999", b)
+    episodio = fila("episode", None, c)
+    from emuwarez_uploadrr.services import source_assistant as sa
+    with patch.object(sa, "get_tmdb_available_providers", return_value=["NF"]) as tmdb:
+        result = sa.suggest_provider_for_item(episodio, conn=conn)
+    assert result["reason"] == "Sin TMDb ID"
+    tmdb.assert_not_called()
+
+
 def test_suggest_provider_una_pelicula_sin_tmdb_no_busca_padre(tmp_path):
     conn = _make_conn(tmp_path)
     item_id = _insert_library_item(conn, title="Peli", tmdb_id=None)

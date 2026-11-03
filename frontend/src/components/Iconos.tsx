@@ -100,6 +100,15 @@ export function IconoCampana(props: IconoProps) {
   return <Svg {...props}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></Svg>
 }
 
+/** La moneda dorada de los puntos de una petición (Peticiones y «Recompensa» del Panel); su color y tamaño van en `.iconos-puntos`. */
+export function IconoPuntos() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="iconos-puntos">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 15.09V18h-2v-.91c-1.28-.26-2.34-1.06-2.41-2.35h1.47c.07.67.55 1.19 1.94 1.19 1.49 0 1.82-.75 1.82-1.21 0-.63-.33-1.22-2.01-1.62-1.87-.45-3.15-1.22-3.15-2.76 0-1.29 1.05-2.13 2.34-2.41V7h2v.92c1.39.34 2.09 1.4 2.13 2.55h-1.47c-.04-.71-.42-1.19-1.65-1.19-1.17 0-1.87.53-1.87 1.28 0 .66.51 1.09 2.01 1.48s3.15 1.04 3.15 2.9c-.01 1.37-1.04 2.12-2.34 2.35z" />
+    </svg>
+  )
+}
+
 /** El orden de una columna: un triángulo hacia arriba o hacia abajo, centrado como el ▼ de los filtros, o los dos si no ordena por ella. */
 export function IconoOrden({ sentido, ...props }: IconoProps & { sentido: 'asc' | 'desc' | null }) {
   const forma = sentido === 'asc' ? 'M12 8 19 16H5z' : sentido === 'desc' ? 'M12 16 5 8h14z' : 'M12 3 19 11H5zM12 21 5 13h14z'

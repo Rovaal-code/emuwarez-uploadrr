@@ -23,6 +23,8 @@ export interface DashboardRecommendationItem {
   title_slug: string | null
   missing_count: number | null
   rec_request_id: number | null
+  // La recompensa de la petición (grupo 1); null en los grupos 2 y 3 o si eMuwarez no la dice.
+  rec_points: number | null
 }
 
 export async function getDashboardRecommendations(limit = 60): Promise<{ items: DashboardRecommendationItem[] }> {

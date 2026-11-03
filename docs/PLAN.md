@@ -158,15 +158,21 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   y salta a una sección o abre la ficha de una película o serie de la Biblioteca (`/library/:id`, por el mismo camino
   que la campana, con la pregunta de «cambios sin guardar»). Flechas, Intro y Escape. Lógica pura en `utils/paleta.ts`.
   Busca solo el nivel de arriba (películas y series), con 8 resultados como máximo.
-- **Oleada 4, carril de «listas» por recompensa:** el Panel abre, encima de la cuadrícula, con «Peticiones listas para
-  subir»: una fila con las cinco (tres con la interfaz estrecha) de más recompensa, en una línea cada una (título con
-  año o temporada y puntos), y cuántas listas hay. Cada una es un botón que abre su ficha en Peticiones, como la
-  campana. Sin ninguna lista no se pinta. Los datos salen de `GET /api/requests?readiness=ready_to_upload&sort=points_desc`
-  (filtro `readiness` nuevo sobre la preparación ya guardada, el mismo criterio de la lista y del aviso
-  `request_new_ready`) y se recargan con el resto del Panel y al terminar una subida. Sin «Ver todas»: Peticiones
-  no deja fijar el orden ni filtrar por preparación desde fuera. Visto en el navegador con datos de prueba a 1440 y
-  1280 px. A 1280×800 la cuadrícula ya iba justa (las cifras van de tres en tres) y el carril le quita unos 115 px
-  a Recomendaciones.
+- **Oleada 4, Recomendaciones por recompensa:** en el Panel, el grupo 1 de Recomendaciones (cada petición de eMuwarez
+  con una coincidencia *Compatible*) va ordenado por recompensa: la que más paga primero, las que no dicen puntos al
+  final y, a igual recompensa, la más nueva delante (el orden de «Puntos / recompensa» en Peticiones). La tabla tiene
+  una columna «Recompensa» (la moneda de Peticiones y los puntos; «—» en una petición sin puntos y en los grupos 2 y 3,
+  que no son peticiones); la API la da como `rec_points`. Además deja fuera las peticiones cuya copia no tiene
+  castellano (preparación guardada `no_castellano`, la misma de Peticiones y del aviso): eMuwarez las rechazaría. Una
+  que aún no se ha evaluado (`NULL`) sigue saliendo. Los grupos 2 y 3 no cambian. Sustituye al carril «Peticiones
+  listas para subir» que se puso encima de la cuadrícula: solo enseñaba las `ready_to_upload`, un estado mucho más
+  estricto que «Compatible», así que en la práctica salía vacío y repetía Recomendaciones. Se quitó con su filtro
+  `readiness` de `GET /api/requests`. Visto en el navegador con datos de prueba: a 1440×900 cabe (la columna lleva
+  6 px de relleno lateral para no empujar fuera «Actividad de subida») y el título pasa de unos 240 a 153 px, así que
+  los largos van en dos o tres líneas. A 1280×800 (modo estrecho) la cuadrícula ya se salía por la derecha desde antes:
+  la primera columna era `1fr` y no podía encoger por debajo de la tabla (~900 px), así que «Actividad de subida» quedaba
+  cortada. Con `minmax(0, 1fr)` en `.dashboard-grid` (y su variante `.ui-estrecha`) la columna encoge, la tabla se desplaza
+  dentro de su panel y la columna derecha se ve entera.
 - **Pendientes pequeños de la oleada 4:** el build usa `build.rolldownOptions.output.codeSplitting` (el chunk `react` sale igual)
   en vez del `manualChunks` obsoleto; y una selección vacía de eventos guardada (`notify.<canal>.events` = "") ya
   no se lee como «sin configurar»: ese canal no recibe ningún evento (`channel_events` lee la clave tal cual).

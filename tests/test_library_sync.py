@@ -908,6 +908,87 @@ def test_unique_content_lists_seasons_not_whole_series(mem_conn):
     assert "Whole Show - Temporada 2" in unique_titles
 
 
+def _peticion_compatible(conn, titulo: str, *, puntos, creada: str, preparacion, has_spanish_ok,
+                         alcance: str | None = None, temporada: int | None = None) -> int:
+    """Una petición de eMuwarez cuya mejor coincidencia es Compatible con su propia fila de la biblioteca (una
+    película, o una serie con su temporada si `alcance` es 'season'), con la recompensa, la fecha y la preparación
+    guardada que se pidan. `has_spanish_ok` va en la fila que pide la petición, como la lee request_readiness."""
+    if alcance == "season":
+        conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog) "
+                     "VALUES (?, 'series', 'Disponible', 0)", (titulo,))
+        lib_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+                     "season_number, has_spanish_ok) VALUES (?, 'season', 'Disponible', 0, ?, ?, ?)",
+                     (f"{titulo} - Temporada {temporada}", lib_id, temporada, has_spanish_ok))
+    else:
+        conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok) "
+                     "VALUES (?, 'movie', 'Disponible', 0, ?)", (titulo, has_spanish_ok))
+        lib_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO request_items (emu_id, title, points, created_at, readiness_status, req_scope, req_season) "
+                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                 (f"rec-{titulo}", titulo, puntos, creada, preparacion, alcance, temporada))
+    req_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO request_matches (library_item_id, request_item_id, status, confidence) "
+                 "VALUES (?, ?, 'Compatible', 1.0)", (lib_id, req_id))
+    return req_id
+
+
+def test_peticiones_compatibles_por_recompensa_y_sin_las_de_sin_castellano(mem_conn):
+    """Recomendaciones, grupo 1: la petición que más paga primero (points de mayor a menor), las que no dicen
+    recompensa al final y, a igual recompensa, la más nueva delante; la recompensa sale en cada fila (rec_points).
+    Sin las que su copia no tiene castellano (la preparación guardada es no_castellano: eMuwarez la rechazaría);
+    una que aún no se ha evaluado (readiness NULL) o cuyo castellano no se ha leído se queda. Los grupos 2 y 3 siguen
+    detrás, en su orden de siempre (lo más nuevo primero), aunque sean más nuevos que las peticiones."""
+    import json
+    from emuwarez_uploadrr.services.library import get_dashboard_recommendations
+
+    ids = {
+        "Sin puntos": _peticion_compatible(mem_conn, "Sin puntos", puntos=None, creada="2026-10-05",
+                                           preparacion="ready_to_upload", has_spanish_ok=1),
+        "Poca": _peticion_compatible(mem_conn, "Poca", puntos=100, creada="2026-10-04",
+                                     preparacion="needs_nomenclature", has_spanish_ok=1),
+        "Mucha vieja": _peticion_compatible(mem_conn, "Mucha vieja", puntos=5000, creada="2026-10-01",
+                                            preparacion="preflight_needed", has_spanish_ok=1),
+        "Mucha nueva": _peticion_compatible(mem_conn, "Mucha nueva", puntos=5000, creada="2026-10-03",
+                                            preparacion="ready_to_upload", has_spanish_ok=1),
+        # Sin evaluar todavía y sin castellano leído: no se sabe, así que se queda.
+        "Sin evaluar": _peticion_compatible(mem_conn, "Sin evaluar", puntos=800, creada="2026-10-02",
+                                            preparacion=None, has_spanish_ok=None),
+        # La temporada pedida, con su castellano y su recompensa.
+        "Serie": _peticion_compatible(mem_conn, "Serie", puntos=3000, creada="2026-10-02",
+                                      preparacion="ready_to_upload", has_spanish_ok=1, alcance="season", temporada=2),
+    }
+    # La que más paga, pero sin castellano: fuera, sea película o temporada.
+    _peticion_compatible(mem_conn, "Rica sin castellano", puntos=99999, creada="2026-10-06",
+                         preparacion="no_castellano", has_spanish_ok=0)
+    _peticion_compatible(mem_conn, "Serie sin castellano", puntos=88888, creada="2026-10-06",
+                         preparacion="no_castellano", has_spanish_ok=0, alcance="season", temporada=1)
+    # Grupo 2 (único, con castellano) y grupo 3 (faltante), más nuevos que cualquier petición.
+    mem_conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok, "
+                     "raw_json) VALUES ('Unica', 'movie', 'Disponible', 0, 1, ?)",
+                     (json.dumps({"added": "2027-01-01T00:00:00Z"}),))
+    mem_conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, raw_json) "
+                     "VALUES ('Falta', 'movie', 'Faltante', 0, ?)",
+                     (json.dumps({"monitored": True, "status": "released", "added": "2027-01-02T00:00:00Z"}),))
+    mem_conn.commit()
+
+    recs = get_dashboard_recommendations(mem_conn)
+    orden = ["Mucha nueva", "Mucha vieja", "Serie", "Sin evaluar", "Poca", "Sin puntos"]
+    assert [(r["rec_group"], r["rec_request_id"], r["rec_points"]) for r in recs] == [
+        (1, ids["Mucha nueva"], 5000), (1, ids["Mucha vieja"], 5000), (1, ids["Serie"], 3000),
+        (1, ids["Sin evaluar"], 800), (1, ids["Poca"], 100), (1, ids["Sin puntos"], None),
+        (2, None, None), (3, None, None),
+    ]
+    assert [r["title"] for r in recs] == orden + ["Unica", "Falta"]
+    # La temporada pedida sigue con su nombre y su tipo.
+    serie = recs[orden.index("Serie")]
+    assert serie["item_type"] == "season" and serie["season_number"] == 2
+    assert serie["content_name"].endswith("Temporada 2")
+
+    # El tope corta por el final: lo primero son siempre las peticiones que más pagan.
+    assert [r["title"] for r in get_dashboard_recommendations(mem_conn, limit=3)] == orden[:3]
+
+
 def test_dashboard_summary_unique_seasons_excludes_inconsistent(mem_conn):
     """Regression: the Panel's "Contenido único" stat card counted a season
     as soon as it was local_status=Disponible and emu_in_catalog=0, with no

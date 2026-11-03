@@ -866,12 +866,10 @@ def list_request_items(
     instance_id: Sequence[int] = (),
     emu_status: Optional[str] = None,
     sort: Optional[str] = None,
-    readiness: Sequence[str] = (),
 ) -> dict:
     """Return paginated request items enriched with best match info.
 
-    Cada filtro de columna admite varios valores (OR); las columnas entre sí, con AND. `readiness` filtra por la
-    preparación que ya guardó request_readiness (`ready_to_upload`…): el carril «listas para subir» del Panel."""
+    Cada filtro de columna admite varios valores (OR); las columnas entre sí, con AND."""
     where_clauses: list[str] = []
     params: list = []
 
@@ -935,7 +933,6 @@ def list_request_items(
         en("ri.author", author)
         where_clauses.append("ri.author_visible = 1")
     en("li.instance_id", instance_id)
-    en("ri.readiness_status", readiness)
     if emu_status == "filled":
         where_clauses.append(f"LOWER(COALESCE(ri.emu_status,'')) IN ({','.join('?' * len(_FILLED_STATUSES))})")
         params.extend(_FILLED_STATUSES)

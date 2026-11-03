@@ -119,7 +119,6 @@ def list_requests(
     instance_id: list[int] = Query([]),
     emu_status: str | None = Query(None),
     sort: str | None = Query(None),
-    readiness: list[str] = Query([]),
     limit: int = Query(50, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     current_user: dict = Depends(require_auth),
@@ -132,7 +131,6 @@ def list_requests(
             conn, limit=limit, offset=offset, search=search, status=status,
             category=category, resolution=resolution, source=source,
             author=author, instance_id=instance_id, emu_status=emu_status, sort=sort,
-            readiness=readiness,
         )
     return RequestListResponse(
         items=[_row_to_item(r, my_username) for r in result["items"]],

@@ -16,8 +16,6 @@ export interface RequestsFilter {
   author?: string[]
   instance_id?: number[]
   emu_status?: string
-  // La preparación ya calculada (`ready_to_upload`…): el carril del Panel.
-  readiness?: string[]
   sort?: string
   limit?: number
   offset?: number
@@ -33,7 +31,6 @@ export async function getRequests(filter?: RequestsFilter): Promise<RequestListR
   filter?.author?.forEach(v => q.append('author', v))
   filter?.instance_id?.forEach(v => q.append('instance_id', String(v)))
   if (filter?.emu_status) q.set('emu_status', filter.emu_status)
-  filter?.readiness?.forEach(v => q.append('readiness', v))
   if (filter?.sort) q.set('sort', filter.sort)
   if (filter?.limit !== undefined) q.set('limit', String(filter.limit))
   if (filter?.offset !== undefined) q.set('offset', String(filter.offset))

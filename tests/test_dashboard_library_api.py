@@ -252,6 +252,30 @@ def test_dashboard_summary_requests_mine_counts_only_visible_matching_author(cli
     assert resp.json()["requests_mine"] == 1
 
 
+def test_dashboard_recommendations_expose_request_reward(client, auth_headers):
+    """Recomendaciones lleva la recompensa de la petición compatible (rec_points), junto a rec_request_id; las filas
+    que no son una petición, sin ella."""
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    conn = connect(db_path())
+    init_db(conn)
+    conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok) "
+                 "VALUES ('Pedida', 'movie', 'Disponible', 0, 1)")
+    lib_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO request_items (emu_id, title, points) VALUES ('r1', 'Pedida', 2500)")
+    req_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO request_matches (library_item_id, request_item_id, status, confidence) "
+                 "VALUES (?, ?, 'Compatible', 1.0)", (lib_id, req_id))
+    conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok, "
+                 "resolution, source) VALUES ('Unica', 'movie', 'Disponible', 0, 1, '1080p', 'WEB-DL')")
+    conn.commit()
+    conn.close()
+
+    resp = client.get("/api/dashboard/recommendations", headers=auth_headers)
+    assert resp.status_code == 200
+    filas = [(i["title"], i["rec_group"], i["rec_request_id"], i["rec_points"]) for i in resp.json()["items"]]
+    assert filas == [("Pedida", 1, req_id, 2500), ("Unica", 2, None, None)]
+
+
 def test_dashboard_summary_requests_reclaimed_is_not_author_filtered(client, auth_headers):
     """eMuwarez doesn't expose whether a claim is yours — requests_reclaimed
     counts every Reclamado request regardless of author, even with no

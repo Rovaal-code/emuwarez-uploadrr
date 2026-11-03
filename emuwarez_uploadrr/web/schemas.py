@@ -523,6 +523,8 @@ class DashboardRecommendationItem(BaseModel):
     title_slug: Optional[str] = None
     missing_count: Optional[int] = None
     rec_request_id: Optional[int] = None
+    # La recompensa (points) de la petición del grupo 1; None en los grupos 2 y 3 o si eMuwarez no la dice.
+    rec_points: Optional[int] = None
 
 
 class DashboardRecommendationsResponse(BaseModel):

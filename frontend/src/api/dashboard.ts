@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { DashboardSummaryResponse, DashboardActivityResponse, EmuPerfil } from '../types/api'
+import type { DashboardSummaryResponse, EmuPerfil } from '../types/api'
 
 // Phase 11G — dashboard "Recomendaciones": actionable content in three ranked
 // groups (1 compatible request · 2 unique/upload · 3 missing/request).
@@ -25,6 +25,11 @@ export interface DashboardRecommendationItem {
   rec_request_id: number | null
   // La recompensa de la petición (grupo 1); null en los grupos 2 y 3 o si eMuwarez no la dice.
   rec_points: number | null
+  // Solo grupo 1: la fila a la que se refiere la petición (la temporada o el capítulo, no la serie que cruzó el
+  // emparejador) y su castellano; resolution/source ya son los de esa fila.
+  library_target_id?: number | null
+  has_spanish_audio?: number | null
+  has_spanish_subs?: number | null
 }
 
 export async function getDashboardRecommendations(limit = 60): Promise<{ items: DashboardRecommendationItem[] }> {
@@ -33,10 +38,6 @@ export async function getDashboardRecommendations(limit = 60): Promise<{ items: 
 
 export async function getDashboardSummary(): Promise<DashboardSummaryResponse> {
   return api.get<DashboardSummaryResponse>('/dashboard/summary')
-}
-
-export async function getDashboardActivity(): Promise<DashboardActivityResponse> {
-  return api.get<DashboardActivityResponse>('/dashboard/activity')
 }
 
 export async function getEmuPerfil(): Promise<EmuPerfil> {

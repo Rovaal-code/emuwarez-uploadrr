@@ -439,6 +439,13 @@ class SyncResponse(BaseModel):
 # Dashboard
 # ---------------------------------------------------------------------------
 
+class InstanciaCaida(BaseModel):
+    id: int
+    nombre: str
+    tipo: str
+    ultima_sincronizacion: Optional[str] = None  # la última vez que la sincronización vio algo de ella
+
+
 class DashboardSummaryResponse(BaseModel):
     library_total: int = 0
     available: int = 0
@@ -452,6 +459,10 @@ class DashboardSummaryResponse(BaseModel):
     radarr_items: int = 0
     sonarr_items: int = 0
     last_sync_at: Optional[str] = None
+    # Cuándo toca la próxima sincronización programada de la biblioteca (None si la tarea está apagada).
+    next_sync_at: Optional[str] = None
+    # Las instancias activas que la vigilancia no vio responder en su última mirada.
+    instancias_caidas: list[InstanciaCaida] = []
     # Phase 5B — EMU request stats (optional, default 0 if not yet synced)
     requests_total: int = 0
     requests_compatible: int = 0
@@ -525,6 +536,11 @@ class DashboardRecommendationItem(BaseModel):
     rec_request_id: Optional[int] = None
     # La recompensa (points) de la petición del grupo 1; None en los grupos 2 y 3 o si eMuwarez no la dice.
     rec_points: Optional[int] = None
+    # Solo grupo 1: la fila de la biblioteca a la que se refiere la petición (la temporada o el capítulo, no la
+    # serie que cruzó el emparejador) y sus flags de castellano; resolution/source ya son los de esa fila.
+    library_target_id: Optional[int] = None
+    has_spanish_audio: Optional[int] = None
+    has_spanish_subs: Optional[int] = None
 
 
 class DashboardRecommendationsResponse(BaseModel):

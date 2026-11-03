@@ -7,21 +7,35 @@ import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/estadisticas', () => ({ getEstadisticasCuenta: vi.fn() }))
+vi.mock('../../api/dashboard', () => ({ getDashboardSummary: vi.fn() }))
 
+import { getDashboardSummary } from '../../api/dashboard'
 import { getEstadisticasCuenta } from '../../api/estadisticas'
 import { SeccionVisible } from '../../context/SeccionVisible'
 import { SyncContext } from '../../context/SyncContext'
-import type { PuntoCuenta } from '../../types/api'
+import type { DashboardSummaryResponse, PuntoCuenta } from '../../types/api'
 import { boton, desmontar, esperar, montar, pulsar, texto } from '../../components/__tests__/dom'
 import { EstadisticasPage } from '../EstadisticasPage'
 
 const pedir = vi.mocked(getEstadisticasCuenta)
+const pedirResumen = vi.mocked(getDashboardSummary)
+
+const resumen = (extra: Partial<DashboardSummaryResponse> = {}): DashboardSummaryResponse => ({
+  library_total: 51372, available: 15861, missing: 57, uploading: 0, completed: 0, unique_content: 283,
+  unique_movies: 141, unique_seasons: 142, unique_episodes: 900, uploads_completed: 14, radarr_items: 220,
+  sonarr_items: 51152, last_sync_at: null, next_sync_at: null, requests_total: 322, requests_compatible: 15,
+  requests_partial: 2, requests_reclaimed: 4, requests_mine: 1, ...extra,
+})
 
 const punto = (dia: string, extra: Partial<PuntoCuenta> = {}): PuntoCuenta => ({
   dia, ratio: 4.1, subido_bytes: 1024 ** 4, bajado_bytes: 300 * 1024 ** 3, bonus: 12345.5, ...extra,
 })
 
-beforeEach(() => { pedir.mockReset() })
+beforeEach(() => {
+  pedir.mockReset()
+  pedirResumen.mockReset()
+  pedirResumen.mockResolvedValue(resumen())
+})
 afterEach(desmontar)
 
 describe('EstadisticasPage', () => {
@@ -43,6 +57,42 @@ describe('EstadisticasPage', () => {
     expect(filas[0].textContent).toContain('4,25')
     expect(filas[0].textContent).toContain('12.346')       // miles con punto
     expect(document.querySelectorAll('.est-leyenda li')).toHaveLength(2)
+  })
+
+  it('arriba lleva las diez tarjetas que tenía el Panel, con las mismas cifras', async () => {
+    pedir.mockResolvedValue({ dias: 90, puntos: [punto('2026-10-01')] })
+    await montar(<EstadisticasPage />)
+    await esperar(() => document.querySelector('.stat-card'))
+
+    const tarjetas = new Map([...document.querySelectorAll('.stat-card')].map(t => [
+      t.querySelector('.stat-card-label')!.textContent, t.querySelector('.stat-card-value')!.textContent]))
+    expect(tarjetas.size).toBe(10)
+    expect(tarjetas.get('Biblioteca sincronizada')).toBe('51.372')
+    expect(tarjetas.get('Disponibles')).toBe('15.861')
+    expect(tarjetas.get('Faltantes')).toBe('57')
+    expect(tarjetas.get('Contenido único')).toBe('283')
+    expect(tarjetas.get('Tus subidas')).toBe('14')
+    expect(tarjetas.get('Peticiones eMuwarez')).toBe('322')
+    expect(tarjetas.get('Peticiones compatibles')).toBe('15')
+    expect(tarjetas.get('Peticiones parciales')).toBe('2')
+    expect(tarjetas.get('Peticiones reclamadas')).toBe('4')
+    expect(tarjetas.get('Mis peticiones')).toBe('1')
+    expect(texto()).toContain('141 películas')
+  })
+
+  it('las tarjetas salen aunque aún no haya ninguna instantánea de la cuenta', async () => {
+    pedir.mockResolvedValue({ dias: 90, puntos: [] })
+    await montar(<EstadisticasPage />)
+    await esperar(() => texto().includes('Todavía no hay datos'))
+    expect(document.querySelectorAll('.stat-card')).toHaveLength(10)
+  })
+
+  it('si fallan las cifras, la evolución de la cuenta sale igual', async () => {
+    pedirResumen.mockRejectedValue(new Error('503'))
+    pedir.mockResolvedValue({ dias: 90, puntos: [punto('2026-10-01')] })
+    await montar(<EstadisticasPage />)
+    await esperar(() => document.querySelector('svg[role="img"]'))
+    expect(document.querySelectorAll('.stat-card')).toHaveLength(0)
   })
 
   it('un día sin cifra sale como raya en la tabla y no rompe la línea del resto', async () => {
@@ -118,10 +168,12 @@ describe('EstadisticasPage', () => {
     }
     await montar(<Seccion />)
     expect(pedir).not.toHaveBeenCalled()
+    expect(pedirResumen).not.toHaveBeenCalled()
 
     await pulsar(boton('ver'))
     await esperar(() => pedir.mock.calls.length === 1)
     await pulsar(boton('ver'))   // se oculta: no repide
     expect(pedir).toHaveBeenCalledTimes(1)
+    expect(pedirResumen).toHaveBeenCalledTimes(1)
   })
 })

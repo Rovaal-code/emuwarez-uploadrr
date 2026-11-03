@@ -35,6 +35,9 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
         from emuwarez_uploadrr.services.upload_queue import dashboard_upload_counters
         summary.update(dashboard_upload_counters(conn))
 
+        from emuwarez_uploadrr.services.vigilancia_instancias import instancias_caidas
+        summary["instancias_caidas"] = instancias_caidas(conn)
+
         # Phase 8A: diagnostic counts
         try:
             from emuwarez_uploadrr.services.library import get_dashboard_diagnostics

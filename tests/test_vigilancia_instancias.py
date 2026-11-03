@@ -24,6 +24,7 @@ def _estado_aparte(monkeypatch):
     """El estado de la vigilancia es del módulo: que un test no deje nada al siguiente."""
     monkeypatch.setattr(vig, "_respondia", {})
     monkeypatch.setattr(vig, "_sincronizada", {})
+    monkeypatch.setattr(vig, "_mirada", {})
     monkeypatch.setattr(library.sync, "_LIB_SYNC_PROGRESS", dict(library.sync._LIB_SYNC_PROGRESS))
 
 
@@ -235,3 +236,64 @@ def test_es_una_tarea_programada_cada_5_minutos_y_no_llena_el_historial(conn, ar
     resultado = scheduler.run_scheduled_task(conn, scheduler.TASK_INSTANCE_WATCH)
     assert resultado["status"] == "completed"
     assert conn.execute("SELECT COUNT(*) FROM task_runs").fetchone()[0] == 0
+
+
+def test_las_instancias_caidas_salen_con_su_ultima_sincronizacion(conn, arr, instancias, reloj, sincronizaciones):
+    arr["peliculas"] = [_peli(1, "Matrix", 603)]
+    library.sync_instance(conn, arr_falso.get_instance(conn, RADARR))
+    vig.vigilar_instancias(conn)
+    assert vig.instancias_caidas(conn) == []
+
+    instancias["radarr"] = False
+    vig.vigilar_instancias(conn)
+    caidas = vig.instancias_caidas(conn)
+    assert [(c["id"], c["tipo"]) for c in caidas] == [(RADARR, "radarr")]
+    assert caidas[0]["ultima_sincronizacion"] is not None
+
+    instancias["radarr"] = True
+    vig.vigilar_instancias(conn)
+    assert vig.instancias_caidas(conn) == []
+
+
+def test_con_la_tarea_de_vigilancia_apagada_no_se_afirma_ninguna_caida(conn, arr, instancias, reloj, sincronizaciones):
+    vig.vigilar_instancias(conn)
+    instancias["radarr"] = False
+    vig.vigilar_instancias(conn)
+    assert vig.instancias_caidas(conn)
+    conn.execute("UPDATE scheduled_tasks SET enabled = 0 WHERE task_key = ?", (scheduler.TASK_INSTANCE_WATCH,))
+    assert vig.instancias_caidas(conn) == []
+
+
+def test_una_caida_con_otra_sincronizacion_en_marcha_no_se_da_por_caida(conn, arr, instancias, reloj, sincronizaciones):
+    """La vigilancia aplaza la sincronización de la que vuelve si hay otra en marcha, pero la instancia responde."""
+    vig.vigilar_instancias(conn)
+    instancias["radarr"] = False
+    vig.vigilar_instancias(conn)
+    instancias["radarr"] = True
+    with library._lib_sync_guard():
+        vig.vigilar_instancias(conn)
+    assert vig.instancias_caidas(conn) == []
+
+
+def test_una_mirada_vieja_no_afirma_que_este_caida(conn, arr, instancias, reloj, sincronizaciones):
+    instancias["radarr"] = False
+    vig.vigilar_instancias(conn)
+    assert len(vig.instancias_caidas(conn)) == 1
+    reloj.avanza(5 * vig.VIGENCIA_MIRADA_VUELTAS + 1)
+    assert vig.instancias_caidas(conn) == []
+
+
+def test_apagada_la_vigilancia_no_se_dice_nada_de_las_instancias(conn, arr, instancias, reloj, sincronizaciones):
+    instancias["radarr"] = False
+    vig.vigilar_instancias(conn)
+    set_setting(conn, "biblioteca.sincronizar_al_volver", "false")
+    conn.commit()
+    assert vig.instancias_caidas(conn) == []
+
+
+def test_una_instancia_desactivada_no_sale_entre_las_caidas(conn, arr, instancias, reloj, sincronizaciones):
+    instancias["radarr"] = False
+    vig.vigilar_instancias(conn)
+    conn.execute("UPDATE instances SET enabled = 0 WHERE id = ?", (RADARR,))
+    conn.commit()
+    assert vig.instancias_caidas(conn) == []

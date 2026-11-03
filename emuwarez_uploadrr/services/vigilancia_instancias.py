@@ -33,6 +33,11 @@ ENFRIAMIENTO = timedelta(minutes=15)
 _respondia: dict[int, bool] = {}
 # Id de instancia -> cuándo se lanzó su última sincronización por haber vuelto.
 _sincronizada: dict[int, datetime] = {}
+# Id de instancia -> (si respondió, cuándo se miró) en la última mirada. Es lo que enseña el Panel, aparte de
+# `_respondia`, que da por caída a la que respondía pero tenía otra sincronización en marcha.
+_mirada: dict[int, tuple[bool, datetime]] = {}
+# Una mirada más vieja que tres vueltas de la tarea ya no dice cómo está la instancia (tarea apagada o parada).
+VIGENCIA_MIRADA_VUELTAS = 3
 
 
 def _ahora() -> datetime:
@@ -59,12 +64,15 @@ def vigilar_instancias(conn: sqlite3.Connection) -> tuple[str, str]:
     # Una instancia que se desactiva o se borra y vuelve después empieza de cero: su primera mirada no sincroniza.
     for id_ in set(_respondia) - {i.id for i in instancias}:
         del _respondia[id_]
+    for id_ in set(_mirada) - {i.id for i in instancias}:
+        del _mirada[id_]
 
     sincronizadas: list[str] = []
     fallos: list[str] = []
     caidas = 0
     for instancia in instancias:
         responde = _responde(instancia)
+        _mirada[instancia.id] = (responde, _ahora())
         habia_caido = _respondia.get(instancia.id) is False
         _respondia[instancia.id] = responde
         if not responde:
@@ -97,3 +105,29 @@ def vigilar_instancias(conn: sqlite3.Connection) -> tuple[str, str]:
     if fallos:
         return "failed", resumen + "; error: " + "; ".join(fallos)
     return "completed", resumen
+
+
+def instancias_caidas(conn: sqlite3.Connection) -> list[dict]:
+    """Las instancias activas que no respondían en la última mirada de la vigilancia, con cuándo se sincronizó por
+    última vez su biblioteca. Solo cuenta lo visto hace poco: sin vigilancia (apagada en Configuración, o la tarea
+    parada) no se sabe cómo están y no se afirma nada."""
+    if not leer_ajuste(conn, "sincronizar_al_volver_instancia"):
+        return []
+    from .scheduler import TASK_INSTANCE_WATCH, get_scheduled_task
+    tarea = get_scheduled_task(conn, TASK_INSTANCE_WATCH)
+    if not tarea["enabled"]:
+        return []
+    vigencia = timedelta(minutes=tarea["interval_minutes"] * VIGENCIA_MIRADA_VUELTAS)
+    caidas = []
+    for instancia in list_instances(conn, enabled_only=True):
+        mirada = _mirada.get(instancia.id)
+        if mirada is None or mirada[0] or _ahora() - mirada[1] > vigencia:
+            continue
+        visto = conn.execute(
+            "SELECT MAX(last_seen_at) AS ultima FROM library_items WHERE instance_id = ?", (instancia.id,),
+        ).fetchone()
+        caidas.append({
+            "id": instancia.id, "nombre": instancia.name, "tipo": instancia.type,
+            "ultima_sincronizacion": visto["ultima"],
+        })
+    return caidas

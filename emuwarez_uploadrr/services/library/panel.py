@@ -109,6 +109,9 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
         "SELECT started_at FROM task_runs WHERE name = 'sync-library' AND status = 'completed' ORDER BY id DESC LIMIT 1"
     ).fetchone()
 
+    from ..scheduler import TASK_LIBRARY_SYNC, get_scheduled_task
+    tarea = get_scheduled_task(conn, TASK_LIBRARY_SYNC)
+
     return {
         "library_total": int(row["total"] or 0),
         "available": int(row["available"] or 0),
@@ -123,6 +126,7 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
         "radarr_items": int(row["radarr_items"] or 0),
         "sonarr_items": int(row["sonarr_items"] or 0),
         "last_sync_at": last_sync["started_at"] if last_sync else None,
+        "next_sync_at": tarea["next_run_at"] if tarea["enabled"] else None,
     }
 
 
@@ -396,6 +400,17 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         d["rec_group"] = 1
         d["rec_request_id"] = r["req_id"]
         d["rec_points"] = r["points"]
+        # La fila a la que se refiere la petición (la temporada o el capítulo, no la serie que cruzó el
+        # emparejador): el asistente de «Subir» se abre sobre ella, como el de Peticiones. De ella salen también la
+        # calidad y el castellano, que una serie no guarda.
+        from ..requests import _scoped_library_id
+        target_id = _scoped_library_id(conn, lib, {"req_scope": scope, "req_season": season, "req_episode": episode})
+        d["library_target_id"] = target_id
+        target = conn.execute(
+            "SELECT resolution, source, has_spanish_audio, has_spanish_subs FROM library_items WHERE id = ?",
+            (target_id,),
+        ).fetchone()
+        d.update(dict(target))
         d["content_name"] = _rec_content_name(conn, lib, season=season, episode=episode, scope=scope)
         size_episode = episode if (scope == "episode" or disp_type == "episode") else None
         d["size_bytes"] = _rec_rolled_size(conn, lib, season=season, episode=size_episode)

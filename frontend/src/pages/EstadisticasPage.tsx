@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
+import { getDashboardSummary } from '../api/dashboard'
 import { getEstadisticasCuenta } from '../api/estadisticas'
 import { EmptyState } from '../components/EmptyState'
 import { ErrorState } from '../components/ErrorState'
 import { GraficoLinea } from '../components/GraficoLinea'
 import { LoadingState } from '../components/LoadingState'
+import { TarjetasDelPanel } from '../components/TarjetasDelPanel'
 import { useSeccionVisible } from '../context/SeccionVisible'
-import type { PuntoCuenta } from '../types/api'
+import type { DashboardSummaryResponse, PuntoCuenta } from '../types/api'
 import { formatBytes, formatNumero, SIN_DATO } from '../utils/format'
 import { formatDia, type PuntoSerie } from '../utils/graficos'
 
@@ -23,13 +25,23 @@ const celda = (n: number | null, formato: (n: number) => string) => (n === null 
 
 type Resultado = { dias: number; puntos: PuntoCuenta[] | null; error: string | null }
 
-// La evolución de tu cuenta de eMuwarez: una instantánea al día, que el servidor guarda al leer tu perfil.
-// Se pide al entrar en la sección y al cambiar de rango; no hay sondeo.
+// Arriba, las cifras de tu biblioteca y de tus peticiones (las tarjetas que tenía el Panel); debajo, la evolución de
+// tu cuenta de eMuwarez: una instantánea al día, que el servidor guarda al leer tu perfil.
+// Todo se pide al entrar en la sección y la evolución también al cambiar de rango; no hay sondeo.
 export function EstadisticasPage() {
   const seVe = useSeccionVisible()
+  const [resumen, setResumen] = useState<DashboardSummaryResponse | null>(null)
   const [dias, setDias] = useState(90)
   const [intento, setIntento] = useState(0)
   const [resultado, setResultado] = useState<Resultado | null>(null)
+
+  // Si falla, se quedan las cifras de la vez anterior (o ninguna): la evolución de la cuenta es lo que da la página.
+  useEffect(() => {
+    if (!seVe) return
+    let vigente = true
+    getDashboardSummary().then(r => { if (vigente) setResumen(r) }, () => { /* sin cifras arriba */ })
+    return () => { vigente = false }
+  }, [seVe])
 
   useEffect(() => {
     if (!seVe) return
@@ -48,7 +60,7 @@ export function EstadisticasPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Estadísticas</div>
-          <div className="page-subtitle">Cómo evoluciona tu cuenta de eMuwarez: una instantánea al día, que se guarda sola al leer tu perfil.</div>
+          <div className="page-subtitle">Tu biblioteca y tus peticiones, y cómo evoluciona tu cuenta de eMuwarez: una instantánea al día, que se guarda sola al leer tu perfil.</div>
         </div>
         <div className="est-rangos" role="group" aria-label="Rango de días">
           {RANGOS.map(r => (
@@ -59,6 +71,8 @@ export function EstadisticasPage() {
           ))}
         </div>
       </div>
+
+      {resumen && <TarjetasDelPanel resumen={resumen} />}
 
       {resultado === null || resultado.dias !== dias ? (
         <LoadingState label="Cargando estadísticas…" />

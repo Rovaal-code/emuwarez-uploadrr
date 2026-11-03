@@ -265,7 +265,7 @@
 }
 
 .detail-card.pet-comparar-card {
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   padding: 21px 19px;
 }
 

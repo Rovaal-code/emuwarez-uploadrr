@@ -10,14 +10,14 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   padding: 10px 18px;
   font-weight: 700;
   font-size: 25px;
   letter-spacing: -0.01em;
 }
 .detcard-anio { color: var(--text-muted); font-weight: 500; }
-.detail-card.detcard-tarjeta { border-radius: 10px; }
+.detail-card.detcard-tarjeta { border-radius: var(--radius-card); }
 .detail-card-title.detcard-titulo {
   font-size: 13.5px;
   font-weight: 600;

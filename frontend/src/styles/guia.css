@@ -20,7 +20,7 @@
 
 /* Fila de pestañas: una celda por sección */
 .detail-card.guia-tira {
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   overflow-x: auto;
   margin-top: 20px;
   flex-shrink: 0;
@@ -63,7 +63,7 @@
 
 /* Panel con el contenido de la sección */
 .detail-card.guia-panel {
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   margin-top: 16px;
   padding: 16px 18px;
   flex: 1;

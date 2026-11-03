@@ -9,8 +9,8 @@
 :root {
   --hud-fill: rgba(3, 17, 39, .82);
   --hud-fill-2: rgba(2, 10, 24, .9);
-  --hud-line: rgba(30, 110, 190, .65);
-  --hud-line-inner: rgba(140, 220, 255, .28);
+  --hud-line: rgba(30, 110, 190, .42);
+  --hud-line-inner: rgba(140, 220, 255, .08);
   --hud-cyan: #2fd8ff;
   --hud-ice: #a9ecff;
   --hud-ok: #28e394;
@@ -53,17 +53,13 @@
 /* ---- shell: sidebar + topbar ---- */
 .hud-app .sidebar {
   background:
-    radial-gradient(160px 220px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 12%, transparent), transparent 60%),
-    radial-gradient(160px 260px at 100% 100%, color-mix(in srgb, var(--hud-cyan) 8%, transparent), transparent 60%),
+    radial-gradient(160px 220px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 6%, transparent), transparent 60%),
+    radial-gradient(160px 260px at 100% 100%, color-mix(in srgb, var(--hud-cyan) 4%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
-  /* Same edge/frame recipe as .stat-card/.card/.activity-section: full
-     border + inset hairline + outer glow + chamfered corners. */
-  border: 1.5px solid var(--hud-line);
-  box-shadow:
-    inset 0 0 0 1px var(--hud-line-inner),
-    inset -1px 0 0 color-mix(in srgb, var(--hud-glint) 15%, transparent),
-    6px 0 34px -18px color-mix(in srgb, var(--hud-cyan) 55%, transparent);
-  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+  /* Mismo marco que .stat-card/.card/.activity-section: borde fino y esquinas redondeadas. */
+  border: 1px solid var(--hud-line);
+  border-radius: var(--radius-card);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner);
 }
 .hud-app .sidebar-logo {
   border-bottom: 1px solid color-mix(in srgb, var(--hud-blue) 40%, transparent);
@@ -81,12 +77,11 @@
   border-left: 2px solid transparent;
   margin: 0 10px;
   width: calc(100% - 20px);
-  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  border-radius: var(--radius-small);
 }
 .hud-app .sidebar.collapsed .nav-item {
   margin: 0 6px;
   width: calc(100% - 12px);
-  clip-path: none;
 }
 .hud-app .nav-item:hover {
   background: color-mix(in srgb, var(--hud-cyan) 6%, transparent);
@@ -96,7 +91,7 @@
   color: var(--hud-ice);
   background: linear-gradient(90deg, color-mix(in srgb, var(--hud-cyan) 18%, transparent), color-mix(in srgb, var(--hud-cyan) 2%, transparent));
   border-left-color: var(--hud-cyan);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hud-cyan) 22%, transparent), 0 0 16px -6px color-mix(in srgb, var(--hud-cyan) 70%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hud-cyan) 22%, transparent), 0 0 12px -6px color-mix(in srgb, var(--hud-cyan) 40%, transparent);
 }
 .hud-app .nav-item.active .nav-item-icon {
   filter: drop-shadow(0 0 4px var(--hud-cyan));
@@ -149,22 +144,18 @@
   text-shadow: 0 0 22px color-mix(in srgb, var(--hud-cyan) 45%, transparent);
 }
 
-/* ---- shared HUD panel material: chamfer + layered frame + corner glow ---- */
+/* ---- material común de los paneles del HUD: borde fino, esquinas redondeadas y brillo discreto ---- */
 .hud-app .stat-card,
 .hud-app .activity-section,
 .hud-app .upload-panel {
   background:
-    radial-gradient(120px 90px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 16%, transparent), transparent 60%),
-    radial-gradient(140px 100px at 100% 100%, color-mix(in srgb, var(--hud-cyan) 10%, transparent), transparent 60%),
+    radial-gradient(120px 90px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 5%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
-  border: 1.5px solid var(--hud-line);
-  border-radius: 3px;
-  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+  border: 1px solid var(--hud-line);
+  border-radius: var(--radius-card);
   box-shadow:
     inset 0 0 0 1px var(--hud-line-inner),
-    inset 0 22px 40px -32px color-mix(in srgb, var(--hud-glint) 45%, transparent),
-    0 14px 30px -16px color-mix(in srgb, var(--overlay-dark) 70%, transparent),
-    0 0 26px -12px color-mix(in srgb, var(--hud-cyan) 35%, transparent);
+    0 10px 24px -16px color-mix(in srgb, var(--overlay-dark) 70%, transparent);
 }
 
 /* ---- global primitives: cards, buttons, modals, inputs ---- */
@@ -175,9 +166,10 @@
 .hud-app .login-card,
 .hud-app .wizard-card {
   background:
-    radial-gradient(120px 90px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 10%, transparent), transparent 60%),
+    radial-gradient(120px 90px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 5%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
   border: 1px solid var(--hud-line);
+  border-radius: var(--radius-card);
   box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px color-mix(in srgb, var(--overlay-dark) 70%, transparent);
 }
 .hud-app .modal-header,
@@ -219,6 +211,7 @@
     radial-gradient(120px 90px at 100% 0%, color-mix(in srgb, var(--hud-cyan) 10%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
   border: 1px solid var(--hud-line);
+  border-radius: var(--radius-card);
   box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px color-mix(in srgb, var(--overlay-dark) 80%, transparent);
 }
 .hud-app .notif-dropdown-header {
@@ -242,7 +235,7 @@
   box-shadow: 0 0 6px var(--hud-cyan);
 }
 .hud-app .settings-tab {
-  border-radius: 2px;
+  border-radius: var(--radius-small);
 }
 .hud-app .settings-tab:hover:not(.active) {
   color: var(--hud-ice);
@@ -290,8 +283,8 @@
   border-bottom-color: color-mix(in srgb, var(--hud-blue) 40%, transparent);
 }
 .hud-app .detail-poster {
-  border: 1.5px solid var(--hud-line);
-  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 0 18px -8px color-mix(in srgb, var(--hud-cyan) 50%, transparent);
+  border: 1px solid var(--hud-line);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner);
 }
 .hud-app .poster-thumb {
   border: 1px solid var(--hud-line);
@@ -318,12 +311,11 @@
   width: 36px;
   height: 36px;
   flex-shrink: 0;
-  border-radius: 3px;
+  border-radius: var(--radius-small);
   color: var(--hud-cyan);
   background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--hud-cyan) 28%, transparent), color-mix(in srgb, var(--hud-cyan) 4%, transparent) 70%);
   border: 1px solid color-mix(in srgb, var(--hud-cyan) 45%, transparent);
-  box-shadow: 0 0 14px -4px color-mix(in srgb, var(--hud-cyan) 60%, transparent), inset 0 0 10px color-mix(in srgb, var(--hud-cyan) 20%, transparent);
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+  box-shadow: inset 0 0 10px color-mix(in srgb, var(--hud-cyan) 14%, transparent);
 }
 .hud-app .stat-card-icon svg { width: 18px; height: 18px; }
 .hud-app .stat-card-label {
@@ -358,8 +350,7 @@
   position: absolute;
   left: 0; right: 0; bottom: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--hud-sky) 70%, transparent) 15%, color-mix(in srgb, var(--hud-glint) 90%, transparent) 50%, color-mix(in srgb, var(--hud-sky) 70%, transparent) 85%, transparent);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--hud-sky) 50%, transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--hud-sky) 40%, transparent) 15%, color-mix(in srgb, var(--hud-glint) 50%, transparent) 50%, color-mix(in srgb, var(--hud-sky) 40%, transparent) 85%, transparent);
 }
 
 /* ---- tables ---- */
@@ -380,7 +371,7 @@
 }
 .hud-app .badge {
   font-family: var(--hud-font);
-  border-radius: 2px;
+  border-radius: var(--radius-badge);
 }
 
 /* ---- upload activity rows ---- */

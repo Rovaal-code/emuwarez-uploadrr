@@ -781,7 +781,7 @@ optgroup {
   background: var(--bg-surface);
   color: var(--text-primary);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   width: 90%;
   max-width: 600px;
   max-height: calc(var(--vh100) * 0.9);

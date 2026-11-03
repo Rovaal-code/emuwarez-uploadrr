@@ -319,8 +319,9 @@ def _get_tmdb_watch_region(conn) -> str:
 def _tmdb_id_de_la_serie(conn, item: dict):
     """El `tmdb_id` de la serie de la que cuelga una temporada o un episodio, o None.
 
-    Los episodios nuevos lo traen copiado de la serie, pero los guardados antes de eso no, y las temporadas nunca
-    lo han tenido; el de la serie es el que vale para las plataformas donde se emite (TMDb las da por serie)."""
+    La sincronización copia el de la serie a sus temporadas y episodios, pero los guardados antes de eso no lo
+    traen. El que vale para las plataformas donde se emite es el de la serie (TMDb las da por serie), así que solo
+    se acepta el de un antepasado que sea una serie: el de una temporada histórica podría ser otro."""
     actual = item
     for _ in range(3):  # episodio -> temporada -> serie
         padre = actual.get("parent_id")
@@ -330,7 +331,7 @@ def _tmdb_id_de_la_serie(conn, item: dict):
         if not fila:
             return None
         actual = dict(fila)
-        if actual.get("tmdb_id"):
+        if actual.get("item_type") == "series" and actual.get("tmdb_id"):
             return actual["tmdb_id"]
     return None
 

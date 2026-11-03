@@ -239,7 +239,7 @@ def _insert_arbol(conn, tmdb_serie="555", tmdb_temporada=None, tmdb_episodio=Non
 
 @pytest.mark.parametrize("quien", ["episodio", "temporada"])
 def test_suggest_provider_usa_el_tmdb_de_la_serie_si_el_episodio_o_la_temporada_no_lo_tienen(tmp_path, quien):
-    """Un episodio antiguo (guardado antes de copiarle el de la serie) o una temporada no traen `tmdb_id`: se
+    """Un episodio o una temporada antiguos (guardados antes de copiarles el de la serie) no traen `tmdb_id`: se
     pregunta a TMDb por el de la serie, como serie de televisión."""
     conn = _make_conn(tmp_path)
     _, temporada, episodio = _insert_arbol(conn)
@@ -249,6 +249,16 @@ def test_suggest_provider_usa_el_tmdb_de_la_serie_si_el_episodio_o_la_temporada_
     assert result["suggested"] == "NF"
     tmdb.assert_called_once()
     assert tmdb.call_args.args[0] == 555 and tmdb.call_args.args[1] != "movie"
+
+
+def test_suggest_provider_ignora_el_tmdb_de_una_temporada_que_no_es_el_de_la_serie(tmp_path):
+    """Solo vale el id de un antepasado que sea una serie: el de una temporada histórica podría ser otro."""
+    conn = _make_conn(tmp_path)
+    _, _, episodio = _insert_arbol(conn, tmdb_serie="555", tmdb_temporada="999")
+    from emuwarez_uploadrr.services import source_assistant as sa
+    with patch.object(sa, "get_tmdb_available_providers", return_value=["NF"]) as tmdb:
+        sa.suggest_provider_for_item(episodio, conn=conn)
+    assert tmdb.call_args.args[0] == 555
 
 
 def test_suggest_provider_prefiere_el_tmdb_propio_del_episodio(tmp_path):

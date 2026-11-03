@@ -59,10 +59,11 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   la imagen va en `position: absolute` dentro del marco (`.bib-tarjeta-marco` y `.poster-grande-marco`) y el alto lo
   fija solo `aspect-ratio`: todas miden 240 (pósters pequeños) o 370 (grandes) a ese ancho. Comprobado en el
   navegador con el CSS real, antes y después. Pendiente: ver que el aviso ya no sale en la aplicación real.
-- **Sugerencia de proveedor por TMDb para episodios antiguos y temporadas:** si un episodio o una temporada no traen
-  `tmdb_id` (los episodios guardados antes de copiarles el de la serie, y las temporadas, que nunca lo tuvieron),
-  `suggest_provider_for_item` usa el de la serie de la que cuelgan (`_tmdb_id_de_la_serie`, por `parent_id`) y pregunta
-  a TMDb como serie. Un `tmdb_id` propio sigue ganando, y sin ninguno en la cadena no se sugiere nada.
+- **Sugerencia de proveedor por TMDb para episodios y temporadas antiguos:** si un episodio o una temporada no traen
+  `tmdb_id` (la sincronización ya se lo copia de la serie, pero los guardados antes de eso no lo tienen),
+  `suggest_provider_for_item` usa el de la serie de la que cuelgan (`_tmdb_id_de_la_serie`, por `parent_id`, solo si el
+  antepasado es una serie) y pregunta a TMDb como serie. Un `tmdb_id` propio sigue ganando, y sin ninguno en la cadena no
+  se sugiere nada.
 - **Iconos de los sitios, dentro del proyecto:** los de proveedores de imágenes y de vídeo, eMuwarez y las webs de las
   fichas (TMDb, IMDb, TVDB, MAL, TVmaze) son ficheros en `frontend/src/assets/iconos/<dominio>.<ext>` (50 de 52 sitios; 240 KB),
   y `Favicon` los pinta sin pedir nada fuera: antes cada navegador los pedía al sitio y a Google, y con un DNS que bloquea

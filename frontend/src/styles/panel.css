@@ -102,15 +102,15 @@
 /* Necesita atención: una banda fina entre los carriles y la franja */
 .panel-atencion {
   flex-shrink: 0;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   padding: 8px 14px;
   background: var(--bg-card);
   border: 1px solid var(--color-warning);
   border-radius: var(--radius-card);
 }
 .panel-atencion-vacia {
-  margin-bottom: 12px;
-  padding: 2px 4px;
+  margin-bottom: 8px;
+  padding: 2px 0;
   font-size: 12px;
   color: var(--text-muted);
   background: none;
@@ -162,32 +162,17 @@
 .panel-aviso-titulo { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 .panel-aviso-accion { flex-shrink: 0; font-size: 12px; white-space: nowrap; }
 
-/* Franja de cinco números */
+/* Franja de cinco cifras: las tarjetas globales (.stat-card) en una fila, más bajas que las de Estadísticas */
 .panel-franja {
   flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
-  margin: 0;
-  padding: 14px 20px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
+  gap: 12px;
 }
-.panel-franja-cifra {
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 2px;
-}
-.panel-franja-cifra dt { font-size: 12px; color: var(--text-muted); }
-.panel-franja-cifra dd {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.1;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
+.panel-franja .stat-card { align-items: center; gap: 10px; padding: 8px 12px; }
+.panel-franja .stat-card-icon { width: 32px; height: 32px; }
+.panel-franja .stat-card-value { font-size: 20px; }
+.panel-franja .stat-card-label { overflow-wrap: anywhere; }
 
 /* Subidas en curso */
 .upload-row.panel-fila-saliendo {

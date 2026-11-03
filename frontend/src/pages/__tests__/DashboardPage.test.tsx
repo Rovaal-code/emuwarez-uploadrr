@@ -115,9 +115,25 @@ describe('Panel', () => {
     expect(subidas).toEqual(['Dragon Ball Daima · Temporada 1', 'Papillon (1973)'])
     expect(carril('En curso').textContent).toContain('1 subiendo · 1 en cola')
 
-    // La franja: los cinco números del mockup, con miles a la española.
-    const franja = [...document.querySelectorAll('.panel-franja-cifra')].map(c => c.textContent)
-    expect(franja).toEqual(['en biblioteca51.372', 'en disco15.861', 'únicos sin subir283', 'peticiones abiertas322', 'tus subidas14'])
+    // La franja: cinco tarjetas de las globales, con miles a la española y solo «En disco» en verde.
+    const franja = document.querySelector('.panel-franja')!
+    expect(franja.getAttribute('aria-label')).toBe('Cifras de la biblioteca y de las peticiones')
+    const tarjetas = [...franja.querySelectorAll('.stat-card')]
+    expect(tarjetas.map(c => [c.querySelector('.stat-card-label')!.textContent, c.querySelector('.stat-card-value')!.textContent]))
+      .toEqual([['En biblioteca', '51.372'], ['En disco', '15.861'], ['Únicos sin subir', '283'], ['Peticiones abiertas', '322'], ['Tus subidas', '14']])
+    expect(tarjetas.map(c => c.querySelectorAll('.stat-card-icon svg').length)).toEqual([1, 1, 1, 1, 1])
+    expect(tarjetas.map(c => c.getAttribute('aria-label')))
+      .toEqual(['En biblioteca: 51.372', 'En disco: 15.861', 'Únicos sin subir: 283', 'Peticiones abiertas: 322', 'Tus subidas: 14'])
+    expect(tarjetas.map(c => (c.querySelector('.stat-card-value') as HTMLElement).style.color))
+      .toEqual(['', 'var(--color-available)', '', '', ''])
+  })
+
+  it('vacío: la franja sigue con sus cinco tarjetas, a cero', async () => {
+    vi.mocked(getDashboardSummary).mockResolvedValue(resumen({
+      library_total: 0, available: 0, unique_content: 0, requests_total: 0, uploads_completed: 0, radarr_items: 0, sonarr_items: 0,
+    }))
+    await pagina()
+    expect([...document.querySelectorAll('.panel-franja .stat-card-value')].map(v => v.textContent)).toEqual(['0', '0', '0', '0', '0'])
   })
 
   it('vacío: dice qué falta en cada carril y la banda de avisos es una sola línea', async () => {

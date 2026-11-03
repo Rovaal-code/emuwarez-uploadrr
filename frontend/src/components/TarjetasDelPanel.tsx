@@ -11,16 +11,24 @@ function svgIcon(d: React.ReactNode) {
   // trazo de longitud casi cero no pinta nada.
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
 }
-const ICON_LIBRARY = svgIcon(<><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></>)
-const ICON_AVAILABLE = svgIcon(<><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9" /><path d="M2 15h20l-2 5H4l-2-5z" /></>)
+export const ICON_LIBRARY = svgIcon(<><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></>)
+export const ICON_AVAILABLE = svgIcon(<><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9" /><path d="M2 15h20l-2 5H4l-2-5z" /></>)
 const ICON_MISSING = svgIcon(<><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></>)
-const ICON_UNIQUE = svgIcon(<><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /><circle cx="12" cy="12" r="3.2" /></>)
-const ICON_UPLOADS = svgIcon(<path d="M12 19V5M5 12l7-7 7 7" />)
-const ICON_REQUESTS = svgIcon(<><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></>)
+export const ICON_UNIQUE = svgIcon(<><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /><circle cx="12" cy="12" r="3.2" /></>)
+export const ICON_UPLOADS = svgIcon(<path d="M12 19V5M5 12l7-7 7 7" />)
+export const ICON_REQUESTS = svgIcon(<><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></>)
 const ICON_COMPATIBLE = svgIcon(<><circle cx="12" cy="12" r="9" /><path d="M8.5 12.3l2.3 2.3 4.7-4.7" /></>)
 const ICON_PARTIAL = svgIcon(<><circle cx="12" cy="12" r="9" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" /></>)
 const ICON_RECLAIMED = svgIcon(<><path d="M5 21V4" /><path d="M5 4h13l-3.2 4.2L18 12.5H5" /></>)
 const ICON_MINE = svgIcon(<><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" /></>)
+
+// Explicaciones que comparten estas tarjetas y la franja del Panel.
+export const EXPLICACION = {
+  available: 'Contenido cuyo archivo está presente en disco, listo para comparar o subir.',
+  unique: 'Contenido disponible que aún no está en eMuwarez: las películas, las temporadas completas de series o documentales y sus capítulos. Son tus oportunidades de subida.',
+  requests: 'Total de peticiones activas descargadas de eMuwarez.',
+  uploads: 'Número de subidas a eMuwarez que has completado con Uploadrr.',
+}
 
 // Las diez tarjetas que antes llenaban el pie del Panel. El color de la cifra solo marca un estado
 // (disponible, faltante, compatible, parcial); el resto va en el color del texto.
@@ -49,7 +57,7 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
           label="Disponibles"
           value={s.available}
           accentColor="var(--color-available)"
-          info="Contenido cuyo archivo está presente en disco, listo para comparar o subir."
+          info={EXPLICACION.available}
         />
 
         <StatCard
@@ -64,7 +72,7 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
           icon={ICON_UNIQUE}
           label="Contenido único"
           value={s.unique_content ?? 0}
-          info="Contenido disponible que aún no está en eMuwarez: las películas, las temporadas completas de series o documentales y sus capítulos. Son tus oportunidades de subida."
+          info={EXPLICACION.unique}
         >
           <div className="panel-sub-lista">
             <div className="stat-card-sub-row"><IconoPelicula /> {formatNumero(s.unique_movies ?? 0)} películas</div>
@@ -76,7 +84,7 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
           icon={ICON_UPLOADS}
           label="Tus subidas"
           value={s.uploads_completed ?? 0}
-          info="Número de subidas a eMuwarez que has completado con Uploadrr."
+          info={EXPLICACION.uploads}
         />
       </div>
 
@@ -85,7 +93,7 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
           icon={ICON_REQUESTS}
           label="Peticiones eMuwarez"
           value={s.requests_total ?? 0}
-          info="Total de peticiones activas descargadas de eMuwarez."
+          info={EXPLICACION.requests}
         />
         <StatCard
           icon={ICON_COMPATIBLE}

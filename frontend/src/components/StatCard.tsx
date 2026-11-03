@@ -15,18 +15,19 @@ interface StatCardProps {
 
 export function StatCard({ label, value, children, accentColor, info, icon }: StatCardProps) {
   const { triggerProps, tooltipNode } = useTooltip(info, 460)
+  const cifra = typeof value === 'number' ? formatNumero(value) : value
   return (
     <div
       className="stat-card"
-      // Con explicación, la tarjeta se alcanza con Tab para poder leerla.
-      {...(info != null ? { ...triggerProps, tabIndex: 0 } : {})}
+      // Con explicación, la tarjeta se alcanza con Tab para poder leerla, y es un grupo con nombre «etiqueta: cifra».
+      {...(info != null ? { ...triggerProps, tabIndex: 0, role: 'group', 'aria-label': `${label}: ${cifra}` } : {})}
       style={info != null ? { cursor: 'help' } : undefined}
     >
       {icon && <div className="stat-card-icon" aria-hidden="true" style={accentColor ? { color: accentColor } : undefined}>{icon}</div>}
       <div className="stat-card-text">
         <div className="stat-card-label">{label}</div>
         <div className="stat-card-value" style={accentColor ? { color: accentColor } : undefined}>
-          {typeof value === 'number' ? formatNumero(value) : value}
+          {cifra}
         </div>
         {children && <div className="stat-card-sub">{children}</div>}
       </div>

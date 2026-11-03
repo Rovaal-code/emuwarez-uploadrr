@@ -191,6 +191,11 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     la query): cada salto debe tener el mismo esquema, nombre y puerto que la petición original (el 443 de https
     equivale a no ponerlo; `www.` y otro puerto cuentan como otro servidor). Si el sitio redirige el dominio pelado
     a `www.`, el resultado dice «redirección a otro servidor (www…)» y hay que guardar esa URL en Configuración.
+  - React 19.3 (`react`, `react-dom` y sus tipos). Solo hizo falta tipar los `RefObject` de `FilasVirtuales` como
+    `RefObject<HTMLElement | null>` (en React 19 `useRef<T>(null)` devuelve `RefObject<T | null>`); el código ya
+    trataba `.current` como posiblemente nulo y no cambia de comportamiento. El chunk `react` del bundle pasa de
+    139,84 kB (gzip 45,32) a 218,78 kB (gzip 68,26); `index` queda igual. Pendiente de ver en el navegador:
+    Biblioteca con scroll rápido en pósters (`RejillaVirtual`).
 
 ## Siguiente (oleada 3)
 
@@ -207,7 +212,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 
 ## Oleada 4
 
-- React 19 y TypeScript 7 (Vite 8 y Vitest 5 ya están).
+- React 19 y TypeScript 7 (Vite 8, Vitest 5 y React 19 ya están; falta TypeScript 7).
 - Funciones nuevas que faltan:
   - subida por lotes;
   - resumen de duplicados y trumps;

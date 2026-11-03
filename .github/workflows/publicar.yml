@@ -76,6 +76,11 @@ jobs:
             echo "::error::solo_prueba y ref no se combinan: :edge es la punta de master."
             exit 1
           fi
+          # El flujo ejecuta los scripts del commit elegido: uno anterior a --solo-comprobar no sirve.
+          if [ -n "$REF" ] && ! grep -q -- '--solo-comprobar' scripts/publicar_version.py 2>/dev/null; then
+            echo "::error::El commit de ref es demasiado antiguo: su scripts/publicar_version.py no admite --solo-comprobar."
+            exit 1
+          fi
           if [ "$PRUEBA" = true ]; then
             echo "accion=prueba" >> "$GITHUB_OUTPUT"
             exit 0

@@ -137,6 +137,21 @@ def test_el_frontend_conoce_todas_las_fases_de_la_subida():
     )
 
 
+def test_la_linea_de_tiempo_nombra_todas_las_fases_de_la_subida():
+    """«Dónde se fue el tiempo» pone un nombre corto a cada fase. Sin el de una,
+    esa fila saldría con la etiqueta larga de la tabla de fases."""
+    from emuwarez_uploadrr.services.uploadrr_progress import PHASE_ORDER
+
+    fuente = _texto("utils/lineaDeTiempo.ts")
+    m = re.search(r"NOMBRE_CORTO_FASE:\s*Record<string, string>\s*=\s*\{(.*?)\n\}", fuente, re.S)
+    assert m, "no se encontró NOMBRE_CORTO_FASE"
+    conocidas = set(re.findall(r"^\s*([a-z_]+):", m.group(1), re.M))
+    assert conocidas == set(PHASE_ORDER), (
+        f"\nSolo en el frontend: {sorted(conocidas - set(PHASE_ORDER))}"
+        f"\nSolo en el backend : {sorted(set(PHASE_ORDER) - conocidas)}"
+    )
+
+
 def test_las_fases_de_la_ficha_dicen_lo_mismo_que_el_backend():
     """DEFAULT_PHASES es el esqueleto que la ficha de una subida enseña ANTES
     de que haya progreso real, y es una copia literal de PHASES.

@@ -555,7 +555,7 @@ export interface UploadChecksSnapshot {
 export interface UploadProgressPhase {
   key: string
   label: string
-  status: 'pending' | 'running' | 'done'
+  status: 'pending' | 'running' | 'done' | 'failed'
   pct: number
   started_at?: string | null
   finished_at?: string | null

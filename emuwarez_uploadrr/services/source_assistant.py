@@ -316,6 +316,25 @@ def _get_tmdb_watch_region(conn) -> str:
     return "ES"
 
 
+def _tmdb_id_de_la_serie(conn, item: dict):
+    """El `tmdb_id` de la serie de la que cuelga una temporada o un episodio, o None.
+
+    Los episodios nuevos lo traen copiado de la serie, pero los guardados antes de eso no, y las temporadas nunca
+    lo han tenido; el de la serie es el que vale para las plataformas donde se emite (TMDb las da por serie)."""
+    actual = item
+    for _ in range(3):  # episodio -> temporada -> serie
+        padre = actual.get("parent_id")
+        if not padre:
+            return None
+        fila = conn.execute("SELECT * FROM library_items WHERE id = ?", (padre,)).fetchone()
+        if not fila:
+            return None
+        actual = dict(fila)
+        if actual.get("tmdb_id"):
+            return actual["tmdb_id"]
+    return None
+
+
 def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
     """Suggest the best EMU provider code for a library item.
 
@@ -343,7 +362,7 @@ def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
                 "reason": "Detectado en el nombre del archivo",
             }
 
-        tmdb_id_raw = item.get("tmdb_id")
+        tmdb_id_raw = item.get("tmdb_id") or _tmdb_id_de_la_serie(conn, item)
         if not tmdb_id_raw:
             return {"suggested": None, "tmdb_providers": [], "reason": "Sin TMDb ID"}
 

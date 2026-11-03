@@ -14,8 +14,8 @@ interface Props<T> {
   alturaEstimada: number
   columnas: number
   // El que hace scroll, y la cabecera fija de la tabla (su alto no es lista).
-  contenedor: RefObject<HTMLElement>
-  cabecera: RefObject<HTMLElement>
+  contenedor: RefObject<HTMLElement | null>
+  cabecera: RefObject<HTMLElement | null>
   // Claves que se pintan siempre, se vean o no (ver utils/ventana).
   fijas?: ReadonlySet<number>
   pintar: (item: T, indice: number) => ReactNode
@@ -115,7 +115,7 @@ interface PropsRejilla<T> {
   // El ancho mínimo de una tarjeta y el hueco entre ellas, como en minmax(…, 1fr).
   minimo: number
   hueco: number
-  contenedor: RefObject<HTMLElement>
+  contenedor: RefObject<HTMLElement | null>
   pintar: (item: T, indice: number) => ReactNode
 }
 
@@ -194,7 +194,7 @@ export function RejillaVirtual<T>({ items, clave, minimo, hueco, contenedor, pin
 }
 
 // Dónde está el scroll del contenedor, descontada la cabecera fija si la hay.
-function useVista(contenedor: RefObject<HTMLElement>, cabecera?: RefObject<HTMLElement>) {
+function useVista(contenedor: RefObject<HTMLElement | null>, cabecera?: RefObject<HTMLElement | null>) {
   const [vista, setVista] = useState({ desde: 0, alto: 0, ancho: 0 })
   // useEffect y no useLayoutEffect: el contenedor es un antepasado, y React
   // engancha su ref DESPUÉS de los efectos de layout de los hijos.

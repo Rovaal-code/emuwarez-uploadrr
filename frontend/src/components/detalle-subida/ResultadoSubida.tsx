@@ -64,15 +64,18 @@ export function ResultadoSubida({ job, seeding, retryError, onStart, onRetry, on
       {retryError && <div className="dsub-error-reintento" role="alert">{retryError}</div>}
 
       {/* El estado se anuncia solo cuando cambia (un aviso del servidor lo pasa de «Subiendo» a «Completado»). */}
-      <div className="dsub-estado" role="status" aria-live="polite" aria-atomic="true">
+      <div className="dsub-estado">
         <span className="dsub-estado-simbolo" aria-hidden="true">{estado.simbolo}</span>
         <div className="dsub-estado-texto">
-          <p className="dsub-estado-titulo">
-            {estado.titulo}
-            {estado.seeding && <span className={`${estado.seeding.clase} dsub-estado-seeding`}>{estado.seeding.texto}</span>}
-          </p>
-          {estado.resumen && <p className="dsub-estado-resumen">{estado.resumen}</p>}
-          {estado.motivo && <p className="dsub-estado-motivo">{estado.motivo}</p>}
+          <div role="status" aria-live="polite" aria-atomic="true">
+            <p className="dsub-estado-titulo">
+              {estado.titulo}
+              {estado.seeding && <span className={`${estado.seeding.clase} dsub-estado-seeding`}>{estado.seeding.texto}</span>}
+            </p>
+            {estado.resumen && <p className="dsub-estado-resumen">{estado.resumen}</p>}
+            {estado.motivo && <p className="dsub-estado-motivo">{estado.motivo}</p>}
+          </div>
+          {estado.transcurrido && <p className="dsub-estado-resumen">{estado.transcurrido}</p>}
         </div>
       </div>
       {enMarcha && (

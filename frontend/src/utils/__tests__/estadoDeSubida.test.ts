@@ -66,4 +66,10 @@ describe('estadoVisible', () => {
     expect(e.titulo).toBe('Subiendo')
     expect(e.resumen).toContain('Calculando hash del torrent (1/1)')
   })
+
+  it('el tiempo transcurrido va aparte del resumen, que es lo que se anuncia', () => {
+    const e = estadoVisible(subida({ status: 'running', started_at: new Date(Date.now() - 125_000).toISOString() }), null)
+    expect(e.transcurrido).toBeTruthy()
+    expect(e.resumen).not.toContain(e.transcurrido!)
+  })
 })

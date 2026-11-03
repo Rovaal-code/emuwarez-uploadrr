@@ -15,6 +15,8 @@ export interface EstadoVisible {
   resumen?: string
   // Por qué falló, o qué quedó a medias.
   motivo?: string
+  // El tiempo transcurrido, aparte para que no se anuncie entero en cada cambio.
+  transcurrido?: string
   // El estado en qBittorrent de una subida completada, con la clase de insignia de Seeding.
   seeding?: { texto: string; clase: string }
 }
@@ -52,7 +54,7 @@ export function estadoVisible(job: UploadJob, seeding: SeedingResponse | null): 
       const fase = info?.label ?? phaseLabel(job.progress_phase)
       const contador = progressCounter(job)
       return { tono: 'curso', simbolo: '●', titulo: 'Subiendo',
-        resumen: `${fase}${info?.counterText ? ` (${info.counterText})` : ''}${contador ? ` · ${contador}` : ''}` }
+        resumen: `${fase}${info?.counterText ? ` (${info.counterText})` : ''}`, transcurrido: contador || undefined }
     }
     case 'queued':
       return { tono: 'curso', simbolo: '●', titulo: 'En cola', resumen: queuedWaitText(job) }

@@ -156,10 +156,10 @@ class TestEmuwarezConnection:
         assert result["ok"] is True
         assert len(http_falso.peticiones) == 2
 
-    def test_http_en_loopback_se_admite(self, http_falso):
-        http_falso.responde(_mock_response(200))
+    def test_http_tampoco_se_admite_en_loopback(self, http_falso):
         result = svc_test_emu(api_key="key123", base_url="http://localhost:8080")
-        assert result["ok"] is True
+        assert result["status"] == "insecure_url"
+        assert http_falso.peticiones == []
 
     def test_success(self, http_falso):
         http_falso.responde(_mock_response(200))

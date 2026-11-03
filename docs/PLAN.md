@@ -143,7 +143,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 - **Oleada 3, última tanda de estilos y HTTPS (#141):** `LoginPage` y los componentes menores pasan a clases
   (`styles/paginas.css`, `styles/componentes-menores.css`, prefijo `menores-`); de 92 `style={{` quedan 67, todos
   dinámicos. «Probar conexión» de eMuwarez rechaza una URL `http://` (estado `insecure_url`) antes de enviar la API
-  key, salvo `localhost`, `127.0.0.1` y `::1`.
+  key, sin excepción para loopback, y no sigue una redirección que baje a `http://`.
 - **Oleada 3, tercera tanda de estilos a clases:** mismo método (sin cambio visual, solo tokens ya existentes, una hoja
   por grupo, importadas al final de `main.tsx`; `Modal` pasa de `style` a `className`):
   - `styles/biblioteca.css` (`bib-`): `LibraryPage` y `LibraryTreeRow` (de 66 `style={{` a 5: sangrías y anchos calculados);

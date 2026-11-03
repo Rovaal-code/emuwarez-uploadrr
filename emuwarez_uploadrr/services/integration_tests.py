@@ -212,13 +212,12 @@ def test_emuwarez_connection(
     if not _base.startswith(("http://", "https://")):
         return _fail("emuwarez", "invalid_url", f"URL de eMuwarez inválida: {_base}")
 
-    # La clave viaja en la query: por http se vería en claro. Solo se admite en loopback (instancia de pruebas local).
+    # La clave viaja en la query: por http se vería en claro (o iría a un proxy del entorno). Solo https.
     try:
         _partes = urllib.parse.urlsplit(_base)
-        _host = _partes.hostname or ""
     except ValueError:  # p. ej. «http://[::1»
         return _fail("emuwarez", "invalid_url", "URL de eMuwarez inválida")
-    if _partes.scheme == "http" and _host not in http_cliente.HOSTS_LOOPBACK:
+    if _partes.scheme == "http":
         return _fail(
             "emuwarez",
             "insecure_url",

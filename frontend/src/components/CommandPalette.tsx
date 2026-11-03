@@ -37,6 +37,7 @@ export function CommandPalette({ secciones, onSeccion, onElemento, onClose }: {
       setBuscando(false)
       return
     }
+    setElementos([])   // Intro no puede abrir un resultado de la consulta anterior
     setBuscando(true)
     let vigente = true
     const t = setTimeout(() => {

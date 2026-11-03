@@ -200,6 +200,16 @@ export function AppShell({ user, onLogout }: AppShellProps) {
     })
   }, [])
 
+  // Elegir una sección en la paleta. Si ya estás en ella con una ficha abierta (/library/42), vuelve a la lista:
+  // `navigate` no hace nada cuando la sección es la misma.
+  const abrirSeccion = useCallback((id: string) => {
+    if (id !== pageFromPath() || window.location.pathname === `/${id}`) { navigate(id); return }
+    guardedLeave(() => {
+      window.history.pushState({}, '', `/${id}`)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+  }, [navigate])
+
   // Keep the tab in sync with browser back/forward.
   const paginaVigente = useRef(activePage)
   paginaVigente.current = activePage
@@ -281,7 +291,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
       {paletaAbierta && (
         <CommandPalette
           secciones={Object.entries(PAGE_TITLE).map(([id, titulo]) => ({ id, titulo }))}
-          onSeccion={navigate}
+          onSeccion={abrirSeccion}
           onElemento={abrirElemento}
           onClose={() => setPaletaAbierta(false)}
         />

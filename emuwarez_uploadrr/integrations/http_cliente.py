@@ -34,8 +34,6 @@ from typing import Any, Callable, Optional, TypeVar
 import httpx
 
 _MAX_REDIRECCIONES = 10  # el max_redirections de urllib
-# Únicos hosts a los que se permite http:// cuando se exige una conexión segura (una instancia local de pruebas).
-HOSTS_LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
 
 # httpx apunta cada petición en INFO con la URL entera, y la de eMuwarez y TMDb lleva la clave: que no llegue a
 # app.log ni a la consola, aunque nadie haya llamado a setup_app_logging (la CLI). Sus avisos sí pasan.
@@ -156,8 +154,7 @@ def _leer_hasta(usar: httpx.Client, metodo: str, url: str, cabeceras: dict[str, 
 
 
 def _es_segura(url: str) -> bool:
-    partes = urllib.parse.urlsplit(url)
-    return partes.scheme == "https" or (partes.scheme == "http" and (partes.hostname or "") in HOSTS_LOOPBACK)
+    return urllib.parse.urlsplit(url).scheme == "https"
 
 
 def _pedir_solo_seguras(usar: httpx.Client, metodo: str, url: str, cabeceras: dict[str, str],
@@ -197,8 +194,9 @@ def pedir(
     Lanza `ErrorHTTP` con un 4xx/5xx y `ErrorConexion` si no hay respuesta. Cualquier otra excepción (una URL mal
     formada, por ejemplo) sale tal cual. `en_sesion` es un cliente de `sesion()`, para que viajen sus cookies.
 
-    Con `solo_seguras` cada redirección se comprueba antes de seguirla y una que baje a `http://` (salvo en
-    loopback) corta con `ErrorConexion`: la URL de la petición puede llevar una clave y no debe viajar en claro."""
+    Con `solo_seguras` cada redirección se comprueba antes de seguirla y una que baje a `http://` corta con
+    `ErrorConexion`: la URL de la petición puede llevar una clave y no debe viajar en claro (tampoco hacia un proxy
+    del entorno, por eso no hay excepción para loopback)."""
     cabeceras = dict(cabeceras or {})
     if contenido is not None and not any(k.lower() == "content-type" for k in cabeceras):
         cabeceras["Content-Type"] = "application/x-www-form-urlencoded"

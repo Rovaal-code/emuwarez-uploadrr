@@ -61,6 +61,18 @@ describe('CommandPalette', () => {
     expect(f.elemento).toHaveBeenCalledWith(42)
   })
 
+  it('al cambiar la consulta, Intro no abre un resultado de la anterior', async () => {
+    m.mockResolvedValueOnce(lista([{ id: 42, title: 'Dune', year: 2021, item_type: 'movie' }]))
+    const f = await montarPaleta()
+    await escribir(entrada(), 'dun')
+    await esperar(() => texto().includes('Dune (2021)'))
+    m.mockReturnValueOnce(new Promise(() => { /* la segunda búsqueda no llega */ }))
+    await escribir(entrada(), 'star')
+    expect(texto()).not.toContain('Dune (2021)')
+    await tecla('Enter')
+    expect(f.elemento).not.toHaveBeenCalled()
+  })
+
   it('las flechas mueven la selección y dan la vuelta', async () => {
     const f = await montarPaleta()
     await tecla('ArrowUp')   // desde la primera, a la última

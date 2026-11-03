@@ -47,7 +47,7 @@ jobs:
       accion: ${{ steps.d.outputs.accion }}
       escala: ${{ steps.d.outputs.escala }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -120,7 +120,7 @@ jobs:
     steps:
       # Con credenciales: este job sube a master el commit de la versión y su
       # etiqueta. .dockerignore excluye .git, así que no llegan a la imagen.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4  # zizmor: ignore[artipacked]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4  # zizmor: ignore[artipacked]
 
       - id: version
         if: env.ACCION == 'publicar'

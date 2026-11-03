@@ -140,6 +140,7 @@
   overflow-y: auto;
 }
 .panel-atencion .panel-aviso { align-items: center; padding: 3px 4px; border-bottom: 0; }
+.panel-atencion .panel-aviso-ancho { grid-column: 1 / -1; }
 .panel-atencion .panel-punto { margin-top: 0; }
 .panel-atencion .panel-aviso-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-aviso-detalle {

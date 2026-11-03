@@ -286,6 +286,39 @@ describe('Panel', () => {
     })
   })
 
+  it('un solo aviso ocupa todo el ancho de la banda, con su acción a la derecha', async () => {
+    vi.mocked(getVersionInfo).mockResolvedValue({ version: '0.14.0', estado: 'hay_novedad', ultima: { version: '0.14.1' } })
+    await pagina()
+    await esperar(() => banda().querySelector('.panel-aviso'))
+    const avisos = [...banda().querySelectorAll('.panel-aviso')]
+    expect(avisos).toHaveLength(1)
+    expect(avisos[0].classList.contains('panel-aviso-ancho')).toBe(true)
+  })
+
+  it('con un número impar de avisos solo el último ocupa todo el ancho', async () => {
+    vi.mocked(getDashboardSummary).mockResolvedValue(resumen({
+      instancias_caidas: [{ id: 3, nombre: 'Radarr up', tipo: 'radarr', ultima_sincronizacion: null }],
+    }))
+    vi.mocked(getUploads).mockResolvedValue([
+      trabajo({ id: 9, status: 'failed', title: 'Fallida', error_message: 'Motivo', finished_at: new Date().toISOString() }),
+    ])
+    vi.mocked(getVersionInfo).mockResolvedValue({ version: '0.14.0', estado: 'hay_novedad', ultima: { version: '0.14.1' } })
+    await pagina()
+    await esperar(() => banda().querySelectorAll('.panel-aviso').length === 3)
+    expect([...banda().querySelectorAll('.panel-aviso')].map(a => a.classList.contains('panel-aviso-ancho')))
+      .toEqual([false, false, true])
+  })
+
+  it('con un número par de avisos ninguno ocupa todo el ancho', async () => {
+    vi.mocked(getDashboardSummary).mockResolvedValue(resumen({
+      instancias_caidas: [{ id: 3, nombre: 'Radarr up', tipo: 'radarr', ultima_sincronizacion: null }],
+    }))
+    vi.mocked(getVersionInfo).mockResolvedValue({ version: '0.14.0', estado: 'hay_novedad', ultima: { version: '0.14.1' } })
+    await pagina()
+    await esperar(() => banda().querySelectorAll('.panel-aviso').length === 2)
+    expect(banda().querySelector('.panel-aviso-ancho')).toBeNull()
+  })
+
   it('«Subir» abre el asistente sobre la temporada de la petición, con su selección y la petición', async () => {
     vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
       rec({ id: 5, library_target_id: 55, item_type: 'season', season_number: 2, episode_number: null, rec_request_id: 77, rec_points: 500, content_name: 'Serie (2016) - Temporada 2' }),

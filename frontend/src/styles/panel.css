@@ -80,8 +80,7 @@
   font-size: 12px;
   color: var(--text-muted);
 }
-/* Segunda línea de la fila: el grupo de release (lo que más se mira), los idiomas y «Ver petición». Alto fijo para
-   que las filas con y sin chip midan lo mismo; lo que no cabe se recorta, «Ver petición» nunca. */
+/* Metadatos de la fila: altura mínima uniforme y «Ver petición» sin recorte. */
 .panel-item-meta {
   display: flex;
   align-items: center;

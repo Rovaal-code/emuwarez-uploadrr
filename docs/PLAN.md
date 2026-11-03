@@ -296,6 +296,17 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - #192: los recuadres del HUD pasan de esquinas cortadas a redondeadas (`--radius-card` 12 px, `--radius-small` 7 px) y con
     borde y resplandor más suaves, en toda la app.
   - Sigue sin verse: el perfil real a 2000 px, la banda con más de cuatro instancias caídas y con el tour abierto.
+- **Oleada 4, rediseño P4: el detalle de una subida (#195):** abre por el resultado.
+  - Completada: «Subido a eMuwarez» con la insignia de seeding (las mismas `seedingDe`/`claseSeeding` del bloque #160), una
+    cuadrícula de datos y «Ver en eMuwarez», «Rellenar petición», «Ver en Biblioteca» y «Ver registro». Las fases quedan tras «Ver
+    todas las fases».
+  - «Dónde se fue el tiempo»: una barra por fase, proporcional al total y con el tiempo escrito (la barra es `aria-hidden`), a partir
+    del `progress_json`; «Pistas» dice «omitida» si el remux se omitió. Una fase sin marcas de tiempo enseña solo su estado.
+  - En curso, fallida o cancelada: mismo diseño con el problema primero (estado, motivo y reintento #126 arriba); el motivo
+    (`error_message`) por fin se ve en esta pantalla. El tiempo transcurrido va fuera de la región `aria-live`.
+  - No tiene «Abrir en qBittorrent»: la URL que la app conoce es la del servidor (puede ser un nombre de contenedor) y no guarda
+    el info-hash. Haría falta una URL pública de qBittorrent en Configuración.
+  - Sin ver: una subida real de punta a punta, el contraste AA medido con una herramienta y un lector de pantalla.
 
 ## Siguiente
 
@@ -313,8 +324,8 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
   - resumen de duplicados y trumps;
   - «Mejoras posibles»;
   - estadísticas del tracker por subida.
-- Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): ~~P1 Panel~~ (hecho), P4 detalle de
-  subida, P5 asistente con Resumen, P2 Biblioteca, P3 Peticiones, P6 Configuración. P7 móvil, pendiente de decidir. Las funciones que
+- Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): ~~P1 Panel~~ y ~~P4 detalle de subida~~ (hechos),
+  P5 asistente con Resumen, P2 Biblioteca, P3 Peticiones, P6 Configuración. P7 móvil, pendiente de decidir. Las funciones que
   tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: esquinas redondeadas y poco contraste, nada plano.
 
 ## Aplazado / ideas

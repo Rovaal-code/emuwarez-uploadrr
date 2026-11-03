@@ -14,6 +14,7 @@ import { syncRequests, getSyncStatus, getRequestsSyncProgress, type RequestsSync
 import { suscribirse, canalVivo } from '../api/eventos'
 import type { RequestSyncStatusResponse } from '../types/api'
 import { formatNumero } from '../utils/format'
+import { pasosDeSincronizarTodo, type PasoSincronizacion } from '../utils/sincronizarTodo'
 
 // Global sync state, shared by every page (Dashboard / Biblioteca / Peticiones).
 // The pages are unmounted when you switch tabs, so if this state lived inside a
@@ -42,6 +43,10 @@ interface SyncContextValue {
   // OTHER sync types use this to disable themselves, since running two syncs
   // at once caused a visual glitch in the top bar.
   isAnySyncing: boolean
+  // «Sincronizar todo»: lanza la biblioteca, el catálogo de eMuwarez y las peticiones una tras otra, con los mismos
+  // arranques de arriba (misma barra, mismos avisos). `todoPendiente` es que aún queda algún paso por lanzar.
+  startAllSync: () => void
+  todoPendiente: boolean
   // Last completion message, shown as a toast in the topbar's sync row (see
   // SyncProgressBanner) — green on success, red on error, auto-dismissed
   // after 5s. Shared by Biblioteca/eMuwarez/Peticiones syncs alike, so it's
@@ -86,13 +91,17 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [messageIsError, setMessageIsError] = useState(false)
   const [messageFadingOut, setMessageFadingOut] = useState(false)
   const [lastInvalidatedAt, setLastInvalidatedAt] = useState(0)
+  const [pasosPendientes, setPasosPendientes] = useState<PasoSincronizacion[]>([])
+  const isAnySyncing = libSyncing || catalogSyncing || requestsSyncing
 
   const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const messageFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Shows a completion toast for 5s (then a 300ms fade) — green on success,
   // red on error.
+  const ultimoFue = useRef({ error: false })
   const showMessage = useCallback((text: string, isError: boolean) => {
+    ultimoFue.current.error = isError
     if (messageTimer.current) clearTimeout(messageTimer.current)
     if (messageFadeTimer.current) clearTimeout(messageFadeTimer.current)
     setMessageFadingOut(false)
@@ -110,6 +119,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   // Clears any toast still showing/fading right as a NEW sync starts, so it
   // can't linger on top of (or alongside) the fresh progress chip.
   const hideMessage = useCallback(() => {
+    ultimoFue.current.error = false
     if (messageTimer.current) clearTimeout(messageTimer.current)
     if (messageFadeTimer.current) clearTimeout(messageFadeTimer.current)
     setMessageFadingOut(false)
@@ -273,6 +283,25 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       })
   }, [followRequests, refreshRequestsStatus, hideMessage, showMessage])
 
+  // ---- Sincronizar todo ----
+  // Cada paso se lanza cuando no queda ninguna sincronización en marcha. Si el que acaba de terminar fue un error
+  // (su aviso sigue en la barra), se para: el siguiente lo taparía.
+  const startAllSync = useCallback(() => {
+    if (libBusy.current || catalogBusy.current || requestsBusy.current) return
+    ultimoFue.current.error = false
+    setPasosPendientes(pasosDeSincronizarTodo(catalogStatus, requestsStatus))
+  }, [catalogStatus, requestsStatus])
+
+  useEffect(() => {
+    if (!pasosPendientes.length || isAnySyncing) return
+    const [paso, ...resto] = pasosPendientes
+    if (ultimoFue.current.error) { setPasosPendientes([]); return }
+    setPasosPendientes(resto)
+    if (paso === 'biblioteca') startLibrarySync()
+    else if (paso === 'catalogo') startCatalogSync('incremental')
+    else startRequestsSync(false)
+  }, [pasosPendientes, isAnySyncing, startLibrarySync, startCatalogSync, startRequestsSync])
+
   // Una sincronización de peticiones ya en marcha (la programada, otra pestaña o una recarga de página): se sigue.
   const checkAndResumeRequestsSync = useCallback(() => {
     if (requestsBusy.current) return
@@ -379,7 +408,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     libSyncing, libProgress, startLibrarySync,
     catalogSyncing, catalogProgress, catalogStatus, startCatalogSync, refreshCatalogStatus,
     requestsSyncing, requestsProgress, requestsStatus, startRequestsSync, refreshRequestsStatus,
-    isAnySyncing: libSyncing || catalogSyncing || requestsSyncing,
+    isAnySyncing, startAllSync, todoPendiente: pasosPendientes.length > 0,
     message, messageIsError, messageFadingOut, lastInvalidatedAt,
   }
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>

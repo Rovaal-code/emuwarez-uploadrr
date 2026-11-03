@@ -20,42 +20,15 @@
   grid-template-columns: minmax(0, 1fr) calc((100% - 32px) / 3);
 }
 
-/* Header "Sincronizar" buttons (Biblioteca · eMuwarez · Peticiones): the three
-   buttons + their gaps span exactly one stat card ("Tus subidas", the last
-   column) so they sit flush above it. Same one-card calc as the grid above. */
+/* «Sincronizar todo»: el botón de la cabecera del Panel. */
 .sync-card {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: calc((100% - 64px) / 5);
 }
-.sync-card > * {
-  flex: 1 1 0;
-  min-width: 0;
-}
-/* Only the three trigger buttons (span > button), never the buttons inside the
-   eMuwarez modal that also hangs off .sync-card. */
-.sync-card > * > button.btn {
-  width: 100%;
-  justify-content: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 11.5px;
-  padding-left: 8px;
-  padding-right: 8px;
-}
-/* Antes esto era un @media (max-width: 1400px). Las media queries miran la
-   ventana REAL y el zoom del tamaño de interfaz no existe para ellas: al 150%
-   en una pantalla de 1920 el contenido solo dispone de 1280 y necesita la
-   disposición estrecha, pero la media query sigue viendo 1920 y no salta. El
-   corte lo decide ahora utils/uiScale.ts y lo publica como esta clase. */
-.ui-estrecha .sync-card {
-  width: calc((100% - 32px) / 3);
-}
+.sync-card button.btn { white-space: nowrap; }
 
-/* «Tu cuenta en eMuwarez»: el hueco entre el título y los botones de
-   sincronizar, sin mover estos de encima de su tarjeta. Si no cabe, baja de línea. */
+/* «Tu cuenta en eMuwarez»: el hueco entre el título y el botón de
+   sincronizar. Si no cabe, baja de línea. */
 .cuenta-emu {
   flex: 1 1 0;
   min-width: 0;

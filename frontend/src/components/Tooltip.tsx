@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useLayoutEffect, useEffect, useId, isValidElement, cloneElement } from 'react'
 import { createPortal } from 'react-dom'
-import { sinEscalar, anchoVentana, medir } from '../utils/uiScale'
+import { sinEscalar, anchoVentana, altoVentana, medir } from '../utils/uiScale'
 import { crearRegistroDescripciones } from '../utils/descripcionesCompartidas'
 
 // Custom hover tooltip styled like the app's cards (opaque surface, not the
@@ -137,6 +137,8 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
     const half = el.offsetWidth / 2
     const clamped = Math.min(Math.max(pt.x, half + 6), anchoVentana() - half - 6)
     el.style.left = `${clamped}px`
+    // Si no cabe debajo (una tarjeta pegada al borde de abajo), se abre por encima del cursor.
+    if (pt.y + 14 + el.offsetHeight > altoVentana() - 6) el.style.top = `${Math.max(6, pt.y - 14 - el.offsetHeight)}px`
   }, [show, pt.x, pt.y])
 
   const triggerProps = {

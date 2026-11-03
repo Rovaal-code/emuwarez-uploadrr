@@ -33,6 +33,8 @@ EMU_TEST_STATE_KEY = "last_emu_test_utc"
 MIN_EMU_TEST_SECONDS = 60
 
 
+_HOSTS_LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
+
 def _emu_test_wait_seconds(conn) -> int:
     """Seconds remaining before another live eMuwarez probe is allowed (0 = now)."""
     from emuwarez_uploadrr.database import get_state
@@ -212,10 +214,19 @@ def test_emuwarez_connection(
     if not _base.startswith(("http://", "https://")):
         return _fail("emuwarez", "invalid_url", f"URL de eMuwarez inválida: {_base}")
 
+    # La clave viaja en la query: por http se vería en claro. Solo se admite en loopback (instancia de pruebas local).
+    _partes = urllib.parse.urlsplit(_base)
+    if _partes.scheme == "http" and (_partes.hostname or "") not in _HOSTS_LOOPBACK:
+        return _fail(
+            "emuwarez",
+            "insecure_url",
+            "La URL de eMuwarez debe usar https:// para no enviar la API key sin cifrar",
+        )
+
     # Rate-limit: at most one live probe per minute, to avoid saturating the
     # real eMuwarez server from the "Probar conexión" button. Only enforced
     # when we have a DB connection to persist the timestamp; the early
-    # not_configured/invalid_url returns above never reach the network and are
+    # not_configured/invalid_url/insecure_url returns above never reach the network and are
     # deliberately not throttled.
     if conn is not None and enforce_rate_limit:
         wait = _emu_test_wait_seconds(conn)

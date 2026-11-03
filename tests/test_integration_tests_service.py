@@ -124,6 +124,18 @@ class TestEmuwarezConnection:
         assert result["ok"] is False
         assert result["status"] == "invalid_url"
 
+    def test_http_remoto_se_rechaza_sin_enviar_la_clave(self, http_falso):
+        result = svc_test_emu(api_key="key123", base_url="http://emu-warez.com")
+        assert result["ok"] is False
+        assert result["status"] == "insecure_url"
+        assert "key123" not in str(result)
+        assert http_falso.peticiones == []
+
+    def test_http_en_loopback_se_admite(self, http_falso):
+        http_falso.responde(_mock_response(200))
+        result = svc_test_emu(api_key="key123", base_url="http://localhost:8080")
+        assert result["ok"] is True
+
     def test_success(self, http_falso):
         http_falso.responde(_mock_response(200))
         result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com")

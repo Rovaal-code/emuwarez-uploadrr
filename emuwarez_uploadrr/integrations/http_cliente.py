@@ -197,12 +197,15 @@ def pedir(
     Con `solo_seguras` cada redirección se comprueba antes de seguirla y una que baje a `http://` corta con
     `ErrorConexion`: la URL de la petición puede llevar una clave y no debe viajar en claro (tampoco hacia un proxy
     del entorno, por eso no hay excepción para loopback)."""
+    if solo_seguras and limite is not None:
+        # La lectura limitada sigue las redirecciones sin mirarlas: mejor negarse que fingir que protege.
+        raise ValueError("solo_seguras no se puede combinar con limite")
     cabeceras = dict(cabeceras or {})
     if contenido is not None and not any(k.lower() == "content-type" for k in cabeceras):
         cabeceras["Content-Type"] = "application/x-www-form-urlencoded"
     usar = en_sesion if en_sesion is not None else cliente(verify)
     try:
-        if solo_seguras and limite is None:
+        if solo_seguras:
             respuesta = _pedir_solo_seguras(usar, metodo.upper(), url, cabeceras, contenido, timeout)
         elif limite is None:
             respuesta = usar.request(

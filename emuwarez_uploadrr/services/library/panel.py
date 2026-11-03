@@ -331,7 +331,8 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
     from ..season_pack import pack_rollup_sql
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    recs: list[dict] = []
+    g1_recs: list[dict] = []  # group 1, already in its final order (the SQL's)
+    recs: list[dict] = []  # groups 2 & 3, sorted at the end
     seen_lib: set[int] = set()  # library ids already shown (so a piece of
     # content isn't repeated across groups 2 & 3 or after appearing in group 1)
 
@@ -344,15 +345,27 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
     # table (library_items.request_status only records one request per item, so
     # a series with several compatible requests would otherwise show just once).
     # One row per request, named/sized at the request's own scope (season /
-    # episode), linking to that request. Ordered newest request first.
+    # episode), linking to that request.
+    # Lo que más paga primero, para ver qué conviene subir antes: la recompensa
+    # (points) de mayor a menor, las que no la dicen al final y, a igual
+    # recompensa, la petición más nueva delante (el mismo orden que «Puntos /
+    # recompensa» en Peticiones, points_desc).
+    # Sin las que su copia no tiene castellano: eMuwarez solo admite contenido
+    # con castellano (en el audio o, si no, en los subtítulos) y la subida las
+    # rechazaría. Lo dice la preparación ya guardada (request_readiness:
+    # no_castellano, con has_spanish_ok = 0 de la fila pedida, temporada o
+    # capítulo incluidos), la misma que pintan Peticiones y el aviso; una
+    # petición que aún no se ha evaluado (NULL) se queda.
     g1 = conn.execute(
         """
-        SELECT ri.id AS req_id, ri.req_scope, ri.req_season, ri.req_episode, ri.created_at AS req_created,
+        SELECT ri.id AS req_id, ri.req_scope, ri.req_season, ri.req_episode, ri.points,
                (SELECT rm.library_item_id FROM request_matches rm
                 WHERE rm.request_item_id = ri.id ORDER BY rm.confidence DESC LIMIT 1) AS lib_id
         FROM request_items ri
         WHERE (SELECT rm.status FROM request_matches rm
                WHERE rm.request_item_id = ri.id ORDER BY rm.confidence DESC LIMIT 1) = 'Compatible'
+          AND COALESCE(ri.readiness_status, '') <> 'no_castellano'
+        ORDER BY ri.points IS NULL, ri.points DESC, ri.created_at DESC, ri.id DESC
         """
     ).fetchall()
     for r in g1:
@@ -382,12 +395,12 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         d["episode_number"] = episode
         d["rec_group"] = 1
         d["rec_request_id"] = r["req_id"]
+        d["rec_points"] = r["points"]
         d["content_name"] = _rec_content_name(conn, lib, season=season, episode=episode, scope=scope)
         size_episode = episode if (scope == "episode" or disp_type == "episode") else None
         d["size_bytes"] = _rec_rolled_size(conn, lib, season=season, episode=size_episode)
         d["missing_count"] = None
-        d["_added"] = r["req_created"] or ""
-        recs.append(d)
+        g1_recs.append(d)
         seen_lib.add(int(lib_id))
 
     def _push(row: dict, group: int, *, name: str | None = None, size=None, missing_count=None):
@@ -400,6 +413,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         d["content_name"] = name if name is not None else _rec_content_name(conn, d)
         d["size_bytes"] = size if size is not None else _rec_rolled_size(conn, d)
         d["rec_request_id"] = None
+        d["rec_points"] = None
         d["missing_count"] = missing_count
         # Recency: for a Faltante candidate (group 3), when it actually BECAME
         # missing (missing_since) is what "newest first" should mean — falls
@@ -495,10 +509,12 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         _push(row, 3, name=_rec_content_name(conn, row, episode=single_missing_episode),
               missing_count=missing_count)
 
-    # Newest-first within each group (stable sort: order by recency, then by
-    # group so the three blocks stay in order 1 → 2 → 3).
+    # Groups 2 & 3: newest-first within each group (stable sort: order by
+    # recency, then by group so the blocks stay in order 2 → 3). Group 1 keeps
+    # its own order (by reward, from the SQL) and goes first.
     recs.sort(key=lambda d: d.get("_added") or "", reverse=True)
     recs.sort(key=lambda d: d["rec_group"])
     for d in recs:
         d.pop("_added", None)
+    recs = g1_recs + recs
     return recs if limit <= 0 else recs[:limit]

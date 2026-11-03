@@ -20,9 +20,10 @@ import { RequestFormModal } from '../components/RequestFormModal'
 import { useTooltip, HoverTitle } from '../components/Tooltip'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
-import { formatBytes, formatDate, formatItemType, formatNumero, timeAgo } from '../utils/format'
+import { formatBytes, formatDate, formatItemType, formatNumero, timeAgo, SIN_DATO } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
-import { ValueChip, ValueIcon, SizeValueIcon, TypeValueIcon, DetailTitleText } from '../components/DetailCard'
+import { recompensaDeRecomendacion } from '../utils/recomendaciones'
+import { ValueChip, ValueIcon, SizeValueIcon, TypeValueIcon, DetailTitleText, PlainValue } from '../components/DetailCard'
 
 // The recommendations item doesn't carry the configured instance name
 // (unlike a full LibraryItemResponse), only the raw instance_type — capitalize
@@ -53,7 +54,7 @@ import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../
 import { queSalieron, soloVivas, idsDe, ultimasTerminadas, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
 import { useSeccionVisible } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
-import { IconoEstrella, IconoLista, IconoPelicula, IconoSerie, IconoSubida, IconoTipo } from '../components/Iconos'
+import { IconoEstrella, IconoLista, IconoPelicula, IconoPuntos, IconoSerie, IconoSubida, IconoTipo } from '../components/Iconos'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -466,6 +467,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                       <th>Tipo</th>
                       <th>Origen</th>
                       <th>Categoría</th>
+                      <th className="panel-recompensa">Recompensa</th>
                       <th>Tamaño</th>
                       <th className="col-actions">Acción</th>
                     </tr>
@@ -473,6 +475,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                   <tbody>
                     {recommendations.map(item => {
                       const meta = REC_GROUP_META[item.rec_group] ?? REC_GROUP_META[2]
+                      const recompensa = recompensaDeRecomendacion(item)
                       return (
                       <tr key={`${item.rec_group}-${item.rec_request_id ?? item.id}`}>
                         <td>
@@ -501,6 +504,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                         <td className="panel-nowrap"><RecOriginCell item={item} instances={connInstances} /></td>
                         <td>
                           <span className={`badge ${meta.className}`}>{meta.category}</span>
+                        </td>
+                        {/* Solo las peticiones (grupo 1) tienen recompensa; por ella van ordenadas. */}
+                        <td className="panel-recompensa">
+                          {recompensa !== null
+                            ? <PlainValue icon={<IconoPuntos />}>{recompensa}</PlainValue>
+                            : <span className="panel-atenuado">{SIN_DATO}</span>}
                         </td>
                         <td className="panel-nowrap">
                           {item.size_bytes

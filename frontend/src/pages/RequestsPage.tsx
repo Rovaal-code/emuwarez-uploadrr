@@ -37,7 +37,7 @@ import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/d
 import { requestDisplayTitle } from '../utils/peticiones'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
-import { IconoBloqueado, IconoDocumental, IconoPelicula, IconoSerie } from '../components/Iconos'
+import { IconoBloqueado, IconoDocumental, IconoPelicula, IconoPuntos, IconoSerie } from '../components/Iconos'
 import { Modal } from '../components/Modal'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
@@ -106,6 +106,7 @@ const fmtNum = (n: number | null | undefined) => formatNumero(n)
 
 // Inline SVG icons for the votes/comments/points columns — emoji (👍💬🪙)
 // render as bare white outlines on some systems, so use real vector icons.
+// La moneda de los puntos es IconoPuntos (Iconos.tsx): la comparte el Panel.
 function Svg({ children, color }: { children: React.ReactNode; color: string }) {
   return (
     <svg viewBox="0 0 24 24" width={15} height={15} fill={color} className="pet-svg-medio" aria-hidden="true">
@@ -118,9 +119,6 @@ const VotesIcon = () => (
 )
 const CommentsIcon = () => (
   <Svg color="#9ca3af"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></Svg>
-)
-const PointsIcon = () => (
-  <Svg color="#eab308"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 15.09V18h-2v-.91c-1.28-.26-2.34-1.06-2.41-2.35h1.47c.07.67.55 1.19 1.94 1.19 1.49 0 1.82-.75 1.82-1.21 0-.63-.33-1.22-2.01-1.62-1.87-.45-3.15-1.22-3.15-2.76 0-1.29 1.05-2.13 2.34-2.41V7h2v.92c1.39.34 2.09 1.4 2.13 2.55h-1.47c-.04-.71-.42-1.19-1.65-1.19-1.17 0-1.87.53-1.87 1.28 0 .66.51 1.09 2.01 1.48s3.15 1.04 3.15 2.9c-.01 1.37-1.04 2.12-2.34 2.35z"/></Svg>
 )
 
 // Author cell — your own requests (author === emu.username) show in green + "(Yo)".
@@ -940,7 +938,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     ]} /></th>
                     {hayVotos && <th className="pet-centro" {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>}
                     {hayComentarios && <th className="pet-centro" {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>}
-                    <HeaderSort label={<PointsIcon />} nombre="Puntos / recompensa" desc="points_desc" asc="points_asc" sortBy={sortBy} onSort={setSortBy} align="center" />
+                    <HeaderSort label={<IconoPuntos />} nombre="Puntos / recompensa" desc="points_desc" asc="points_asc" sortBy={sortBy} onSort={setSortBy} align="center" />
                     <HeaderSort label="Creada" desc="created_desc" asc="created_asc" sortBy={sortBy} onSort={setSortBy} />
                   </tr>
                 </thead>

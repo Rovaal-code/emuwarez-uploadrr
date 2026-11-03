@@ -1,6 +1,6 @@
 /* Componentes pequeños: estilos que antes iban en línea. Un prefijo por
    componente (detcard-, logs-, provprio-, reqform-, bibdet-, poster-grande-,
-   emusync-, delsub-, hijos-). Se importa después de components.css en
+   emusync-, delsub-, hijos-, iconos-). Se importa después de components.css en
    main.tsx. Las reglas que retocan una clase base llevan el selector tan
    específico como ella o más: una clase suelta perdería contra ella. */
 
@@ -296,3 +296,6 @@
 .activity-section.hijos-caja { margin-bottom: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .hijos-scroll { overflow: auto; flex: 1; min-height: 0; }
 .data-table th.hijos-col-titulo { width: 100%; }
+
+/* Iconos: la moneda de los puntos, en línea con el texto como el resto de iconos de las columnas. */
+.iconos-puntos { flex-shrink: 0; vertical-align: middle; }

@@ -42,6 +42,15 @@
 }
 .hover-link.panel-rec-nombre { font-weight: 500; min-width: 0; }
 .data-table td.panel-nowrap { white-space: nowrap; }
+/* Recompensa: con el relleno lateral de las demás columnas, la tabla ya no
+   cabía a 1440 px y empujaba fuera «Actividad de subida». Con 6 px (en vez de
+   12) cabe y le quita al título lo menos posible. */
+.data-table th.panel-recompensa,
+.data-table td.panel-recompensa {
+  padding-left: 6px;
+  padding-right: 6px;
+  white-space: nowrap;
+}
 .badge.panel-cat-1,
 .badge.panel-cat-2,
 .badge.panel-cat-3 {

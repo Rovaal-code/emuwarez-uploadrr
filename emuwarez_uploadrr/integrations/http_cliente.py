@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import http.cookiejar
 import logging
+import re
 import ssl
 import threading
 import urllib.parse
@@ -167,6 +168,17 @@ def _mismo_servidor(a: httpx.URL, b: httpx.URL) -> bool:
     return a.scheme == b.scheme and a.host == b.host and a.port == b.port
 
 
+def _host_sin_claves(host: str, url: str) -> str:
+    """El nombre del servidor destino con la clave de la petición tapada: un servidor ajeno podría ponerla en el
+    nombre (`https://CLAVE.ejemplo/`) y el mensaje la enseñaría. httpx pasa el nombre a minúsculas, así que la
+    clave se busca sin distinguirlas."""
+    from .base import _claves_de  # base importa este módulo: el import va dentro para no cerrar el ciclo
+
+    for clave in _claves_de(url):
+        host = re.sub(re.escape(clave), "***", host, flags=re.IGNORECASE)
+    return host
+
+
 def _pedir_solo_seguras(usar: httpx.Client, metodo: str, url: str, cabeceras: dict[str, str],
                         contenido: Optional[bytes], timeout: float) -> httpx.Response:
     """Sigue las redirecciones a mano para mirar el destino de cada salto antes de pedirlo.
@@ -183,7 +195,7 @@ def _pedir_solo_seguras(usar: httpx.Client, metodo: str, url: str, cabeceras: di
         if not _es_segura(str(siguiente.url)):
             raise ErrorConexion("redirección a una dirección sin https")
         if not _mismo_servidor(origen, siguiente.url):
-            raise ErrorConexion(f"redirección a otro servidor ({siguiente.url.host})")
+            raise ErrorConexion(f"redirección a otro servidor ({_host_sin_claves(siguiente.url.host, url)})")
         respuesta = usar.send(siguiente, follow_redirects=False)
     if respuesta.next_request is not None:
         raise ErrorConexion("demasiadas redirecciones")

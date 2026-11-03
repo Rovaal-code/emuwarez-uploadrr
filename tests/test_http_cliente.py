@@ -298,6 +298,15 @@ def test_solo_seguras_corta_una_redireccion_a_otro_servidor_sin_pedirla(http_fal
     assert "CLAVESECRETA" not in repr(info.value) and "/x" not in info.value.motivo
 
 
+def test_solo_seguras_no_enseña_la_clave_si_el_otro_servidor_la_pone_en_su_nombre(http_falso):
+    http_falso.responde(respuesta(302, headers={"Location": "https://CLAVESECRETA.malo.example/x"}), respuesta(200))
+    with pytest.raises(http_cliente.ErrorConexion) as info:
+        http_cliente.pedir("GET", "https://a.example/x?api_token=CLAVESECRETA", timeout=5, solo_seguras=True)
+    assert len(http_falso.peticiones) == 1
+    assert "CLAVESECRETA" not in info.value.motivo and "CLAVESECRETA" not in repr(info.value)
+    assert "***.malo.example" in info.value.motivo  # el resto del nombre sigue identificando el destino
+
+
 def test_solo_seguras_corta_el_salto_a_otro_servidor_en_medio_de_la_cadena(http_falso):
     http_falso.responde(
         respuesta(302, headers={"Location": "https://a.example/uno"}),

@@ -276,6 +276,47 @@ def test_dashboard_recommendations_expose_request_reward(client, auth_headers):
     assert filas == [("Pedida", 1, req_id, 2500), ("Unica", 2, None, None)]
 
 
+def test_dashboard_recommendations_point_a_season_request_at_its_season(client, auth_headers):
+    """La petición de una temporada cruza con la serie, pero «Subir» abre el asistente sobre la temporada: la fila de
+    destino, con su calidad y su castellano (la serie no guarda ninguno), va en la recomendación."""
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    conn = connect(db_path())
+    init_db(conn)
+    conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok) "
+                 "VALUES ('Serie', 'series', 'Disponible', 0, 1)")
+    serie = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+                 "season_number, resolution, source, has_spanish_audio, has_spanish_subs, has_spanish_ok) "
+                 "VALUES ('Serie T2', 'season', 'Disponible', 0, ?, 2, '1080p', 'WEB-DL', 1, 0, 1)", (serie,))
+    temporada = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO request_items (emu_id, title, points, req_scope, req_season) "
+                 "VALUES ('r1', 'Serie T2', 900, 'season', 2)")
+    req_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO request_matches (library_item_id, request_item_id, status, confidence) "
+                 "VALUES (?, ?, 'Compatible', 1.0)", (serie, req_id))
+    conn.commit()
+    conn.close()
+
+    item = client.get("/api/dashboard/recommendations", headers=auth_headers).json()["items"][0]
+    assert (item["id"], item["library_target_id"], item["season_number"]) == (serie, temporada, 2)
+    assert (item["resolution"], item["source"]) == ("1080p", "WEB-DL")
+    assert (item["has_spanish_audio"], item["has_spanish_subs"]) == (1, 0)
+
+
+def test_dashboard_summary_lleva_las_instancias_caidas_y_la_proxima_sincronizacion(client, auth_headers):
+    from emuwarez_uploadrr.services import vigilancia_instancias as vig
+    resp = client.get("/api/dashboard/summary", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["instancias_caidas"] == []
+    assert resp.json()["next_sync_at"] is None or isinstance(resp.json()["next_sync_at"], str)
+
+    with patch.object(vig, "instancias_caidas", return_value=[
+            {"id": 1, "nombre": "Radarr up", "tipo": "radarr", "ultima_sincronizacion": "2026-11-02T10:00:00+00:00"}]):
+        caidas = client.get("/api/dashboard/summary", headers=auth_headers).json()["instancias_caidas"]
+    assert caidas == [{"id": 1, "nombre": "Radarr up", "tipo": "radarr",
+                       "ultima_sincronizacion": "2026-11-02T10:00:00+00:00"}]
+
+
 def test_dashboard_summary_requests_reclaimed_is_not_author_filtered(client, auth_headers):
     """eMuwarez doesn't expose whether a claim is yours — requests_reclaimed
     counts every Reclamado request regardless of author, even with no

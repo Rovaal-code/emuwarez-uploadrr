@@ -371,3 +371,31 @@
   flex-wrap: wrap;
 }
 
+/* Paso Resumen: dos paneles (lo que se sube, lo que ya hay) que pasan a una columna si no caben. */
+.asist-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.detail-card.asist-panel { padding: 12px 14px; border-radius: var(--radius-card); min-width: 0; }
+.asist-panel-titulo { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.asist-nombre-torrent { margin: 0 0 10px; font-size: 14px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.asist-lista-subida {
+  margin: 0 0 10px;
+  padding: 0 0 0 18px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.asist-datos { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 12.5px; }
+.asist-datos dt { color: var(--text-muted); }
+.asist-datos dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.asist-dato-nota { display: block; margin-top: 2px; font-size: 11.5px; color: var(--text-muted); }
+.asist-aviso-dato { color: var(--color-warning-soft); }
+.asist-nota-catalogo { margin: 10px 0 0; font-size: 11.5px; color: var(--text-muted); }
+
+/* «En eMuwarez ya hay»: la tabla hace scroll dentro del panel si son muchos */
+.asist-tabla-caja-yahay { max-height: 280px; }
+.asist-tabla-yahay > thead > tr > th:nth-child(2) { width: 31%; }
+.asist-tabla-yahay > thead > tr > th:nth-child(3) { width: 17%; }
+.asist-celda-yahay { padding: 6px 10px; vertical-align: top; }
+.asist-veredicto { font-weight: 600; color: var(--text-muted); }
+.asist-veredicto-mejor { color: var(--color-available-soft); }
+.asist-veredicto-peor { color: var(--color-warning-soft); }

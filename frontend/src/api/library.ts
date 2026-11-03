@@ -199,6 +199,8 @@ export interface EmuMatch {
   codec: string | null
   has_spanish: number | null
   size: number | null
+  // Tu copia frente a este torrent; null si no hay nada que comparar.
+  veredicto?: 'mejor' | 'igual' | 'peor' | null
 }
 
 export interface EmuComparison {
@@ -215,8 +217,15 @@ export interface EmuComparison {
   have_all_episodes?: boolean
 }
 
-export async function getEmuComparison(id: number): Promise<EmuComparison> {
-  return api.get<EmuComparison>(`/library/${id}/emu-comparison`)
+// `resolution` y `source`, si vienen, sustituyen a los de tu copia: lo que el asistente de subida pone en el nombre.
+export async function getEmuComparison(
+  id: number, tuya?: { resolution?: string | null; source?: string | null },
+): Promise<EmuComparison> {
+  const consulta = new URLSearchParams()
+  if (tuya?.resolution) consulta.set('resolution', tuya.resolution)
+  if (tuya?.source) consulta.set('source', tuya.source)
+  const query = consulta.toString() ? `?${consulta}` : ''
+  return api.get<EmuComparison>(`/library/${id}/emu-comparison${query}`)
 }
 
 export type EmuSyncMode = 'incremental' | 'full'

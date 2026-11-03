@@ -1,8 +1,9 @@
-// Paso 2 con varios elementos (temporadas o capítulos): las comprobaciones de
-// cada uno, las comunes a todos, y «Subir todas/todos» con su resultado. Mismo
-// aspecto que el de uno solo: tarjeta de comprobaciones y desplegable arriba a
-// la derecha para recorrer los elementos.
+// Paso Resumen con varios elementos (temporadas o capítulos): el resumen de la
+// tanda, las comprobaciones de cada uno, las comunes a todos, y «Subir todas/todos»
+// con su resultado. Mismo aspecto que el de uno solo, con un desplegable arriba a
+// la derecha para recorrer las comprobaciones de los elementos.
 import { CheckRow } from './piezas'
+import { ResumenSubida } from './ResumenSubida'
 import type { Asistente } from './useAsistente'
 
 export function PasoSubidaTanda({ a }: { a: Asistente }) {
@@ -24,7 +25,9 @@ export function PasoSubidaTanda({ a }: { a: Asistente }) {
         const resumen = !batchChecksLoading && (completas || !!batchChecksError)
         return (
           <>
-            <div className="asist-selector-fila">
+            <ResumenSubida a={a} />
+
+            <div className="asist-selector-fila asist-mt-14">
               <select
                 className="form-input form-select asist-select-auto"
                 value={viewId} onChange={e => setBatchViewId(Number(e.target.value))}
@@ -59,17 +62,20 @@ export function PasoSubidaTanda({ a }: { a: Asistente }) {
                 </>
               )}
 
-              {resumen && (
-                <div className={!batchChecksError && blocked.length === 0 && envReady ? 'asist-mt-14 asist-negrita asist-ok' : 'asist-mt-14 asist-negrita asist-error'}>
-                  {batchChecksError
-                    ? `✗ No se pudieron completar las comprobaciones: ${batchChecksError}`
-                    : !envReady
-                    ? '✗ La subida no se puede realizar'
-                    : blocked.length === 0
-                    ? `✓ Todo listo: ${batchQueue.length} ${batchIsEpisodes ? 'capítulos' : 'temporadas'}`
-                    : `✗ ${blocked.length} de ${batchQueue.length} no se ${blocked.length === 1 ? 'puede' : 'pueden'} subir`}
-                </div>
-              )}
+              {/* La región existe siempre: así el lector anuncia el veredicto cuando llega. */}
+              <div role="status">
+                {resumen && (
+                  <div className={!batchChecksError && blocked.length === 0 && envReady ? 'asist-mt-14 asist-negrita asist-ok' : 'asist-mt-14 asist-negrita asist-error'}>
+                    {batchChecksError
+                      ? `✗ No se pudieron completar las comprobaciones: ${batchChecksError}`
+                      : !envReady
+                      ? '✗ La subida no se puede realizar'
+                      : blocked.length === 0
+                      ? `✓ Todo listo: ${batchQueue.length} ${batchIsEpisodes ? 'capítulos' : 'temporadas'}`
+                      : `✗ ${blocked.length} de ${batchQueue.length} no se ${blocked.length === 1 ? 'puede' : 'pueden'} subir`}
+                  </div>
+                )}
+              </div>
               {/* Repite solo lo que falló o no llegó; lo elegido y editado se queda. */}
               {resumen && (!!batchChecksError || !envReady || blocked.length > 0) && (
                 <button className="btn btn-secondary btn-sm asist-mt-12 asist-t12" onClick={repetirComprobacionesTanda} type="button">
@@ -93,7 +99,7 @@ export function PasoSubidaTanda({ a }: { a: Asistente }) {
             )}
 
             <div className="asist-pie">
-              <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">Volver</button>
+              <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">← Volver</button>
               <button
                 className="btn btn-primary"
                 onClick={batchIsEpisodes ? uploadAllEpisodes : uploadAllSeasons}

@@ -145,8 +145,13 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   const [initialTag, setInitialTag] = useState('')
   // Los grupos de subida guardados en Configuración, para el desplegable de Tag.
   const [gruposDeSubida, setGruposDeSubida] = useState<string[]>([])
+  // El ajuste de pistas de Configuración: el Resumen lo dice en un pack y en una tanda, que no cargan las pistas.
+  const [modoPistasAjuste, setModoPistasAjuste] = useState<string | undefined>()
   useEffect(() => {
-    fetchSettings().then(s => setGruposDeSubida(s.upload_tags ?? [])).catch(() => { /* quedan los de siempre */ })
+    fetchSettings().then(s => {
+      setGruposDeSubida(s.upload_tags ?? [])
+      setModoPistasAjuste(s.remux_track_mode)
+    }).catch(() => { /* quedan los de siempre */ })
   }, [])
   const opcionesTag = Array.from(new Set([fields.tag, initialTag, ...(gruposDeSubida.length ? gruposDeSubida : ['EMUWAREZ'])].filter(Boolean))) as string[]
   const [titleWarning, setTitleWarning] = useState<string | null>(null)
@@ -1018,7 +1023,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   const seasonDisplayTitle = seasonTitlePreview ?? seasonPlan?.season_pack_title
 
   return {
-    item, onDone, onNavigate, onClose, needsSelection, allowMultiSeason, step, setStep,
+    item, onDone, onNavigate, onClose, needsSelection, allowMultiSeason, step, setStep, requestId, preselect, modoPistasAjuste,
     seleccion, targetId, targetIsSeason, seasonQueue, episodeQueue,
     // Paso 0
     seasons, episodes, selError, multiSelected, setMultiSelected, seasonUploadMode, setSeasonUploadMode,

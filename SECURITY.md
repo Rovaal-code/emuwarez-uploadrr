@@ -9,7 +9,7 @@ versiones antiguas.
 
 ## Cómo avisar de un fallo de seguridad
 
-Si tienes acceso al repositorio, avisa directamente a Gabriel (Kisnov) o abre un issue aquí, que solo lo ven los
+Si tienes acceso al repositorio, avisa directamente a Kisnov o abre un issue aquí, que solo lo ven los
 colaboradores. Cuenta qué has visto, qué impacto crees que tiene y cómo reproducirlo, y la versión de la imagen.
 
 Si el fallo está en la subida en sí (el programa que se lanza para subir a eMuwarez), repórtalo en

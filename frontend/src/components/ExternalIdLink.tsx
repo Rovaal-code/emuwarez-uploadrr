@@ -10,7 +10,7 @@ export function ExternalIdLink({ id, href, label }: { id: string; href: string |
   const { triggerProps, tooltipNode } = useTooltip(href ? `Ver en ${label}` : null)
   const inner = (
     <>
-      <Favicon domain={domain} size={16} radius={3} fallback={<span style={{ fontSize: 12 }}>↗</span>} />
+      <Favicon domain={domain} size={16} radius={3} fallback={<span className="menores-flecha">↗</span>} />
       {id}
     </>
   )

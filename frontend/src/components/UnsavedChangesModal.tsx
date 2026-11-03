@@ -25,10 +25,10 @@ export function UnsavedChangesModal() {
   return (
     <Modal titulo="Cambios sin guardar" onClose={cancel} style={{ maxWidth: 420 }}>
       <div className="modal-body">
-        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13.5, lineHeight: 1.5 }}>
+        <p className="menores-sin-guardar-texto">
           Tienes cambios sin guardar en Configuración. Si sales ahora se perderán.
         </p>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+        <div className="menores-sin-guardar-acciones">
           <button className="btn btn-danger" onClick={confirm}>Salir sin guardar</button>
         </div>
       </div>

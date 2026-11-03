@@ -83,7 +83,7 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
         {/* User info — username only, with a toggle to obfuscate it */}
         {user && (
           <div className="topbar-user">
-            <IconoUsuario size={15} style={{ color: 'var(--text-accent)' }} />
+            <IconoUsuario size={15} />
             <span className="topbar-username">
               {hideName ? tapar(user.username) : user.username}
             </span>

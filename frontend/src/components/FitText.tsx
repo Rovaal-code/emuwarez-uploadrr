@@ -114,7 +114,7 @@ export function FitText({
   if (!showSizeControls) return textNode
 
   return (
-    <div style={{ width: '100%', minWidth: 0 }}>
+    <div className="menores-fit-envoltorio">
       {textNode}
       <SizeControls value={manualSize} auto={autoSizeRef.current} onChange={setManualSize} />
     </div>
@@ -197,10 +197,10 @@ export function FitTextPair({
   }, [textoA, textoB, max, min, manualSize])
 
   return (
-    <div style={{ width: '100%', minWidth: 0 }}>
+    <div className="menores-fit-envoltorio">
       <div style={items[0].labelStyle}>{items[0].label}</div>
       <div ref={refA} style={textStyle}>{items[0].text}</div>
-      <div style={{ ...items[1].labelStyle, marginTop: 10 }}>{items[1].label}</div>
+      <div className="menores-fit-segunda-etiqueta" style={items[1].labelStyle}>{items[1].label}</div>
       <div ref={refB} style={textStyle}>{items[1].text}</div>
       {showSizeControls && <SizeControls value={manualSize} auto={autoSizeRef.current} onChange={setManualSize} />}
     </div>
@@ -216,7 +216,7 @@ function SizeControls({ value, auto, onChange }: {
   const incTip = useTooltip('Aumentar tamaño de letra')
   const resetTip = useTooltip('Volver al ajuste automático')
   return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 4 }}>
+    <div className="menores-fit-controles">
       <button
         type="button"
         onClick={() => onChange(s => Math.max(4, Math.round((s ?? auto) - 1)))}
@@ -232,7 +232,7 @@ function SizeControls({ value, auto, onChange }: {
       {value != null && (
         <button type="button" onClick={() => onChange(() => null)} style={debugBtnStyle} {...resetTip.triggerProps}>↺{resetTip.tooltipNode}</button>
       )}
-      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+      <span className="menores-fit-valor">
         {value != null ? `${value}px (manual)` : `${auto.toFixed(1)}px (auto)`}
       </span>
     </div>

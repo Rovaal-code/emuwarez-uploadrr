@@ -91,7 +91,7 @@ export function ProviderIcon({ code, size = 18, link = true }: { code: string | 
   const visual = url
     ? (
       <span style={{ ...box, background: 'var(--overlay-light)' }} {...codeTip.triggerProps}>
-        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} />
+        <img src={url} alt="" className="menores-icono-img" />
         {codeTip.tooltipNode}
       </span>
     )
@@ -105,13 +105,12 @@ export function ProviderIcon({ code, size = 18, link = true }: { code: string | 
   if (domain && link) {
     return (
       <a
-        className="hover-link"
         href={`https://${domain}`}
         target="_blank"
         rel="noreferrer"
         onClick={e => e.stopPropagation()}
         draggable={false}
-        style={{ display: 'inline-flex', flexShrink: 0 }}
+        className="hover-link menores-proveedor-enlace"
         {...openTip.triggerProps}
       >
         {visual}
@@ -131,7 +130,7 @@ export function ProviderTag({ code, label, size = 18 }: { code: string | null | 
   const inner = (
     <>
       <ProviderIcon code={code} size={size} link={false} />
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label ?? code}</span>
+      <span className="menores-proveedor-nombre">{label ?? code}</span>
     </>
   )
   const style: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }

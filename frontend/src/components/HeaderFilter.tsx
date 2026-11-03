@@ -187,13 +187,8 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
           role="dialog"
           aria-label={`Filtrar ${label}`}
           onClick={e => e.stopPropagation()}
-          style={{
-            position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000,
-            minWidth: 170, maxWidth: 'min(340px, calc(var(--vw100) - 16px))',
-            maxHeight: 300, overflowY: 'auto', padding: 4,
-            background: 'var(--bg-surface)', border: '1px solid var(--border)',
-            borderRadius: 8, boxShadow: 'var(--shadow-modal)',
-          }}
+          className="menores-filtro-panel"
+          style={{ top: pos.top, left: pos.left }}
         >
           {buscador && (
             <input

@@ -14,13 +14,8 @@ export function PosterStatusIcon({ status }: { status: string }) {
   return (
     <span
       aria-label={status}
-      style={{
-        width: 24, height: 24, borderRadius: '50%', background: color,
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        color: 'var(--text-on-color)', fontSize: 14, fontWeight: 800, lineHeight: 1,
-        border: '2px solid color-mix(in srgb, var(--overlay-light) 90%, transparent)',
-        boxShadow: '0 1px 4px color-mix(in srgb, var(--overlay-dark) 55%, transparent)',
-      }}
+      className="menores-poster-estado"
+      style={{ background: color }}
       {...triggerProps}
     >
       {symbol}

@@ -1,0 +1,3 @@
+/* Estilos de páginas sueltas que antes iban en línea (pages/LoginPage.tsx). Se importa el último en main.tsx. */
+.login-title.login-titulo-mt { margin-top: 10px; }
+.spinner.login-spinner { width: 14px; height: 14px; border-width: 2px; }

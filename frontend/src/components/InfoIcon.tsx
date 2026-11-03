@@ -10,12 +10,8 @@ export function InfoIcon({ text, size = 13 }: { text: React.ReactNode; size?: nu
       <button
         type="button"
         aria-label="Más información"
-        style={{
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          width: size, height: size, borderRadius: '50%', border: '1px solid var(--text-muted)',
-          fontSize: size - 4, cursor: 'help', flexShrink: 0, color: 'var(--text-muted)',
-          background: 'transparent', padding: 0, lineHeight: 1,
-        }}
+        className="menores-info"
+        style={{ width: size, height: size, fontSize: size - 4 }}
       >
         ?
       </button>

@@ -33,7 +33,7 @@ export function SyncInfo({ syncStatus, onSync, syncing, blocked = false, label =
       )}
       <Tooltip content={!can_sync ? `Disponible en ${mins} min` : blocked ? 'Otra sincronización en curso' : (title ?? 'Sincronizar')}>
         <button className="btn btn-primary btn-sm" onClick={() => onSync(false)} disabled={syncing || blocked || !can_sync}>
-          {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : `↻ ${label}`}
+          {syncing ? <><span className="spinner emusync-spinner" /> Sincronizando…</> : `↻ ${label}`}
         </button>
       </Tooltip>
       {!can_sync && allowForce && (

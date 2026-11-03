@@ -22,12 +22,9 @@ export function Favicon({ domain, src, size = 16, fallback = null, radius = 3, b
   const onError = () => setStage(s => (s === 'direct' && google ? 'google' : 'failed'))
   if (background) {
     return (
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: size, height: size, borderRadius: radius, background, flexShrink: 0, overflow: 'hidden',
-      }}>
+      <span className="menores-icono-caja" style={{ width: size, height: size, borderRadius: radius, background }}>
         <img src={current} alt="" loading="lazy" onError={onError}
-          style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2, boxSizing: 'border-box' }} />
+          className="menores-icono-img menores-icono-img-caja" />
       </span>
     )
   }

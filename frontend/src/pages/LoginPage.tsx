@@ -55,7 +55,7 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
       <div className="login-card">
         <div className="login-logo">
           <ServiceIcon type="emu" size={40} />
-          <div className="login-title" style={{ marginTop: 10 }}>eMuwarez Uploadrr</div>
+          <div className="login-title login-titulo-mt">eMuwarez Uploadrr</div>
           <div className="login-sub">Inicia sesión para continuar</div>
         </div>
         <form onSubmit={handleSubmit} className="login-fields" autoComplete="on">
@@ -96,7 +96,7 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
             className="btn btn-primary login-submit"
             disabled={loading || !username.trim() || !password}
           >
-            {loading ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Iniciando…</> : 'Iniciar sesión'}
+            {loading ? <><span className="spinner login-spinner" /> Iniciando…</> : 'Iniciar sesión'}
           </button>
         </form>
       </div>

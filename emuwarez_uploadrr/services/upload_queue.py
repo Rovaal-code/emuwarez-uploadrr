@@ -1210,9 +1210,12 @@ def _paso_preparar(t: _Trabajo) -> bool:
             # Con ficheros rehechos o un tmp de otra preparación, empieza de cero.
             reanuda = uploadrr_puede_reanudar(anterior.get("status"), anterior.get("etapa_parada"),
                                               anterior.get("pasos_uploadrr_json"))
+            # Si reanuda, hereda los pasos que dejó hechos: un fallo antes del primer `Step done` no debe borrarlos.
+            pasos = anterior.get("pasos_uploadrr_json") if reanuda else None
             conn.execute("UPDATE upload_jobs SET remux_snapshot_json = ?, huellas_preparacion_json = ?, "
-                         "reanuda_uploadrr = ? WHERE id = ?",
-                         (anterior["remux_snapshot_json"], anterior["huellas_preparacion_json"], int(reanuda), job_id))
+                         "reanuda_uploadrr = ?, pasos_uploadrr_json = ? WHERE id = ?",
+                         (anterior["remux_snapshot_json"], anterior["huellas_preparacion_json"], int(reanuda), pasos,
+                          job_id))
             conn.commit()
             update_phase_progress(job_id, "remux", 100)
             aprovecha = subpasos_que_reutilizaria(anterior.get("status"), anterior.get("etapa_parada"),

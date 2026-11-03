@@ -26,7 +26,7 @@ describe('opcionesDeReintento', () => {
   it('dice qué reutiliza el reintento que reanuda, si Uploadrr dejó algo hecho', () => {
     const [reanudar, principio] = opcionesDeReintento({
       reintento_desde_nombre: 'Verificar antes de subir', reintento_reutiliza: ['Capturas', 'Torrent'] })
-    expect(reanudar.ayuda).toBe('Reutiliza lo ya hecho: capturas, torrent')
+    expect(reanudar.ayuda).toBe('Reutiliza lo ya hecho si los ficheros no han cambiado: capturas, torrent')
     expect(principio.ayuda).toBeUndefined()
     expect(opcionesDeReintento({ reintento_desde_nombre: 'X', reintento_reutiliza: [] })[0].ayuda).toBeUndefined()
   })

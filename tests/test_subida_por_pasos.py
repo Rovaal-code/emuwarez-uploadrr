@@ -438,6 +438,7 @@ def test_el_reintento_reutiliza_los_ficheros_pero_uploadrr_no_reanuda(db_conn, p
 
     assert pipeline.preparados == []                 # la preparación sí se reutiliza
     assert _reanuda(db_conn, nuevo) == 0             # pero Uploadrr-EMU empieza de cero
+    assert db_conn.execute("SELECT pasos_uploadrr_json FROM upload_jobs WHERE id = ?", (nuevo,)).fetchone()[0] is None
 
 
 def test_el_reintento_dice_que_uploadrr_no_repetira_lo_que_termino(db_conn, pipeline):
@@ -448,6 +449,9 @@ def test_el_reintento_dice_que_uploadrr_no_repetira_lo_que_termino(db_conn, pipe
     uq._run_queued_job(nuevo)
 
     assert any("Uploadrr no repetirá: capturas, torrent" in m for m in _logs(db_conn, nuevo))
+    # Los pasos pasan al trabajo nuevo: si falla antes de terminar otro, el siguiente reintento sigue sabiéndolos.
+    assert db_conn.execute("SELECT pasos_uploadrr_json FROM upload_jobs WHERE id = ?", (nuevo,)).fetchone()[0] == \
+        json.dumps(["screenshots", "torrent"])
 
 
 def test_el_reintento_prepara_de_nuevo_si_el_original_ha_cambiado(db_conn, pipeline):

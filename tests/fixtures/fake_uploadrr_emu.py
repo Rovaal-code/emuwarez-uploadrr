@@ -16,6 +16,7 @@ Failure/slowness simulation (for exercising cancel/timeout/failed paths):
   --fake-sleep SECONDS        sleep between each log line
   FAKE_UPLOADRR_FAIL=1        same as --fake-fail (env fallback)
   FAKE_UPLOADRR_SLEEP=N       same as --fake-sleep (env fallback)
+  FAKE_UPLOADRR_FAIL_EARLY=1  exit 1 before any `Step done:` line
   FAKE_UPLOADRR_LINES=N       print N more stdout lines (enough to fill the pipe)
   FAKE_UPLOADRR_GRANDCHILD=F  start a child that keeps stdout/stderr open for 60 s
                               (like mkbrr/ffmpeg) and write its pid to file F
@@ -65,6 +66,10 @@ def main(argv: list[str] | None = None) -> int:
         print(line, flush=True)
         if sleep_s:
             time.sleep(sleep_s)
+
+    if os.environ.get("FAKE_UPLOADRR_FAIL_EARLY") == "1":
+        print("[EMU] ERROR: fallo simulado antes de terminar ningún paso", file=sys.stderr, flush=True)
+        return 1
 
     emit("[EMU] Preparando subida")
     emit(f"[EMU] Archivo: {args.path}")

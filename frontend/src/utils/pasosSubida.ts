@@ -33,7 +33,7 @@ export function opcionesDeReintento(
     {
       etiqueta: `Reintentar desde «${job.reintento_desde_nombre}»`,
       desdeElPrincipio: false,
-      ...(reutiliza.length > 0 ? { ayuda: `Reutiliza lo ya hecho: ${reutiliza.join(', ').toLowerCase()}` } : {}),
+      ...(reutiliza.length > 0 ? { ayuda: `Reutiliza lo ya hecho si los ficheros no han cambiado: ${reutiliza.join(', ').toLowerCase()}` } : {}),
     },
     { etiqueta: 'Reintentar desde el principio', desdeElPrincipio: true },
   ]

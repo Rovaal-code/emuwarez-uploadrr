@@ -127,7 +127,7 @@ def test_la_migracion_añade_las_columnas_y_se_puede_repetir(db_conn):
 # La ejecución real contra el Uploadrr-EMU falso
 # ---------------------------------------------------------------------------
 
-def _preparar_subida(db_conn, tmp_path, uploadrr_dir, python_path, *, reanuda):
+def _preparar_subida(db_conn, tmp_path, uploadrr_dir, python_path, *, reanuda, pasos=None):
     from emuwarez_uploadrr.services.upload_execution import get_upload_job  # noqa: F401
     for k, v in {"uploadrr.path": str(uploadrr_dir), "uploadrr.python_path": python_path,
                  "tmdb.api_key": "tmdb_secret_abc123", "emu.api_key": "emu_secret_xyz789",
@@ -137,10 +137,10 @@ def _preparar_subida(db_conn, tmp_path, uploadrr_dir, python_path, *, reanuda):
     prepared.write_bytes(b"\x00" * 16)
     cur = db_conn.execute(
         "INSERT INTO upload_jobs (title, path, status, stage, source_path, prepared_path, uploadrr_command_json, "
-        "reanuda_uploadrr, created_at, updated_at) "
-        "VALUES ('T', ?, 'ready', 'preflight', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        "reanuda_uploadrr, pasos_uploadrr_json, created_at, updated_at) "
+        "VALUES ('T', ?, 'ready', 'preflight', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
         (str(prepared), str(prepared), str(prepared),
-         json.dumps({"category": "movie", "tmdb_id": "1", "resolution": "1080p", "title": "T"}), reanuda))
+         json.dumps({"category": "movie", "tmdb_id": "1", "resolution": "1080p", "title": "T"}), reanuda, pasos))
     db_conn.commit()
     return cur.lastrowid
 
@@ -208,3 +208,24 @@ def test_solo_un_trabajo_que_reanuda_lanza_resume(db_conn, tmp_path, fake_upload
 ])
 def test_cuando_uploadrr_puede_reanudar(status, parada, crudo, esperado):
     assert sp.uploadrr_puede_reanudar(status, parada, crudo) is esperado
+
+
+def test_un_trabajo_que_reanuda_conserva_los_pasos_heredados_si_falla_antes_de_terminar_ninguno(
+        db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, monkeypatch):
+    monkeypatch.setenv("FAKE_UPLOADRR_FAIL_EARLY", "1")
+    jid = _preparar_subida(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, reanuda=1,
+                           pasos=json.dumps(["screenshots", "torrent"]))
+
+    job = _correr(db_conn, jid)
+
+    assert job["status"] == "failed"
+    assert sp.leer_subpasos(job["pasos_uploadrr_json"]) == ["screenshots", "torrent"]
+
+
+def test_un_trabajo_que_no_reanuda_no_hereda_nada(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, monkeypatch):
+    monkeypatch.setenv("FAKE_UPLOADRR_FAIL_EARLY", "1")
+    jid = _preparar_subida(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, reanuda=0)
+
+    job = _correr(db_conn, jid)
+
+    assert job["status"] == "failed" and sp.leer_subpasos(job["pasos_uploadrr_json"]) == []

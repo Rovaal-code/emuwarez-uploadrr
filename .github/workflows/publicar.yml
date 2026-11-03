@@ -68,9 +68,14 @@ jobs:
           EVENTO: ${{ github.event_name }}
           ESCALA: ${{ inputs.escala || 'auto' }}
           PRUEBA: ${{ inputs.solo_prueba || false }}
+          REF: ${{ inputs.ref }}
           NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
           TOKEN: ${{ secrets.UPLOADRR_VERSION_TOKEN }}
         run: |
+          if [ "$PRUEBA" = true ] && [ -n "$REF" ]; then
+            echo "::error::solo_prueba y ref no se combinan: :edge es la punta de master."
+            exit 1
+          fi
           if [ "$PRUEBA" = true ]; then
             echo "accion=prueba" >> "$GITHUB_OUTPUT"
             exit 0

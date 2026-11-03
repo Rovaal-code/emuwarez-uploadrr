@@ -393,6 +393,10 @@ def _logs(conn, job_id):
         "SELECT message FROM upload_job_logs WHERE upload_job_id = ?", (job_id,))]
 
 
+def _reanuda(conn, job_id):
+    return conn.execute("SELECT reanuda_uploadrr FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()[0]
+
+
 def _retry_en_marcha(db_conn, pipeline, **kw):
     iid = _peli(db_conn, str(pipeline.origen))
     _anterior(db_conn, iid, pipeline.destino, **kw)
@@ -416,6 +420,18 @@ def test_el_reintento_reutiliza_la_preparacion_que_sigue_valiendo(db_conn, pipel
     assert json.loads(fila["huellas_preparacion_json"]) == json.loads(_huellas({"Peli.2024.mkv": pipeline.origen}))
     assert fila["prepared_path"] == str(pipeline.destino)
     assert any(f"Se reutiliza la preparación de la subida #{anterior}" in m for m in _logs(db_conn, nuevo))
+    # Con los ficheros de la anterior, Uploadrr-EMU también reanuda (`--resume`).
+    assert _reanuda(db_conn, nuevo) == 1
+
+
+def test_el_reintento_dice_que_uploadrr_no_repetira_lo_que_termino(db_conn, pipeline):
+    os.link(pipeline.origen, pipeline.destino)
+    anterior, nuevo = _retry_en_marcha(db_conn, pipeline, originales={"Peli.2024.mkv": pipeline.origen},
+                                       pasos_uploadrr_json=json.dumps(["screenshots", "torrent"]))
+
+    uq._run_queued_job(nuevo)
+
+    assert any("Uploadrr no repetirá: capturas, torrent" in m for m in _logs(db_conn, nuevo))
 
 
 def test_el_reintento_prepara_de_nuevo_si_el_original_ha_cambiado(db_conn, pipeline):
@@ -430,6 +446,8 @@ def test_el_reintento_prepara_de_nuevo_si_el_original_ha_cambiado(db_conn, pipel
 
     assert pipeline.preparados == [str(pipeline.destino)]
     assert any("No se reutiliza la preparación anterior" in m and "ha cambiado" in m for m in _logs(db_conn, nuevo))
+    # Ficheros rehechos: el torrent y las capturas de la anterior no valen, Uploadrr-EMU empieza de cero.
+    assert _reanuda(db_conn, nuevo) == 0
 
 
 def test_preparar_apunta_la_huella_del_original(db_conn, pipeline):

@@ -577,12 +577,20 @@ export interface UploadProgressState {
 
 // Phase 6A — Upload preflight
 
+// Lo que Uploadrr-EMU ha dado por terminado dentro de «Subir con Uploadrr» (services/subida_pasos.py).
+export interface SubpasoSubida {
+  clave: string
+  nombre: string
+  hecho: boolean
+}
+
 // Un paso con nombre de una subida (services/subida_pasos.py).
 export interface PasoSubida {
   clave: string
   nombre: string
   // hecho | en_curso | fallido | cancelado | pendiente
   estado: string
+  subpasos?: SubpasoSubida[]
 }
 
 export interface UploadJob {
@@ -595,6 +603,8 @@ export interface UploadJob {
   pasos?: PasoSubida[]
   reintento_desde?: string | null
   reintento_desde_nombre?: string | null
+  // Lo que un reintento que reanuda no repetiría dentro de Uploadrr-EMU (capturas, torrent).
+  reintento_reutiliza?: string[]
   title?: string
   source_path?: string
   prepared_path?: string

@@ -23,12 +23,12 @@ def _peli(conn, ruta="/fake/movie.mkv"):
     return conn.execute("SELECT id FROM library_items ORDER BY id DESC LIMIT 1").fetchone()["id"]
 
 
-def _subida(conn, status, stage, parada=None):
+def _subida(conn, status, stage, parada=None, pasos_uploadrr=None):
     cur = conn.execute(
-        """INSERT INTO upload_jobs (library_item_id, status, stage, etapa_parada, title, path, source_path,
-                                    created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'Peli', '/fake/movie.mkv', '/fake/movie.mkv', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
-        (_peli(conn), status, stage, parada))
+        """INSERT INTO upload_jobs (library_item_id, status, stage, etapa_parada, pasos_uploadrr_json, title, path,
+                                    source_path, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'Peli', '/fake/movie.mkv', '/fake/movie.mkv', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+        (_peli(conn), status, stage, parada, pasos_uploadrr))
     conn.commit()
     return cur.lastrowid
 
@@ -42,6 +42,21 @@ def test_el_detalle_trae_los_pasos_y_desde_donde_se_reanudaria(client, auth_head
     assert datos["pasos"][0]["nombre"]
     assert datos["reintento_desde"] == "verificacion"
     assert datos["reintento_desde_nombre"] == "Verificar antes de subir"
+
+
+def test_el_detalle_enseña_lo_que_uploadrr_termino_y_lo_que_un_reintento_no_repetiria(client, auth_headers, db_conn):
+    j = _subida(db_conn, "failed", "failed", "running", '["screenshots", "torrent"]')
+    datos = client.get(f"/api/uploads/{j}", headers=auth_headers).json()
+
+    assert [(s["clave"], s["hecho"]) for s in datos["pasos"][3]["subpasos"]] == [
+        ("screenshots", True), ("torrent", True), ("tracker", False)]
+    assert "subpasos" not in datos["pasos"][0] or datos["pasos"][0]["subpasos"] == []
+    assert datos["reintento_reutiliza"] == ["Capturas", "Torrent"]
+
+
+def test_sin_pasos_apuntados_no_hay_nada_que_reutilizar(client, auth_headers, db_conn):
+    datos = client.get(f"/api/uploads/{_subida(db_conn, 'failed', 'failed', 'running')}", headers=auth_headers).json()
+    assert datos["pasos"][3]["subpasos"] == [] and datos["reintento_reutiliza"] == []
 
 
 def test_una_subida_parada_antes_de_preparar_no_se_reanuda(client, auth_headers, db_conn):

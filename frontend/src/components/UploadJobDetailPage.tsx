@@ -371,6 +371,11 @@ function PasosDeSubida({ pasos }: { pasos: PasoSubida[] }) {
           <li key={p.clave} title={e.texto} aria-label={`${p.nombre}: ${e.texto}`} className={`dsub-paso dsub-paso-${e.clave}`}>
             <span aria-hidden="true">{e.simbolo}</span>
             <span>{i + 1}. {p.nombre}</span>
+            {p.subpasos && p.subpasos.length > 0 && (
+              <span className="dsub-subpasos">
+                ({p.subpasos.map(sp => `${sp.nombre.toLowerCase()} ${sp.hecho ? '✓' : '○'}`).join(' · ')})
+              </span>
+            )}
           </li>
         )
       })}
@@ -581,7 +586,9 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
           {['failed', 'cancelled'].includes(job.status) && opcionesDeReintento(job).map((o, i) => (
             <button key={o.etiqueta} className={`btn ${i === 0 ? 'btn-primary' : 'btn-secondary'} btn-sm`}
               onClick={() => onRetry(job, o.desdeElPrincipio)}
-              title={o.desdeElPrincipio && i > 0 ? 'Vuelve a preparar los ficheros en vez de reutilizar los que ya estaban listos' : undefined}>
+              title={o.desdeElPrincipio && i > 0
+                ? 'Vuelve a preparar los ficheros y a empezar Uploadrr, en vez de reutilizar lo que ya estaba hecho'
+                : o.ayuda}>
               <RetryButtonIcon /> {o.etiqueta}
             </button>
           ))}

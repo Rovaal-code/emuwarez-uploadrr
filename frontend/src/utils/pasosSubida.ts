@@ -19,13 +19,22 @@ export function estadoDePaso(paso: Pick<PasoSubida, 'estado'>) {
 export interface OpcionDeReintento {
   etiqueta: string
   desdeElPrincipio: boolean
+  /** Lo que esta opción no repite (se enseña como ayuda del botón). */
+  ayuda?: string
 }
 
 /** Los botones de reintento de una subida parada. Si el servidor puede reanudarla, ofrece reanudar y empezar de cero. */
-export function opcionesDeReintento(job: { reintento_desde_nombre?: string | null }): OpcionDeReintento[] {
+export function opcionesDeReintento(
+  job: { reintento_desde_nombre?: string | null; reintento_reutiliza?: string[] },
+): OpcionDeReintento[] {
   if (!job.reintento_desde_nombre) return [{ etiqueta: 'Reintentar', desdeElPrincipio: false }]
+  const reutiliza = job.reintento_reutiliza ?? []
   return [
-    { etiqueta: `Reintentar desde «${job.reintento_desde_nombre}»`, desdeElPrincipio: false },
+    {
+      etiqueta: `Reintentar desde «${job.reintento_desde_nombre}»`,
+      desdeElPrincipio: false,
+      ...(reutiliza.length > 0 ? { ayuda: `Reutiliza lo ya hecho: ${reutiliza.join(', ').toLowerCase()}` } : {}),
+    },
     { etiqueta: 'Reintentar desde el principio', desdeElPrincipio: true },
   ]
 }

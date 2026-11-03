@@ -1128,11 +1128,19 @@ class UploadStartRequest(BaseModel):
     confirmation: Optional[str] = None
 
 
+class SubpasoSubida(BaseModel):
+    clave: str
+    nombre: str
+    hecho: bool
+
+
 class PasoSubida(BaseModel):
     clave: str
     nombre: str
     # hecho | en_curso | fallido | cancelado | pendiente
     estado: str
+    # Solo «Subir con Uploadrr»: lo que Uploadrr-EMU ha dado por terminado (capturas, torrent, subida a eMuwarez).
+    subpasos: list[SubpasoSubida] = []
 
 
 class UploadJobDetail(BaseModel):
@@ -1173,6 +1181,8 @@ class UploadJobDetail(BaseModel):
     # Desde qué paso reanudaría un reintento (None: empezaría por el principio) y su nombre.
     reintento_desde: Optional[str] = None
     reintento_desde_nombre: Optional[str] = None
+    # Lo que un reintento que reanuda no repetiría dentro de Uploadrr-EMU (capturas, torrent).
+    reintento_reutiliza: list[str] = []
     # Media type (movie/series/…) from the linked library item, for filtering.
     media_type: Optional[str] = None
     # Poster thumbnail from the linked library item, for the Subidas row.

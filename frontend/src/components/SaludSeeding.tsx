@@ -28,10 +28,10 @@ export function SeedingBloque({ job, seeding }: { job: UploadJob; seeding: Seedi
   const sinDatos = !datos || !datos.disponible
   return (
     <div className="dsub-panel" data-testid="seeding-bloque">
-      <div className="dsub-panel-titulo">
+      <h2 className="dsub-panel-titulo">
         Seeding en qBittorrent
         {cargando && <span className="spinner dsub-spinner-13" />}
-      </div>
+      </h2>
       <div className="detail-card dsub-caja seeding-caja">
         {sinDatos ? (
           <div className="seeding-sin-datos">

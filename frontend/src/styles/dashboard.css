@@ -5,7 +5,7 @@
   /* Right column ("Actividad de subida") matches the width of a single
      "Completadas" stat card: the stat rows above are 5 equal columns with a
      16px gap, so one card is (100% - 4*16px) / 5. */
-  grid-template-columns: 1fr calc((100% - 64px) / 5);
+  grid-template-columns: minmax(0, 1fr) calc((100% - 64px) / 5);
   gap: 20px;
 }
 
@@ -17,7 +17,7 @@
    disposición estrecha, pero la media query sigue viendo 1920 y no salta. El
    corte lo decide ahora utils/uiScale.ts y lo publica como esta clase. */
 .ui-estrecha .dashboard-grid {
-  grid-template-columns: 1fr calc((100% - 32px) / 3);
+  grid-template-columns: minmax(0, 1fr) calc((100% - 32px) / 3);
 }
 
 /* Header "Sincronizar" buttons (Biblioteca · eMuwarez · Peticiones): the three

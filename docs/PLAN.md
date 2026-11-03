@@ -169,9 +169,10 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   estricto que «Compatible», así que en la práctica salía vacío y repetía Recomendaciones. Se quitó con su filtro
   `readiness` de `GET /api/requests`. Visto en el navegador con datos de prueba: a 1440×900 cabe (la columna lleva
   6 px de relleno lateral para no empujar fuera «Actividad de subida») y el título pasa de unos 240 a 153 px, así que
-  los largos van en dos o tres líneas. Pendiente: a 1280×800 la cuadrícula ya se salía por la derecha (la tabla no
-  encoge por debajo de su ancho mínimo, ~815 px, y deja fuera más de la mitad de «Actividad de subida»); la columna
-  nueva tapa unos 87 px más (de sus 320 px se ven unos 88).
+  los largos van en dos o tres líneas. A 1280×800 (modo estrecho) la cuadrícula ya se salía por la derecha desde antes:
+  la primera columna era `1fr` y no podía encoger por debajo de la tabla (~900 px), así que «Actividad de subida» quedaba
+  cortada. Con `minmax(0, 1fr)` en `.dashboard-grid` (y su variante `.ui-estrecha`) la columna encoge, la tabla se desplaza
+  dentro de su panel y la columna derecha se ve entera.
 - **Pendientes pequeños de la oleada 4:** el build usa `build.rolldownOptions.output.codeSplitting` (el chunk `react` sale igual)
   en vez del `manualChunks` obsoleto; y una selección vacía de eventos guardada (`notify.<canal>.events` = "") ya
   no se lee como «sin configurar»: ese canal no recibe ningún evento (`channel_events` lee la clave tal cual).

@@ -34,6 +34,12 @@ def get_upload_job(job_id: int, conn=None) -> dict | None:
             conn.close()
 
 
+# Una fila es la punta de su cadena de reintentos si ninguna otra la reintenta (la misma regla que
+# upload_queue._find_latest_job_for_item). Siempre sobre toda la tabla: un intento posterior de otro lote o suelto
+# también la deja atrás.
+CONDICION_PUNTA = "id NOT IN (SELECT retry_of_job_id FROM upload_jobs WHERE retry_of_job_id IS NOT NULL)"
+
+
 def _upload_jobs_where(filters: dict) -> tuple[str, list[Any]]:
     conditions = []
     params: list[Any] = []
@@ -64,6 +70,13 @@ def _upload_jobs_where(filters: dict) -> tuple[str, list[Any]]:
     if request_item_id is not None:
         conditions.append("request_item_id = ?")
         params.append(request_item_id)
+
+    lote_id = filters.get("lote_id")
+    if lote_id:
+        # Solo la punta de cada cadena: un elemento del lote es su último intento, así que la lista, el «N de M»
+        # y el resumen del lote cuentan lo mismo (services/lotes.py usa la misma condición).
+        conditions.append(f"lote_id = ? AND {CONDICION_PUNTA}")
+        params.append(lote_id)
 
     return (f"WHERE {' AND '.join(conditions)}" if conditions else ""), params
 

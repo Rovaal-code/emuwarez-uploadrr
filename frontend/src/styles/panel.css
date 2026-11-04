@@ -219,6 +219,13 @@
   color: var(--text-muted);
 }
 .panel-recientes-titulo { margin: 0; }
+/* «+N en cola · Ver todas las subidas», bajo las filas vivas que caben. */
+.panel-en-curso-mas {
+  margin: 0;
+  padding: 8px 8px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 .upload-row.panel-fila-saliendo {
   opacity: 0;
   pointer-events: none;

@@ -47,9 +47,12 @@ export async function queueUpload(
   // La petición desde la que se abrió el asistente: la subida la cubre y
   // Subidas la enseña.
   requestItemId?: number | null,
+  // El lote al que pertenece (las tandas del asistente): solo viaja si se da, una subida suelta no lo manda.
+  loteId?: string,
 ): Promise<UploadQueueResult> {
   return api.post<UploadQueueResult>(`/library/${itemId}/upload/queue`, {
     request_item_id: requestItemId ?? null,
+    ...(loteId ? { lote_id: loteId } : {}),
     remux_overrides: remuxOverrides ?? null,
     checks: checks ?? null,
     remux_snapshot: remuxSnapshot ?? null,
@@ -67,6 +70,8 @@ export interface UploadsQuery {
   // Sin las filas de antes de que un trabajo solo naciera al pulsar Subir: se quitan en el servidor,
   // antes de aplicar el límite, para que no ocupen sitio en la página.
   hide_preparatory?: boolean
+  // Solo las de ese lote, y de cada elemento solo su último intento (el servidor quita los anteriores).
+  lote_id?: string
 }
 
 function uploadsQueryString(params?: UploadsQuery): string {
@@ -77,6 +82,7 @@ function uploadsQueryString(params?: UploadsQuery): string {
   if (params?.offset != null) qs.set('offset', String(params.offset))
   if (params?.search) qs.set('search', params.search)
   if (params?.library_item_id != null) qs.set('library_item_id', String(params.library_item_id))
+  if (params?.lote_id) qs.set('lote_id', params.lote_id)
   const query = qs.toString()
   return query ? `?${query}` : ''
 }

@@ -109,6 +109,14 @@ function plan(extra: Partial<SeasonPackPlanResponse> = {}): SeasonPackPlanRespon
   }
 }
 
+// Todas las subidas de una tanda llevan el mismo lote (12 hex) como 7.º argumento de queueUpload.
+function mismoLote() {
+  const lotes = m(subidas.queueUpload).mock.calls.map(c => c[6])
+  expect(lotes.length).toBeGreaterThan(0)
+  expect(lotes[0]).toMatch(/^[0-9a-f]{12}$/)
+  expect(new Set(lotes).size).toBe(1)
+}
+
 const onClose = vi.fn()
 const onDone = vi.fn()
 const onNavigate = vi.fn()
@@ -412,6 +420,7 @@ describe('varios capítulos de una temporada', () => {
     expect(nom.saveNomenclatureFields).toHaveBeenCalledWith(22, expect.objectContaining({ title: 'Serie', tag: 'G22' }))
     expect(m(subidas.queueUpload).mock.calls.map(c => c[0])).toEqual([21, 22])
     expect(m(subidas.queueUpload).mock.calls[0][2]).toEqual({ ready: true, checks: [...LISTO.checks, ...ENTORNO.checks] })
+    mismoLote()
 
     await pulsar(boton('Ir a Subidas'))
     expect(onNavigate).toHaveBeenCalledWith('uploads')
@@ -453,6 +462,7 @@ describe('varias temporadas de una serie', () => {
     expect(m(subidas.queueUpload).mock.calls.map(c => c[0])).toEqual([31])
     expect(m(subidas.queueUpload).mock.calls[0][4]).toEqual({ source: 'WEB-DL', provider: undefined, tag: 'GRP', title: 'Serie' })
     expect(m(subidas.queueUpload).mock.calls[0][5]).toBeUndefined()
+    mismoLote()
   })
 
   it('cambiar el Proveedor en el paso 1 vuelve a comprobar el contenido de esa temporada', async () => {
@@ -646,6 +656,7 @@ describe('fallos de red y respuestas tardías', () => {
       expect(texto()).toContain('Sin audio detectado')
       expect(m(subidas.queueUpload).mock.calls.map(c => c[0])).toEqual([21])
       expect(m(nom.saveNomenclatureFields).mock.calls.map(c => c[0])).not.toContain(22)
+      mismoLote()
     })
 
     // El entorno falla la primera vez y responde bien después.

@@ -89,6 +89,27 @@ export function notaEnCurso(filas: { job: UploadJob }[]): string | undefined {
   return [subiendo && `${subiendo} subiendo`, enCola && `${enCola} en cola`].filter(Boolean).join(' · ') || undefined
 }
 
+// Cuántas filas vivas enseña «En curso» como mucho: una tanda de diez capítulos llenaba el carril de filas en cola.
+export const MAX_FILAS_VIVAS = 6
+
+// Las filas que se pintan: las vivas hasta el tope (vienen ya ordenadas, las que trabajan antes que las que esperan,
+// y estas por su puesto en la cola) y todas las que se despiden, que no cuentan para el tope. Más las vivas que no
+// caben, para la línea «+N en cola».
+export function recortarEnCurso<T extends { job: UploadJob; yendose: boolean }>(filas: T[]): { visibles: T[]; ocultas: T[] } {
+  const viva = (f: T) => !f.yendose && ACTIVE_JOB_STATUSES.has(f.job.status)
+  const vivas = filas.filter(viva)
+  const ocultas = vivas.slice(MAX_FILAS_VIVAS)
+  if (!ocultas.length) return { visibles: filas, ocultas }
+  const fuera = new Set(ocultas)
+  return { visibles: filas.filter(f => !fuera.has(f)), ocultas }
+}
+
+// «+4 en cola», o «+4 más» si entre las que no caben hay alguna trabajando (sin límite de subidas en paralelo).
+function textoOcultas(ocultas: { job: UploadJob }[]): string {
+  const todasEnCola = ocultas.every(f => f.job.status === 'queued')
+  return `+${ocultas.length} ${todasEnCola ? 'en cola' : 'más'}`
+}
+
 // «En curso»: las subidas vivas con su fase y su progreso y las que acaban de terminar, hasta que se van; debajo,
 // «Recientes»: las últimas terminadas (también las fallidas, que además salen en «Necesita atención»).
 export function CarrilEnCurso({ filas, recientes, onOpen, onVerTodas }: {
@@ -98,6 +119,7 @@ export function CarrilEnCurso({ filas, recientes, onOpen, onVerTodas }: {
   onVerTodas: () => void
 }) {
   const idRecientes = useId()
+  const { visibles, ocultas } = recortarEnCurso(filas)
   return (
     <Carril titulo="En curso" nota={notaEnCurso(filas)} tour="dashboard-running">
       {filas.length === 0 && recientes.length === 0 && (
@@ -108,7 +130,14 @@ export function CarrilEnCurso({ filas, recientes, onOpen, onVerTodas }: {
         />
       )}
       {filas.length === 0 && recientes.length > 0 && <p className="panel-sin-curso">Sin subidas en curso</p>}
-      {filas.map(({ job, yendose }) => <FilaSubida key={job.id} job={job} yendose={yendose} onOpen={onOpen} />)}
+      {visibles.map(({ job, yendose }) => <FilaSubida key={job.id} job={job} yendose={yendose} onOpen={onOpen} />)}
+      {ocultas.length > 0 && (
+        <p className="panel-en-curso-mas">
+          {textoOcultas(ocultas)}
+          {' · '}
+          <HoverTitle as="span" className="hover-link" onClick={onVerTodas} tip="Abrir Subidas">Ver todas las subidas</HoverTitle>
+        </p>
+      )}
       {recientes.length > 0 && (
         <>
           <h3 className="upload-panel-group panel-recientes-titulo" id={idRecientes}>Recientes</h3>

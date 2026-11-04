@@ -648,6 +648,9 @@ export interface UploadJob {
   request_url?: string | null
   queue_position?: number | null
   queue_total?: number | null
+  // El lote con el que se encoló (una tanda del asistente) y cuántos elementos tiene; null sin lote.
+  lote_id?: string | null
+  lote_total?: number | null
   nomenclature_snapshot?: UploadNomenclatureSnapshot | null
   remux_snapshot?: UploadRemuxSnapshot | null
   checks_snapshot?: UploadChecksSnapshot | null

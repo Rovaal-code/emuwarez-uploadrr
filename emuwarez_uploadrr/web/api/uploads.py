@@ -24,6 +24,7 @@ from ...services.upload_execution import (
     compute_progress_phase,
 )
 from ...services.subida_pasos import NOMBRES, pasos_de_subida, reanudar_desde, subpasos_que_reutilizaria
+from ...services.lotes import PATRON_LOTE_ID, contar_por_lote
 from ...services.upload_queue import get_queue_positions
 from ..dependencies import require_auth
 from ..runtime import _db_path
@@ -140,6 +141,7 @@ def _job_to_detail(
     queue_position: int | None = None,
     queue_total: int | None = None,
     release_groups: list[str] | None = None,
+    lote_total: int | None = None,
 ) -> UploadJobDetail:
     prepared = j.get("prepared_path")
     source = j.get("source_path") or j.get("path")
@@ -196,6 +198,8 @@ def _job_to_detail(
         reintento_desde_nombre=NOMBRES.get(_reintento_desde(j) or ""),
         queue_position=queue_position,
         queue_total=queue_total,
+        lote_id=j.get("lote_id"),
+        lote_total=lote_total if j.get("lote_id") else None,
         nomenclature_snapshot=_extract_json_dict(j, "nomenclature_snapshot_json"),
         remux_snapshot=_extract_json_dict(j, "remux_snapshot_json"),
         checks_snapshot=_extract_json_dict(j, "checks_snapshot_json"),
@@ -316,7 +320,7 @@ def queue_upload(
             item_id, request_item_id=body.request_item_id,
             remux_overrides=overrides, remux_snapshot=body.remux_snapshot, checks=checks, conn=conn,
             source_override=body.source, provider_override=body.provider, tag_override=body.tag,
-            title_override=body.title, idiomas_audio=body.idiomas,
+            title_override=body.title, idiomas_audio=body.idiomas, lote_id=body.lote_id,
         )
 
     job = result.get("job")
@@ -336,6 +340,7 @@ def get_uploads(
     search: str | None = Query(default=None),
     library_item_id: int | None = Query(default=None),
     request_item_id: int | None = Query(default=None),
+    lote_id: str | None = Query(default=None, pattern=PATRON_LOTE_ID),
     current_user: dict = Depends(require_auth),
 ):
     filters = {
@@ -346,6 +351,7 @@ def get_uploads(
         "search": search,
         "library_item_id": library_item_id,
         "request_item_id": request_item_id,
+        "lote_id": lote_id,
     }
     queue_positions = get_queue_positions()
     with _get_conn() as conn:
@@ -353,11 +359,14 @@ def get_uploads(
         # Las fichas de todas las subidas en una sola consulta.
         from ...services.library import library_display_fields
         fichas = library_display_fields({j.get("library_item_id") for j in jobs}, conn)
+        # El «Lote · N» de cada fila, en una sola consulta para toda la página.
+        lotes = contar_por_lote(conn, (j.get("lote_id") for j in jobs))
     return [
         _con_ficha(
             j, fichas.get(j.get("library_item_id")),
             queue_position=queue_positions.get(j.get("id"), (None, None))[0],
             queue_total=queue_positions.get(j.get("id"), (None, None))[1],
+            lote_total=lotes.get(j.get("lote_id")),
         )
         for j in jobs
     ]
@@ -371,6 +380,7 @@ def count_uploads(
     search: str | None = Query(default=None),
     library_item_id: int | None = Query(default=None),
     request_item_id: int | None = Query(default=None),
+    lote_id: str | None = Query(default=None, pattern=PATRON_LOTE_ID),
     current_user: dict = Depends(require_auth),
 ) -> dict:
     """Cuántas subidas hay con esos filtros, sin el límite de la lista: el «M» de «N de M»."""
@@ -380,6 +390,7 @@ def count_uploads(
         "search": search,
         "library_item_id": library_item_id,
         "request_item_id": request_item_id,
+        "lote_id": lote_id,
     }
     with _get_conn() as conn:
         return {"total": count_upload_jobs(filters=filters, conn=conn)}
@@ -395,7 +406,9 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
         from ...services.library import library_display_fields_one
         row = library_display_fields_one(job["library_item_id"], conn) if job.get("library_item_id") else None
         display_title = content_display_title(conn, row) if row else None
-    return _con_ficha(job, row, display_title=display_title, queue_position=queue_position, queue_total=queue_total)
+        lote_total = contar_por_lote(conn, [job["lote_id"]]).get(job["lote_id"]) if job.get("lote_id") else None
+    return _con_ficha(job, row, display_title=display_title, queue_position=queue_position, queue_total=queue_total,
+                      lote_total=lote_total)
 
 
 @router.get("/uploads/{job_id}/logs", response_model=UploadJobLogsResponse)

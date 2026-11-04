@@ -367,6 +367,17 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - Pósters del Panel (#204): todos de 44×66 px, el alto del texto de una fila con grupo de release e idiomas.
   - Barra lateral (#205): un carril recto de arriba abajo, sin esquinas redondeadas (#192 se las había dado y dejaba un hueco junto a la
     barra superior) ni margen inferior; la línea bajo el logo es la misma que la de la barra superior.
+- **Oleada 4, subida por lotes, PR 1: las tandas del asistente quedan agrupadas como lote:** esquema 52, columna
+  `upload_jobs.lote_id` (12 hex, con índice; sin tabla: el lote es una etiqueta). Cada tanda del asistente (temporadas o
+  capítulos) genera un id en el navegador y lo manda en cada `queueUpload`; un reintento (`queue_retry_for_job`) lo conserva, un
+  «Subir» nuevo del mismo elemento no, y el camino heredado `retry_upload_job` tampoco (crea filas `ready` que no cuentan como
+  activas). `services/lotes.py` guarda el tope (`MAX_ELEMENTOS_LOTE`, copia vigilada en `utils/lote.ts`), el patrón del id y
+  `contar_por_lote`. `GET /uploads?lote_id=…` y `/uploads/count?lote_id=…` devuelven y cuentan solo la punta de cada cadena
+  (`CONDICION_PUNTA`, la misma regla que `_find_latest_job_for_item`), y cada subida trae `lote_id`/`lote_total`. Subidas enseña
+  el chip «Lote · N» (solo con más de un elemento) que filtra por el lote; «Quitar filtros» lo quita. «En curso» del Panel enseña
+  como mucho 6 filas vivas y «+N en cola · Ver todas las subidas»; con más de 100 subidas vivas el Panel aún puede perder la que
+  sube (pide las 100 más nuevas), pendiente para cuando haya lotes grandes. Sin ver en el navegador. Sigue el PR 2 del plan (resumen,
+  cancelar pendientes y reintentar fallidas del lote).
 
 ## Siguiente
 
@@ -381,7 +392,8 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 
 - Funciones nuevas que faltan:
   - subida por lotes: el plan detallado (modelo, PRs en orden, tests, riesgos y 14 preguntas para Gabriel) está en
-    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); sin implementar;
+    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); hecho el PR 1 (ver «Hecho»), sigue
+    el PR 2;
   - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).

@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import re
 from typing import Any, Dict, Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
+
+from ..services.lotes import PATRON_LOTE_ID
 
 
 # ---------------------------------------------------------------------------
@@ -1247,6 +1249,9 @@ class UploadJobDetail(BaseModel):
     # (upload_queue.get_queue_positions). None si no está esperando.
     queue_position: Optional[int] = None
     queue_total: Optional[int] = None
+    # El lote o tanda al que pertenece y cuántos elementos tiene (services/lotes.py). None si es suelta.
+    lote_id: Optional[str] = None
+    lote_total: Optional[int] = None
     # Read-only snapshots taken at apply time — the nomenclature field
     # breakdown and the applied remux track plan, neither of which survive
     # anywhere else once nomenclature.py/mkv_remux.py return. Backs the job
@@ -1444,6 +1449,9 @@ class UploadQueueBody(BaseModel):
     # Solo pack: el idioma elegido para cada pista de audio sin idioma, por su
     # posición entre las de audio ({"2": "spa"}). Vale para todos los capítulos.
     idiomas: Optional[Dict[str, str]] = None
+    # La tanda del asistente a la que pertenece esta subida (12 hex que genera el
+    # navegador); Subidas la agrupa como lote. None en una subida suelta.
+    lote_id: Optional[str] = Field(None, pattern=PATRON_LOTE_ID)
 
 
 class UploadQueueResponse(BaseModel):

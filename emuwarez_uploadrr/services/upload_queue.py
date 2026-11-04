@@ -104,6 +104,7 @@ def _insert_and_start_queued_job(
     nomenclature_snapshot: dict | None = None,
     season_overrides: dict | None = None,
     reutiliza_preparacion: bool = False,
+    lote_id: str | None = None,
 ) -> dict:
     """Shared by queue_upload_for_item() and queue_retry_for_job(): insert a
     fresh 'queued' row for `item` and start its pipeline right away.
@@ -140,6 +141,8 @@ def _insert_and_start_queued_job(
 
     `request_title`/`request_url` — la petición que cubre la subida, copiada
     tal cual estaba al encolar (ver _foto_de_la_peticion).
+
+    `lote_id` — la etiqueta del lote o tanda a la que pertenece (ver services/lotes.py); None si es suelta.
     """
     now_iso = _now_iso()
 
@@ -168,8 +171,8 @@ def _insert_and_start_queued_job(
                 retry_of_job_id, retry_count, checks_snapshot_json,
                 nomenclature_proposal_id, nomenclature_snapshot_json,
                 remux_overrides_json, remux_snapshot_json, season_overrides_json,
-                reutiliza_preparacion, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                reutiliza_preparacion, lote_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item["id"], request_item_id, request_title, request_url,
@@ -184,6 +187,7 @@ def _insert_and_start_queued_job(
                 json.dumps(remux_snapshot, ensure_ascii=False) if remux_snapshot else None,
                 json.dumps(season_overrides, ensure_ascii=False) if season_overrides else None,
                 1 if reutiliza_preparacion else 0,
+                lote_id,
                 now_iso, now_iso,
             ),
         )
@@ -263,8 +267,11 @@ def queue_upload_for_item(
     tag_override: str | None = None,
     title_override: str | None = None,
     idiomas_audio: dict | None = None,
+    lote_id: str | None = None,
     conn=None,
 ) -> dict:
+    """Encola la subida de un elemento. `lote_id`: la etiqueta de la tanda o lote al que pertenece (no se hereda
+    del trabajo anterior del elemento: solo el reintento de un trabajo la conserva)."""
     own = conn is None
     conn = conn or connect()
     try:
@@ -310,6 +317,7 @@ def queue_upload_for_item(
             nomenclature_snapshot=proposal,
             retry_of_job_id=retry_of_job_id, retry_count=retry_count,
             season_overrides=season_overrides,
+            lote_id=lote_id,
         )
     finally:
         if own:
@@ -370,6 +378,9 @@ def queue_retry_for_job(original_job_id: int, conn=None, *, desde_el_principio: 
             season_overrides=_load_json("season_overrides_json"),
             reutiliza_preparacion=(not desde_el_principio
                                    and reanudar_desde(original.get("status"), original.get("etapa_parada")) is not None),
+            # El reintento sigue en el mismo lote (el camino heredado retry_upload_job no lo hereda a propósito:
+            # crea filas 'ready' que no cuentan como activas).
+            lote_id=original.get("lote_id"),
         )
     finally:
         if own:

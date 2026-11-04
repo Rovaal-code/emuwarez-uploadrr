@@ -259,3 +259,12 @@ def test_los_dominios_de_proveedor_coinciden():
     assert m, "no se encontró DOMAINS"
     delFront = dict(re.findall(r"'?([\w+]+)'?:\s*'([^']+)'", m.group(1)))
     assert delFront == {k.lower(): v for k, v in PROVIDER_DOMAINS.items()}
+
+
+def test_el_tope_de_un_lote_coincide():
+    """utils/lote.ts repite cuántos elementos admite un lote (services/lotes.py)."""
+    from emuwarez_uploadrr.services.lotes import MAX_ELEMENTOS_LOTE
+
+    m = re.search(r"MAX_ELEMENTOS_LOTE\s*=\s*(\d+)", _texto("utils/lote.ts"))
+    assert m, "no se encontró MAX_ELEMENTOS_LOTE en utils/lote.ts"
+    assert int(m.group(1)) == MAX_ELEMENTOS_LOTE

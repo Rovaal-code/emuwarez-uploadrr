@@ -1409,3 +1409,24 @@ def test_mejoras_posibles_de_temporada_exigen_lo_mismo_que_el_pack(mem_conn):
 
     titulos = [r["title"] for r in get_dashboard_recommendations(mem_conn) if r["rec_group"] == 4]
     assert titulos == ["Serie - Temporada 1"]
+
+
+def test_el_tope_de_recomendaciones_no_deja_sin_sitio_a_las_mejoras(mem_conn):
+    """Con muchas peticiones, únicos y faltantes, el tope sigue reservando sitio para las «Mejoras posibles»."""
+    from emuwarez_uploadrr.services.library import get_dashboard_recommendations
+    from emuwarez_uploadrr.services.library.panel import _repartir_cupo
+
+    assert _repartir_cupo([[1, 2, 3, 4], [5], [6, 7, 8]], 6) == [[1, 2, 3], [5], [6, 7]]
+    assert _repartir_cupo([[1, 2, 3], [], [4]], 10) == [[1, 2, 3], [], [4]]
+    assert _repartir_cupo([[1, 2], [3, 4]], 0) == [[], []]
+
+    for n in range(6):
+        mem_conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok) "
+                         "VALUES (?, 'movie', 'Disponible', 0, 1)", (f"Unica {n}",))
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, emu_aportes, has_spanish_ok) "
+        "VALUES ('Mejorable', 'movie', 'Disponible', 1, '[{\"dim\": \"codec\", \"detail\": \"HEVC\"}]', 1)")
+    mem_conn.commit()
+    titulos = [r["title"] for r in get_dashboard_recommendations(mem_conn, limit=4)]
+    assert len(titulos) == 4 and "Mejorable" in titulos
+    assert len(get_dashboard_recommendations(mem_conn, limit=0)) == 7

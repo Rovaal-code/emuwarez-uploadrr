@@ -333,6 +333,25 @@ def _rec_rolled_size(conn: sqlite3.Connection, row: dict, *, season: int | None 
     return r["s"] if r and r["c"] else None
 
 
+def _repartir_cupo(listas: list[list], cupo: int) -> list[list]:
+    """Recorta cada lista (conservando su orden) para que entre todas no pasen de `cupo`: el cupo se reparte a partes
+    iguales entre las que no están vacías y lo que una no usa pasa a las demás."""
+    cuotas = [0] * len(listas)
+    pendiente = max(cupo, 0)
+    while pendiente > 0:
+        con_hueco = [i for i, lista in enumerate(listas) if len(lista) > cuotas[i]]
+        if not con_hueco:
+            break
+        parte = max(pendiente // len(con_hueco), 1)
+        for i in con_hueco:
+            dado = min(parte, len(listas[i]) - cuotas[i], pendiente)
+            cuotas[i] += dado
+            pendiente -= dado
+            if pendiente == 0:
+                break
+    return [lista[:cuota] for lista, cuota in zip(listas, cuotas)]
+
+
 def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100) -> list[dict]:
     from ..season_pack import pack_rollup_sql
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -421,6 +440,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         d["rec_aportes"] = []
         g1_recs.append(d)
         seen_lib.add(int(lib_id))
+        seen_lib.add(int(target_id))  # la temporada o el capítulo pedidos tampoco se repiten como idea sin petición
 
     def _push(row: dict, group: int, *, name: str | None = None, size=None, missing_count=None,
               aportes: list | None = None):
@@ -562,9 +582,15 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
     recs.sort(key=lambda d: d["rec_group"])
     for d in recs:
         d.pop("_added", None)
+    # El tope corta por el final, pero no deja un grupo sin sitio: las peticiones (grupo 1) van primero y lo que
+    # sobra se reparte a partes iguales entre los grupos 2, 3 y 4 (el que no llena su parte la cede a los demás).
+    if limit > 0:
+        g1_recs = g1_recs[:limit]
+        por_grupo = [[d for d in recs if d["rec_group"] == g] for g in (2, 3, 4)]
+        recs = [d for lista in _repartir_cupo(por_grupo, limit - len(g1_recs)) for d in lista]
     recs = g1_recs + recs
     # Los idiomas salen ya como códigos de eMuwarez (ESP primero), los mismos que lleva el nombre del torrent.
     for d in recs:
         d["audio_languages"] = _split_languages(d.get("audio_languages"))
         d["subtitle_languages"] = _split_languages(d.get("subtitle_languages"))
-    return recs if limit <= 0 else recs[:limit]
+    return recs

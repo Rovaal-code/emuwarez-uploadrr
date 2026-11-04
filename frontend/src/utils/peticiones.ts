@@ -26,3 +26,78 @@ export function requestDisplayTitle(item: Pick<RequestItemResponse,
   }
   return `${base}${year}`
 }
+
+// Los grupos de la lista de Peticiones: lo que se puede hacer con cada una.
+export type GrupoPeticion = 'lista' | 'parcial' | 'sin_copia' | 'cerrada'
+
+export const GRUPOS_PETICION: { id: GrupoPeticion; titulo: string; ayuda: string }[] = [
+  { id: 'lista', titulo: 'Lista para subir', ayuda: 'Tienes el contenido y cumple lo pedido' },
+  { id: 'parcial', titulo: 'Parcial', ayuda: 'Tienes algo, pero aún no se puede subir' },
+  { id: 'sin_copia', titulo: 'No la tienes', ayuda: 'Sin copia en tu biblioteca' },
+  { id: 'cerrada', titulo: 'Cerradas', ayuda: 'Reclamada por otro, ya llena o ya subida' },
+]
+
+// request_readiness.status (services/request_readiness.py) → grupo.
+const GRUPO_POR_PREPARACION: Record<string, GrupoPeticion> = {
+  ready_to_upload: 'lista',
+  preflight_needed: 'lista',
+  needs_nomenclature: 'lista',
+  partially_available: 'parcial',
+  spec_mismatch: 'parcial',
+  no_castellano: 'parcial',
+  downloading: 'parcial',
+  pending_import: 'parcial',
+  import_error: 'parcial',
+  no_local_match: 'sin_copia',
+  file_missing: 'sin_copia',
+  claimed: 'cerrada',
+  claimed_unknown: 'cerrada',
+  pending_approval: 'cerrada',
+  filled: 'cerrada',
+  already_exists: 'cerrada',
+  uploaded: 'cerrada',
+  uploading: 'cerrada',
+}
+
+// Sin preparación guardada todavía, decide la compatibilidad que enseña la columna.
+const GRUPO_POR_COMPATIBILIDAD: Record<string, GrupoPeticion> = {
+  Compatible: 'lista',
+  Parcial: 'parcial',
+  Reclamado: 'cerrada',
+  Pendiente: 'cerrada',
+  Llena: 'cerrada',
+}
+
+export function grupoDePeticion(item: Pick<RequestItemResponse, 'readiness_status' | 'compatibility_status'>): GrupoPeticion {
+  const porPreparacion = item.readiness_status ? GRUPO_POR_PREPARACION[item.readiness_status] : undefined
+  return porPreparacion ?? GRUPO_POR_COMPATIBILIDAD[item.compatibility_status ?? ''] ?? 'sin_copia'
+}
+
+// La que más paga primero, las que no dicen puntos al final y, a igual recompensa, la más nueva (como `points_desc` del servidor).
+function porRecompensa(a: Pick<RequestItemResponse, 'id' | 'points' | 'created_at'>, b: Pick<RequestItemResponse, 'id' | 'points' | 'created_at'>): number {
+  if ((a.points == null) !== (b.points == null)) return a.points == null ? 1 : -1
+  if (a.points !== b.points) return (b.points ?? 0) - (a.points ?? 0)
+  const ca = a.created_at ?? '', cb = b.created_at ?? ''
+  if (ca !== cb) return ca < cb ? 1 : -1
+  return b.id - a.id
+}
+
+type ParaAgrupar = Pick<RequestItemResponse, 'id' | 'points' | 'created_at' | 'readiness_status' | 'compatibility_status'>
+
+// Los grupos que tienen algo, en el orden de GRUPOS_PETICION y cada uno por recompensa.
+export function agruparPeticiones<T extends ParaAgrupar>(items: T[]): { id: GrupoPeticion; titulo: string; ayuda: string; items: T[] }[] {
+  return GRUPOS_PETICION
+    .map(g => ({ ...g, items: items.filter(i => grupoDePeticion(i) === g.id).sort(porRecompensa) }))
+    .filter(g => g.items.length > 0)
+}
+
+// Columna Autor: oculta salvo que se active (el autor sale en cada captura de pantalla).
+const CLAVE_MOSTRAR_AUTOR = 'emuwarez_peticiones_mostrar_autor'
+
+export function leerMostrarAutor(): boolean {
+  try { return localStorage.getItem(CLAVE_MOSTRAR_AUTOR) === '1' } catch { return false }
+}
+
+export function guardarMostrarAutor(mostrar: boolean): void {
+  try { localStorage.setItem(CLAVE_MOSTRAR_AUTOR, mostrar ? '1' : '0') } catch { /* sin almacenamiento: vale para esta visita */ }
+}

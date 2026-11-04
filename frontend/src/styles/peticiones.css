@@ -69,6 +69,57 @@
   align-self: center;
 }
 
+/* Casilla «Mostrar autor» de la barra de filtros */
+.checkbox-label.pet-ver-autor {
+  margin-left: auto;
+}
+
+/* Grupos de la lista: lo que se puede hacer con cada petición. El color solo marca el estado. */
+.data-table th.pet-grupo-th {
+  padding: 16px 12px 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.pet-grupo-titulo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pet-grupo-titulo::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.pet-bloque-lista .pet-grupo-titulo::before {
+  background: var(--color-available);
+}
+
+.pet-bloque-parcial .pet-grupo-titulo::before {
+  background: var(--color-warning);
+}
+
+.pet-grupo-n {
+  margin: 0 10px 0 8px;
+  padding: 1px 7px;
+  border-radius: var(--radius-small);
+  background: var(--bg-card);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pet-grupo-ayuda {
+  font-weight: 400;
+}
+
 /* Celdas y cabeceras: `.data-table th { text-align }` y `.data-table td { color }` */
 .pet-nowrap {
   white-space: nowrap;

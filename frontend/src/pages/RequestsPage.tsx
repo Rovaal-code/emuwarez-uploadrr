@@ -35,7 +35,7 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { HeaderSort } from '../components/HeaderSort'
 import { formatBytes, timeAgo, formatDate, formatNumero } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { requestDisplayTitle } from '../utils/peticiones'
+import { agruparPeticiones, guardarMostrarAutor, leerMostrarAutor, requestDisplayTitle } from '../utils/peticiones'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
 import { IconoBloqueado, IconoDocumental, IconoPelicula, IconoPuntos, IconoSerie } from '../components/Iconos'
@@ -95,7 +95,12 @@ function RequestPoster({ url, category, size = 'sm' }: { url: string | null; cat
   )
 }
 
+// Sin orden elegido: la lista va en grupos por lo que se puede hacer y, dentro de cada uno, por recompensa.
+// Elegir cualquier otro orden (el selector o una cabecera) la deja plana: la cabecera manda.
+const ORDEN_POR_GRUPOS = 'grupos'
+
 const SORT_OPTIONS = [
+  { value: ORDEN_POR_GRUPOS, label: 'Orden: Por estado y recompensa' },
   { value: 'created_desc', label: 'Orden: Más recientes' },
   { value: 'created_asc', label: 'Orden: Más antiguas' },
   { value: 'title', label: 'Orden: Título (A-Z)' },
@@ -612,7 +617,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [sourceFilter, setSourceFilter] = useState<string[]>(NINGUNO)
   const [authorFilter, setAuthorFilter] = useState<string[]>(NINGUNO)
   const [instanceFilter, setInstanceFilter] = useState<string[]>(NINGUNO)
-  const [sortBy, setSortBy] = useState('created_desc')
+  const [sortBy, setSortBy] = useState(ORDEN_POR_GRUPOS)
+  // Autor oculto salvo que se active (aparece en cada captura de pantalla).
+  const [verAutor, setVerAutor] = useState(leerMostrarAutor)
   const [facets, setFacets] = useState<{
     categories: string[]; resolutions: string[]; sources: string[]; authors: string[]; statuses: string[]
     instances: { value: string; label: string }[]
@@ -693,7 +700,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         source: sourceFilter,
         author: authorFilter,
         instance_id: instanceFilter.map(Number),
-        sort: sortBy,
+        sort: sortBy === ORDEN_POR_GRUPOS ? 'points_desc' : sortBy,
         limit: PAGE_SIZE,
         offset: off,
       })
@@ -804,7 +811,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   useAlSalir(() => {
     closeRequestDetail()
     quitarFiltros()
-    setSortBy('created_desc')
+    setSortBy(ORDEN_POR_GRUPOS)
   })
 
   // Same hand-off, but live — the sessionStorage read above only fires on
@@ -842,9 +849,48 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   }, [])
 
   const displayItems = items
+  const agrupada = sortBy === ORDEN_POR_GRUPOS
+  // Con un filtro de autor puesto la columna se queda, o filtraría sin decir por qué.
+  const mostrarAutor = verAutor || authorFilter.length > 0
   // Las peticiones reales no traen votos ni comentarios: sin dato, sin columna.
   const hayVotos = displayItems.some(i => i.votes != null)
   const hayComentarios = displayItems.some(i => i.comments != null)
+
+  const columnas = 8 + Number(mostrarAutor) + Number(hayVotos) + Number(hayComentarios)
+  const fila = (item: RequestItemResponse) => (
+    <tr
+      key={item.id}
+      onClick={() => handleRowClick(item.id)}
+      className={selectedId === item.id ? 'clickable row-selected' : 'clickable'}
+    >
+      <td>
+        <div className="pet-titulo-fila">
+          <RequestPoster url={item.poster_url} category={item.category} />
+          <div className="pet-min-0">
+            <HoverTitle
+              className="lib-title-link"
+              onClick={e => { e.stopPropagation(); handleRowClick(item.id) }}
+              tip="Abrir ficha"
+            >
+              <DetailTitleText title={requestDisplayTitle(item)} />
+            </HoverTitle>
+          </div>
+        </div>
+      </td>
+      <td className="pet-nowrap">
+        <PlainValue icon={<TypeValueIcon />}>{tipoOf(item.category).label}</PlainValue>
+      </td>
+      <td className="pet-nowrap"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
+      <td><CompatibilityBadge status={item.compatibility_status} reclamada={item.reclamada_por} /></td>
+      {mostrarAutor && <td className="pet-t12 pet-nowrap"><AuthorCell author={item.author} isMine={item.is_mine} /></td>}
+      <td className="pet-nowrap"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
+      <td className="pet-nowrap"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
+      {hayVotos && <td className="pet-centro pet-t12">{item.votes ?? '—'}</td>}
+      {hayComentarios && <td className="pet-centro pet-t12">{item.comments ?? '—'}</td>}
+      <td className="pet-centro pet-t12 pet-nowrap">{fmtNum(item.points)}</td>
+      <CreatedAtCell createdAt={item.created_at} />
+    </tr>
+  )
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
@@ -898,6 +944,15 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <select className="form-input form-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
             {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
+          <label className="checkbox-label pet-ver-autor">
+            <input
+              type="checkbox"
+              checked={mostrarAutor}
+              disabled={authorFilter.length > 0}
+              onChange={e => { setVerAutor(e.target.checked); guardarMostrarAutor(e.target.checked) }}
+            />
+            Mostrar autor
+          </label>
         </div>
 
         {/* Solo bloquea la PRIMERA vez, cuando todavía no hay nada que enseñar.
@@ -934,9 +989,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                       // "No disponible" for a column that says "Faltante".
                       { value: '', label: 'Todas' }, ...facets.statuses.map(s => ({ value: s, label: getRequestStatusInfo(s).label })),
                     ]} /></th>
-                    <th><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
+                    {mostrarAutor && <th><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.authors.map(a => ({ value: a, label: a })),
-                    ]} /></th>
+                    ]} /></th>}
                     <th><HeaderFilter label="Resolución" value={resolutionFilter} onChange={setResolutionFilter} options={[
                       { value: '', label: 'Todas' }, ...facets.resolutions.map(r => ({ value: r, label: r })),
                     ]} /></th>
@@ -951,51 +1006,28 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                 </thead>
                 {displayItems.length === 0 && (
                   <FilaVacia
-                    columnas={9 + Number(hayVotos) + Number(hayComentarios)}
+                    columnas={columnas}
                     title="Sin peticiones"
                     body="No hay peticiones que coincidan con los filtros."
                     action={<button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>}
                   />
                 )}
-                <tbody>
-                  {displayItems
-                    .map(item => {
-                    return (
-                      <tr
-                        key={item.id}
-                        onClick={() => handleRowClick(item.id)}
-                        className={selectedId === item.id ? 'clickable row-selected' : 'clickable'}
-                      >
-                        <td>
-                          <div className="pet-titulo-fila">
-                            <RequestPoster url={item.poster_url} category={item.category} />
-                            <div className="pet-min-0">
-                              <HoverTitle
-                                className="lib-title-link"
-                                onClick={e => { e.stopPropagation(); handleRowClick(item.id) }}
-                                tip="Abrir ficha"
-                              >
-                                <DetailTitleText title={requestDisplayTitle(item)} />
-                              </HoverTitle>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="pet-nowrap">
-                          <PlainValue icon={<TypeValueIcon />}>{tipoOf(item.category).label}</PlainValue>
-                        </td>
-                        <td className="pet-nowrap"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
-                        <td><CompatibilityBadge status={item.compatibility_status} reclamada={item.reclamada_por} /></td>
-                        <td className="pet-t12 pet-nowrap"><AuthorCell author={item.author} isMine={item.is_mine} /></td>
-                        <td className="pet-nowrap"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
-                        <td className="pet-nowrap"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
-                        {hayVotos && <td className="pet-centro pet-t12">{item.votes ?? '—'}</td>}
-                        {hayComentarios && <td className="pet-centro pet-t12">{item.comments ?? '—'}</td>}
-                        <td className="pet-centro pet-t12 pet-nowrap">{fmtNum(item.points)}</td>
-                        <CreatedAtCell createdAt={item.created_at} />
-                      </tr>
-                    )
-                  })}
-                </tbody>
+                {agrupada ? agruparPeticiones(displayItems).map(g => (
+                  <tbody key={g.id} className={`pet-bloque pet-bloque-${g.id}`}>
+                    <tr className="pet-grupo-cab">
+                      <th scope="rowgroup" colSpan={columnas} className="pet-grupo-th">
+                        <span className="pet-grupo-titulo">{g.titulo}</span>
+                        <span className="pet-grupo-n">{g.items.length}</span>
+                        <span className="pet-grupo-ayuda">{g.ayuda}</span>
+                      </th>
+                    </tr>
+                    {g.items.map(fila)}
+                  </tbody>
+                )) : (
+                  <tbody>
+                    {displayItems.map(fila)}
+                  </tbody>
+                )}
               </table>
             </div>
 

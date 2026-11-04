@@ -347,7 +347,9 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
   - estadísticas del tracker por subida.
 - Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): ~~P1 Panel~~, ~~P4 detalle de subida~~ y ~~P5 asistente con Resumen~~ (hechos),
   quedan P2 Biblioteca, P3 Peticiones y P6 Configuración. P7 móvil, pendiente de decidir. Las funciones que
-  tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: esquinas redondeadas y poco contraste, nada plano.
+  tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: le gusta el diseño original y solo quiere mejoras para ver mejor el contenido nuevo;
+  esquinas redondeadas (la esquina cortada, demasiado contrastada, no); modo compacto pero legible, inspirándose en apps como
+  Tracearr; y pasar cada pantalla por la skill `frontend-design`.
 
 ## Aplazado / ideas
 

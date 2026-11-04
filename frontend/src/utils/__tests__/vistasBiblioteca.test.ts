@@ -28,6 +28,7 @@ describe('mismosFiltros', () => {
     expect(mismosFiltros(FLUX, { ...FLUX, group: ['FLUX'] })).toBe(true)
     expect(mismosFiltros(FLUX, { ...FLUX, group: ['NTb'] })).toBe(false)
     expect(mismosFiltros(FLUX, { ...FLUX, sort: 'size_asc' })).toBe(false)
+    expect(mismosFiltros({ ...FLUX, group: ['FLUX', 'NTb'] }, { ...FLUX, group: ['NTb', 'FLUX'] })).toBe(true)
   })
 })
 
@@ -56,6 +57,11 @@ describe('conVista y sinVista', () => {
 })
 
 describe('persistencia', () => {
+  it('un orden guardado que el selector no ofrece vuelve al de partida', () => {
+    localStorage.setItem(CLAVE, JSON.stringify([{ id: '1', nombre: 'Rara', filtros: { ...FLUX, sort: 'desconocido' } }]))
+    expect(cargarVistas()[0].filtros.sort).toBe(SIN_FILTROS.sort)
+  })
+
   it('lo guardado vuelve igual', () => {
     const v = conVista([], 'Solo FLUX', FLUX, 'a')
     persistirVistas(v)

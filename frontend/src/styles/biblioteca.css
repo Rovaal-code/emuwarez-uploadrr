@@ -321,9 +321,9 @@
   flex: none;
   margin-left: auto;
 }
-/* Con poco sitio el origen se queda en su icono (el nombre sigue en el filtro y en el tooltip). */
+/* Con poco sitio el origen enlazado se queda en su icono (el nombre sigue en el filtro y en el tooltip). */
 @container bib-titulo (max-width: 430px) {
-  .bib-spec-origen .service-inline > span:last-child { display: none; }
+  .bib-spec-origen-enlace .service-inline > span:last-child { display: none; }
 }
 .bib-guion { color: var(--text-muted); }
 .bib-guion.bib-guion-12 { font-size: 12px; }

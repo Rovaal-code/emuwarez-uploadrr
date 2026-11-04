@@ -1,9 +1,4 @@
-/**
- * Vistas guardadas de Biblioteca: una combinación de filtros, búsqueda y orden con nombre, para volver a ella con un clic.
- *
- * Los filtros viven en el estado de la página y no en la URL, así que una vista guarda esos valores. Se quedan en
- * este navegador (localStorage): no hay endpoint ni migración, y quien las usa es una sola persona.
- */
+// Vistas guardadas de Biblioteca: filtros, búsqueda y orden con nombre, en localStorage (sin endpoint ni migración).
 
 const CLAVE_VISTAS = 'emuwarez_uploadrr_library_views'
 const MAX_VISTAS = 20
@@ -32,6 +27,8 @@ export interface VistaGuardada {
 }
 
 export const ORDEN_POR_DEFECTO = 'title_asc'
+// Los órdenes del selector de LibraryPage: una vista guardada con otro valor vuelve al de partida.
+export const ORDENES_ADMITIDOS = ['title_asc', 'title_desc', 'updated_desc', 'year_desc', 'year_asc', 'size_desc', 'size_asc']
 
 export const SIN_FILTROS: FiltrosDeVista = {
   search: '', type: [], status: [], instanceId: [], request: [], provider: [], quality: [], source: [], group: [],
@@ -50,13 +47,17 @@ function normalizar(crudo: unknown): FiltrosDeVista {
   }
   if (typeof o.search === 'string') f.search = o.search
   if (typeof o.aporte === 'string') f.aporte = o.aporte
-  if (typeof o.sort === 'string' && o.sort) f.sort = o.sort
+  if (typeof o.sort === 'string' && ORDENES_ADMITIDOS.includes(o.sort)) f.sort = o.sort
   return f
 }
 
 export function mismosFiltros(a: FiltrosDeVista, b: FiltrosDeVista): boolean {
-  return a.search === b.search && a.aporte === b.aporte && a.sort === b.sort
-    && LISTAS.every(k => a[k].length === b[k].length && a[k].every((v, i) => v === b[k][i]))
+  const mismaLista = (x: string[], y: string[]) => {
+    const xs = [...x].sort()
+    const ys = [...y].sort()
+    return xs.length === ys.length && xs.every((v, i) => v === ys[i])
+  }
+  return a.search === b.search && a.aporte === b.aporte && a.sort === b.sort && LISTAS.every(k => mismaLista(a[k], b[k]))
 }
 
 /** Hay algo que guardar: algún filtro, una búsqueda o un orden que no es el de partida. */

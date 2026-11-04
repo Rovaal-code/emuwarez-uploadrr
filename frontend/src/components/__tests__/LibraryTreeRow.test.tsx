@@ -1,8 +1,5 @@
 // @vitest-environment jsdom
-/**
- * La fila de la lista de Biblioteca: bajo el título, una línea con tipo, calidad, source, proveedor, códec e idiomas,
- * el grupo de release al final de la línea del título y el origen; y sin columnas que repitan lo mismo en cada fila.
- */
+// La fila de Biblioteca: línea de especificaciones bajo el título, grupo de release y origen, sin columnas repetidas.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { InstanceSafeResponse, LibraryItemResponse } from '../../types/api'
 import { LibraryTreeRow } from '../LibraryTreeRow'

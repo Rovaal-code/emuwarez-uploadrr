@@ -35,7 +35,7 @@ export function LineaDeCalidad({ item, deepLink }: { item: LibraryItemResponse; 
         {partes.join(' · ')}
       </span>
       {item.instance_type && (deepLink
-        ? <a className="hover-link bib-spec-origen" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...origenTip}><ServiceLabel type={item.instance_type} label={nombreOrigen} size={12} />{origenTooltip}</a>
+        ? <a className="hover-link bib-spec-origen bib-spec-origen-enlace" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...origenTip}><ServiceLabel type={item.instance_type} label={nombreOrigen} size={12} />{origenTooltip}</a>
         : <span className="bib-spec-origen"><ServiceLabel type={item.instance_type} label={nombreOrigen} size={12} /></span>)}
     </div>
   )

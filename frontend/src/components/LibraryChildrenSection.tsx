@@ -73,18 +73,12 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
               content (poster/fields/comparison) — same fill+internal-scroll
               pattern as Biblioteca's own list table. */}
           <div className="hijos-scroll">
-            <table className="data-table">
+            <table className="data-table bib-tabla">
               <thead>
                 <tr>
                   <th className="hijos-col-titulo">Título</th>
-                  <th>Tipo</th>
-                  <th>Origen</th>
                   <th>Estado</th>
                   <th>Petición</th>
-                  <th>Resolución</th>
-                  <th>Proveedor</th>
-                  <th>Source</th>
-                  <th>Grupo</th>
                   <th>Español</th>
                   <th>EMuwarez</th>
                   <th>Tamaño</th>

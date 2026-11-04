@@ -11,6 +11,8 @@ interface SidebarProps {
   movil?: boolean
   abierta?: boolean
   onCerrar?: () => void
+  // En el cajón: volver a ver el tour guiado (en la cabecera no cabe el botón).
+  onTour?: () => void
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'emuwarez_uploadrr_sidebar_collapsed'
@@ -116,7 +118,7 @@ function NavItemRow({ item, active, collapsed, onNavigate }: {
   )
 }
 
-export function Sidebar({ active, onNavigate, movil = false, abierta = false, onCerrar }: SidebarProps) {
+export function Sidebar({ active, onNavigate, movil = false, abierta = false, onCerrar, onTour }: SidebarProps) {
   const [collapsedGuardado, setCollapsed] = useState(loadCollapsed)
   const collapsed = collapsedGuardado && !movil
   const nav = useRef<HTMLElement>(null)
@@ -160,6 +162,7 @@ export function Sidebar({ active, onNavigate, movil = false, abierta = false, on
             onNavigate={id => { onNavigate(id); if (movil) onCerrar?.() }}
           />
         ))}
+        {movil && onTour && <button type="button" className="nav-item" onClick={onTour}>Ver el tour guiado</button>}
       </nav>
       <SystemStatusPanel collapsed={collapsed} />
     </aside>

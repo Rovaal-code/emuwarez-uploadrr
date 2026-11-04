@@ -18,6 +18,9 @@ export function useMenuMovil() {
     return () => consulta.removeEventListener('change', alCambiar)
   }, [])
 
+  // Al salir del modo móvil se cierra: si no, al volver a una ventana estrecha el cajón se abriría solo.
+  useEffect(() => { if (!movil) setAbierto(false) }, [movil])
+
   const visible = movil && abierto
   const cerrar = useCallback(() => setAbierto(false), [])
   const alternar = useCallback(() => setAbierto(a => !a), [])

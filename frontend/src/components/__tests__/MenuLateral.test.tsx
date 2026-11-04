@@ -14,6 +14,7 @@ import { Sidebar } from '../Sidebar'
 import { desmontar, montar, pulsar } from './dom'
 
 const onNavigate = vi.fn()
+const onTour = vi.fn()
 
 // El mismo cableado que AppShell: el hook, el botón de la cabecera, el velo y la barra.
 function Arnes() {
@@ -22,7 +23,7 @@ function Arnes() {
     <>
       <BotonMenu abierto={menu.abierto} onAlternar={menu.alternar} botonRef={menu.botonRef} />
       {menu.abierto && <div className="sidebar-velo" onClick={menu.cerrar} />}
-      <Sidebar active="library" onNavigate={onNavigate} movil={menu.movil} abierta={menu.abierto} onCerrar={menu.cerrar} />
+      <Sidebar active="library" onNavigate={onNavigate} movil={menu.movil} abierta={menu.abierto} onCerrar={menu.cerrar} onTour={onTour} />
     </>
   )
 }
@@ -37,7 +38,7 @@ const menu = () => document.querySelector<HTMLButtonElement>('.boton-menu')!
 const barra = () => document.querySelector<HTMLElement>('.sidebar')!
 const escape = () => act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
 
-beforeEach(() => { onNavigate.mockReset(); localStorage.clear() })
+beforeEach(() => { onNavigate.mockReset(); onTour.mockReset(); localStorage.clear() })
 afterEach(desmontar)
 
 describe('barra lateral en ventanas estrechas', () => {
@@ -83,6 +84,14 @@ describe('barra lateral en ventanas estrechas', () => {
     await pulsar([...barra().querySelectorAll('.nav-item')].find(b => b.textContent === 'Subidas'))
     expect(onNavigate).toHaveBeenCalledWith('uploads')
     expect(barra().classList.contains('abierta')).toBe(false)
+  })
+
+  it('el cajón ofrece volver a ver el tour', async () => {
+    await montar(<Arnes />)
+    await pulsar(menu())
+    const boton = [...barra().querySelectorAll('button')].find(b => b.textContent === 'Ver el tour guiado')!
+    await pulsar(boton)
+    expect(onTour).toHaveBeenCalledTimes(1)
   })
 
   it('aunque la barra esté contraída en escritorio, en el cajón enseña los textos', async () => {

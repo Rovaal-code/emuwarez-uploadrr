@@ -279,15 +279,18 @@ export function AppShell({ user, onLogout }: AppShellProps) {
     <div className="app-shell hud-app">
       <UnsavedChangesModal />
       {menu.abierto && <div className="sidebar-velo" onClick={menu.cerrar} aria-hidden="true" />}
-      <Sidebar active={activePage} onNavigate={navigate} movil={menu.movil} abierta={menu.abierto} onCerrar={menu.cerrar} />
-      <div className="main-content">
+      <Sidebar
+        active={activePage} onNavigate={navigate} movil={menu.movil} abierta={menu.abierto} onCerrar={menu.cerrar}
+        onTour={() => { menu.cerrar(); startTour(TOUR_STEPS) }}
+      />
+      <div className="main-content" inert={menu.abierto}>
         <Topbar
           user={user}
           pageTitle={PAGE_TITLE[activePage] ?? ''}
           onLogout={onLogout}
           menu={menu}
         />
-        <main className="page-container" ref={contenedor} inert={menu.abierto}>
+        <main className="page-container" ref={contenedor}>
           <PageContent page={activePage} onNavigate={navigate} />
         </main>
       </div>

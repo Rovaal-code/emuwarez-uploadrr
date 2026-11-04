@@ -56,13 +56,15 @@
     radial-gradient(160px 220px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 6%, transparent), transparent 60%),
     radial-gradient(160px 260px at 100% 100%, color-mix(in srgb, var(--hud-cyan) 4%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
-  /* Mismo marco que .stat-card/.card/.activity-section: borde fino y esquinas redondeadas. */
-  border: 1px solid var(--hud-line);
-  border-radius: var(--radius-card);
-  box-shadow: inset 0 0 0 1px var(--hud-line-inner);
+  /* Es el carril del borde izquierdo de la ventana: solo lleva línea a la derecha y sin esquinas redondeadas. */
+  border: 0;
+  border-right: 1px solid var(--hud-line);
+  border-radius: 0;
+  margin-bottom: 0;
+  box-shadow: inset -1px 0 0 var(--hud-line-inner);
 }
 .hud-app .sidebar-logo {
-  border-bottom: 1px solid color-mix(in srgb, var(--hud-blue) 40%, transparent);
+  border-bottom: 1px solid var(--hud-line);
 }
 .hud-app .sidebar-logo-text {
   font-family: var(--hud-font);

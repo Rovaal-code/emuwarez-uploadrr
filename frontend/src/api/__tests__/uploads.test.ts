@@ -1,19 +1,23 @@
 /**
  * Lo que la lista de Subidas pide al servidor: sin las filas preparatorias (que ocupaban sitio en la página), con
- * el límite explícito, y el registro por partes.
+ * el límite explícito, y el registro por partes. Y el lote: el filtro de la lista y el `lote_id` al encolar, que una
+ * subida suelta no manda.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../client', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
 
 import { api } from '../client'
-import { countUploads, getUploadJobLogs, getUploads } from '../uploads'
+import { countUploads, getUploadJobLogs, getUploads, queueUpload } from '../uploads'
 
 const get = vi.mocked(api.get)
+const post = vi.mocked(api.post)
 
 beforeEach(() => {
   get.mockReset()
   get.mockResolvedValue([])
+  post.mockReset()
+  post.mockResolvedValue({ status: 'queued', job: null, errors: [] })
 })
 
 describe('la lista de subidas', () => {
@@ -31,6 +35,28 @@ describe('la lista de subidas', () => {
     get.mockResolvedValue({ total: 342 })
     expect(await countUploads({ status: 'failed', hide_preparatory: true })).toBe(342)
     expect(get).toHaveBeenCalledWith('/uploads/count?status=failed&hide_preparatory=true')
+  })
+
+  it('filtrada por lote: la lista y el total llevan el lote_id', async () => {
+    await getUploads({ hide_preparatory: true, lote_id: '0123456789ab', limit: 100 })
+    expect(get).toHaveBeenCalledWith('/uploads?hide_preparatory=true&limit=100&lote_id=0123456789ab')
+    get.mockResolvedValue({ total: 3 })
+    expect(await countUploads({ hide_preparatory: true, lote_id: '0123456789ab' })).toBe(3)
+    expect(get).toHaveBeenCalledWith('/uploads/count?hide_preparatory=true&lote_id=0123456789ab')
+  })
+})
+
+describe('encolar una subida', () => {
+  it('suelta: el cuerpo no lleva lote_id', async () => {
+    await queueUpload(10)
+    const [ruta, cuerpo] = post.mock.calls[0]
+    expect(ruta).toBe('/library/10/upload/queue')
+    expect(cuerpo).not.toHaveProperty('lote_id')
+  })
+
+  it('de una tanda: el 7.º argumento viaja como lote_id', async () => {
+    await queueUpload(21, undefined, null, null, undefined, 5, 'abcdef012345')
+    expect(post.mock.calls[0][1]).toEqual(expect.objectContaining({ request_item_id: 5, lote_id: 'abcdef012345' }))
   })
 })
 

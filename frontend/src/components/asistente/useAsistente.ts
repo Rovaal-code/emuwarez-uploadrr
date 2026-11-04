@@ -12,6 +12,7 @@ import {
   applyTrackRemux,
 } from '../../api/nomenclature'
 import { queueUpload, getExistingJobForItem, runUploadChecks } from '../../api/uploads'
+import { nuevoLoteId } from '../../utils/lote'
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../../api/library'
 import type { MediaInfoReport } from '../../api/library'
 import {
@@ -920,6 +921,8 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     }
 
     setBatchPhase('processing'); setBatchIndex(0); setBatchResults([])
+    // Un lote por tanda: Subidas agrupa estas temporadas y deja filtrarlas juntas.
+    const loteId = nuevoLoteId()
     const results: typeof batchResults = []
     for (let i = 0; i < seasonQueue.length; i++) {
       const seasonId = seasonQueue[i]
@@ -936,7 +939,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
           results.push({ seasonId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(seasonId, undefined, checksResult, null, ajustesDeTemporada(overridesMap.get(seasonId), proveedorElegido, seasonId, idiomasPorTemporada.get(seasonId)), s && peticionCubre(preselect, s) ? requestId : undefined)
+        const r = await queueUpload(seasonId, undefined, checksResult, null, ajustesDeTemporada(overridesMap.get(seasonId), proveedorElegido, seasonId, idiomasPorTemporada.get(seasonId)), s && peticionCubre(preselect, s) ? requestId : undefined, loteId)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {
@@ -969,6 +972,8 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     }
 
     setBatchPhase('processing'); setBatchIndex(0); setBatchResults([])
+    // Un lote por tanda, como en las temporadas.
+    const loteId = nuevoLoteId()
     const results: typeof batchResults = []
     for (let i = 0; i < episodeQueue.length; i++) {
       const episodeId = episodeQueue[i]
@@ -1004,7 +1009,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
           results.push({ seasonId: episodeId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(episodeId, undefined, checksResult, null, undefined, ep && peticionCubre(preselect, ep) ? requestId : undefined)
+        const r = await queueUpload(episodeId, undefined, checksResult, null, undefined, ep && peticionCubre(preselect, ep) ? requestId : undefined, loteId)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId: episodeId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {

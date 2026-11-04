@@ -39,6 +39,7 @@ import { SyncContext } from '../../context/SyncContext'
 import type { DashboardSummaryResponse, LibraryItemResponse, UploadJob } from '../../types/api'
 import { desmontar, esperar, montar, pulsar, texto } from '../../components/__tests__/dom'
 import { DashboardPage } from '../DashboardPage'
+import { recortarEnCurso } from '../../components/hoy/CarrilEnCurso'
 
 const resumen = (extra: Partial<DashboardSummaryResponse> = {}): DashboardSummaryResponse => ({
   library_total: 51372, available: 15861, missing: 57, uploading: 0, completed: 0, unique_content: 283,
@@ -464,6 +465,32 @@ describe('Panel', () => {
       .toEqual({ id: 40, preselect: null, requestId: null })
   })
 
+  it('una tanda de 10: «En curso» enseña 6 filas vivas, la que sube primero, y «+4 en cola»', async () => {
+    vi.mocked(getUploads).mockResolvedValue([
+      ...Array.from({ length: 9 }, (_, i) => trabajo({ id: 20 + i, status: 'queued', title: `Capítulo ${i + 2}`, queue_position: i + 1 })),
+      trabajo({ id: 10, status: 'running', title: 'Capítulo 1', started_at: new Date().toISOString() }),
+    ])
+    await pagina()
+    await esperar(() => carril('En curso').querySelectorAll('.upload-row').length > 0)
+
+    const subidas = [...carril('En curso').querySelectorAll('.upload-row-title')].map(t => t.textContent)
+    expect(subidas).toEqual(['Capítulo 1', 'Capítulo 2', 'Capítulo 3', 'Capítulo 4', 'Capítulo 5', 'Capítulo 6'])
+    // La nota sigue contando todas; la línea de debajo, las que no caben.
+    expect(carril('En curso').textContent).toContain('1 subiendo · 9 en cola')
+    const mas = carril('En curso').querySelector('.panel-en-curso-mas')!
+    expect(mas.textContent).toBe('+4 en cola · Ver todas las subidas')
+    await pulsar(mas.querySelector('[role="link"]')!)
+    expect(navegar).toHaveBeenCalledWith('uploads')
+  })
+
+  it('con 6 vivas o menos no hay línea «+N en cola»', async () => {
+    vi.mocked(getUploads).mockResolvedValue(
+      Array.from({ length: 6 }, (_, i) => trabajo({ id: 20 + i, status: 'queued', title: `Capítulo ${i + 1}`, queue_position: i + 1 })))
+    await pagina()
+    await esperar(() => carril('En curso').querySelectorAll('.upload-row').length === 6)
+    expect(carril('En curso').querySelector('.panel-en-curso-mas')).toBeNull()
+  })
+
   it('«Ver todas las subidas» abre Subidas', async () => {
     await pagina()
     await pulsar([...carril('En curso').querySelectorAll('[role="link"]')].find(l => l.textContent === 'Ver todas las subidas'))
@@ -474,5 +501,22 @@ describe('Panel', () => {
     await pagina()
     expect([...document.querySelectorAll('button')].filter(b => b.textContent!.includes('↻')).map(b => b.textContent))
       .toEqual(['↻ Sincronizar todo'])
+  })
+})
+
+describe('el tope de filas vivas de «En curso»', () => {
+  const fila = (id: number, status: string, yendose = false) => ({ job: trabajo({ id, status }), yendose })
+
+  it('las que se despiden no cuentan ni se esconden', () => {
+    const vivas = Array.from({ length: 8 }, (_, i) => fila(i + 1, i === 0 ? 'running' : 'queued'))
+    const despidiendose = [fila(50, 'completed'), fila(51, 'failed', true)]
+    const { visibles, ocultas } = recortarEnCurso([...vivas, ...despidiendose])
+    expect(visibles.map(f => f.job.id)).toEqual([1, 2, 3, 4, 5, 6, 50, 51])
+    expect(ocultas.map(f => f.job.id)).toEqual([7, 8])
+  })
+
+  it('sin pasarse del tope, todas tal cual', () => {
+    const filas = [fila(1, 'running'), fila(2, 'completed')]
+    expect(recortarEnCurso(filas)).toEqual({ visibles: filas, ocultas: [] })
   })
 })

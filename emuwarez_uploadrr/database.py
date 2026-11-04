@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 51
+SCHEMA_VERSION = 52
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1295,6 +1295,20 @@ def _migrate_upload_jobs_pasos_uploadrr(conn: sqlite3.Connection) -> None:
                 raise
 
 
+def _migrate_upload_jobs_lote(conn: sqlite3.Connection) -> None:
+    """Esquema 52: `lote_id`, la etiqueta que agrupa las subidas lanzadas de una vez (una tanda del asistente o un
+    lote). Sin tabla propia: lo que se sabe del lote se deduce de sus filas. Anulable: las subidas sueltas y las
+    viejas no tienen lote."""
+    if "lote_id" not in {fila[1] for fila in conn.execute("PRAGMA table_info(upload_jobs)")}:
+        try:
+            conn.execute("ALTER TABLE upload_jobs ADD COLUMN lote_id TEXT")
+        except sqlite3.OperationalError:
+            # Solo se calla si la columna ya está (la añadió otro init_db a la vez), no un «database is locked».
+            if "lote_id" not in {fila[1] for fila in conn.execute("PRAGMA table_info(upload_jobs)")}:
+                raise
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_upload_jobs_lote ON upload_jobs(lote_id)")
+
+
 def _migrate_quitar_registro_arr(conn: sqlite3.Connection) -> None:
     """Esquema 48: el registro entero de la cola y el historial de Radarr/Sonarr ya no se guarda (nadie lo leía, y
     trae el enlace del indexador con su clave, como el ?apikey= de Prowlarr). Se borra el que había."""
@@ -1879,6 +1893,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_request_items_aviso_pendiente(conn)
         _migrate_perfil_historial(conn)
         _migrate_upload_jobs_pasos_uploadrr(conn)
+        _migrate_upload_jobs_lote(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

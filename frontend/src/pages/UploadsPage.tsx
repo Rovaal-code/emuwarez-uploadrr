@@ -133,7 +133,7 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
 // One table row — used both for the latest attempt in a retry chain (normal
 // row) and for its older attempts (indented/muted, revealed by expanding the
 // Reintentos toggle). `retryToggle` is only passed on the latest-attempt row.
-function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel, onRetry, onDelete }: {
+function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel, onRetry, onDelete, onFiltrarLote }: {
   job: UploadJob
   seeding: SeedingEstado
   instances: InstanceSafeResponse[]
@@ -143,6 +143,8 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
   onCancel: (jobId: number) => void
   onDelete: (job: UploadJob) => void
   onRetry: (job: UploadJob) => void
+  // Pulsar el chip «Lote · N»: ver solo las subidas de ese lote.
+  onFiltrarLote?: (loteId: string) => void
 }) {
   const canCancel = CANCELLABLE_STATUSES.has(job.status)
   const canDelete = DELETABLE_STATUSES.has(job.status)
@@ -163,6 +165,10 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
         : 'Borrar esta subida del historial')
     : 'Solo se puede borrar una subida terminada: completada, cancelada o fallida')
   const cancelBtnTip = useTooltip(canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo')
+  // El chip del lote: solo si el lote tiene más de un elemento (uno que se quedó en uno no agrupa nada), y no en los
+  // intentos anteriores, que van debajo de la fila que ya lo lleva.
+  const loteId = !indent && job.lote_id && (job.lote_total ?? 0) > 1 ? job.lote_id : null
+  const loteTip = useTooltip(loteId ? 'Ver solo las subidas de este lote' : null)
   return (
     <tr className={indent ? 'sub-fila-antigua' : undefined}>
       <td className="sub-celda-titulo">
@@ -193,6 +199,17 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
               {titleTooltip}
             </span>
             {job.year ? <span className="sub-muted sub-t11 sub-no-encoge">({job.year})</span> : null}
+            {loteId && onFiltrarLote && (
+              <button
+                type="button"
+                className="sub-lote-chip"
+                onClick={e => { e.stopPropagation(); onFiltrarLote(loteId) }}
+                {...loteTip.triggerProps}
+              >
+                Lote · {job.lote_total}
+                {loteTip.tooltipNode}
+              </button>
+            )}
             {job.result_url && (
               <a className="hover-link sub-enlace-emu" href={job.result_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
                 aria-label="Ver en eMuwarez" {...emuTip}>
@@ -326,6 +343,9 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('created_desc')
   const [typeFilter, setTypeFilter] = useState('')
+  // Solo las subidas de un lote (el chip «Lote · N»): lo filtra el servidor, que devuelve el último intento de cada
+  // elemento.
+  const [loteFiltro, setLoteFiltro] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
   // Cuántas se piden (las más recientes), cuántas hay en total con el filtro de estado, y si ya llegó la primera
   // respuesta (hasta entonces «no está en la lista» no quiere decir nada).
@@ -363,7 +383,11 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       // The "Subiendo" filter option (value 'running') must also catch
       // 'preparing' jobs — they display identically as "Subiendo" now (see
       // STATUS_LABEL) — so the server filters on both, before paginating and counting.
-      const filtros = { status: statusFilter === 'running' ? 'running,preparing' : statusFilter || undefined, hide_preparatory: true }
+      const filtros = {
+        status: statusFilter === 'running' ? 'running,preparing' : statusFilter || undefined,
+        hide_preparatory: true,
+        lote_id: loteFiltro ?? undefined,
+      }
       // Si falla solo el recuento, la lista se enseña igual y el total queda sin conocer.
       const [data, cuantas] = await Promise.all([
         getUploads({ ...filtros, limit: limite }),
@@ -379,7 +403,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       if (!opts?.silent) setError('Error al cargar los trabajos de subida.')
     }
     finally { if (!opts?.silent) setLoading(false) }
-  }, [statusFilter, limite])
+  }, [statusFilter, limite, loteFiltro])
 
   useEffect(() => { load() }, [load])
 
@@ -410,8 +434,11 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   function quitarFiltros() {
     setSearch('')
     setStatusFilter(''); setTypeFilter('')
+    setLoteFiltro(null)
   }
-  const filtrando = !!(search || statusFilter || typeFilter)
+  const filtrando = !!(search || statusFilter || typeFilter || loteFiltro)
+  // Cuántos elementos tiene el lote filtrado: lo dice cualquiera de sus filas (antes de recargar, la del chip pulsado).
+  const loteTotal = loteFiltro ? jobs.find(j => j.lote_id === loteFiltro)?.lote_total ?? null : null
   // Las que faltan por cargar (sin total conocido, si la lista llena el límite pedido). La búsqueda por título y el
   // filtro de tipo miran solo las cargadas.
   const hayMas = hayMasPorCargar(total, jobs.length, limite, MAX_LIMITE)
@@ -683,6 +710,13 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <option value="status">Orden: Estado</option>
           <option value="duration_desc">Orden: Duración</option>
         </select>
+        {loteFiltro && (
+          <span className="sub-lote-filtro">
+            {loteTotal != null ? `Lote de ${loteTotal} ${loteTotal === 1 ? 'subida' : 'subidas'}` : 'Lote'}
+            {' · '}
+            <button type="button" className="sub-lote-quitar" onClick={() => setLoteFiltro(null)}>Quitar filtro de lote</button>
+          </span>
+        )}
       </div>
 
       {/* Ver RequestsPage: solo bloquea si no hay nada que enseñar todavía. */}
@@ -744,6 +778,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                         onCancel={handleCancel}
                         onDelete={setDeleteJob}
                         onRetry={handleRetryQueued}
+                        onFiltrarLote={setLoteFiltro}
                       />
                       {expanded && ancestors.map(a => (
                         <JobRow key={a.id} job={a} instances={instances} seeding={seeding} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} onDelete={setDeleteJob} />

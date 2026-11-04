@@ -2,7 +2,7 @@
  * La lógica del Panel: cómo se reparten las recomendaciones, qué va en cada carril y qué dice cada línea.
  * El servidor ya da cada lista en su orden (las peticiones por recompensa); aquí solo se reparte y se redacta.
  */
-import type { DashboardRecommendationItem } from '../api/dashboard'
+import type { AporteRecomendacion, DashboardRecommendationItem } from '../api/dashboard'
 import type { DashboardSummaryResponse, UploadJob } from '../types/api'
 import { estadoCastellano } from './castellano'
 import { formatBytes, formatItemType, parseServerDate, timeAgo } from './format'
@@ -10,6 +10,7 @@ import { formatBytes, formatItemType, parseServerDate, timeAgo } from './format'
 const REC_GRUPO_PETICION = 1
 const REC_GRUPO_UNICO = 2
 const REC_GRUPO_FALTANTE = 3
+const REC_GRUPO_MEJORA = 4
 
 /** Una subida fallida deja de avisar pasado este tiempo (o antes, si se reintenta o se borra). */
 export const FALLIDA_VIGENTE_MS = 3 * 24 * 3600 * 1000
@@ -24,11 +25,27 @@ export interface RecomendacionesRepartidas {
   unicos: DashboardRecommendationItem[]
   /** Grupo 3: lo que falta y se podría pedir a eMuwarez. */
   faltantes: DashboardRecommendationItem[]
+  /** Grupo 4: lo que ya está en eMuwarez pero tu copia aporta algo («Mejoras posibles»). */
+  mejoras: DashboardRecommendationItem[]
 }
 
 export function repartirRecomendaciones(items: DashboardRecommendationItem[]): RecomendacionesRepartidas {
   const grupo = (g: number) => items.filter(i => i.rec_group === g)
-  return { peticiones: grupo(REC_GRUPO_PETICION), unicos: grupo(REC_GRUPO_UNICO), faltantes: grupo(REC_GRUPO_FALTANTE) }
+  return {
+    peticiones: grupo(REC_GRUPO_PETICION), unicos: grupo(REC_GRUPO_UNICO), faltantes: grupo(REC_GRUPO_FALTANTE),
+    mejoras: grupo(REC_GRUPO_MEJORA),
+  }
+}
+
+/** «Resolución 2160p», «Códec HEVC (−1,2 GB)», «Castellano»: lo que tu copia aporta, dicho en una frase corta. */
+export function textoDeAporte(a: AporteRecomendacion): string {
+  switch (a.dim) {
+    case 'resolucion': return `Resolución ${a.detail}`
+    case 'source': return `Source ${a.detail}`
+    case 'codec': return `Códec ${a.detail}`
+    case 'idioma': return 'Castellano'
+    default: return a.detail
+  }
 }
 
 /** «Película · 1080p WEB-DL · castellano · 6,0 GB»: lo que se sabe, sin rayas donde no se sabe. */

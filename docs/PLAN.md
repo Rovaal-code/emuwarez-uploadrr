@@ -328,6 +328,13 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   (no a master), sin tests (se pasan antes en local) y sin mover `:edge`; si falla después de subir la versión, se reanuda con
   `ref=release/vX.Y.Z`. Se usó para sacar la 0.16.2 desde `6acfa83`, el último commit antes del rediseño; hay que fusionar la
   rama `release/vX.Y.Z` en master para que `__version__` no se quede atrás (#201).
+- **Oleada 4, «Mejoras posibles»:** cuarto grupo de Recomendaciones del Panel (`rec_group = 4`, `rec_aportes`): lo disponible
+  que ya está en eMuwarez (`emu_in_catalog = 1`) y cuya copia aporta algo que ninguno de sus torrents tiene (resolución,
+  source, códec o castellano: los `emu_aportes` que la ficha de Biblioteca marca como «Aportas»). Mismas unidades y exigencias
+  que el contenido único (película o temporada con castellano y rollup de pack). Sale en «Otras ideas (sin petición)» con una
+  etiqueta por aporte y «Subir» abre el asistente sin petición; el Resumen del asistente da el veredicto frente a cada torrent
+  (no es un permiso: revisa las reglas de trumps). Los capítulos sueltos no entran (sus aportes se calculan, pero se sube por
+  temporada). Sin migración. Sin ver en el navegador.
 
 ## Siguiente
 
@@ -343,7 +350,7 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 - Funciones nuevas que faltan:
   - subida por lotes;
   - resumen de duplicados y trumps;
-  - «Mejoras posibles»;
+  - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - estadísticas del tracker por subida.
 - Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): ~~P1 Panel~~, ~~P4 detalle de subida~~ y ~~P5 asistente con Resumen~~ (hechos),
   quedan P2 Biblioteca, P3 Peticiones y P6 Configuración. P7 móvil, pendiente de decidir. Las funciones que

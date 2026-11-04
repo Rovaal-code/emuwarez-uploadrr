@@ -7,7 +7,7 @@ import type { DashboardRecommendationItem } from '../../api/dashboard'
 import type { UploadJob } from '../../types/api'
 import {
   avisosDeAtencion, fallidasRecientes, lineaDeEspecificaciones, lineaSincronizacion, ordenarEnCurso,
-  repartirRecomendaciones, FALLIDAS_MAX, FALLIDA_VIGENTE_MS,
+  repartirRecomendaciones, textoDeAporte, FALLIDAS_MAX, FALLIDA_VIGENTE_MS,
 } from '../hoy'
 
 const rec = (extra: Partial<DashboardRecommendationItem>): DashboardRecommendationItem => ({
@@ -22,16 +22,27 @@ describe('el reparto de las recomendaciones', () => {
   it('separa peticiones, únicos y faltantes sin cambiar el orden que da el servidor', () => {
     const items = [
       rec({ id: 1, rec_group: 1, rec_points: 900 }), rec({ id: 2, rec_group: 1, rec_points: 100 }),
-      rec({ id: 3, rec_group: 2 }), rec({ id: 4, rec_group: 3 }), rec({ id: 5, rec_group: 2 }),
+      rec({ id: 3, rec_group: 2 }), rec({ id: 4, rec_group: 3 }), rec({ id: 5, rec_group: 2 }), rec({ id: 6, rec_group: 4 }),
     ]
     const r = repartirRecomendaciones(items)
     expect(r.peticiones.map(i => i.id)).toEqual([1, 2])
     expect(r.unicos.map(i => i.id)).toEqual([3, 5])
     expect(r.faltantes.map(i => i.id)).toEqual([4])
+    expect(r.mejoras.map(i => i.id)).toEqual([6])
   })
 
   it('sin recomendaciones, los tres carriles quedan vacíos', () => {
-    expect(repartirRecomendaciones([])).toEqual({ peticiones: [], unicos: [], faltantes: [] })
+    expect(repartirRecomendaciones([])).toEqual({ peticiones: [], unicos: [], faltantes: [], mejoras: [] })
+  })
+})
+
+describe('lo que aporta tu copia', () => {
+  it('dice cada aporte en una frase corta', () => {
+    expect(textoDeAporte({ dim: 'resolucion', detail: '2160p' })).toBe('Resolución 2160p')
+    expect(textoDeAporte({ dim: 'source', detail: 'Remux' })).toBe('Source Remux')
+    expect(textoDeAporte({ dim: 'codec', detail: 'HEVC (−1,2 GB)' })).toBe('Códec HEVC (−1,2 GB)')
+    expect(textoDeAporte({ dim: 'idioma', detail: 'ESP' })).toBe('Castellano')
+    expect(textoDeAporte({ dim: 'otro', detail: 'algo' })).toBe('algo')
   })
 })
 

@@ -511,7 +511,7 @@ class DashboardActivityResponse(BaseModel):
 
 class DashboardRecommendationItem(BaseModel):
     id: int
-    rec_group: int  # 1 = compatible request, 2 = unique/upload, 3 = missing/request
+    rec_group: int  # 1 = compatible request, 2 = unique/upload, 3 = missing/request, 4 = mejora posible
     item_type: str
     title: Optional[str] = None
     content_name: str
@@ -546,6 +546,9 @@ class DashboardRecommendationItem(BaseModel):
     release_group: Optional[str] = None
     audio_languages: list[str] = []
     subtitle_languages: list[str] = []
+    # Solo grupo 4: lo que tu copia aporta frente a lo que ya hay en eMuwarez, [{dim, detail}] (resolucion, source,
+    # codec, idioma).
+    rec_aportes: list[dict] = []
 
 
 class DashboardRecommendationsResponse(BaseModel):

@@ -448,6 +448,22 @@ describe('Panel', () => {
     expect(document.querySelector('[data-testid="formulario"]')!.textContent).toBe('30')
   })
 
+  it('«Mejoras posibles» (grupo 4) enseña lo que aporta tu copia y «Subir» abre el asistente sin petición', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+      rec({ id: 40, rec_group: 4, content_name: 'Mejorable (2003)',
+        rec_aportes: [{ dim: 'resolucion', detail: '2160p' }, { dim: 'idioma', detail: 'ESP' }] }),
+    ] })
+    await pagina()
+    const mas = document.querySelector('details.panel-mas')!
+    expect(mas.textContent).toContain('Mejoras posibles')
+    const fila = [...mas.querySelectorAll('.panel-item')].find(f => f.textContent!.includes('Mejorable (2003)'))!
+    expect([...fila.querySelectorAll('.panel-aporte')].map(a => a.textContent)).toEqual(['Resolución 2160p', 'Castellano'])
+    await pulsar(botonDe(fila, 'Subir'))
+    await esperar(() => document.querySelector('[data-testid="asistente"]'))
+    expect(JSON.parse(document.querySelector('[data-testid="asistente"]')!.textContent!))
+      .toEqual({ id: 40, preselect: null, requestId: null })
+  })
+
   it('«Ver todas las subidas» abre Subidas', async () => {
     await pagina()
     await pulsar([...carril('En curso').querySelectorAll('[role="link"]')].find(l => l.textContent === 'Ver todas las subidas'))

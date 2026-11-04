@@ -1,6 +1,7 @@
 """Datos del panel (Dashboard): resumen, diagnóstico, actividad reciente y recomendaciones."""
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -337,7 +338,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     g1_recs: list[dict] = []  # group 1, already in its final order (the SQL's)
-    recs: list[dict] = []  # groups 2 & 3, sorted at the end
+    recs: list[dict] = []  # groups 2, 3 & 4, sorted at the end
     seen_lib: set[int] = set()  # library ids already shown (so a piece of
     # content isn't repeated across groups 2 & 3 or after appearing in group 1)
 
@@ -417,10 +418,12 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         size_episode = episode if (scope == "episode" or disp_type == "episode") else None
         d["size_bytes"] = _rec_rolled_size(conn, lib, season=season, episode=size_episode)
         d["missing_count"] = None
+        d["rec_aportes"] = []
         g1_recs.append(d)
         seen_lib.add(int(lib_id))
 
-    def _push(row: dict, group: int, *, name: str | None = None, size=None, missing_count=None):
+    def _push(row: dict, group: int, *, name: str | None = None, size=None, missing_count=None,
+              aportes: list | None = None):
         rid = int(row["id"])
         if rid in seen_lib:
             return
@@ -432,6 +435,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         d["rec_request_id"] = None
         d["rec_points"] = None
         d["missing_count"] = missing_count
+        d["rec_aportes"] = aportes or []
         # Recency: for a Faltante candidate (group 3), when it actually BECAME
         # missing (missing_since) is what "newest first" should mean — falls
         # back to Radarr/Sonarr's own "added" date (when Radarr/Sonarr first
@@ -468,6 +472,31 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
               AND (li.item_type != 'season' OR ({pack_rollup_sql("li")}))"""
     ).fetchall():
         _push(dict(row), 2)
+
+    # Group 4 — «Mejoras posibles»: lo que tienes disponible y YA está en eMuwarez, pero tu copia aporta algo que
+    # no tiene ninguno de sus torrents (mayor resolución, mejor source, un códec más eficiente o el castellano que
+    # les falta): lo que la ficha de Biblioteca marca como «Aportas» (emu_in_catalog = 1 con emu_aportes). Mismas
+    # unidades subibles y mismas exigencias de castellano y de pack que el grupo 2. No es un permiso para subir:
+    # eMuwarez tiene reglas de trumps y el Resumen del asistente enseña el veredicto frente a cada torrent.
+    for row in conn.execute(
+        f"""SELECT {cols}, li.emu_aportes,
+              COALESCE(json_extract(li.raw_json, '$.added'),
+                       (SELECT json_extract(p.raw_json, '$.added')
+                        FROM library_items p WHERE p.id = li.parent_id)) AS arr_added
+            FROM library_items li
+            WHERE li.local_status = 'Disponible' AND li.emu_in_catalog = 1
+              AND li.item_type IN ('movie', 'season')
+              AND json_valid(li.emu_aportes) AND json_array_length(li.emu_aportes) > 0
+              AND li.has_spanish_ok = 1
+              AND (li.item_type != 'season' OR ({pack_rollup_sql("li")}))"""
+    ).fetchall():
+        row = dict(row)
+        try:
+            aportes = [a for a in json.loads(row.pop("emu_aportes") or "[]") if isinstance(a, dict)]
+        except ValueError:
+            continue
+        if aportes:
+            _push(row, 4, aportes=aportes)
 
     # Group 3 — monitored content you're missing and that isn't on eMuwarez, a
     # candidate to request. Excludes anything not yet released (unreleased /
@@ -526,8 +555,8 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         _push(row, 3, name=_rec_content_name(conn, row, episode=single_missing_episode),
               missing_count=missing_count)
 
-    # Groups 2 & 3: newest-first within each group (stable sort: order by
-    # recency, then by group so the blocks stay in order 2 → 3). Group 1 keeps
+    # Groups 2, 3 & 4: newest-first within each group (stable sort: order by
+    # recency, then by group so the blocks stay in order 2 → 3 → 4). Group 1 keeps
     # its own order (by reward, from the SQL) and goes first.
     recs.sort(key=lambda d: d.get("_added") or "", reverse=True)
     recs.sort(key=lambda d: d["rec_group"])

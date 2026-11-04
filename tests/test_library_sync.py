@@ -1358,3 +1358,54 @@ def test_a_series_with_one_season_downloaded_falls_back_to_the_season_notificati
     notes = list_notifications(sonarr_conn)
     assert len(notes) == 1
     assert "Temporada 2" in notes[0]["content_title"]
+
+
+def test_mejoras_posibles_son_lo_que_ya_esta_en_emuwarez_y_tu_copia_mejora(mem_conn):
+    """Grupo 4 de Recomendaciones: disponible, ya en eMuwarez (emu_in_catalog = 1) y con aportes. Sin aportes, sin
+    castellano o sin tener el fichero no entra, y el grupo 2 (contenido único) sigue sin repetirlo."""
+    from emuwarez_uploadrr.services.library import get_dashboard_recommendations
+
+    def peli(titulo, estado="Disponible", en_catalogo=1, aportes='[{"dim": "resolucion", "detail": "2160p"}]', es=1):
+        mem_conn.execute(
+            "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, emu_aportes, has_spanish_ok) "
+            "VALUES (?, 'movie', ?, ?, ?, ?)", (titulo, estado, en_catalogo, aportes, es))
+
+    peli("Mejor")
+    peli("Igual", aportes="[]")
+    peli("Sin aportes calculados", aportes=None)
+    peli("Sin castellano", es=0)
+    peli("No la tienes", estado="Faltante")
+    peli("Subida ya", estado="Subido")
+    peli("No esta en eMuwarez", en_catalogo=0, aportes="[]")
+    peli("JSON roto", aportes="{no es json")
+    mem_conn.commit()
+
+    recs = get_dashboard_recommendations(mem_conn)
+    mejoras = [r for r in recs if r["rec_group"] == 4]
+    assert [r["title"] for r in mejoras] == ["Mejor"]
+    assert mejoras[0]["rec_aportes"] == [{"dim": "resolucion", "detail": "2160p"}]
+    # El único no se mezcla con las mejoras, ni al revés.
+    assert [r["title"] for r in recs if r["rec_group"] == 2] == ["No esta en eMuwarez"]
+    assert all(r["rec_aportes"] == [] for r in recs if r["rec_group"] != 4)
+
+
+def test_mejoras_posibles_de_temporada_exigen_lo_mismo_que_el_pack(mem_conn):
+    """Una temporada con aportes solo es una mejora subible si sus capítulos coinciden (rollup del pack) y llevan
+    castellano, igual que en el contenido único."""
+    from emuwarez_uploadrr.services.library import get_dashboard_recommendations
+
+    mem_conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog) "
+                     "VALUES ('Serie', 'series', 'Disponible', 1)")
+    serie = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    for n, (res, ok) in enumerate((("1080p", 1), (None, 1), ("1080p", 0)), start=1):
+        mem_conn.execute(
+            "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, emu_aportes, parent_id, "
+            "season_number, resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+            "has_spanish_subs, has_spanish_ok) "
+            f"VALUES ('Serie - Temporada {n}', 'season', 'Disponible', 1, "
+            "'[{\"dim\": \"codec\", \"detail\": \"HEVC\"}]', ?, ?, ?, 'WEB-DL', 'x265', 'AAC', 'jpn', 'spa', 1, ?)",
+            (serie, n, res, ok))
+    mem_conn.commit()
+
+    titulos = [r["title"] for r in get_dashboard_recommendations(mem_conn) if r["rec_group"] == 4]
+    assert titulos == ["Serie - Temporada 1"]

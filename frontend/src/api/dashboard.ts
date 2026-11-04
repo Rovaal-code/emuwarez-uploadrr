@@ -2,7 +2,10 @@ import { api } from './client'
 import type { DashboardSummaryResponse, EmuPerfil } from '../types/api'
 
 // Phase 11G — dashboard "Recomendaciones": actionable content in three ranked
-// groups (1 compatible request · 2 unique/upload · 3 missing/request).
+// groups (1 compatible request · 2 unique/upload · 3 missing/request · 4 mejora posible: ya está en eMuwarez y tu
+// copia aporta algo).
+export interface AporteRecomendacion { dim: string; detail: string }
+
 export interface DashboardRecommendationItem {
   id: number
   rec_group: number
@@ -34,6 +37,8 @@ export interface DashboardRecommendationItem {
   release_group?: string | null
   audio_languages?: string[]
   subtitle_languages?: string[]
+  // Solo grupo 4: lo que tu copia aporta frente a lo que ya hay en eMuwarez.
+  rec_aportes?: AporteRecomendacion[]
 }
 
 export async function getDashboardRecommendations(limit = 60): Promise<{ items: DashboardRecommendationItem[] }> {

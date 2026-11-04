@@ -352,6 +352,21 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   nombre de cada torrent, `grupo_del_nombre`: lo que sigue al último guion, sin contar el «DL» de un WEB-DL) y en la lista de
   Subidas (`release_groups` de lo que se sube: el de la copia o los de todos los capítulos de una temporada). **No** se añadió a la
   lista de Peticiones: una petición no pide grupo y su copia local ya enseña el suyo en el detalle (`local_release_groups`).
+- **Oleada 4, rediseño P3, P2 y P6, y los retoques del Panel (#207, #208, #209, #204, #205):**
+  - Peticiones (#207): agrupada por lo que se puede hacer: «Lista para subir», «Parcial» y «No la tienes», más «Cerradas» (reclamadas,
+    llenas o ya subidas, que no se pueden subir y mentirían en ningún otro grupo); dentro de cada grupo, por recompensa. Elegir otra
+    ordenación (selector o cabecera) deja la lista plana. La columna Autor está oculta por defecto (casilla «Mostrar autor», en
+    localStorage). «Temporada 0» ya estaba arreglado (8510288).
+  - Biblioteca (#208): las columnas pasan de 13 a 7. Tipo, origen, resolución, proveedor, source y grupo se pliegan en una línea de
+    especificaciones bajo el título (con el grupo de release a la derecha de la línea del título) y sus seis filtros pasan a la cabecera
+    de Título. Filas de 63 a 57 px y sin scroll horizontal a 1280. Vistas guardadas en localStorage (los filtros viven en el estado de
+    la página, no en la URL). El desplegable «Orden» se queda: ordena por título, año y reciente, que ninguna cabecera hace.
+  - Configuración (#209): índice de secciones sticky con buscador, barra de guardado con el número de campos cambiados (compara
+    campo a campo con lo cargado) y «Avanzado» plegado (hoy solo trae las rutas permitidas: la ruta de Python y los timeouts no se
+    muestran en la pantalla). Por debajo de 1100 px el índice es una fila sin fijar.
+  - Pósters del Panel (#204): todos de 44×66 px, el alto del texto de una fila con grupo de release e idiomas.
+  - Barra lateral (#205): un carril recto de arriba abajo, sin esquinas redondeadas (#192 se las había dado y dejaba un hueco junto a la
+    barra superior) ni margen inferior; la línea bajo el logo es la misma que la de la barra superior.
 
 ## Siguiente
 
@@ -370,8 +385,8 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
   - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).
-- Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): ~~P1 Panel~~, ~~P4 detalle de subida~~ y ~~P5 asistente con Resumen~~ (hechos),
-  quedan P2 Biblioteca, P3 Peticiones y P6 Configuración. P7 móvil, pendiente de decidir. Las funciones que
+- Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): P1 Panel, P4 detalle de subida, P5 asistente con Resumen,
+  P2 Biblioteca, P3 Peticiones y P6 Configuración (todos hechos). Queda P7 móvil, pendiente de decidir. Las funciones que
   tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: le gusta el diseño original y solo quiere mejoras para ver mejor el contenido nuevo;
   esquinas redondeadas (la esquina cortada, demasiado contrastada, no); modo compacto pero legible, inspirándose en apps como
   Tracearr; y pasar cada pantalla por la skill `frontend-design`.

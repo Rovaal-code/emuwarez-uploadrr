@@ -69,6 +69,11 @@
   align-self: center;
 }
 
+/* Casilla «Mostrar autor» de la barra de filtros */
+.checkbox-label.pet-ver-autor {
+  margin-left: auto;
+}
+
 /* Grupos de la lista: lo que se puede hacer con cada petición. El color solo marca el estado. */
 .data-table th.pet-grupo-th {
   padding: 16px 12px 6px;

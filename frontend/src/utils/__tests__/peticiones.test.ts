@@ -1,10 +1,11 @@
+// @vitest-environment jsdom
 /**
  * Los grupos de la lista de Peticiones: a cuál va cada estado de preparación, el orden por recompensa dentro de
- * cada uno.
+ * cada uno y la preferencia de la columna Autor.
  */
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
-  agruparPeticiones, grupoDePeticion, type GrupoPeticion,
+  agruparPeticiones, grupoDePeticion, guardarMostrarAutor, leerMostrarAutor, type GrupoPeticion,
 } from '../peticiones'
 
 const p = (id: number, readiness: string | null, extra: Record<string, unknown> = {}) => ({
@@ -65,5 +66,34 @@ describe('agruparPeticiones', () => {
 
   it('sin peticiones no hay grupos', () => {
     expect(agruparPeticiones([])).toEqual([])
+  })
+})
+
+describe('la preferencia de mostrar el autor', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('por defecto está oculto', () => {
+    expect(leerMostrarAutor()).toBe(false)
+  })
+
+  it('se guarda y se vuelve a leer', () => {
+    guardarMostrarAutor(true)
+    expect(leerMostrarAutor()).toBe(true)
+    guardarMostrarAutor(false)
+    expect(leerMostrarAutor()).toBe(false)
+  })
+
+  it('sin almacenamiento no falla y sigue oculto', () => {
+    const real = Storage.prototype
+    const get = real.getItem, set = real.setItem
+    real.getItem = () => { throw new Error('bloqueado') }
+    real.setItem = () => { throw new Error('bloqueado') }
+    try {
+      expect(() => guardarMostrarAutor(true)).not.toThrow()
+      expect(leerMostrarAutor()).toBe(false)
+    } finally {
+      real.getItem = get
+      real.setItem = set
+    }
   })
 })

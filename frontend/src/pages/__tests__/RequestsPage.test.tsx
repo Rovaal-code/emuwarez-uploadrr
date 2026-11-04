@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Peticiones con el servidor simulado: los grupos por lo que se puede hacer, su orden por recompensa, que una
- * ordenación elegida los quite.
+ * ordenación elegida los quite y la columna Autor (oculta por defecto, activable y recordada).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -16,7 +16,7 @@ import { getInstances } from '../../api/instances'
 import { SeccionVisible } from '../../context/SeccionVisible'
 import { SyncContext } from '../../context/SyncContext'
 import type { RequestItemResponse } from '../../types/api'
-import { desmontar, elegir, esperar, montar, pulsar } from '../../components/__tests__/dom'
+import { campo, desmontar, elegir, esperar, montar, pulsar } from '../../components/__tests__/dom'
 import { RequestsPage } from '../RequestsPage'
 
 const peticion = (id: number, extra: Partial<RequestItemResponse>): RequestItemResponse => ({
@@ -49,11 +49,13 @@ async function pagina() {
   await esperar(() => document.querySelector('table.data-table tbody tr'))
 }
 
+const cabeceras = () => [...document.querySelectorAll('thead th')].map(th => th.textContent?.trim())
 const grupos = () => [...document.querySelectorAll('tbody.pet-bloque')].map(b => ({
   titulo: b.querySelector('.pet-grupo-titulo')!.textContent,
   n: b.querySelector('.pet-grupo-n')!.textContent,
   filas: [...b.querySelectorAll('tr.clickable')].map(tr => tr.querySelector('.lib-title-link')!.textContent),
 }))
+const casillaAutor = () => campo<HTMLInputElement>('Mostrar autor')
 const ultimaLlamada = () => { const l = vi.mocked(getRequests).mock.calls; return l[l.length - 1][0] }
 
 beforeEach(() => {
@@ -90,5 +92,30 @@ describe('Peticiones', () => {
     await pulsar(document.querySelector('button[aria-label="Puntos / recompensa"]')!)
     await esperar(() => document.querySelectorAll('tbody.pet-bloque').length === 0)
     expect(ultimaLlamada()).toMatchObject({ sort: 'points_desc' })
+  })
+
+  it('la columna Autor está oculta por defecto', async () => {
+    await pagina()
+    expect(cabeceras().some(c => c?.startsWith('Autor'))).toBe(false)
+    expect(document.body.textContent).not.toContain('pedidor')
+    expect(casillaAutor()!.checked).toBe(false)
+  })
+
+  it('la casilla muestra la columna Autor y lo recuerda', async () => {
+    await pagina()
+    await pulsar(casillaAutor())
+    expect(cabeceras().some(c => c?.startsWith('Autor'))).toBe(true)
+    expect(document.body.textContent).toContain('pedidor')
+    expect(localStorage.getItem('emuwarez_peticiones_mostrar_autor')).toBe('1')
+    // Las cabeceras de grupo ocupan todo el ancho, con la columna de más.
+    const th = document.querySelector('th.pet-grupo-th')!
+    expect(th.getAttribute('colspan')).toBe(String(document.querySelectorAll('thead th').length))
+  })
+
+  it('con la preferencia guardada arranca con el autor a la vista', async () => {
+    localStorage.setItem('emuwarez_peticiones_mostrar_autor', '1')
+    await pagina()
+    expect(casillaAutor()!.checked).toBe(true)
+    expect(cabeceras().some(c => c?.startsWith('Autor'))).toBe(true)
   })
 })

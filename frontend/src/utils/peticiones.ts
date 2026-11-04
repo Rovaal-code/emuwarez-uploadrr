@@ -90,3 +90,14 @@ export function agruparPeticiones<T extends ParaAgrupar>(items: T[]): { id: Grup
     .map(g => ({ ...g, items: items.filter(i => grupoDePeticion(i) === g.id).sort(porRecompensa) }))
     .filter(g => g.items.length > 0)
 }
+
+// Columna Autor: oculta salvo que se active (el autor sale en cada captura de pantalla).
+const CLAVE_MOSTRAR_AUTOR = 'emuwarez_peticiones_mostrar_autor'
+
+export function leerMostrarAutor(): boolean {
+  try { return localStorage.getItem(CLAVE_MOSTRAR_AUTOR) === '1' } catch { return false }
+}
+
+export function guardarMostrarAutor(mostrar: boolean): void {
+  try { localStorage.setItem(CLAVE_MOSTRAR_AUTOR, mostrar ? '1' : '0') } catch { /* sin almacenamiento: vale para esta visita */ }
+}

@@ -307,6 +307,27 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - No tiene «Abrir en qBittorrent»: la URL que la app conoce es la del servidor (puede ser un nombre de contenedor) y no guarda
     el info-hash. Haría falta una URL pública de qBittorrent en Configuración.
   - Sin ver: una subida real de punta a punta, el contraste AA medido con una herramienta y un lector de pantalla.
+- **Oleada 4, rediseño P5: el asistente de subida con Resumen (#200):** un stepper con los pasos reales de cada flujo (película o
+  capítulo: «Nombre y pistas → Resumen»; serie, temporada o tanda: «Contenido → Nombre y pistas → Resumen») y un paso final que
+  enseña lo que se sube: nombre del torrent, ficheros, categoría (Película o Serie: Uploadrr-EMU solo envía `movie`/`tv`, así que
+  no dice «Anime»), petición (con aviso si hay una abierta que la subida no cubre), pistas y copia (no predice reflink: depende de
+  `st_nlink` al preparar). «En eMuwarez ya hay» saca del catálogo local los torrents del mismo contenido y dice si lo tuyo es
+  mejor, igual o peor (`veredicto`, calculado en el servidor); no cuenta como permiso: revisa las reglas de trumps. El pie del
+  asistente queda siempre a la vista. La columna se llama «Lo tuyo» y no «Tuyo» porque el catálogo local no guarda el autor.
+  - Sin hacer: Nomenclatura, Pistas y MediaInfo como pestañas dentro del paso 2 en vez de modales (encaja: `PasoArchivo` y
+    `PasoTemporada` tienen ya los tres bloques; hace falta sustituir los booleanos `showRemuxCard`/`showMiCard` por una pestaña
+    activa, en un PR aparte y con comparación visual); en una tanda el Resumen no lista el nombre de cada torrent.
+- **Oleada 4, el Panel, segunda ronda (#197):** «En curso» vuelve a enseñar las subidas recientes (las cinco últimas, con su
+  insignia); «Listo para subir» enseña el grupo de release y los idiomas de cada petición; con un solo aviso en «Necesita atención»
+  la acción queda a la derecha.
+- **Oleada 4, el grupo de release a la vista (#199):** `release_groups` (lista) en las series y temporadas; fila «Grupo» en la
+  ficha de Biblioteca, «Varios (N)» en las celdas de la tabla de hijos cuando se mezclan, «Grupo» en el detalle de una subida y
+  una columna en la comparación de Peticiones. El grupo viene del `releaseGroup` de Radarr/Sonarr y se rellena en la siguiente
+  sincronización: una base sin resincronizar lo tiene vacío. Falta en la lista de Subidas, la de Peticiones y «Tu copia vs eMuwarez».
+- **Publicar la versión de un commit anterior (#198):** `publicar.yml` acepta `ref`; la versión y su etiqueta van a `release/vX.Y.Z`
+  (no a master), sin tests (se pasan antes en local) y sin mover `:edge`; si falla después de subir la versión, se reanuda con
+  `ref=release/vX.Y.Z`. Se usó para sacar la 0.16.2 desde `6acfa83`, el último commit antes del rediseño; hay que fusionar la
+  rama `release/vX.Y.Z` en master para que `__version__` no se quede atrás (#201).
 
 ## Siguiente
 
@@ -324,8 +345,8 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
   - resumen de duplicados y trumps;
   - «Mejoras posibles»;
   - estadísticas del tracker por subida.
-- Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): ~~P1 Panel~~ y ~~P4 detalle de subida~~ (hechos),
-  P5 asistente con Resumen, P2 Biblioteca, P3 Peticiones, P6 Configuración. P7 móvil, pendiente de decidir. Las funciones que
+- Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): ~~P1 Panel~~, ~~P4 detalle de subida~~ y ~~P5 asistente con Resumen~~ (hechos),
+  quedan P2 Biblioteca, P3 Peticiones y P6 Configuración. P7 móvil, pendiente de decidir. Las funciones que
   tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: esquinas redondeadas y poco contraste, nada plano.
 
 ## Aplazado / ideas

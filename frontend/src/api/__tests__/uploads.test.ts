@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('../client', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
 
 import { api } from '../client'
-import { cancelarLote, countUploads, getLote, getUploadJobLogs, getUploads, queueUpload, reintentarLote } from '../uploads'
+import { cancelarLote, countUploads, getLote, getUploadJobLogs, getUploads, queueLote, queueUpload, reintentarLote } from '../uploads'
 
 const get = vi.mocked(api.get)
 const post = vi.mocked(api.post)
@@ -90,5 +90,18 @@ describe('el registro de una subida', () => {
   it('lo nuevo: con la secuencia de la última línea que se tiene', async () => {
     await getUploadJobLogs(7, 5000, 0, false, 120)
     expect(get).toHaveBeenCalledWith('/uploads/7/logs?limit=5000&offset=0&tail=false&after_sequence=120')
+  })
+})
+
+describe('«Subir por lotes»', () => {
+  it('manda los elementos en su orden, tal cual', async () => {
+    post.mockResolvedValue({ lote_id: '0123456789ab', encolados: 2, saltados: 0, resultados: [] })
+    const checks = { checks: [], ready: true }
+    const elementos = [
+      { item_id: 12, checks, campos: { title: 'Dune', provider: 'AMZN' } },
+      { item_id: 11, checks },
+    ]
+    expect((await queueLote(elementos)).encolados).toBe(2)
+    expect(post).toHaveBeenCalledWith('/uploads/lote', { elementos })
   })
 })

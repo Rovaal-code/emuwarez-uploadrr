@@ -10,6 +10,7 @@ import { useTooltip } from './Tooltip'
 import { ValueChip, ValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
 import { estadoCastellano, CASTELLANO_INFO } from '../utils/castellano'
 import { IconoDesplegar, IconoTipo } from './Iconos'
+import { CasillaLote } from './lote/CasillaLote'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
@@ -37,6 +38,12 @@ interface LibraryTreeRowProps {
   // que se ven (FilasVirtuales), y así mantiene montada una serie desplegada
   // aunque salga de la pantalla: dentro guarda sus temporadas y su página.
   onExpandedChange?: (id: number, expanded: boolean) => void
+  // «Subir por lotes»: con `onAlternar`, una película lleva su casilla dentro de la celda del título (sin columna
+  // nueva). Va un booleano y una función estable, nunca la selección entera: rompería el memo de cada fila. No se
+  // pasa a las hijas (solo las películas se marcan) ni desde la ficha (LibraryChildrenSection).
+  seleccionado?: boolean
+  loteLleno?: boolean
+  onAlternar?: (item: LibraryItemResponse) => void
 }
 
 // Series -> Season -> Episode collapsible tree, one row per level, reused
@@ -78,7 +85,7 @@ export function SpanishAudioCell({ item }: { item: LibraryItemResponse }) {
 // of them on every keystroke even though their own props hadn't changed —
 // this (plus onSelect/onAction/onReload staying referentially stable at the
 // call site) is what makes that skip actually happen.
-export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false, onExpandedChange }: LibraryTreeRowProps) {
+export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false, onExpandedChange, seleccionado = false, loteLleno = false, onAlternar }: LibraryTreeRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<LibraryItemResponse[]>([])
   const [childTotal, setChildTotal] = useState(0)
@@ -172,6 +179,9 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         <td className="bib-celda-titulo">
           {/* La sangría depende de la profundidad: se queda en línea. */}
           <div className="bib-titulo-fila" style={{ paddingLeft: indent }}>
+            {onAlternar && item.item_type === 'movie' && (
+              <CasillaLote item={item} seleccionado={seleccionado} bloqueada={loteLleno} onAlternar={onAlternar} />
+            )}
             {canExpand ? (
               // Sin recuadro: el triángulo se ilumina él solo al pasar por
               // encima (.tree-expander). Un botón con caja aquí competía

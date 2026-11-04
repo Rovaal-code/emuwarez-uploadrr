@@ -19,6 +19,7 @@ import { formatDateTimeSeconds } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { hayMasPorCargar } from '../utils/paginarSubidas'
+import { CLAVE_ABRIR_LOTE, PATRON_LOTE_ID } from '../utils/lote'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText,
@@ -426,13 +427,22 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // llegaban justo después (ver context/SeccionVisible). Se abre aunque no esté
   // en la lista (una antigua): la ficha la pide por su id.
   const subidasALaVista = useSeccionVisible()
+  //
+  // También el lote recién encolado desde «Subir por lotes» (Biblioteca): la tabla, filtrada por él.
   useEffect(() => {
     if (!subidasALaVista || !cargado) return
+    let lote: string | null = null
+    try { lote = sessionStorage.getItem(CLAVE_ABRIR_LOTE) } catch { /* ignore */ }
+    if (lote) {
+      try { sessionStorage.removeItem(CLAVE_ABRIR_LOTE) } catch { /* ignore */ }
+      if (PATRON_LOTE_ID.test(lote)) verLote(lote)
+    }
     let pending: string | null = null
     try { pending = sessionStorage.getItem('emuwarez_open_upload') } catch { /* ignore */ }
     if (!pending) return
     try { sessionStorage.removeItem('emuwarez_open_upload') } catch { /* ignore */ }
     openUpload(Number(pending))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- se recoge al llegar los datos o volver a la sección; verLote solo fija estado
   }, [cargado, subidasALaVista])
 
   // La sección sigue montada al cambiar de pestaña: el seeding se vuelve a leer cada vez que se ve (el servidor lo

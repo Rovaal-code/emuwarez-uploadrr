@@ -61,11 +61,16 @@ export function useComprobaciones(targetId: number | null, proveedorElegido: Pro
 // UNA vez para toda la tanda: con 30 capítulos, preguntarle 30 veces a
 // eMuwarez si está vivo no aporta nada y multiplica por 30 la espera. Las
 // del CONTENIDO sí van una por elemento, porque dependen del fichero.
-export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedorElegido }: {
+//
+// `minimo`: desde cuántos elementos se comprueba así. El asistente lo deja en 2
+// (con uno solo usa useComprobaciones); «Subir por lotes» pasa 1, porque un lote
+// de una película también se sube por aquí.
+export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedorElegido, minimo = 2 }: {
   step: 0 | 1 | 2
   batchQueue: readonly number[]
   batchPhase: 'idle' | 'processing' | 'done'
   proveedorElegido: ProveedoresElegidos
+  minimo?: number
 }) {
   const [batchEnvChecks, setBatchEnvChecks] = useState<UploadChecksResult | null>(null)
   const [batchContentChecks, setBatchContentChecks] = useState<Map<number, UploadChecksResult>>(new Map())
@@ -100,7 +105,7 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
   const sigueValiendo = (id: number) => !!batchContentChecks.get(id)?.ready
     && proveedorComprobado.current.get(id) === proveedorParaServidor(proveedorElegido, id)
   useEffect(() => {
-    if (step !== 2 || batchQueue.length <= 1 || batchPhase !== 'idle') return
+    if (step !== 2 || batchQueue.length < minimo || batchPhase !== 'idle') return
     if (batchChecksLoading || (batchEnvChecks?.ready && batchQueue.every(sigueValiendo))) return
     let alive = true
     const run = async () => {

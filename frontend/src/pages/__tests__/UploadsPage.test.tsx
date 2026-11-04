@@ -229,3 +229,22 @@ describe('«Ver el lote» desde el detalle de una subida', () => {
     expect(document.querySelector('.page-title')?.textContent).toBe('Subidas')
   })
 })
+
+describe('el lote recién encolado desde Biblioteca', () => {
+  afterEach(() => { sessionStorage.clear() })
+
+  it('al entrar, la tabla sale filtrada por él y la marca se gasta', async () => {
+    sessionStorage.setItem('emuwarez_open_lote', LOTE)
+    await pagina()
+    await esperar(() => ultimaPeticion()?.lote_id === LOTE)
+    await esperar(() => banner()?.textContent?.includes('Lote de 3 subidas'))
+    expect(sessionStorage.getItem('emuwarez_open_lote')).toBeNull()
+  })
+
+  it('un lote_id que no tiene la forma de uno no filtra nada', async () => {
+    sessionStorage.setItem('emuwarez_open_lote', 'no-es-un-lote')
+    await pagina()
+    expect(ultimaPeticion()?.lote_id).toBeUndefined()
+    expect(sessionStorage.getItem('emuwarez_open_lote')).toBeNull()
+  })
+})

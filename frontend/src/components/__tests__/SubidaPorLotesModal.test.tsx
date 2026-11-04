@@ -1,0 +1,335 @@
+// @vitest-environment jsdom
+/**
+ * «Subir por lotes» con el servidor simulado: qué se comprueba y cuándo (nada en el paso 1; el entorno una vez y el
+ * contenido por película en el paso 2), qué llega desmarcado o se salta y por qué, cuándo se habilita «Subir N»,
+ * qué se manda a POST /uploads/lote y cómo se enseña lo que respondió.
+ */
+import { act } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../../api/uploads', () => ({ queueLote: vi.fn(), runUploadChecks: vi.fn(), getUploadChecksProgress: vi.fn() }))
+vi.mock('../../api/nomenclature', () => ({ getNomenclatureFields: vi.fn(), previewNomenclatureFields: vi.fn() }))
+vi.mock('../../api/library', () => ({ getEmuComparison: vi.fn(), suggestProvider: vi.fn() }))
+vi.mock('../../api/settings', () => ({ fetchSettings: vi.fn() }))
+vi.mock('../../api/eventos', () => ({ seguirProgreso: vi.fn(() => () => {}) }))
+
+import * as subidas from '../../api/uploads'
+import * as nom from '../../api/nomenclature'
+import * as biblioteca from '../../api/library'
+import { fetchSettings } from '../../api/settings'
+import { ApiClientError } from '../../api/client'
+import type { EmuComparison } from '../../api/library'
+import type { LibraryItemResponse } from '../../types/api'
+import { SubidaPorLotesModal } from '../lote/SubidaPorLotesModal'
+import { boton, desmontar, diferida, esperar, montar, pulsar, texto } from './dom'
+
+const m = vi.mocked
+
+const peli = (id: number, title: string, extra: Partial<LibraryItemResponse> = {}) => ({
+  id, item_type: 'movie', title, year: 2021, local_status: 'Disponible', has_spanish_ok: 1,
+  resolution: '1080p', source: 'BluRay', ...extra,
+}) as LibraryItemResponse
+
+const DUNE = peli(11, 'Dune')
+const ALIEN = peli(12, 'Alien')
+const HEAT = peli(13, 'Heat')
+
+const CAMPOS = {
+  title: 'X', year: '2021', resolution: '1080p', source: 'BluRay', provider: null, video_codec: 'x264',
+  audio_summary: 'Castellano DD 5.1', subs: 'SUBS', tag: 'GRP',
+}
+const ENTORNO = { ready: true, checks: [{ id: 'emuwarez', label: 'eMuwarez responde', status: 'ok' as const, message: '' }] }
+const LISTO = { ready: true, checks: [{ id: 'accesible', label: 'Fichero accesible', status: 'ok' as const, message: '' }] }
+const SIN_NADA: EmuComparison = { available: true, message: null, matches: [] }
+
+const nombreDe = (id: number) => `Peli ${id} (2021) 1080p BluRay x264-GRP`
+
+const onClose = vi.fn()
+const onDone = vi.fn()
+const onNavigate = vi.fn()
+
+async function abrir(peliculas: LibraryItemResponse[]) {
+  await montar(<SubidaPorLotesModal peliculas={peliculas} onClose={onClose} onDone={onDone} onNavigate={onNavigate} />)
+}
+
+const llamadas = (scope: 'environment' | 'content') => m(subidas.runUploadChecks).mock.calls.filter(c => c[1] === scope)
+const fila = (id: number) => document.querySelector<HTMLTableRowElement>(`tr[data-item="${id}"]`)!
+const incluir = (titulo: string) => document.querySelector<HTMLInputElement>(`input[aria-label="Incluir «${titulo}»"]`)!
+const casillaPaso1 = (titulo: string) =>
+  [...document.querySelectorAll<HTMLLabelElement>('.lote-fila label')].find(l => l.textContent?.startsWith(titulo))!.querySelector('input')!
+const botonSubir = () => [...document.querySelectorAll('button')].find(b => /^Subir \d+$/.test(b.textContent ?? ''))
+const escape = () => act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+
+async function alResumen(n: number) {
+  await pulsar(boton(`Continuar (${n})`))
+  await esperar(() => texto().includes('Se subirán') && !document.querySelector('.asist-spinner-14'))
+}
+
+beforeEach(() => {
+  m(subidas.runUploadChecks).mockImplementation(async (_id, scope) => (scope === 'environment' ? ENTORNO : LISTO))
+  m(nom.getNomenclatureFields).mockImplementation(async id => ({
+    fields: { ...CAMPOS }, torrent_name: nombreDe(id), internal_mkv_title: '', blocked: false,
+  }))
+  m(biblioteca.getEmuComparison).mockResolvedValue(SIN_NADA)
+  m(fetchSettings).mockResolvedValue({ upload_max_concurrent: 1 } as never)
+  m(subidas.queueLote).mockImplementation(async elementos => ({
+    lote_id: '0123456789ab', encolados: elementos.length, saltados: 0,
+    resultados: elementos.map((e, i) => ({ item_id: e.item_id, status: 'queued', job_id: 100 + i, errors: [] })),
+  }))
+})
+afterEach(async () => {
+  await desmontar()
+  vi.clearAllMocks()
+  sessionStorage.clear()
+})
+
+describe('qué se comprueba y cuándo', () => {
+  it('un lote de una sola película se comprueba y se sube', async () => {
+    await abrir([DUNE])
+    await alResumen(1)
+    expect(fila(11).textContent).toContain(nombreDe(11))
+    expect(fila(11).textContent).toContain('No hay nada igual en eMuwarez.')
+    expect(incluir('Dune').checked).toBe(true)
+    expect(botonSubir()!.disabled).toBe(false)
+    await pulsar(botonSubir())
+    await esperar(() => texto().includes('1 de 1 encolada'))
+    expect(subidas.queueLote).toHaveBeenCalledTimes(1)
+  })
+
+  it('nada se comprueba mientras se está en el paso 1; el entorno, una sola vez para todas', async () => {
+    await abrir([DUNE, ALIEN, HEAT])
+    expect(texto()).toContain('3 de 3 marcadas')
+    expect(subidas.runUploadChecks).not.toHaveBeenCalled()
+    expect(nom.getNomenclatureFields).not.toHaveBeenCalled()
+    await alResumen(3)
+    expect(llamadas('environment')).toHaveLength(1)
+    expect(llamadas('content').map(c => c[0])).toEqual([11, 12, 13])
+    expect(m(nom.getNomenclatureFields).mock.calls.map(c => c[0])).toEqual([11, 12, 13])
+  })
+
+  it('volver sin cambiar nada no repite; cambiar la selección lo vuelve a comprobar', async () => {
+    await abrir([DUNE, ALIEN])
+    await alResumen(2)
+    await pulsar(boton('← Volver'))
+    await alResumen(2)
+    expect(llamadas('environment')).toHaveLength(1)
+    expect(llamadas('content')).toHaveLength(2)
+
+    await pulsar(boton('← Volver'))
+    await pulsar(casillaPaso1('Alien'))
+    expect(texto()).toContain('1 de 2 marcadas')
+    await alResumen(1)
+    expect(llamadas('environment')).toHaveLength(2)
+    expect(llamadas('content').map(c => c[0])).toEqual([11, 12, 11])
+    expect(document.querySelector('tr[data-item="12"]')).toBeNull()
+  })
+
+  it('una película sin castellano sale desmarcada y sin poder marcarse, con su motivo', async () => {
+    await abrir([DUNE, peli(14, 'Sin castellano', { has_spanish_ok: 0 })])
+    expect(casillaPaso1('Sin castellano').disabled).toBe(true)
+    expect(casillaPaso1('Sin castellano').checked).toBe(false)
+    expect(texto()).toContain('No tiene castellano ni en el audio ni en los subtítulos.')
+    expect(boton('Continuar (1)')).toBeDefined()
+  })
+})
+
+describe('qué llega desmarcado o se salta', () => {
+  it('con la nomenclatura bloqueada se saltará y no se manda', async () => {
+    m(nom.getNomenclatureFields).mockImplementation(async id => (id === 12
+      ? { fields: {}, torrent_name: '', internal_mkv_title: '', blocked: true, error: 'MediaInfo no puede leer el fichero.' }
+      : { fields: { ...CAMPOS }, torrent_name: nombreDe(id), internal_mkv_title: '', blocked: false }))
+    await abrir([DUNE, ALIEN])
+    await alResumen(2)
+    expect(fila(12).textContent).toContain('MediaInfo no puede leer el fichero.')
+    expect(fila(12).textContent).toContain('Se saltará')
+    expect(incluir('Alien').checked).toBe(false)
+    expect(incluir('Alien').disabled).toBe(true)
+    await pulsar(boton('Subir 1'))
+    await esperar(() => m(subidas.queueLote).mock.calls.length)
+    expect(m(subidas.queueLote).mock.calls[0][0].map(e => e.item_id)).toEqual([11])
+  })
+
+  it('una pista sin idioma enseña el aviso y llega desmarcada, pero se puede marcar', async () => {
+    m(nom.getNomenclatureFields).mockImplementation(async id => ({
+      fields: { ...CAMPOS }, torrent_name: nombreDe(id), internal_mkv_title: '', blocked: false,
+      audio_warning: id === 11 ? 'Una pista de audio no tiene idioma: el nombre no la incluye.' : null,
+    }))
+    await abrir([DUNE, ALIEN])
+    await alResumen(2)
+    expect(fila(11).textContent).toContain('Una pista de audio no tiene idioma')
+    expect(incluir('Dune').checked).toBe(false)
+    expect(incluir('Dune').disabled).toBe(false)
+    expect(fila(11).textContent).toContain('Súbela suelta para elegir el idioma')
+    expect(boton('Subir 1')).toBeDefined()
+    await pulsar(incluir('Dune'))
+    expect(boton('Subir 2')).toBeDefined()
+  })
+
+  it('un duplicado en eMuwarez llega desmarcado con su veredicto', async () => {
+    m(biblioteca.getEmuComparison).mockImplementation(async id => (id === 12
+      ? { available: true, message: null, matches: [{ name: 'Alien 1080p', resolution: '1080p', source: 'BluRay', codec: null, has_spanish: 1, size: null, veredicto: 'igual' }] }
+      : SIN_NADA))
+    await abrir([DUNE, ALIEN])
+    await alResumen(2)
+    expect(fila(12).textContent).toContain('la subida sería un duplicado')
+    expect(incluir('Alien').checked).toBe(false)
+    expect(incluir('Dune').checked).toBe(true)
+    // Lo que compara es lo que irá en el nombre.
+    expect(biblioteca.getEmuComparison).toHaveBeenCalledWith(12, { resolution: '1080p', source: 'BluRay' })
+  })
+
+  it('dos películas que saldrían con el mismo nombre se saltan las dos', async () => {
+    m(nom.getNomenclatureFields).mockResolvedValue({ fields: { ...CAMPOS }, torrent_name: 'Igual', internal_mkv_title: '', blocked: false })
+    await abrir([DUNE, ALIEN])
+    await alResumen(2)
+    expect(fila(11).textContent).toContain('mismo nombre')
+    expect(incluir('Dune').disabled).toBe(true)
+    expect(incluir('Alien').disabled).toBe(true)
+    expect(botonSubir()!.disabled).toBe(true)
+  })
+})
+
+describe('cuándo se habilita «Subir»', () => {
+  it('no mientras falta una comprobación de contenido', async () => {
+    const pendiente = diferida<typeof LISTO>()
+    m(subidas.runUploadChecks).mockImplementation(async (id, scope) =>
+      scope === 'environment' ? ENTORNO : id === 12 ? pendiente.promesa : LISTO)
+    await abrir([DUNE, ALIEN])
+    await pulsar(boton('Continuar (2)'))
+    await esperar(() => fila(11)?.textContent?.includes('✓ Lista'))
+    expect(fila(12).textContent).toContain('Comprobando…')
+    expect(botonSubir()!.disabled).toBe(true)
+    await act(async () => { pendiente.resolver(LISTO) })
+    await esperar(() => botonSubir() && !botonSubir()!.disabled)
+  })
+
+  it('no con el entorno fallido, y «Volver a comprobar» lo repite', async () => {
+    const MAL = { ready: false, checks: [{ id: 'qbittorrent', label: 'qBittorrent', status: 'fail' as const, message: 'No responde' }] }
+    m(subidas.runUploadChecks).mockImplementation(async (_id, scope) => (scope === 'environment' ? MAL : LISTO))
+    await abrir([DUNE])
+    await alResumen(1)
+    expect(texto()).toContain('✗ La subida no se puede realizar')
+    expect(botonSubir()!.disabled).toBe(true)
+    m(subidas.runUploadChecks).mockImplementation(async (_id, scope) => (scope === 'environment' ? ENTORNO : LISTO))
+    await pulsar(boton('↻ Volver a comprobar'))
+    await esperar(() => botonSubir() && !botonSubir()!.disabled)
+    expect(llamadas('environment')).toHaveLength(2)
+  })
+
+  it('no con una comprobación de contenido fallida para todas', async () => {
+    const FALLA = { ready: false, checks: [{ id: 'spanish', label: 'Castellano', status: 'fail' as const, message: 'Sin castellano' }] }
+    m(subidas.runUploadChecks).mockImplementation(async (_id, scope) => (scope === 'environment' ? ENTORNO : FALLA))
+    await abrir([DUNE])
+    await alResumen(1)
+    expect(fila(11).textContent).toContain('✗ Sin castellano')
+    expect(fila(11).textContent).toContain('Se saltará')
+    expect(botonSubir()!.disabled).toBe(true)
+  })
+})
+
+describe('lo que se manda y lo que vuelve', () => {
+  it('manda el orden del lote, las comprobaciones de cada una con las comunes y los campos completos', async () => {
+    m(nom.getNomenclatureFields).mockImplementation(async id => ({
+      fields: { ...CAMPOS, source: id === 12 ? 'WEB-DL' : 'BluRay' }, torrent_name: nombreDe(id), internal_mkv_title: '', blocked: false,
+    }))
+    m(biblioteca.suggestProvider).mockResolvedValue({ suggested: 'NF', tmdb_providers: ['NF'], reason: '' })
+    m(nom.previewNomenclatureFields).mockResolvedValue({
+      torrent_name: 'Alien (2021) 1080p NF WEB-DL x264-GRP', internal_mkv_title: '', fields: {}, provider_options: [],
+    })
+    await abrir([ALIEN, DUNE])
+    await alResumen(2)
+    expect(fila(12).textContent).toContain('Alien (2021) 1080p NF WEB-DL x264-GRP')
+    // Solo a la WEB-DL sin proveedor se le sugiere.
+    expect(biblioteca.suggestProvider).toHaveBeenCalledTimes(1)
+    expect(biblioteca.suggestProvider).toHaveBeenCalledWith(12)
+    await pulsar(boton('Subir 2'))
+    await esperar(() => texto().includes('2 de 2 encoladas'))
+    const merged = { ready: true, checks: [...LISTO.checks, ...ENTORNO.checks] }
+    expect(subidas.queueLote).toHaveBeenCalledWith([
+      { item_id: 12, checks: merged, campos: { ...CAMPOS, source: 'WEB-DL', provider: 'NF' } },
+      { item_id: 11, checks: merged },
+    ])
+  })
+
+  it('con «Subidas en paralelo» a 0 avisa de que irán todas a la vez', async () => {
+    m(fetchSettings).mockResolvedValue({ upload_max_concurrent: 0 } as never)
+    await abrir([DUNE, ALIEN])
+    await alResumen(2)
+    expect(texto()).toContain('Sin límite: se lanzarán las 2 a la vez contra eMuwarez')
+  })
+
+  it('dice de cuántas en cuántas irán según el ajuste', async () => {
+    m(fetchSettings).mockResolvedValue({ upload_max_concurrent: 2 } as never)
+    await abrir([DUNE])
+    await alResumen(1)
+    expect(texto()).toContain('Se subirán de 2 en 2 según “Subidas en paralelo” (ahora: 2)')
+  })
+
+  it('un resultado parcial lista las saltadas con su motivo', async () => {
+    m(subidas.queueLote).mockResolvedValue({
+      lote_id: '0123456789ab', encolados: 1, saltados: 1,
+      resultados: [
+        { item_id: 11, status: 'queued', job_id: 100, errors: [] },
+        { item_id: 12, status: 'blocked', job_id: null, errors: ['Ya hay una subida en curso para este contenido.'] },
+      ],
+    })
+    await abrir([DUNE, ALIEN])
+    await alResumen(2)
+    await pulsar(boton('Subir 2'))
+    await esperar(() => texto().includes('1 de 2 encoladas'))
+    expect(texto()).toContain('✗ Alien: Ya hay una subida en curso para este contenido.')
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('un 409 enseña sus motivos y no da nada por encolado', async () => {
+    m(subidas.queueLote).mockRejectedValue(new ApiClientError('Conflict', 409, {
+      detail: ['Falta la clave de la API de eMuwarez.', 'Falta la clave de TMDb.'],
+    }))
+    await abrir([DUNE])
+    await alResumen(1)
+    await pulsar(boton('Subir 1'))
+    await esperar(() => texto().includes('Falta la clave de TMDb.'))
+    expect(texto()).toContain('Falta la clave de la API de eMuwarez.')
+    expect(texto()).toContain('No se ha encolado nada')
+    expect(onDone).not.toHaveBeenCalled()
+    expect(boton('Subir 1')).toBeDefined()
+  })
+
+  it('«Ver el lote en Subidas» lo deja apuntado y va a Subidas', async () => {
+    await abrir([DUNE])
+    await alResumen(1)
+    await pulsar(boton('Subir 1'))
+    await pulsar(await esperar(() => boton('Ver el lote en Subidas')))
+    expect(sessionStorage.getItem('emuwarez_open_lote')).toBe('0123456789ab')
+    expect(onNavigate).toHaveBeenCalledWith('uploads')
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('Escape tras encolar cierra, y la selección ya se limpió', async () => {
+    await abrir([DUNE])
+    await alResumen(1)
+    await pulsar(boton('Subir 1'))
+    await esperar(() => boton('Ver el lote en Subidas'))
+    expect(onDone).toHaveBeenCalledTimes(1)
+    await escape()
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onNavigate).not.toHaveBeenCalled()
+  })
+
+  it('mientras se encola no se cierra', async () => {
+    const respuesta = diferida<Awaited<ReturnType<typeof subidas.queueLote>>>()
+    m(subidas.queueLote).mockReturnValue(respuesta.promesa)
+    await abrir([DUNE])
+    await alResumen(1)
+    await pulsar(boton('Subir 1'))
+    expect(texto()).toContain('Encolando…')
+    await escape()
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => {
+      respuesta.resolver({ lote_id: '0123456789ab', encolados: 1, saltados: 0, resultados: [{ item_id: 11, status: 'queued', job_id: 1, errors: [] }] })
+    })
+    await esperar(() => texto().includes('1 de 1 encolada'))
+    await escape()
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})

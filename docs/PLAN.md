@@ -398,6 +398,22 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   transacción: uno que revienta se salta sin dejar escrituras a medias. `provider` solo llega a los packs; el de una película va
   en `campos`. Si no se encola ninguno no queda lote. Asumido sin la respuesta de Gabriel (preguntas 1, 2 y 12 del plan): lote
   sin edición por elemento, tope de 50, respeta «Subidas en paralelo» tal cual y con 0 (sin límite) solo avisará la interfaz.
+- **Oleada 4, subida por lotes, PR 4: Biblioteca, selección de películas y modal «Subir por lotes»:** el botón «Seleccionar» de
+  la barra de Biblioteca pone una casilla en cada película (no en series, temporadas ni capítulos) de las tres vistas: en la
+  lista dentro de la celda del título (siguen 7 columnas), en los pósters arriba a la izquierda y fuera del layout (la tarjeta
+  no cambia de alto). La selección (`useSeleccionLote`, tope de 50) vive en la página: sobrevive a filtrar, a una vista guardada
+  y a cambiar de vista, y se limpia al salir de Biblioteca, al apagar «Seleccionar» y al encolar. Un pie en el flujo de
+  `.bib-pagina` (`BarraLote`, no fijo) dice cuántas hay y cuántas esconde el filtro. El modal (`components/lote/`): paso 1,
+  qué entra (las que no están en disco o sin castellano, desmarcadas con su motivo, `razonNoSubible`); paso 2, por película el
+  nombre del torrent, sus avisos, su comprobación y lo que ya hay en eMuwarez (`conclusionDuplicados`), con «Incluir». Las
+  comprobaciones son las de `useComprobacionesTanda` (nuevo `minimo`, 1 aquí y 2 en el asistente): el entorno una vez, el
+  contenido por película, nada en el paso 1. Se salta (desmarcada y sin poder marcarse) la que falla su comprobación, tiene la
+  nomenclatura bloqueada o saldría con el mismo nombre que otra; llegan desmarcadas la de una pista sin idioma («Súbela suelta
+  para elegir el idioma»), el duplicado y la peor que todo. A una WEB-DL sin proveedor se le sugiere el de TMDb y se mandan sus
+  `campos` completos. Dice de cuántas en cuántas irán («Subidas en paralelo»; con 0 avisa de que irán todas a la vez).
+  «Subir N» llama a `POST /uploads/lote`; el resultado lista las saltadas y «Ver el lote en Subidas» abre Subidas filtrada por
+  él (`emuwarez_open_lote`); un 409 enseña sus motivos. Decidido sin Gabriel: la selección se enciende con «Seleccionar» (sin
+  él no hay casillas). Sin ver en el navegador (falta comprobar a mano la rejilla con 200 marcadas).
 
 ## Siguiente
 
@@ -412,8 +428,8 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 
 - Funciones nuevas que faltan:
   - subida por lotes: el plan detallado (modelo, PRs en orden, tests, riesgos y 14 preguntas para Gabriel) está en
-    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); hechos los PR 1, 2 y 3 (ver «Hecho»),
-    sigue el PR 4;
+    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); hechos los PR 1 a 4 (ver «Hecho»),
+    sigue el PR 5 (series y temporadas en el lote);
   - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).

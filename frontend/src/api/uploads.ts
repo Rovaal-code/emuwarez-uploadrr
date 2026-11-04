@@ -9,7 +9,7 @@ import type {
   LoteResumen,
   LoteAccionResult,
 } from '../types/api'
-import type { TrackRemuxOverride } from './nomenclature'
+import type { NomenclatureFields, TrackRemuxOverride } from './nomenclature'
 import { latestInChain } from '../utils/uploadStatus'
 
 export async function uploadPreflight(itemId: number, requestId?: number): Promise<UploadPreflightResponse> {
@@ -64,6 +64,43 @@ export async function queueUpload(
     title: seasonOverrides?.title ?? null,
     idiomas: seasonOverrides?.idiomas ?? null,
   })
+}
+
+// Un elemento de «Subir por lotes» (web/schemas.py::UploadLoteElemento).
+export interface ElementoLote {
+  item_id: number
+  // La petición que cubre (desde el Panel); sin ella desde Biblioteca.
+  request_item_id?: number | null
+  // Las comprobaciones que vio el usuario: contenido del elemento más las de entorno. Sin `ready`, se salta.
+  checks: UploadChecksResult
+  // Película o capítulo: el juego COMPLETO de campos de nomenclatura con el proveedor sugerido; el servidor lo
+  // guarda como «save-fields». Solo cuando la interfaz sugirió un proveedor.
+  campos?: NomenclatureFields | null
+  // Solo pack: el proveedor elegido.
+  provider?: string | null
+}
+
+// Lo que hizo el servidor con cada elemento, en el orden mandado (web/schemas.py::UploadLoteResultado).
+export interface ResultadoElementoLote {
+  item_id: number
+  status: 'queued' | 'blocked'
+  job_id: number | null
+  errors: string[]
+}
+
+export interface LoteEncolado {
+  // null si no se encoló ninguno: no queda un lote vacío.
+  lote_id: string | null
+  encolados: number
+  saltados: number
+  resultados: ResultadoElementoLote[]
+}
+
+// Encola varias subidas como un lote, en este orden (el de la cola). El que no se puede subir se salta con su
+// motivo y el resto sigue. Si falta algo que haría fallar a todos (claves, Uploadrr-EMU), 409 con los motivos en
+// `detail` (una lista) y nada encolado.
+export async function queueLote(elementos: ElementoLote[]): Promise<LoteEncolado> {
+  return api.post<LoteEncolado>('/uploads/lote', { elementos })
 }
 
 export interface UploadsQuery {

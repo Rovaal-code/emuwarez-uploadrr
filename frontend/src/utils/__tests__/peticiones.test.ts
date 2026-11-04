@@ -1,8 +1,5 @@
 // @vitest-environment jsdom
-/**
- * Los grupos de la lista de Peticiones: a cuál va cada estado de preparación, el orden por recompensa dentro de
- * cada uno y la preferencia de la columna Autor.
- */
+// Grupos de Peticiones: a cuál va cada estado, el orden por recompensa y la preferencia de Autor.
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   agruparPeticiones, grupoDePeticion, guardarMostrarAutor, leerMostrarAutor, type GrupoPeticion,

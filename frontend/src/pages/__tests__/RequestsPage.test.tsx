@@ -1,8 +1,5 @@
 // @vitest-environment jsdom
-/**
- * Peticiones con el servidor simulado: los grupos por lo que se puede hacer, su orden por recompensa, que una
- * ordenación elegida los quite y la columna Autor (oculta por defecto, activable y recordada).
- */
+// Peticiones con servidor simulado: grupos por estado, orden por recompensa y columna Autor.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/requests', () => ({ getRequests: vi.fn(), getRequestDetail: vi.fn() }))

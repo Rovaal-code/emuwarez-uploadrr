@@ -1,38 +1,23 @@
-// Paso 2 de un solo elemento: el nombre final, las comprobaciones previas y
+// Paso Resumen de un solo elemento: lo que se sube, las comprobaciones previas y
 // el botón que encola la subida.
-import { FitText, FitTextPair } from '../FitText'
 import { useTooltip } from '../Tooltip'
-import { CHECK_STEP_ORDER, CHECK_STEP_ORDER_SEASON, CHECK_STEP_PENDING_LABEL, INTERNAL_TITLE_LABEL, labelStyle } from './constantes'
+import { CHECK_STEP_ORDER, CHECK_STEP_ORDER_SEASON, CHECK_STEP_PENDING_LABEL } from './constantes'
 import { CheckRow } from './piezas'
+import { ResumenSubida } from './ResumenSubida'
 import type { Asistente } from './useAsistente'
 
 export function PasoSubida({ a }: { a: Asistente }) {
   const {
-    item, targetIsSeason, seasonDisplayTitle, preview, checks, checksLoading, checksError, liveChecks, runChecks,
+    item, targetIsSeason, checks, checksLoading, checksError, liveChecks, runChecks,
     uploadMsg, uploading, canUpload, recalculandoIdioma, setStep, doUpload,
   } = a
   const uploadBtnTip = useTooltip(canUpload ? null : 'Alguna comprobación ha fallado o aún está en curso')
   return (
     <div className="modal-body">
-      <div className="detail-card asist-tarjeta asist-mb-14">
-        {targetIsSeason ? (
-          <>
-            <div className="asist-etiqueta">Nombre final del torrent (pack de temporada)</div>
-            <FitText min={9} text={seasonDisplayTitle || '—'} />
-          </>
-        ) : (
-          <FitTextPair
-            min={9}
-            items={[
-              { label: 'Nombre final del torrent', text: preview?.torrent_name || '—', labelStyle },
-              { label: INTERNAL_TITLE_LABEL, text: preview?.internal_mkv_title || '—', labelStyle },
-            ]}
-          />
-        )}
-      </div>
+      <ResumenSubida a={a} />
 
       {/* Pre-upload checks card */}
-      <div className="detail-card asist-tarjeta">
+      <div className="detail-card asist-tarjeta asist-mt-14">
         <div className="asist-fila-titulo">
           <div className="asist-etiqueta">Comprobaciones previas</div>
           {checksLoading && <span className="spinner asist-spinner-14" />}
@@ -50,16 +35,19 @@ export function PasoSubida({ a }: { a: Asistente }) {
         ) : (
           checks?.checks.map(c => <CheckRow key={c.id} c={c} />)
         )}
-        {!checksLoading && checks && (
-          <div className={checks.ready ? 'asist-mt-14 asist-negrita asist-ok' : 'asist-mt-14 asist-negrita asist-error'}>
-            {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}
-          </div>
-        )}
-        {!checksLoading && checksError && (
-          <div className="asist-mt-14 asist-negrita asist-error">
-            {`✗ No se pudieron completar las comprobaciones: ${checksError}`}
-          </div>
-        )}
+        {/* La región existe siempre: así el lector anuncia el veredicto cuando llega, a los ~30 s. */}
+        <div role="status">
+          {!checksLoading && checks && (
+            <div className={checks.ready ? 'asist-mt-14 asist-negrita asist-ok' : 'asist-mt-14 asist-negrita asist-error'}>
+              {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}
+            </div>
+          )}
+          {!checksLoading && checksError && (
+            <div className="asist-mt-14 asist-negrita asist-error">
+              {`✗ No se pudieron completar las comprobaciones: ${checksError}`}
+            </div>
+          )}
+        </div>
         {!checksLoading && (
           <button className="btn btn-secondary btn-sm asist-mt-12 asist-t12" onClick={runChecks} type="button">
             ↻ Volver a comprobar
@@ -77,7 +65,7 @@ export function PasoSubida({ a }: { a: Asistente }) {
       )}
 
       <div className="asist-pie">
-        <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={uploading}>Volver</button>
+        <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={uploading}>← Volver</button>
         <button
           className="btn btn-primary"
           onClick={doUpload}

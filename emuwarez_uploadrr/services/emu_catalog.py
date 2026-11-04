@@ -336,6 +336,19 @@ def _compute_aportes(mine: dict, matches: list[dict]) -> list[dict]:
     return aportes
 
 
+def _veredicto(mine: dict, match: dict) -> Optional[str]:
+    """Tu copia frente a un torrent del catálogo: "mejor", "igual" o "peor". Resolución, luego source, luego códec;
+    solo cuenta lo que se sabe de los dos lados (None si no hay nada que comparar)."""
+    pares = ((_res_rank(mine.get("resolution")), _res_rank(match.get("resolution"))),
+             (_src_rank(mine.get("source")), _match_src_rank(match)),
+             (_codec_tier(mine.get("codec")), _codec_tier(match.get("codec"))))
+    comparables = [(mio, suyo) for mio, suyo in pares if mio and suyo]
+    for mio, suyo in comparables:
+        if mio != suyo:
+            return "mejor" if mio > suyo else "peor"
+    return "igual" if comparables else None
+
+
 def _episode_lang_has_es(langs: Optional[str]) -> bool:
     if not langs:
         return False
@@ -597,10 +610,12 @@ def catalogo_cubre(conn: sqlite3.Connection, item_id: int, resolucion: Optional[
 
 # --- Per-item comparison detail (for the detail card) ------------------------
 
-def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
+def get_item_comparison(conn: sqlite3.Connection, item_id: int, *,
+                        resolution: Optional[str] = None, source: Optional[str] = None) -> dict:
     """Your copy vs every eMuwarez torrent that matches this movie/season, for
     the detail-card comparison table. Movies match by tmdb_id, seasons by
-    (series tvdb_id, season_number)."""
+    (series tvdb_id, season_number). `resolution` y `source`, si vienen, sustituyen a los de tu copia: son los
+    que el asistente de subida va a poner en el nombre."""
     item = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
     if not item:
         return {"available": False, "message": "Elemento no encontrado", "matches": []}
@@ -644,8 +659,15 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
                 "matches": [], "in_catalog": item.get("emu_in_catalog"),
                 "aportes": _safe_json(item.get("emu_aportes"))}
 
+    if resolution:
+        mine["resolution"] = resolution
+    if source:
+        mine["source"] = source
     matches = [{"name": r["name"], "resolution": r["resolution"], "source": r["source"],
-                "codec": r["codec"], "has_spanish": r["has_spanish"], "size": r["size"]}
+                "codec": r["codec"], "has_spanish": r["has_spanish"], "size": r["size"],
+                # Un capítulo suelto no es el pack de la temporada: no se le compara.
+                "veredicto": None if itype == "season" and _parse_episode_number(r["name"]) is not None
+                else _veredicto(mine, r)}
                for r in rows]
     result = {
         "available": True,

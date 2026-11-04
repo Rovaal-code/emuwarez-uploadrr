@@ -457,11 +457,13 @@ def library_emu_sync_progress(current_user: dict = Depends(require_auth)) -> dic
 
 
 @router.get("/library/{item_id}/emu-comparison")
-def library_emu_comparison(item_id: int, current_user: dict = Depends(require_auth)) -> dict:
-    """Your copy vs eMuwarez's matching torrents, for the detail-card table."""
+def library_emu_comparison(item_id: int, resolution: Optional[str] = None, source: Optional[str] = None,
+                           current_user: dict = Depends(require_auth)) -> dict:
+    """Your copy vs eMuwarez's matching torrents, for the detail-card table. `resolution` y `source`
+    sustituyen a los de tu copia (lo que el asistente de subida va a poner en el nombre)."""
     from emuwarez_uploadrr.services.emu_catalog import get_item_comparison
     with _get_conn() as conn:
-        return get_item_comparison(conn, item_id)
+        return get_item_comparison(conn, item_id, resolution=resolution, source=source)
 
 
 @router.get("/library/{item_id}", response_model=LibraryItemResponse)

@@ -234,7 +234,7 @@ describe('Panel', () => {
       expect(filas.map(f => f.querySelector('.panel-fila-tiempo')!.textContent)).toEqual(['hace 1 día', 'hace 2 días', 'hace 4 días'])
       expect(filas[1].querySelector('.panel-fila-duracion')!.textContent).toBe('en 4m 20s')
       expect(filas[0].querySelector('.panel-fila-duracion')).toBeNull()
-      expect(filas.every(f => f.querySelector('.panel-poster-peq'))).toBe(true)
+      expect(filas.every(f => f.querySelector('.panel-poster'))).toBe(true)
 
       await pulsar(filas[1].querySelector('[role="link"]')!)
       expect(sessionStorage.getItem('emuwarez_open_upload')).toBe('1')

@@ -24,7 +24,7 @@ function Fila({ item, extra, verPeticion, accion, onVerFicha }: {
   const subs = item.subtitle_languages ?? []
   return (
     <li className="panel-item">
-      <Cartel url={item.poster_url} serie={esSerie(item)} pequeno />
+      <Cartel url={item.poster_url} serie={esSerie(item)} />
       <div className="panel-item-texto">
         <HoverTitle className="hover-link panel-item-titulo" onClick={() => onVerFicha(item)} tip="Ver ficha del contenido">
           <DetailTitleText title={item.content_name} />

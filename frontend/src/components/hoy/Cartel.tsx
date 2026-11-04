@@ -1,10 +1,10 @@
 import { posterUrl } from '../../utils/libraryItem'
 import { IconoTipo } from '../Iconos'
 
-// La carátula pequeña de una fila; sin imagen (o si no carga), el icono del tipo.
-export function Cartel({ url, serie, pequeno = false }: { url: string | null | undefined; serie: boolean; pequeno?: boolean }) {
+// La carátula de una fila; sin imagen (o si no carga), el icono del tipo.
+export function Cartel({ url, serie }: { url: string | null | undefined; serie: boolean }) {
   return (
-    <div className={`poster-thumb panel-poster${pequeno ? ' panel-poster-peq' : ''}`}>
+    <div className="poster-thumb panel-poster">
       {url ? (
         <img
           src={posterUrl(url, 'w154')}

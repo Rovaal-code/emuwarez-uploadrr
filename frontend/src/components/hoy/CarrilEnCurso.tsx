@@ -12,10 +12,10 @@ import { HoverTitle } from '../Tooltip'
 import { Carril } from './Carril'
 import { Cartel } from './Cartel'
 
-// Una fila de «En curso» o de «Recientes» (`compacta`, sin barra, con la carátula pequeña): entera es un enlace al
+// Una fila de «En curso» o de «Recientes»: entera es un enlace al
 // detalle de la subida en Subidas. Lleva su propio reloj para que el tiempo corra sin repintar el Panel entero cada segundo.
-function FilaSubida({ job, yendose = false, compacta = false, onOpen }: {
-  job: UploadJob; yendose?: boolean; compacta?: boolean; onOpen: (jobId: number) => void
+function FilaSubida({ job, yendose = false, onOpen }: {
+  job: UploadJob; yendose?: boolean; onOpen: (jobId: number) => void
 }) {
   useTicker(ACTIVE_JOB_STATUSES.has(job.status))
   const isPreparingOrRunning = job.status === 'preparing' || job.status === 'running'
@@ -35,7 +35,7 @@ function FilaSubida({ job, yendose = false, compacta = false, onOpen }: {
     // En línea solo la duración, que es una constante del código.
     <HoverTitle className={`upload-row${yendose ? ' panel-fila-saliendo' : ''}`} tip="Ver detalle de la subida" onClick={() => onOpen(job.id!)}
       style={{ transition: `opacity ${DESVANECER_MS}ms ease-out` }}>
-      <Cartel url={job.poster_url} pequeno={compacta} serie={job.media_type === 'series' || job.media_type === 'episode'} />
+      <Cartel url={job.poster_url} serie={job.media_type === 'series' || job.media_type === 'episode'} />
       <div className="panel-fila-texto">
         <div className="panel-fila-titulo">
           <span className="upload-row-title">{job.title ?? `Job #${job.id}`}</span>
@@ -113,7 +113,7 @@ export function CarrilEnCurso({ filas, recientes, onOpen, onVerTodas }: {
         <>
           <h3 className="upload-panel-group panel-recientes-titulo" id={idRecientes}>Recientes</h3>
           <ul className="panel-lista" aria-labelledby={idRecientes}>
-            {recientes.map(job => <li key={job.id}><FilaSubida job={job} compacta onOpen={onOpen} /></li>)}
+            {recientes.map(job => <li key={job.id}><FilaSubida job={job} onOpen={onOpen} /></li>)}
           </ul>
         </>
       )}

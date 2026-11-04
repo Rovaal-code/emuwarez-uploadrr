@@ -335,6 +335,14 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   etiqueta por aporte y «Subir» abre el asistente sin petición; el Resumen del asistente da el veredicto frente a cada torrent
   (no es un permiso: revisa las reglas de trumps). Los capítulos sueltos no entran (sus aportes se calculan, pero se sube por
   temporada). Sin migración. Sin ver en el navegador.
+- **Oleada 4, estadísticas del tracker por subida:** el detalle de una subida completada con ficha (`result_tracker`) enseña el bloque
+  «En eMuwarez»: seeders, leechers, veces completado y, si los tiene, freeleech y doble subida. `GET /api/uploads/{id}/tracker-stats`
+  (`services/emu_torrent_stats.py`, `emu_get_torrent`) saca el id de la ficha y pide `GET /api/torrents/{id}` a eMuwarez, siempre
+  a `EMU_BASE_URL` y por el limitador de las consultas sueltas. Una llamada por subida, solo al abrir el detalle o con «Actualizar»
+  (nunca por reloj ni en la lista: la clave se comparte con Sonarr, Radarr y qui), con caché de 5 min en memoria (30 s si falló).
+  Un fallo del tracker es `disponible: false` con su mensaje, no un error; sin ficha es un 404. Sin migración ni historial: solo
+  la lectura de ahora. Los nombres de los atributos (`seeders`, `leechers`, `times_completed`, `freeleech`, `double_up`) son los de
+  UNIT3D; **sin probar contra el eMuwarez real**.
 
 ## Siguiente
 
@@ -351,7 +359,7 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
   - subida por lotes;
   - resumen de duplicados y trumps;
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
-  - estadísticas del tracker por subida.
+  - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).
 - Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): ~~P1 Panel~~, ~~P4 detalle de subida~~ y ~~P5 asistente con Resumen~~ (hechos),
   quedan P2 Biblioteca, P3 Peticiones y P6 Configuración. P7 móvil, pendiente de decidir. Las funciones que
   tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: le gusta el diseño original y solo quiere mejoras para ver mejor el contenido nuevo;

@@ -10,6 +10,7 @@ import {
 } from './DetailCard'
 import { ServiceIcon } from './ServiceIcon'
 import { Modal } from './Modal'
+import { GruposDeRelease } from './GruposDeRelease'
 
 // Three-state summary shown in the "eMuwarez" field chip (Información
 // técnica card) — collapses EmuComparison's several branches (not in
@@ -155,6 +156,7 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
                 <th>Contenido</th>
                 <th>Resolución</th>
                 <th>Source</th>
+                <th>Grupo</th>
                 <th>Códec</th>
                 <th><span className="comp-th-icono">Español <InfoIcon text="El idioma español se deduce del nombre del torrent; «?» = desconocido." /></span></th>
                 <th>Tamaño</th>
@@ -167,6 +169,9 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
                   <td className="comp-tuya">Tu copia</td>
                   <td className="comp-nowrap"><TechChip icon={ResolutionValueIcon} value={mine.resolution} /></td>
                   <td className="comp-nowrap"><TechChip icon={SourceValueIcon} value={mine.source} /></td>
+                  <td className="comp-nowrap">
+                    {mine.release_groups?.length ? <GruposDeRelease grupos={mine.release_groups} junto /> : <span className="detcard-atenuado">—</span>}
+                  </td>
                   <td className="comp-nowrap"><TechChip icon={VideoCodecValueIcon} value={mine.codec} /></td>
                   <td className="comp-nowrap"><TechChip icon={LanguageValueIcon} value={mine.has_es ? 'Sí' : null} /></td>
                   <td className="comp-nowrap"><TechChip icon={SizeValueIcon} value={formatBytes(mine.size)} /></td>
@@ -188,6 +193,9 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
                   <td className="comp-origen">eMuwarez</td>
                   <td className="comp-nowrap"><TechChip icon={ResolutionValueIcon} value={m.resolution} /></td>
                   <td className="comp-nowrap"><TechChip icon={SourceValueIcon} value={m.source} /></td>
+                  <td className="comp-nowrap">
+                    {m.release_group ? <GruposDeRelease grupos={[m.release_group]} junto /> : <span className="detcard-atenuado">—</span>}
+                  </td>
                   <td className="comp-nowrap"><TechChip icon={VideoCodecValueIcon} value={m.codec} /></td>
                   <td className="comp-nowrap"><TechChip icon={LanguageValueIcon} value={m.has_spanish === 1 ? 'Sí' : m.has_spanish === 0 ? 'No' : '?'} /></td>
                   <td className="comp-nowrap"><TechChip icon={SizeValueIcon} value={formatBytes(m.size)} /></td>

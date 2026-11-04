@@ -659,3 +659,15 @@ def test_missing_total_es_el_de_todos_no_el_de_la_pagina(client, auth_headers):
     data = client.get("/api/missing?limit=1", headers=auth_headers).json()
     assert len(data["items"]) == 1
     assert data["total"] == 3
+
+
+def test_la_lista_de_subidas_lleva_los_grupos_de_release_de_lo_que_se_sube(client, auth_headers):
+    from emuwarez_uploadrr.database import db, db_path
+    with db(db_path()) as conn:
+        conn.execute("INSERT INTO library_items (id, item_type, title, local_status) VALUES (900, 'season', 'S', 'Disponible')")
+        for n, grupo in enumerate(("Ryodan", "Ryodan", None, "eMu"), start=1):
+            conn.execute("INSERT INTO library_items (item_type, title, local_status, parent_id, release_group) "
+                         "VALUES ('episode', ?, 'Disponible', 900, ?)", (f"E{n}", grupo))
+        conn.execute("INSERT INTO upload_jobs (title, path, status, library_item_id) VALUES ('T', '/x', 'completed', 900)")
+    jobs = client.get("/api/uploads", headers=auth_headers).json()
+    assert [j["release_groups"] for j in jobs if j["library_item_id"] == 900] == [["eMu", "Ryodan"]]

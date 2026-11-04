@@ -336,6 +336,20 @@ def _compute_aportes(mine: dict, matches: list[dict]) -> list[dict]:
     return aportes
 
 
+# Lo que acaba un nombre de eMuwarez tras el último guion es el grupo de release («Peli (2020) 1080p WEB-DL x265-Ryodan»);
+# «DL» de un WEB-DL sin grupo no lo es.
+_GRUPO_FINAL_RE = re.compile(r"-([A-Za-z0-9][A-Za-z0-9_.]{0,24})\s*$")
+_NO_ES_GRUPO = frozenset({"dl", "rip", "disc", "remux"})
+
+
+def grupo_del_nombre(name: Optional[str]) -> Optional[str]:
+    """El grupo de release que cierra el nombre de un torrent (tras el último guion), o None si no lo lleva."""
+    m = _GRUPO_FINAL_RE.search(name or "")
+    if not m or m.group(1).lower() in _NO_ES_GRUPO:
+        return None
+    return m.group(1)
+
+
 def _veredicto(mine: dict, match: dict) -> Optional[str]:
     """Tu copia frente a un torrent del catálogo: "mejor", "igual" o "peor". Resolución, luego source, luego códec;
     solo cuenta lo que se sabe de los dos lados (None si no hay nada que comparar)."""
@@ -636,10 +650,11 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int, *,
     if itype == "movie":
         mine = {"resolution": item["resolution"], "source": item["source"],
                 "codec": _norm_codec(item["video_codec"] or "") or item["video_codec"],
-                "has_es": _episode_lang_has_es(item["audio_languages"]), "size": item["size_bytes"]}
+                "has_es": _episode_lang_has_es(item["audio_languages"]), "size": item["size_bytes"],
+                "release_groups": [item["release_group"]] if item["release_group"] else []}
     elif itype == "season":
         eps = [dict(e) for e in conn.execute(
-            "SELECT resolution, source, video_codec, audio_languages, size_bytes "
+            "SELECT resolution, source, video_codec, audio_languages, size_bytes, release_group "
             "FROM library_items WHERE parent_id = ? AND item_type = 'episode'", (item_id,)
         ).fetchall()]
         mine = {
@@ -648,11 +663,13 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int, *,
             "codec": _best_codec([e["video_codec"] for e in eps]),
             "has_es": any(_episode_lang_has_es(e["audio_languages"]) for e in eps),
             "size": sum(e["size_bytes"] or 0 for e in eps) or None,
+            "release_groups": sorted({e["release_group"] for e in eps if e["release_group"]}, key=str.casefold),
         }
     elif itype == "episode":
         mine = {"resolution": item["resolution"], "source": item["source"],
                 "codec": _norm_codec(item["video_codec"] or "") or item["video_codec"],
-                "has_es": _episode_lang_has_es(item["audio_languages"]), "size": item["size_bytes"]}
+                "has_es": _episode_lang_has_es(item["audio_languages"]), "size": item["size_bytes"],
+                "release_groups": [item["release_group"]] if item["release_group"] else []}
     else:
         # Series is a rollup (drill into its seasons).
         return {"available": False, "message": "La comparación es a nivel de película, temporada o capítulo",
@@ -665,6 +682,7 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int, *,
         mine["source"] = source
     matches = [{"name": r["name"], "resolution": r["resolution"], "source": r["source"],
                 "codec": r["codec"], "has_spanish": r["has_spanish"], "size": r["size"],
+                "release_group": grupo_del_nombre(r["name"]),
                 # Un capítulo suelto no es el pack de la temporada: no se le compara.
                 "veredicto": None if itype == "season" and _parse_episode_number(r["name"]) is not None
                 else _veredicto(mine, r)}

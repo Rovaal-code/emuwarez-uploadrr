@@ -173,6 +173,20 @@ _CAMPOS_ADORNO = (
 )
 
 
+def _grupos_de_release_de(ids: list[int], conn) -> dict[int, list[str]]:
+    """Los grupos de release distintos de cada elemento: el suyo si es un capítulo o una película, y los de todos sus
+    capítulos si es una temporada o una serie (los rollups no se guardan, se leen)."""
+    marcas = ",".join("?" * len(ids))
+    grupos: dict[int, set[str]] = {}
+    for fila in conn.execute(
+        f"""SELECT li.id AS raiz, d.release_group AS grupo FROM library_items li
+            JOIN library_items d ON d.id = li.id OR d.parent_id = li.id
+                 OR d.parent_id IN (SELECT id FROM library_items WHERE parent_id = li.id)
+            WHERE li.id IN ({marcas}) AND d.release_group IS NOT NULL AND d.release_group <> ''""", tuple(ids)):
+        grupos.setdefault(fila["raiz"], set()).add(fila["grupo"])
+    return {i: sorted(g, key=str.casefold) for i, g in grupos.items()}
+
+
 def library_display_fields(item_ids, conn) -> dict[int, dict]:
     """Los campos de adorno de varios elementos, indexados por id. El endpoint
     de Subidas construía el IN a mano."""
@@ -183,7 +197,8 @@ def library_display_fields(item_ids, conn) -> dict[int, dict]:
     filas = conn.execute(
         f"SELECT {_CAMPOS_ADORNO} FROM library_items WHERE id IN ({marcas})", tuple(ids)
     ).fetchall()
-    return {r["id"]: dict(r) for r in filas}
+    grupos = _grupos_de_release_de(ids, conn)
+    return {r["id"]: {**dict(r), "release_groups": grupos.get(r["id"], [])} for r in filas}
 
 
 def library_display_fields_one(item_id: int, conn) -> dict | None:
@@ -194,4 +209,6 @@ def library_display_fields_one(item_id: int, conn) -> dict | None:
         "FROM library_items WHERE id = ?",
         (item_id,),
     ).fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    return {**dict(row), "release_groups": _grupos_de_release_de([item_id], conn).get(item_id, [])}

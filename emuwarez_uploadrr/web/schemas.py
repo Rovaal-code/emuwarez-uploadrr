@@ -1171,6 +1171,8 @@ class PasoSubida(BaseModel):
 
 
 class UploadJobDetail(BaseModel):
+    # Los grupos de release de lo que se sube (el de la copia, o los de todos los capítulos de una temporada).
+    release_groups: list[str] = []
     id: Optional[int] = None
     library_item_id: Optional[int] = None
     request_item_id: Optional[int] = None

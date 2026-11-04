@@ -184,3 +184,27 @@ def test_un_capitulo_suelto_no_se_compara_con_el_pack_de_la_temporada(db_conn):
     db_conn.commit()
     veredictos = {m["name"]: m["veredicto"] for m in get_item_comparison(db_conn, temporada)["matches"]}
     assert veredictos == {"Serie S01 720p WEB-DL": "igual", "Serie S01E01 720p WEB-DL": None}
+
+
+@pytest.mark.parametrize("nombre,esperado", [
+    ("Peli (2020) 1080p WEB-DL x265-Ryodan", "Ryodan"),
+    ("Peli (2020) 1080p BluRay DUAL-eMu", "eMu"),
+    ("Peli (2020) 1080p WEB-DL", None),           # el «DL» de WEB-DL no es un grupo
+    ("Peli 2020 1080p BDRemux", None),
+    ("Peli (2020) 1080p x264-", None),
+    ("", None), (None, None),
+])
+def test_grupo_del_nombre(nombre, esperado):
+    from emuwarez_uploadrr.services.emu_catalog import grupo_del_nombre
+    assert grupo_del_nombre(nombre) == esperado
+
+
+def test_la_comparacion_lleva_el_grupo_de_tu_copia_y_el_de_cada_torrent(db_conn):
+    item_id = _movie(db_conn, "Grupo Movie", tmdb_id=560)
+    db_conn.execute("UPDATE library_items SET release_group = 'Ryodan' WHERE id = ?", (item_id,))
+    _catalog_movie(db_conn, tmdb_id=560, name="Grupo Movie (2020) 1080p WEB-DL x264-eMu")
+    set_state(db_conn, SYNC_COMPLETED_STATE_KEY, "2026-01-01T00:00:00Z")
+    db_conn.commit()
+    result = get_item_comparison(db_conn, item_id)
+    assert result["mine"]["release_groups"] == ["Ryodan"]
+    assert [m["release_group"] for m in result["matches"]] == ["eMu"]

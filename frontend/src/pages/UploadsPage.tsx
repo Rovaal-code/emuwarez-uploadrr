@@ -5,6 +5,7 @@ import { ApiClientError } from '../api/client'
 import type { UploadJob, InstanceSafeResponse } from '../types/api'
 import { EmptyState, FilaVacia } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
+import { GruposDeRelease } from '../components/GruposDeRelease'
 import { ErrorState } from '../components/ErrorState'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { UploadJobDetailPage } from '../components/UploadJobDetailPage'
@@ -215,6 +216,9 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
               : <ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} />
           )
           : <span className="sub-muted">—</span>}
+      </td>
+      <td className="col-prioridad-baja sub-nowrap">
+        <GruposDeRelease grupos={job.release_groups ?? []} junto />
       </td>
       <td className="col-prioridad-baja sub-nowrap sub-celda-peticion">
         <PeticionDeSubida job={job} />
@@ -695,6 +699,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     { value: '', label: 'Todos' }, { value: 'movie', label: 'Película' }, { value: 'series', label: 'Serie' }, { value: 'season', label: 'Temporada' }, { value: 'episode', label: 'Episodio' },
                   ]} /></th>
                   <th>Origen</th>
+                  <th className="col-prioridad-baja">Grupo</th>
                   <th className="col-prioridad-baja">Petición</th>
                   <th><HeaderFilter label="Estado" value={statusFilter} onChange={setStatusFilter} options={[
                     { value: '', label: 'Todos' }, ...STATUS_OPTIONS.filter(Boolean).map(s => ({ value: s, label: statusLabel(s) })),
@@ -710,7 +715,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
               </thead>
               {visibleJobs.length === 0 && filtrando && (
                 <FilaVacia
-                  columnas={12}
+                  columnas={13}
                   icon={<IconoSubida />}
                   title="Sin resultados"
                   body={hayMas

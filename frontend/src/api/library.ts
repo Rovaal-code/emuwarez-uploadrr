@@ -199,6 +199,8 @@ export interface EmuMatch {
   codec: string | null
   has_spanish: number | null
   size: number | null
+  // El grupo de release que cierra el nombre del torrent (tras el último guion); null si no lleva.
+  release_group?: string | null
   // Tu copia frente a este torrent; null si no hay nada que comparar.
   veredicto?: 'mejor' | 'igual' | 'peor' | null
 }
@@ -206,7 +208,7 @@ export interface EmuMatch {
 export interface EmuComparison {
   available: boolean
   message: string | null
-  mine?: { resolution: string | null; source: string | null; codec: string | null; has_es: boolean; size: number | null }
+  mine?: { resolution: string | null; source: string | null; codec: string | null; has_es: boolean; size: number | null; release_groups?: string[] }
   mine_available?: boolean
   matches: EmuMatch[]
   in_catalog?: number | null

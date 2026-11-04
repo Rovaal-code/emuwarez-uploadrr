@@ -615,6 +615,8 @@ export interface UploadJob {
   result_url?: string | null
   result_torrent_id?: string | null
   result_tracker?: string | null
+  // Los grupos de release de lo que se sube (el de la copia, o los de todos los capítulos de una temporada).
+  release_groups?: string[]
   result_category?: string | null
   duration_seconds?: number | null
   retry_count?: number

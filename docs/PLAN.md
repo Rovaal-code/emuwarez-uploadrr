@@ -365,7 +365,8 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 ## Oleada 4
 
 - Funciones nuevas que faltan:
-  - subida por lotes;
+  - subida por lotes: el plan detallado (modelo, PRs en orden, tests, riesgos y 11 preguntas para Gabriel) está en
+    `docs/PLAN_SUBIDA_POR_LOTES.md`; sin implementar;
   - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).

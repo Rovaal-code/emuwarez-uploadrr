@@ -9,14 +9,17 @@ import { IconoCampana, IconoCorreo, IconoUsuario } from './Iconos'
 import { ServiceIcon } from './ServiceIcon'
 import { tapar, usePerfilEmu } from '../context/PerfilEmuContext'
 import { enlacesCuentaEmu } from '../utils/cuentaEmu'
+import { BotonMenu } from './BotonMenu'
+import type { useMenuMovil } from '../hooks/useMenuMovil'
 
 interface TopbarProps {
   user: CurrentUserResponse | null
   pageTitle: string
   onLogout: () => void
+  menu: Pick<ReturnType<typeof useMenuMovil>, 'abierto' | 'alternar' | 'botonRef'>
 }
 
-export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
+export function Topbar({ user, pageTitle, onLogout, menu }: TopbarProps) {
   const { start: startTour } = useTour()
   const { perfil, ocultarNombre: hideName, setOcultarNombre: setHideName } = usePerfilEmu()
   const tourTip = useTooltip('Ver el tour guiado')
@@ -37,6 +40,7 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
   return (
     <header className="topbar">
       <div className="topbar-left">
+        <BotonMenu abierto={menu.abierto} onAlternar={menu.alternar} botonRef={menu.botonRef} />
         <span className="topbar-title">{pageTitle}</span>
       </div>
       {/* Center slot for live sync status — same row as the page title, so
@@ -50,7 +54,7 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
         {/* Guided tour — relaunch any time */}
         <button
           type="button"
-          className="topbar-btn"
+          className="topbar-btn topbar-tour"
           aria-label="Ver el tour guiado"
           onClick={() => startTour(TOUR_STEPS)}
           {...tourTip.triggerProps}

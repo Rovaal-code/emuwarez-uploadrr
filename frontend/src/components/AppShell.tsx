@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react
 import { Sidebar } from './Sidebar'
 import { SeccionVisible } from '../context/SeccionVisible'
 import { Topbar } from './Topbar'
+import { useMenuMovil } from '../hooks/useMenuMovil'
 import type { CurrentUserResponse } from '../types/api'
 import { guardedLeave, hasUnsavedChanges } from '../utils/unsavedGuard'
 import { UnsavedChangesModal } from './UnsavedChangesModal'
@@ -159,6 +160,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   const [activePage, setActivePage] = useState<string>(pageFromPath)
   const { start: startTour } = useTour()
   const [paletaAbierta, setPaletaAbierta] = useState(false)
+  const menu = useMenuMovil()
 
   useEffect(() => {
     if (localStorage.getItem(TOUR_SEEN_KEY) !== '1') {
@@ -276,12 +278,17 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   return (
     <div className="app-shell hud-app">
       <UnsavedChangesModal />
-      <Sidebar active={activePage} onNavigate={navigate} />
-      <div className="main-content">
+      {menu.abierto && <div className="sidebar-velo" onClick={menu.cerrar} aria-hidden="true" />}
+      <Sidebar
+        active={activePage} onNavigate={navigate} movil={menu.movil} abierta={menu.abierto} onCerrar={menu.cerrar}
+        onTour={() => { menu.cerrar(); startTour(TOUR_STEPS) }}
+      />
+      <div className="main-content" inert={menu.abierto}>
         <Topbar
           user={user}
           pageTitle={PAGE_TITLE[activePage] ?? ''}
           onLogout={onLogout}
+          menu={menu}
         />
         <main className="page-container" ref={contenedor}>
           <PageContent page={activePage} onNavigate={navigate} />

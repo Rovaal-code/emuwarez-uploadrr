@@ -684,3 +684,10 @@
     width: auto;
   }
 }
+
+/* Las cuatro pestañas no caben en una fila: pasan a dos. */
+@media (max-width: 768px) {
+  .aj-tabs {
+    flex-wrap: wrap;
+  }
+}

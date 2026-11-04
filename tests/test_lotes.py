@@ -400,3 +400,183 @@ def test_dos_reintentos_a_la_vez_no_dejan_dos_puntas(db_conn, tmp_path):
     assert segundo["status"] == "blocked"
     assert f"#{primero}" in segundo["errors"][0]
     assert lotes.contar_por_lote(db_conn, [LOTE]) == {LOTE: 1}
+
+# ---------------------------------------------------------------------------
+# PR 3: POST /uploads/lote (encolar_lote)
+# ---------------------------------------------------------------------------
+
+LISTO = {"checks": [{"id": "accesible", "label": "El archivo es accesible", "status": "ok", "message": ""}],
+         "ready": True}
+
+
+@pytest.fixture
+def sin_comprobaciones(monkeypatch):
+    """Claves configuradas y contenido apto: cada test decide qué falla."""
+    from emuwarez_uploadrr.services import upload_checks, upload_queue
+    monkeypatch.setattr(upload_queue, "_season_upload_preconditions", lambda conn: [])
+    contenido = {}
+    monkeypatch.setattr(upload_checks, "run_upload_checks",
+                        lambda conn, item_id, scope="all", **kw: contenido.get(item_id, LISTO))
+    return contenido
+
+
+def _item(conn, tipo: str, titulo: str, parent_id: int | None = None) -> int:
+    cur = conn.execute(
+        """INSERT INTO library_items (item_type, title, parent_id, local_status, request_status, nomenclature_status,
+                                      updated_at)
+           VALUES (?, ?, ?, 'Disponible', 'Sin petición', 'N/A', CURRENT_TIMESTAMP)""",
+        (tipo, titulo, parent_id),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def _el(item_id: int, **extra) -> dict:
+    return {"item_id": item_id, "checks": LISTO, **extra}
+
+
+def test_encolar_lote_en_el_orden_dado_con_una_sola_etiqueta(db_conn, tmp_path, sin_comprobaciones):
+    a, b, c = (_peli(db_conn, tmp_path, t) for t in "ABC")
+
+    r = lotes.encolar_lote(db_conn, [_el(c), _el(a), _el(b)])
+
+    assert (r["encolados"], r["saltados"]) == (3, 0)
+    assert lotes.lote_id_valido(r["lote_id"])
+    filas = db_conn.execute("SELECT library_item_id, lote_id FROM upload_jobs ORDER BY id").fetchall()
+    assert [tuple(f) for f in filas] == [(c, r["lote_id"]), (a, r["lote_id"]), (b, r["lote_id"])]
+    assert [x["job_id"] for x in r["resultados"]] == [f[0] for f in db_conn.execute(
+        "SELECT id FROM upload_jobs ORDER BY id")]
+
+
+def test_encolar_lote_salta_cada_elemento_que_no_vale_sin_tumbar_el_resto(db_conn, tmp_path, sin_comprobaciones,
+                                                                          monkeypatch):
+    bueno = _peli(db_conn, tmp_path, "Buena")
+    serie = _item(db_conn, "series", "Serie")
+    temporada = _item(db_conn, "season", "T1", parent_id=serie)
+    capitulo = _item(db_conn, "episode", "E1", parent_id=temporada)
+    sin_castellano = _peli(db_conn, tmp_path, "Sin castellano")
+    sin_comprobar = _peli(db_conn, tmp_path, "Sin comprobar")
+    activo = _peli(db_conn, tmp_path, "Activa")
+    _encolar(db_conn, activo, lote_id=None)
+    revienta = _peli(db_conn, tmp_path, "Revienta")
+    sin_comprobaciones[sin_castellano] = {
+        "checks": [{"id": "spanish", "label": "No tiene castellano", "status": "fail", "message": "Sin pista"}],
+        "ready": False}
+    from emuwarez_uploadrr.services import upload_queue
+    original = upload_queue.queue_upload_for_item
+
+    def queue(item_id, **kw):
+        if item_id == revienta:
+            raise RuntimeError("boom")
+        return original(item_id, **kw)
+    monkeypatch.setattr(upload_queue, "queue_upload_for_item", queue)
+
+    r = lotes.encolar_lote(db_conn, [
+        _el(bueno), _el(bueno), _el(999999), _el(serie), _el(temporada), _el(capitulo), _el(sin_castellano),
+        {"item_id": sin_comprobar, "checks": {"checks": [], "ready": False}}, _el(activo), _el(revienta),
+    ])
+
+    estados = [(x["item_id"], x["status"], (x["errors"] or [""])[0]) for x in r["resultados"]]
+    assert estados == [
+        (bueno, "queued", ""),
+        (bueno, "blocked", "Repetido en el lote."),
+        (999999, "blocked", "El elemento ya no está en la biblioteca."),
+        (serie, "blocked", "Elige sus temporadas."),
+        (temporada, "queued", ""),
+        (capitulo, "blocked", "Su temporada ya va en el lote."),
+        (sin_castellano, "blocked", "No tiene castellano: Sin pista"),
+        (sin_comprobar, "blocked", "No pasó las comprobaciones previas."),
+        (activo, "blocked", "Ya hay una subida en curso para este contenido."),
+        (revienta, "blocked", "Error inesperado al encolarlo; mira el registro."),
+    ]
+    assert (r["encolados"], r["saltados"]) == (2, 8)
+
+
+def test_ninguno_encolado_no_deja_lote(db_conn, tmp_path, sin_comprobaciones):
+    serie = _item(db_conn, "series", "Serie")
+    r = lotes.encolar_lote(db_conn, [_el(serie)])
+    assert (r["lote_id"], r["encolados"]) == (None, 0)
+
+
+def test_doble_clic_salta_todos_la_segunda_vez(db_conn, tmp_path, sin_comprobaciones):
+    elementos = [_el(_peli(db_conn, tmp_path, t)) for t in "AB"]
+    assert lotes.encolar_lote(db_conn, elementos)["encolados"] == 2
+    segundo = lotes.encolar_lote(db_conn, elementos)
+    assert (segundo["lote_id"], segundo["encolados"]) == (None, 0)
+
+
+def test_falta_una_clave_rechaza_el_lote_entero(db_conn, tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import upload_queue
+    monkeypatch.setattr(upload_queue, "_season_upload_preconditions",
+                        lambda conn: ["API key de TMDb no configurada."])
+    with pytest.raises(lotes.LoteRechazado) as e:
+        lotes.encolar_lote(db_conn, [_el(_peli(db_conn, tmp_path))])
+    assert e.value.motivos == ["API key de TMDb no configurada."]
+    assert db_conn.execute("SELECT COUNT(*) FROM upload_jobs").fetchone()[0] == 0
+
+
+def test_el_tope_del_lote(db_conn):
+    with pytest.raises(ValueError):
+        lotes.encolar_lote(db_conn, [])
+    with pytest.raises(ValueError):
+        lotes.encolar_lote(db_conn, [_el(1)] * (lotes.MAX_ELEMENTOS_LOTE + 1))
+
+
+def test_cada_elemento_lleva_su_peticion_sus_comprobaciones_y_el_proveedor_solo_en_packs(
+        db_conn, tmp_path, sin_comprobaciones, monkeypatch):
+    from emuwarez_uploadrr.services import upload_queue
+    llamadas = []
+    monkeypatch.setattr(upload_queue, "queue_upload_for_item",
+                        lambda item_id, **kw: llamadas.append((item_id, kw)) or {"status": "queued", "job": {"id": 1}})
+    peli = _peli(db_conn, tmp_path)
+    temporada = _item(db_conn, "season", "T1", parent_id=_item(db_conn, "series", "S"))
+
+    lotes.encolar_lote(db_conn, [_el(peli, request_item_id=7, provider="AMZN"), _el(temporada, provider="")])
+
+    (p, kw_p), (t, kw_t) = llamadas
+    assert (p, kw_p["request_item_id"], kw_p["checks"], kw_p["provider_override"]) == (peli, 7, LISTO, None)
+    assert (t, kw_t["provider_override"]) == (temporada, "")
+    assert kw_p["lote_id"] == kw_t["lote_id"]
+
+
+def test_campos_se_guardan_como_save_fields_y_no_si_el_elemento_se_salta(db_conn, tmp_path, sin_comprobaciones,
+                                                                         monkeypatch):
+    from emuwarez_uploadrr.services import nomenclature, source_assistant
+    guardados = []
+    monkeypatch.setattr(source_assistant, "update_nomenclature_fields_preview",
+                        lambda item_id, campos, conn=None: {"torrent_name": "X"})
+    monkeypatch.setattr(nomenclature, "save_manual_nomenclature_fields",
+                        lambda item_id, campos, preview, conn: guardados.append((item_id, campos, preview)))
+    campos = {"title": "Peli", "provider": "AMZN"}
+    peli = _peli(db_conn, tmp_path, "A")
+    activa = _peli(db_conn, tmp_path, "B")
+    _encolar(db_conn, activa, lote_id=None)
+
+    lotes.encolar_lote(db_conn, [_el(peli, campos=campos), _el(activa, campos=campos)])
+
+    assert guardados == [(peli, campos, {"torrent_name": "X"})]
+
+
+def test_la_api_encola_un_lote(client, auth_headers, db_conn, tmp_path, sin_comprobaciones):
+    a, b = _peli(db_conn, tmp_path, "A"), _peli(db_conn, tmp_path, "B")
+
+    resp = client.post("/api/uploads/lote", json={"elementos": [_el(a), _el(b)]}, headers=auth_headers)
+
+    assert resp.status_code == 200, resp.text
+    cuerpo = resp.json()
+    assert (cuerpo["encolados"], [x["status"] for x in cuerpo["resultados"]]) == (2, ["queued", "queued"])
+    assert client.get(f"/api/uploads/lotes/{cuerpo['lote_id']}", headers=auth_headers).json()["total"] == 2
+
+
+def test_la_api_valida_el_lote(client, auth_headers, db_conn, tmp_path, monkeypatch):
+    assert client.post("/api/uploads/lote", json={"elementos": []}, headers=auth_headers).status_code == 422
+    demasiados = [_el(1)] * (lotes.MAX_ELEMENTOS_LOTE + 1)
+    assert client.post("/api/uploads/lote", json={"elementos": demasiados}, headers=auth_headers).status_code == 422
+    assert client.post("/api/uploads/lote", json={"elementos": [{"item_id": 1}]},
+                       headers=auth_headers).status_code == 422  # sin comprobaciones
+    assert client.post("/api/uploads/lote", json={"elementos": [_el(1)]}).status_code == 401
+
+    from emuwarez_uploadrr.services import upload_queue
+    monkeypatch.setattr(upload_queue, "_season_upload_preconditions", lambda conn: ["Ruta de Uploadrr no existe: /x"])
+    resp = client.post("/api/uploads/lote", json={"elementos": [_el(_peli(db_conn, tmp_path))]}, headers=auth_headers)
+    assert (resp.status_code, resp.json()["detail"]) == (409, ["Ruta de Uploadrr no existe: /x"])

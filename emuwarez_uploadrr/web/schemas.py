@@ -5,7 +5,7 @@ import re
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, field_validator
 
-from ..services.lotes import PATRON_LOTE_ID
+from ..services.lotes import MAX_ELEMENTOS_LOTE, PATRON_LOTE_ID
 
 
 # ---------------------------------------------------------------------------
@@ -1491,6 +1491,39 @@ class LoteAccionResponse(BaseModel):
     reintentadas: int = 0
     saltadas: list[LoteSaltada] = []
     resumen: Optional[LoteResumen] = None
+
+
+class UploadLoteElemento(BaseModel):
+    """Un elemento de «Subir por lotes» (services/lotes.encolar_lote)."""
+    item_id: int
+    # La petición que cubre (desde el Panel); None desde Biblioteca.
+    request_item_id: Optional[int] = None
+    # Las comprobaciones de contenido que vio el usuario. Sin `ready` el elemento se salta.
+    checks: UploadChecksSnapshot
+    # Película o capítulo: el juego completo de campos de nomenclatura con el proveedor sugerido (se guarda como
+    # «save-fields»). Se ignora en un pack.
+    campos: Optional[Dict[str, Any]] = None
+    # Solo pack: el proveedor elegido. None = no elegido; "" = «Sin proveedor» a mano.
+    provider: Optional[str] = None
+
+
+class UploadLoteBody(BaseModel):
+    elementos: list[UploadLoteElemento] = Field(min_length=1, max_length=MAX_ELEMENTOS_LOTE)
+
+
+class UploadLoteResultado(BaseModel):
+    item_id: int
+    status: str  # "queued" | "blocked"
+    job_id: Optional[int] = None
+    errors: list[str] = []
+
+
+class UploadLoteResponse(BaseModel):
+    # None si no se encoló ninguno: no queda un lote vacío.
+    lote_id: Optional[str] = None
+    encolados: int
+    saltados: int
+    resultados: list[UploadLoteResultado]
 
 
 class UploadQueueResponse(BaseModel):

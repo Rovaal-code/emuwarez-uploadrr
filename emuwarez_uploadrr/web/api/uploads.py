@@ -35,6 +35,8 @@ from ..schemas import (
     LoteCancelarBody,
     LoteReintentarBody,
     LoteResumen,
+    UploadLoteBody,
+    UploadLoteResponse,
     OkResponse,
     UploadArtifact,
     UploadArtifactsResponse,
@@ -399,6 +401,17 @@ def count_uploads(
     }
     with _get_conn() as conn:
         return {"total": count_upload_jobs(filters=filters, conn=conn)}
+
+
+@router.post("/uploads/lote", response_model=UploadLoteResponse)
+def encolar_lote(body: UploadLoteBody, current_user: dict = Depends(require_auth)):
+    """«Subir por lotes»: encola cada elemento en el orden dado, con la misma etiqueta de lote. El que no se puede
+    subir se salta con su motivo; si falta algo que haría fallar a todos (claves, Uploadrr-EMU), 409 y nada encolado."""
+    with db(_db_path()) as conn:
+        try:
+            return UploadLoteResponse(**lotes.encolar_lote(conn, [e.model_dump() for e in body.elementos]))
+        except lotes.LoteRechazado as e:
+            raise HTTPException(status_code=409, detail=e.motivos) from e
 
 
 def _resumen_o_404(conn, lote_id: str) -> LoteResumen:

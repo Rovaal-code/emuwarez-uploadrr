@@ -388,6 +388,16 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   estaba completada, volvía a subir lo subido), y en Subidas «Reintentar» queda apagado en los intentos anteriores. El detalle
   de una subida dice «Parte de un lote de N · Ver el lote». La puerta de «Subidas en paralelo» guarda el límite leído un segundo
   y lo olvida al vaciarse la cola (con un lote, cada hilo en espera abría una conexión por vuelta). Sin ver en el navegador.
+- **Oleada 4, subida por lotes, PR 3: `POST /uploads/lote`** (solo backend, sin interfaz todavía): `lotes.encolar_lote` encola
+  hasta `MAX_ELEMENTOS_LOTE` (50) elementos en el orden dado con una misma etiqueta. Antes de crear nada mira una vez las
+  precondiciones que harían fallar a todos (`uploadrr.path`, claves de eMuwarez y TMDb): si falta algo, 409 y nada encolado.
+  Por elemento, y antes de escribir nada, salta con su motivo: repetido en el lote, inexistente, serie («Elige sus
+  temporadas»), capítulo cuya temporada va en el mismo lote, comprobaciones sin `ready`, película o capítulo que no pasa otra
+  vez la comprobación de contenido en el servidor (el castellano de una película no se volvía a mirar al correr el trabajo) y
+  elemento con una subida en marcha; solo después guarda `campos` (como «save-fields») y encola. Cada elemento va en su propia
+  transacción: uno que revienta se salta sin dejar escrituras a medias. `provider` solo llega a los packs; el de una película va
+  en `campos`. Si no se encola ninguno no queda lote. Asumido sin la respuesta de Gabriel (preguntas 1, 2 y 12 del plan): lote
+  sin edición por elemento, tope de 50, respeta «Subidas en paralelo» tal cual y con 0 (sin límite) solo avisará la interfaz.
 
 ## Siguiente
 
@@ -402,8 +412,8 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 
 - Funciones nuevas que faltan:
   - subida por lotes: el plan detallado (modelo, PRs en orden, tests, riesgos y 14 preguntas para Gabriel) está en
-    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); hechos los PR 1 y 2 (ver «Hecho»),
-    sigue el PR 3;
+    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); hechos los PR 1, 2 y 3 (ver «Hecho»),
+    sigue el PR 4;
   - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).

@@ -6,6 +6,7 @@ Todo el SQL de los lotes vive aquí o en upload_execution/consultas.py: web/ no 
 
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 import sqlite3
@@ -19,6 +20,10 @@ MAX_ELEMENTOS_LOTE = 50
 # 12 hexadecimales en minúscula: lo genera el servidor o, en las tandas del asistente, el navegador.
 PATRON_LOTE_ID = r"^[0-9a-f]{12}$"
 _LOTE_ID = re.compile(PATRON_LOTE_ID)
+# Lo que se sube por lotes: una serie se elige por temporadas.
+TIPOS_DE_LOTE = ("movie", "season", "episode")
+
+logger = logging.getLogger("emuwarez.upload")
 
 
 def nuevo_lote_id() -> str:
@@ -135,3 +140,105 @@ def reintentar_fallidas(conn: sqlite3.Connection, lote_id: str, *, desde_el_prin
             saltadas.append({"job_id": job["id"], "title": job.get("title"),
                              "errors": resultado.get("errors") or ["No se pudo reintentar."]})
     return {"reintentadas": len(encoladas), "saltadas": saltadas}
+
+
+class LoteRechazado(Exception):
+    """El lote entero no se puede encolar (falta una clave, Uploadrr-EMU no está): cada elemento fallaría igual."""
+
+    def __init__(self, motivos: list[str]):
+        super().__init__("; ".join(motivos))
+        self.motivos = motivos
+
+
+def _bloqueado(item_id: int, *motivos: str) -> dict:
+    return {"item_id": item_id, "status": "blocked", "job_id": None, "errors": list(motivos)}
+
+
+def _primer_fallo(comprobaciones: dict) -> str:
+    for c in comprobaciones.get("checks") or []:
+        if c.get("status") == "fail":
+            return f"{c.get('label')}: {c.get('message')}" if c.get("message") else str(c.get("label"))
+    return "No pasó las comprobaciones previas."
+
+
+def _encolar_uno(conn: sqlite3.Connection, el: dict, lote_id: str, vistos: set[int], temporadas: set[int]) -> dict:
+    """Un elemento del lote. Todo lo que puede saltarlo va antes de escribir nada: guardar `campos` caduca la
+    propuesta vigente del elemento, y hacerlo para uno que luego se salta cambiaría el nombre de su subida en marcha."""
+    from .source_assistant import update_nomenclature_fields_preview
+    from .nomenclature import save_manual_nomenclature_fields
+    from .upload_checks import run_upload_checks
+    from .upload_queue import queue_upload_for_item, trabajo_activo
+
+    item_id = int(el["item_id"])
+    if item_id in vistos:
+        return _bloqueado(item_id, "Repetido en el lote.")
+    vistos.add(item_id)
+    fila = conn.execute("SELECT id, item_type, parent_id FROM library_items WHERE id = ?", (item_id,)).fetchone()
+    if not fila:
+        return _bloqueado(item_id, "El elemento ya no está en la biblioteca.")
+    tipo = fila["item_type"]
+    if tipo not in TIPOS_DE_LOTE:
+        return _bloqueado(item_id, "Elige sus temporadas." if tipo == "series" else f"No se sube por lotes ({tipo}).")
+    if tipo == "episode" and fila["parent_id"] in temporadas:
+        return _bloqueado(item_id, "Su temporada ya va en el lote.")
+    checks = el.get("checks") or {}
+    if not checks.get("ready"):
+        return _bloqueado(item_id, _primer_fallo(checks))
+    if tipo != "season":
+        # El castellano de una película o un capítulo no se vuelve a mirar al correr el trabajo (solo los packs):
+        # no basta con lo que dice el navegador. Es barato: abrir el fichero y leer columnas.
+        contenido = run_upload_checks(conn, item_id, scope="content")
+        if not contenido.get("ready"):
+            return _bloqueado(item_id, _primer_fallo(contenido))
+    if trabajo_activo(conn, item_id):
+        return _bloqueado(item_id, "Ya hay una subida en curso para este contenido.")
+
+    campos = el.get("campos")
+    if campos and tipo != "season":
+        preview = update_nomenclature_fields_preview(item_id, campos, conn=conn)
+        save_manual_nomenclature_fields(item_id, campos, preview, conn=conn)
+    resultado = queue_upload_for_item(
+        item_id, request_item_id=el.get("request_item_id"), checks=checks,
+        # El proveedor solo cuenta en un pack; el de una película va dentro de `campos`.
+        provider_override=el.get("provider") if tipo == "season" else None,
+        lote_id=lote_id, conn=conn,
+    )
+    job = resultado.get("job") or {}
+    if resultado.get("status") != "queued":
+        return _bloqueado(item_id, *(resultado.get("errors") or ["No se pudo encolar."]))
+    return {"item_id": item_id, "status": "queued", "job_id": job.get("id"), "errors": []}
+
+
+def encolar_lote(conn: sqlite3.Connection, elementos: list[dict]) -> dict:
+    """Encola varias subidas como un lote, en el orden dado (el de la cola). Cada elemento es
+    `{item_id, request_item_id?, checks, campos?, provider?}`: `checks` el resultado de las comprobaciones que vio el
+    usuario, `campos` el juego completo de campos de nomenclatura (película o capítulo, solo si la interfaz sugirió
+    un proveedor), `provider` el proveedor elegido para un pack. Un elemento que no se puede subir se salta con su
+    motivo y el resto sigue. Si no se encola ninguno, no queda lote (`lote_id` None)."""
+    from .upload_queue import _season_upload_preconditions
+
+    if not 1 <= len(elementos) <= MAX_ELEMENTOS_LOTE:
+        raise ValueError(f"Un lote lleva entre 1 y {MAX_ELEMENTOS_LOTE} elementos.")
+    # Lo que haría fallar a todos en segundos, mirado una vez antes de crear nada.
+    motivos = _season_upload_preconditions(conn)
+    if motivos:
+        raise LoteRechazado(motivos)
+
+    ids = sorted({int(e["item_id"]) for e in elementos})
+    temporadas = {fila[0] for fila in conn.execute(
+        f"SELECT id FROM library_items WHERE item_type = 'season' AND id IN ({','.join('?' * len(ids))})", ids)}
+    lote_id = nuevo_lote_id()
+    vistos: set[int] = set()
+    resultados: list[dict] = []
+    for el in elementos:
+        try:
+            resultado = _encolar_uno(conn, el, lote_id, vistos, temporadas)
+            conn.commit()
+        except Exception:
+            logger.exception("Lote %s: no se pudo encolar el elemento %s", lote_id, el.get("item_id"))
+            conn.rollback()
+            resultado = _bloqueado(int(el["item_id"]), "Error inesperado al encolarlo; mira el registro.")
+        resultados.append(resultado)
+    encolados = sum(1 for r in resultados if r["status"] == "queued")
+    return {"lote_id": lote_id if encolados else None, "encolados": encolados,
+            "saltados": len(resultados) - encolados, "resultados": resultados}

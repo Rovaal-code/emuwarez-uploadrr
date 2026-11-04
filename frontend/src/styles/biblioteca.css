@@ -126,8 +126,11 @@
   padding-left: 8px;
   padding-right: 8px;
 }
+/* Con menos ancho la tabla se desplaza en horizontal en vez de aplastar el título y el grupo de release. */
+.data-table th.hijos-col-titulo { min-width: 340px; }
 .data-table th.bib-col-titulo {
   width: 100%;
+  min-width: 340px;
   padding-top: 3px;
   padding-bottom: 3px;
 }

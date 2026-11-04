@@ -371,3 +371,32 @@ def test_la_api_del_lote(client, auth_headers, db_conn, tmp_path):
     assert client.post(f"/api/uploads/lotes/{OTRO}/cancelar", json={}, headers=auth_headers).status_code == 404
     assert client.get("/api/uploads/lotes/NOVALE", headers=auth_headers).status_code == 422
     assert client.get(f"/api/uploads/lotes/{LOTE}").status_code == 401
+
+
+def test_cancelar_todo_para_tambien_la_que_arranco_entre_medias(db_conn, tmp_path, monkeypatch):
+    """Con «parar también las que están en marcha», una que estaba en cola al leer y ya se prepara al escribir
+    también se para (por cancel_upload_job), no se queda contada como intacta."""
+    job = _encolar(db_conn, _peli(db_conn, tmp_path))
+    foto = lotes._puntas(db_conn, LOTE)
+    _poner(db_conn, job, "preparing")
+    monkeypatch.setattr(lotes, "_puntas", lambda conn, lote_id: foto)
+
+    assert lotes.cancelar_lote(db_conn, LOTE, solo_pendientes=False) == {"canceladas": 1, "intactas": 0}
+    assert _estado(db_conn, job) == "cancelled"
+
+
+def test_dos_reintentos_a_la_vez_no_dejan_dos_puntas(db_conn, tmp_path):
+    """La guardia de queue_retry_for_job va fuera de la transacción: la de dentro cierra la carrera."""
+    item = _peli(db_conn, tmp_path)
+    job = _encolar(db_conn, item)
+    _fallar(db_conn, job)
+    primero = uq.queue_retry_for_job(job, conn=db_conn)["job"]["id"]
+    _fallar(db_conn, primero)
+    fila = dict(db_conn.execute("SELECT * FROM library_items WHERE id = ?", (item,)).fetchone())
+
+    # Lo que haría el segundo reintento si hubiera pasado la guardia de fuera antes de que existiera el primero.
+    segundo = uq._insert_and_start_queued_job(db_conn, fila, retry_of_job_id=job, lote_id=LOTE)
+
+    assert segundo["status"] == "blocked"
+    assert f"#{primero}" in segundo["errors"][0]
+    assert lotes.contar_por_lote(db_conn, [LOTE]) == {LOTE: 1}

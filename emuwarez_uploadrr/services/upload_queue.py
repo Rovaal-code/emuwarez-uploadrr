@@ -153,6 +153,15 @@ def _insert_and_start_queued_job(
     conn.isolation_level = None
     try:
         conn.execute("BEGIN IMMEDIATE")
+        if retry_of_job_id is not None:
+            # La guardia de queue_retry_for_job va fuera de esta transacción: dos reintentos a la vez del mismo
+            # intento podían pasarla los dos y dejar la cadena con dos puntas.
+            hijo = conn.execute("SELECT id FROM upload_jobs WHERE retry_of_job_id = ? LIMIT 1",
+                                (retry_of_job_id,)).fetchone()
+            if hijo:
+                conn.execute("ROLLBACK")
+                return {"status": "blocked", "job": None, "errors": [
+                    f"Ya se reintentó (subida #{hijo[0]}): reintenta el último intento de la cadena."]}
         activa = trabajo_activo(conn, item["id"])
         if activa:
             conn.execute("ROLLBACK")

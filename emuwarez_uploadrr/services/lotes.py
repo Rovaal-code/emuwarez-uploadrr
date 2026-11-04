@@ -103,8 +103,11 @@ def cancelar_lote(conn: sqlite3.Connection, lote_id: str, *, solo_pendientes: bo
                           stream="system")
 
     if not solo_pendientes:
+        # Las que ya estaban en marcha y también las que arrancaron entre la lectura y la escritura de arriba.
+        intactas = 0
+        hechas = set(canceladas)
         for job in puntas:
-            if job.get("status") == "queued" or job.get("status") not in ACTIVE_JOB_STATUSES:
+            if job["id"] in hechas or job.get("status") not in ACTIVE_JOB_STATUSES:
                 continue
             # cancel_upload_job relee el estado: una que acaba de terminar ya no se toca.
             if cancel_upload_job(job["id"], conn=conn).get("ok"):

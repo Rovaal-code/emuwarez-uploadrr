@@ -72,7 +72,7 @@ export function SettingsPage() {
     // quedan fijas arriba, y el contenido de la pestaña activa se desplaza
     // por dentro (el div de más abajo) cuando no cabe entero — las cuatro
     // pestañas se comportan igual, Configuración incluida.
-    <div className="aj-marco">
+    <div className="aj-marco" data-tour="settings-content">
       <div className="page-header aj-no-encoge">
         <div>
           <div className="page-title">Configuración</div>

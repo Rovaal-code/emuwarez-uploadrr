@@ -197,6 +197,14 @@ describe('Configuración: pestaña de ajustes', () => {
     expect(hayCambios()).toBe(false)
   })
 
+  it('el paso «Configuración» del tour encuentra su marco en todas las pestañas', async () => {
+    await montar()
+    for (const pestana of ['Configuración', 'Notificaciones', 'Diagnóstico', 'Backup']) {
+      await pulsar(boton(pestana))
+      expect(document.querySelectorAll('[data-tour="settings-content"]')).toHaveLength(1)
+    }
+  })
+
   it('un cambio marca «Cambios sin guardar», registra el guardián y guardar envía solo lo cambiado más el resto del formulario', async () => {
     await montar()
     expect(hasUnsavedChanges()).toBe(false)

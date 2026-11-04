@@ -105,7 +105,7 @@ function ConfigFormulario({ form }: { form: ConfigForm }) {
   )
 
   return (
-    <div ref={raiz} data-tour="settings-content" className="aj-config">
+    <div ref={raiz} className="aj-config">
       <IndiceSecciones
         entradas={ENTRADAS.filter(e => visible(e.id))}
         activa={activa}

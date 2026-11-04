@@ -41,6 +41,55 @@
 }
 .btn.btn-primary.bib-vista-apagada { opacity: 0.55; }
 
+/* Vistas guardadas: una insignia por vista (nombre + quitar) y el formulario para guardar la de ahora. */
+.bib-vista {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--overlay-light) 4%, transparent);
+}
+.bib-vista.activa {
+  border-color: var(--text-accent);
+  background: color-mix(in srgb, var(--text-accent) 12%, transparent);
+}
+.bib-vista-nombre,
+.bib-vista-quitar {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.bib-vista-nombre {
+  padding: 4px 4px 4px 10px;
+  border-radius: var(--radius-small) 0 0 var(--radius-small);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bib-vista-quitar {
+  padding: 4px 8px 4px 4px;
+  border-radius: 0 var(--radius-small) var(--radius-small) 0;
+}
+.bib-vista.activa .bib-vista-nombre { color: var(--text-primary); }
+.bib-vista-nombre:hover,
+.bib-vista-quitar:hover { color: var(--text-primary); }
+.bib-vista-nombre:focus-visible,
+.bib-vista-quitar:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+.bib-vista-nueva {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.filters-bar .form-input.bib-vista-nombre-campo { width: 180px; min-width: 0; }
+
 /* Bloques con la tabla o la rejilla */
 .activity-section.bib-bloque-lista {
   flex: 1;

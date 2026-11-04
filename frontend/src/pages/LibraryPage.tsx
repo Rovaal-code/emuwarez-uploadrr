@@ -29,6 +29,10 @@ import { useTardanza } from '../hooks/useTardanza'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { IconoLibros, IconoTipo } from '../components/Iconos'
 import { formatNumero } from '../utils/format'
+import { VistasGuardadas } from '../components/VistasGuardadas'
+import {
+  cargarVistas, conVista, persistirVistas, sinVista, ORDEN_POR_DEFECTO, type FiltrosDeVista, type VistaGuardada,
+} from '../utils/vistasBiblioteca'
 
 // Una sola lista vacía: volver a ponerla no cuenta como cambio y no recarga la biblioteca.
 const NINGUNO: string[] = []
@@ -258,8 +262,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [filterEmu, setFilterEmu] = useState<string[]>(NINGUNO)
   const [filterAporte, setFilterAporte] = useState('')
   const [filterSpanish, setFilterSpanish] = useState<string[]>(NINGUNO)
-  const [sortBy, setSortBy] = useState('title_asc')
+  const [sortBy, setSortBy] = useState(ORDEN_POR_DEFECTO)
   const [offset, setOffset] = useState(0)
+  const [vistas, setVistas] = useState<VistaGuardada[]>(cargarVistas)
 
   // Con cualquier filtro puesto se pide la biblioteca en plano. Ver
   // utils/filtrosBiblioteca: recortar a la raíz mientras filtras dejaba la
@@ -271,6 +276,30 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }
   const flatFilter = necesitaTodosLosNiveles(filtros)
   const filtrando = hayAlgunFiltro(filtros)
+
+  // Lo que guarda una vista: la búsqueda tal como está escrita, los filtros y el orden.
+  const filtrosDeAhora: FiltrosDeVista = {
+    search, type: filterType, status: filterStatus, instanceId: filterInstanceId, request: filterRequest,
+    provider: searchProvider, quality: searchQuality, source: searchSource, group: searchGroup,
+    emu: filterEmu, aporte: filterAporte, spanish: filterSpanish, sort: sortBy,
+  }
+  function aplicarVista({ filtros: f }: VistaGuardada) {
+    setSearch(f.search); setDebouncedSearch(f.search)
+    setFilterType(f.type); setFilterStatus(f.status); setFilterInstanceId(f.instanceId); setFilterRequest(f.request)
+    setSearchProvider(f.provider); setSearchQuality(f.quality); setSearchSource(f.source); setSearchGroup(f.group)
+    setFilterEmu(f.emu); setFilterAporte(f.aporte); setFilterSpanish(f.spanish); setSortBy(f.sort)
+    setOffset(0)
+  }
+  function guardarVista(nombre: string) {
+    const sig = conVista(vistas, nombre, filtrosDeAhora, Date.now().toString(36))
+    setVistas(sig)
+    persistirVistas(sig)
+  }
+  function quitarVista(vista: VistaGuardada) {
+    const sig = sinVista(vistas, vista.id)
+    setVistas(sig)
+    persistirVistas(sig)
+  }
 
   // Todos los filtros van al servidor. Proveedor, Resolución, Source, Grupo,
   // eMuwarez y Aportes se filtraban aquí sobre lo cargado, que con más de
@@ -387,7 +416,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     setSelected(null)
     closeDetailPath('library')
     quitarFiltros()
-    setSortBy('title_asc')
+    setSortBy(ORDEN_POR_DEFECTO)
   })
 
   // Deep link: /library/:id (bookmark, reload, or a link shared elsewhere) —
@@ -678,6 +707,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <option value="size_desc">Orden: Tamaño (Más)</option>
           <option value="size_asc">Orden: Tamaño (Menos)</option>
         </select>
+        <VistasGuardadas vistas={vistas} actual={filtrosDeAhora} onAplicar={aplicarVista} onGuardar={guardarVista} onQuitar={quitarVista} />
         {/* La tabla apagada sola no decía que estuviera cargando. */}
         {tarda && (
           <span role="status" className="bib-cargando">

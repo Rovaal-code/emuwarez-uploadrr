@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NAV_ITEMS, type NavItem } from '../types/domain'
 import { ServiceIcon } from './ServiceIcon'
 import { useTooltip } from './Tooltip'
@@ -7,6 +7,10 @@ import { SystemStatusPanel } from './SystemStatusPanel'
 interface SidebarProps {
   active: string
   onNavigate: (id: string) => void
+  // En ventanas estrechas la barra es un cajón: siempre con textos, y el logo la cierra.
+  movil?: boolean
+  abierta?: boolean
+  onCerrar?: () => void
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'emuwarez_uploadrr_sidebar_collapsed'
@@ -112,10 +116,17 @@ function NavItemRow({ item, active, collapsed, onNavigate }: {
   )
 }
 
-export function Sidebar({ active, onNavigate }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(loadCollapsed)
+export function Sidebar({ active, onNavigate, movil = false, abierta = false, onCerrar }: SidebarProps) {
+  const [collapsedGuardado, setCollapsed] = useState(loadCollapsed)
+  const collapsed = collapsedGuardado && !movil
+  const nav = useRef<HTMLElement>(null)
   const { triggerProps: logoTip, tooltipNode: logoTooltip } =
-    useTooltip(collapsed ? 'Expandir menú' : 'Contraer menú')
+    useTooltip(movil ? null : collapsed ? 'Expandir menú' : 'Contraer menú')
+
+  // Al abrir el cajón el foco pasa a la sección actual.
+  useEffect(() => {
+    if (abierta) nav.current?.querySelector<HTMLElement>('[aria-current="page"]')?.focus()
+  }, [abierta])
 
   function toggleCollapsed() {
     setCollapsed(c => {
@@ -126,27 +137,27 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
   }
 
   return (
-    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+    <aside id="menu-lateral" className={`sidebar${collapsed ? ' collapsed' : ''}${abierta ? ' abierta' : ''}`}>
       <button
         type="button"
         className="sidebar-logo"
-        onClick={toggleCollapsed}
+        onClick={movil ? onCerrar : toggleCollapsed}
         aria-expanded={!collapsed}
-        aria-label={collapsed ? 'Expandir menú' : 'Contraer menú'}
+        aria-label={movil ? 'Cerrar menú' : collapsed ? 'Expandir menú' : 'Contraer menú'}
         {...logoTip}
       >
         <ServiceIcon type="emu" size={28} />
         {!collapsed && <span className="sidebar-logo-text">eMuwarez Uploadrr</span>}
         {logoTooltip}
       </button>
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" ref={nav}>
         {NAV_ITEMS.map((item) => (
           <NavItemRow
             key={item.id}
             item={item}
             active={active === item.id}
             collapsed={collapsed}
-            onNavigate={onNavigate}
+            onNavigate={id => { onNavigate(id); if (movil) onCerrar?.() }}
           />
         ))}
       </nav>

@@ -602,3 +602,69 @@
   color: var(--text-secondary);
   margin-top: 2px;
 }
+
+/* Ventanas estrechas (≤768 px): la barra lateral es un cajón que se abre con el botón de la cabecera y el contenido ocupa todo el ancho. */
+.boton-menu,
+.sidebar-velo {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .boton-menu {
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 960;
+    width: min(var(--sidebar-width), 85%);
+    margin-bottom: 0;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0s linear 0.2s;
+  }
+
+  .sidebar.abierta {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.2s ease;
+  }
+
+  .sidebar-velo {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 950;
+    background: color-mix(in srgb, var(--overlay-dark) 55%, transparent);
+  }
+
+  .topbar {
+    padding: 0 12px;
+  }
+
+  .page-container {
+    padding: 16px;
+  }
+
+  .topbar-left {
+    min-width: 0;
+  }
+
+  .topbar-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Con el menú, la campana y los enlaces de eMuwarez no cabe nada más en la cabecera. */
+  .topbar-center,
+  .topbar-tour,
+  .topbar-user {
+    display: none;
+  }
+}

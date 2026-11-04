@@ -143,6 +143,8 @@ async function escribir(el: HTMLInputElement | HTMLSelectElement, valor: string)
 }
 
 const texto = () => document.body.textContent ?? ''
+// La barra de guardado de Configuración, con su contador.
+const hayCambios = () => /campos? (ha|han) cambiado/.test(texto())
 
 beforeEach(() => {
   vi.mocked(fetchSettings).mockImplementation(async () => structuredClone(AJUSTES))
@@ -192,17 +194,17 @@ describe('Configuración: pestaña de ajustes', () => {
     expect(pass.placeholder).toBe('••••••••')
     expect(campo('Tag').value).toBe('Subidas')
     expect(document.querySelector('[data-tour="settings-content"]')).not.toBeNull()
-    expect(texto()).not.toContain('Cambios sin guardar')
+    expect(hayCambios()).toBe(false)
   })
 
   it('un cambio marca «Cambios sin guardar», registra el guardián y guardar envía solo lo cambiado más el resto del formulario', async () => {
     await montar()
     expect(hasUnsavedChanges()).toBe(false)
     await escribir(campo('Tag'), 'Nuevo')
-    expect(texto()).toContain('Cambios sin guardar')
+    expect(hayCambios()).toBe(true)
     expect(hasUnsavedChanges()).toBe(true)
 
-    await pulsar(boton('Guardar configuración'))
+    await pulsar(boton('Guardar'))
     expect(updateSettings).toHaveBeenCalledTimes(1)
     const payload = vi.mocked(updateSettings).mock.calls[0][0]
     expect(payload).toMatchObject({
@@ -223,7 +225,7 @@ describe('Configuración: pestaña de ajustes', () => {
       expect(payload).not.toHaveProperty(k)
     }
     expect(texto()).toContain('✓ Configuración guardada')
-    expect(texto()).not.toContain('Cambios sin guardar')
+    expect(hayCambios()).toBe(false)
     expect(hasUnsavedChanges()).toBe(false)
   })
 
@@ -231,32 +233,32 @@ describe('Configuración: pestaña de ajustes', () => {
     await montar()
     await escribir(porPlaceholder('API key de eMuwarez'), '  clave-nueva  ')
     await escribir(porPlaceholder('API key de TMDb'), 'tmdb-nueva')
-    expect(texto()).toContain('Cambios sin guardar')
-    await pulsar(boton('Guardar configuración'))
+    expect(hayCambios()).toBe(true)
+    await pulsar(boton('Guardar'))
     const payload = vi.mocked(updateSettings).mock.calls[0][0]
     expect(payload.emu_api_key).toBe('clave-nueva')
     expect(payload.tmdb_api_key).toBe('tmdb-nueva')
     expect(porPlaceholder('API key de eMuwarez').value).toBe('')
     expect(porPlaceholder('API key de TMDb').value).toBe('')
-    expect(texto()).not.toContain('Cambios sin guardar')
+    expect(hayCambios()).toBe(false)
   })
 
   it('quitar la contraseña de qBittorrent la manda en `clear` y se puede deshacer', async () => {
     await montar()
     await pulsar(boton('Quitar la contraseña'))
     expect(campo('Contraseña (dejar vacío').placeholder).toBe('Se quitará al guardar')
-    expect(texto()).toContain('Cambios sin guardar')
+    expect(hayCambios()).toBe(true)
     await pulsar(boton('No quitarla'))
-    expect(texto()).not.toContain('Cambios sin guardar')
+    expect(hayCambios()).toBe(false)
     await pulsar(boton('Quitar la contraseña'))
-    await pulsar(boton('Guardar configuración'))
+    await pulsar(boton('Guardar'))
     expect(vi.mocked(updateSettings).mock.calls[0][0]).toMatchObject({ clear: ['qbit_password'] })
   })
 
   it('una URL de qBittorrent inválida no se guarda', async () => {
     await montar()
     await escribir(campo('URL del WebUI'), 'qbit.local')
-    await pulsar(boton('Guardar configuración'))
+    await pulsar(boton('Guardar'))
     expect(updateSettings).not.toHaveBeenCalled()
     expect(texto()).toContain('La URL de qBittorrent debe empezar por http:// o https://')
   })
@@ -264,8 +266,8 @@ describe('Configuración: pestaña de ajustes', () => {
   it('un grupo escrito sin pulsar «Añadir» también se guarda', async () => {
     await montar()
     await escribir(porPlaceholder('Añadir otro grupo'), 'TERCERO')
-    expect(texto()).toContain('Cambios sin guardar')
-    await pulsar(boton('Guardar configuración'))
+    expect(hayCambios()).toBe(true)
+    await pulsar(boton('Guardar'))
     expect(vi.mocked(updateSettings).mock.calls[0][0].upload_tags).toEqual(['GRUPO', 'OTRO', 'TERCERO'])
     expect(porPlaceholder('Añadir otro grupo').value).toBe('')
   })
@@ -333,9 +335,147 @@ describe('Configuración: pestaña de ajustes', () => {
     vi.mocked(updateSettings).mockRejectedValueOnce(new Error('boom'))
     await montar()
     await escribir(campo('Tag'), 'Nuevo')
-    await pulsar(boton('Guardar configuración'))
+    await pulsar(boton('Guardar'))
     expect(texto()).toContain('✗ boom')
-    expect(texto()).toContain('Cambios sin guardar')
+    expect(hayCambios()).toBe(true)
+  })
+})
+
+describe('Configuración: índice, buscador, barra de guardado y Avanzado', () => {
+  const seccion = (id: string) => document.querySelector<HTMLElement>(`[data-seccion="${id}"]`)!
+  const visibles = () => [...document.querySelectorAll<HTMLElement>('[data-seccion]')].filter(e => !e.hidden).map(e => e.dataset.seccion)
+  const enlace = (titulo: string) => [...document.querySelectorAll<HTMLButtonElement>('.aj-indice__enlace')].find(b => b.textContent === titulo)!
+  const buscar = (q: string) => escribir(document.querySelector<HTMLInputElement>('input[aria-label="Buscar en Configuración"]')!, q)
+  const cambios = () => document.querySelector('[role="status"].aj-guardado__cuenta')?.textContent
+  const cabeceraAvanzado = () => document.querySelector<HTMLButtonElement>('.aj-avanzado__cabecera')!
+
+  it('el índice enseña un enlace por cada tarjeta que hay, dentro de una nav con nombre', async () => {
+    await montar()
+    const nav = document.querySelector('nav[aria-label="Secciones de Configuración"]')!
+    expect([...nav.querySelectorAll('button')].map(b => b.textContent)).toEqual([
+      'Cuenta', 'Sesiones abiertas', 'eMuwarez', 'TMDb', 'qBittorrent', 'Proveedores de vídeo',
+      'Proveedores de imágenes', 'Otros', 'Widget para Homepage', 'Avanzado',
+    ])
+    expect(nav.querySelectorAll('[aria-current]').length).toBe(1)
+  })
+
+  it('un enlace salta a su tarjeta, le da el foco y la resalta', async () => {
+    const saltar = vi.fn()
+    Element.prototype.scrollIntoView = saltar
+    await montar()
+    await pulsar(enlace('TMDb'))
+    await act(async () => { await new Promise(r => requestAnimationFrame(() => r(null))) })
+    expect(saltar).toHaveBeenCalled()
+    expect(document.activeElement).toBe(seccion('tmdb'))
+    expect(seccion('tmdb').className).toContain('aj-seccion--resaltada')
+    expect(enlace('TMDb').getAttribute('aria-current')).toBe('true')
+  })
+
+  it('la sección activa sigue al desplazamiento y la última se activa en cuanto se ve entera', async () => {
+    const avisos: ((e: Partial<IntersectionObserverEntry>[]) => void)[] = []
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(cb: (e: Partial<IntersectionObserverEntry>[]) => void) { avisos.push(cb) }
+      observe() {}
+      disconnect() {}
+    })
+    try {
+      await montar()
+      const [franja, final] = avisos
+      expect(enlace('Cuenta').getAttribute('aria-current')).toBe('true')
+      await act(async () => { franja([{ target: seccion('qbittorrent'), isIntersecting: true }]) })
+      expect(enlace('qBittorrent').getAttribute('aria-current')).toBe('true')
+      expect(enlace('Cuenta').getAttribute('aria-current')).toBeNull()
+      await act(async () => { franja([{ target: seccion('qbittorrent'), isIntersecting: false }, { target: seccion('otros'), isIntersecting: true }]) })
+      expect(enlace('Otros').getAttribute('aria-current')).toBe('true')
+      await act(async () => { final([{ target: seccion('avanzado'), intersectionRatio: 1 }]) })
+      expect(enlace('Avanzado').getAttribute('aria-current')).toBe('true')
+      await act(async () => { final([{ target: seccion('avanzado'), intersectionRatio: 0.4 }]) })
+      expect(enlace('Otros').getAttribute('aria-current')).toBe('true')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('el buscador filtra por título y por etiqueta de campo, y avisa si no hay resultados', async () => {
+    await montar()
+    expect(visibles()).toHaveLength(10)
+    await buscar('qbit')
+    expect(visibles()).toEqual(['qbittorrent'])
+    expect(document.querySelectorAll('.aj-indice__enlace')).toHaveLength(1)
+    // etiqueta de un campo de la tarjeta de TMDb, sin acentos ni mayúsculas
+    await buscar('REGION')
+    expect(visibles()).toEqual(['tmdb'])
+    await buscar('zzz')
+    expect(visibles()).toEqual([])
+    expect(texto()).toContain('Ninguna sección coincide con «zzz».')
+    await buscar('')
+    expect(visibles()).toHaveLength(10)
+    expect(texto()).not.toContain('Ninguna sección coincide')
+  })
+
+  it('el filtrado no desmonta las tarjetas: lo escrito en una oculta se conserva', async () => {
+    await montar()
+    await escribir(campo('Tag'), 'Nuevo')
+    await buscar('tmdb')
+    await buscar('')
+    expect(campo('Tag').value).toBe('Nuevo')
+  })
+
+  it('la barra de guardado cuenta los campos que han cambiado de verdad', async () => {
+    await montar()
+    expect(cambios()).toBeUndefined()
+    await escribir(campo('Tag'), 'Nuevo')
+    expect(cambios()).toBe('1 campo ha cambiado')
+    await escribir(porPlaceholder('API key de TMDb'), 'k')
+    await escribir(campo('URL del WebUI'), 'http://otro')
+    expect(cambios()).toBe('3 campos han cambiado')
+    // volver al valor cargado no cuenta
+    await escribir(campo('Tag'), 'Subidas')
+    expect(cambios()).toBe('2 campos han cambiado')
+    await escribir(porPlaceholder('API key de TMDb'), '')
+    await escribir(campo('URL del WebUI'), 'http://qbit:8080')
+    expect(cambios()).toBeUndefined()
+    expect(() => boton('Guardar')).toThrow()
+  })
+
+  it('guardar desde la barra envía el formulario y la barra desaparece; no hay un segundo botón en la cabecera', async () => {
+    await montar()
+    await escribir(campo('Tag'), 'Nuevo')
+    expect([...document.querySelectorAll('button')].filter(b => b.textContent === 'Guardar')).toHaveLength(1)
+    expect(() => boton('Guardar configuración')).toThrow()
+    await pulsar(boton('Guardar'))
+    expect(updateSettings).toHaveBeenCalledTimes(1)
+    expect(cambios()).toBeUndefined()
+  })
+
+  it('Avanzado viene plegado, se despliega, guarda lo que se escribe dentro y no lo pierde al plegarlo', async () => {
+    await montar()
+    const cabecera = cabeceraAvanzado()
+    expect(cabecera.getAttribute('aria-expanded')).toBe('false')
+    const cuerpo = document.getElementById(cabecera.getAttribute('aria-controls')!)!
+    expect(cuerpo.hidden).toBe(true)
+    await pulsar(cabecera)
+    expect(cabecera.getAttribute('aria-expanded')).toBe('true')
+    expect(cuerpo.hidden).toBe(false)
+    await escribir(campo('Rutas permitidas'), '/data, /media')
+    expect(cambios()).toBe('1 campo ha cambiado')
+    await pulsar(cabecera)
+    expect(cuerpo.hidden).toBe(true)
+    expect(cambios()).toBe('1 campo ha cambiado')
+    await pulsar(boton('Guardar'))
+    expect(vi.mocked(updateSettings).mock.calls[0][0].uploadrr_allowed_roots).toBe('/data, /media')
+  })
+
+  it('el salto del índice y una búsqueda que acierta en Avanzado lo abren', async () => {
+    await montar()
+    const cabecera = cabeceraAvanzado()
+    await pulsar(enlace('Avanzado'))
+    expect(cabecera.getAttribute('aria-expanded')).toBe('true')
+    await pulsar(cabecera)
+    expect(cabecera.getAttribute('aria-expanded')).toBe('false')
+    await buscar('rutas permitidas')
+    expect(visibles()).toEqual(['avanzado'])
+    expect(cabecera.getAttribute('aria-expanded')).toBe('true')
   })
 })
 
@@ -547,17 +687,15 @@ describe('Configuración: no guardar sin haber cargado ni pisar lo editado duran
     vi.mocked(fetchSettings).mockRejectedValueOnce(new Error('sin conexión'))
     await montar()
     expect(texto()).toContain('sin conexión')
-    expect(boton('Guardar configuración').disabled).toBe(true)
-    await pulsar(boton('Guardar configuración'))
+    expect(() => boton('Guardar')).toThrow()
     expect(updateSettings).not.toHaveBeenCalled()
 
     // «Reintentar» vuelve a cargar y, ya con los ajustes reales, se puede guardar
     await pulsar(boton('Reintentar'))
     expect(fetchSettings).toHaveBeenCalledTimes(2)
     expect(campo('Tag').value).toBe('Subidas')
-    expect(boton('Guardar configuración').disabled).toBe(false)
     await escribir(campo('Tag'), 'Nuevo')
-    await pulsar(boton('Guardar configuración'))
+    await pulsar(boton('Guardar'))
     expect(vi.mocked(updateSettings).mock.calls[0][0]).toMatchObject({ upload_tags: ['GRUPO', 'OTRO'], qbit_tag: 'Nuevo' })
   })
 
@@ -567,8 +705,7 @@ describe('Configuración: no guardar sin haber cargado ni pisar lo editado duran
     vi.mocked(fetchSettings).mockRejectedValueOnce(new Error('sin conexión'))
     await montar(true)
     expect(texto()).toContain('sin conexión')
-    expect(boton('Guardar configuración').disabled).toBe(true)
-    await pulsar(boton('Guardar configuración'))
+    expect(() => boton('Guardar')).toThrow()
     expect(updateSettings).not.toHaveBeenCalled()
   })
 
@@ -576,7 +713,7 @@ describe('Configuración: no guardar sin haber cargado ni pisar lo editado duran
     vi.mocked(fetchSettings).mockRejectedValueOnce(new Error(''))
     await montar()
     expect(texto()).toContain('No se pudo cargar la configuración')
-    expect(boton('Guardar configuración').disabled).toBe(true)
+    expect(() => boton('Guardar')).toThrow()
   })
 
   describe('mapeo de rutas', () => {

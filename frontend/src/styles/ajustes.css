@@ -518,3 +518,168 @@
 .data-table td.aj-muted-12 {
   color: var(--text-muted);
 }
+
+/* Configuración: índice de secciones a la izquierda, tarjetas a la derecha y la barra de guardado pegada abajo. */
+.aj-config {
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr);
+  column-gap: 20px;
+  align-items: start;
+  /* La barra de guardado queda abajo del todo aunque las tarjetas no llenen el alto. */
+  min-height: 100%;
+  grid-template-rows: 1fr auto;
+}
+
+.aj-config__contenido {
+  min-width: 0;
+}
+
+/* Con el índice al lado sobra menos ancho: tarjetas de 340px como mínimo, para que no se aprieten (filas truncadas). */
+.aj-config .settings-config-grid {
+  columns: 4 340px;
+}
+
+.aj-config__vacio {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.aj-indice {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.aj-indice__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.aj-indice__enlace {
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+}
+
+.aj-indice__enlace:hover {
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+
+.aj-indice__enlace.activa {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+
+.aj-indice__enlace:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.aj-seccion {
+  break-inside: avoid;
+  margin-bottom: 16px;
+  border-radius: var(--radius-card);
+}
+
+.aj-seccion[hidden] {
+  display: none;
+}
+
+.aj-seccion--resaltada {
+  outline: 2px solid var(--text-accent);
+  outline-offset: 2px;
+}
+
+.aj-avanzado__cabecera {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  cursor: pointer;
+  text-align: left;
+}
+
+.aj-avanzado__cabecera:hover {
+  background: var(--bg-card-hover);
+}
+
+.aj-avanzado__cabecera:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.aj-avanzado__flecha {
+  width: 12px;
+  color: var(--text-secondary);
+}
+
+.aj-avanzado__cuerpo {
+  margin-top: 12px;
+}
+
+.aj-guardado {
+  grid-column: 1 / -1;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 10px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.aj-guardado__cuenta {
+  font-size: 13px;
+  color: var(--color-warning-soft);
+}
+
+/* Sin sitio para el índice al lado: pasa a una fila sobre las tarjetas. */
+@media (max-width: 1099px) {
+  .aj-config {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+  }
+  .aj-indice {
+    z-index: 4;
+    padding-bottom: 8px;
+    background: var(--bg-base);
+    max-height: none;
+  }
+  .aj-indice__lista {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .aj-indice__enlace {
+    width: auto;
+  }
+}

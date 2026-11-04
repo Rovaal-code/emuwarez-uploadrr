@@ -1454,6 +1454,45 @@ class UploadQueueBody(BaseModel):
     lote_id: Optional[str] = Field(None, pattern=PATRON_LOTE_ID)
 
 
+class LoteResumen(BaseModel):
+    """Cuántos elementos de un lote hay en cada estado (services/lotes.resumen_de_lote)."""
+    lote_id: str
+    total: int
+    en_cola: int
+    en_marcha: int
+    completadas: int
+    fallidas: int
+    canceladas: int
+    creado: Optional[str] = None
+    terminado: bool
+    puede_cancelar: bool
+    puede_reintentar: bool
+
+
+class LoteCancelarBody(BaseModel):
+    # False: también las que ya se preparan o suben (si no, solo las que esperan en la cola).
+    solo_pendientes: bool = True
+
+
+class LoteReintentarBody(BaseModel):
+    # True: rehacer cada una desde el principio en vez de reanudar desde el paso que falló.
+    desde_el_principio: bool = False
+
+
+class LoteSaltada(BaseModel):
+    job_id: int
+    title: Optional[str] = None
+    errors: list[str] = []
+
+
+class LoteAccionResponse(BaseModel):
+    canceladas: int = 0
+    intactas: int = 0
+    reintentadas: int = 0
+    saltadas: list[LoteSaltada] = []
+    resumen: Optional[LoteResumen] = None
+
+
 class UploadQueueResponse(BaseModel):
     status: str
     job: Optional[UploadJobDetail] = None

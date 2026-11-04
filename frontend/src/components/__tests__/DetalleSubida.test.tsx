@@ -142,3 +142,21 @@ describe('detalle de una subida que no terminó bien', () => {
     expect(texto()).toContain('Borrar')
   })
 })
+
+describe('una subida que es parte de un lote', () => {
+  it('dice de cuántas es el lote y «Ver el lote» lo pide con su id', async () => {
+    const onVerLote = vi.fn()
+    await montar(<UploadJobDetailPage job={{ ...fallida, lote_id: '0123456789ab', lote_total: 4 }} seeding={seeding} {...manos} onVerLote={onVerLote} />)
+    expect(document.querySelector('.dsub-lote')!.textContent).toBe('Parte de un lote de 4 · Ver el lote')
+    await pulsar(boton('Ver el lote'))
+    expect(onVerLote).toHaveBeenCalledWith('0123456789ab')
+  })
+
+  it('sin lote, o con un lote que se quedó en uno, no dice nada', async () => {
+    await montar(pagina(fallida))
+    expect(texto()).not.toContain('Parte de un lote')
+    await desmontar()
+    await montar(pagina({ ...fallida, lote_id: '0123456789ab', lote_total: 1 }))
+    expect(texto()).not.toContain('Parte de un lote')
+  })
+})

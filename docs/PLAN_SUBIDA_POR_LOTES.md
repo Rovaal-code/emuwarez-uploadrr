@@ -540,6 +540,8 @@ Gabriel decide (pregunta 14): o lo acepta, o se agrupan, o se publica a mano.
 - `resumen_de_lote`, `GET /uploads/lotes/{id}`, `cancelar_lote`, `reintentar_fallidas`, rutas
   `POST /uploads/lotes/{id}/cancelar|reintentar`; banner con contadores, botones y modal de confirmación en `UploadsPage`;
   «Parte de un lote» en `UploadJobDetailPage`; caché de ~1 s del límite en la puerta.
+- Añadido en la revisión de #212: `queue_retry_for_job` solo acepta la punta de la cadena (reintentar un intento anterior
+  abría una segunda punta y el lote contaba un elemento de más) y «Reintentar» queda apagado en los intentos anteriores.
 - **Aceptación**: con la puerta a 1 y un lote de 3 (uno `running`), «Cancelar pendientes» deja el `running` intacto y cancela los
   otros dos sin que toquen ficheros; uno que pasó a `preparing` entre medias sale como «intacto»; con la casilla «también lo que
   ya está en marcha» cancela los tres en ese orden; «Reintentar fallidas» crea trabajos nuevos con el mismo `lote_id`, en orden

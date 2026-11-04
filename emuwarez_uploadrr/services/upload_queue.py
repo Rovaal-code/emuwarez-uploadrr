@@ -345,6 +345,17 @@ def queue_retry_for_job(original_job_id: int, conn=None, *, desde_el_principio: 
         item_id = original.get("library_item_id")
         if not item_id:
             return {"status": "blocked", "errors": ["El job original no tiene un elemento de biblioteca asociado."], "job": None}
+        # Solo la punta de la cadena: reintentar un intento anterior abría una segunda punta para el mismo
+        # elemento (y, si la punta ya estaba completada, volvía a subir lo ya subido).
+        siguiente = conn.execute("SELECT id FROM upload_jobs WHERE retry_of_job_id = ? ORDER BY id DESC LIMIT 1",
+                                 (original_job_id,)).fetchone()
+        if siguiente:
+            activa = trabajo_activo(conn, item_id)
+            if activa:  # doble clic en «Reintentar»: el primero ya está en marcha
+                return {"status": "blocked", "job": activa,
+                        "errors": ["Ya hay una subida en curso para este contenido."]}
+            return {"status": "blocked", "job": get_upload_job(siguiente[0], conn=conn), "errors": [
+                f"Ya se reintentó (subida #{siguiente[0]}): reintenta el último intento de la cadena."]}
 
         row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
         item = row_to_dict(row)

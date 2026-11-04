@@ -378,6 +378,16 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   como mucho 6 filas vivas y «+N en cola · Ver todas las subidas»; con más de 100 subidas vivas el Panel aún puede perder la que
   sube (pide las 100 más nuevas), pendiente para cuando haya lotes grandes. Sin ver en el navegador. Sigue el PR 2 del plan (resumen,
   cancelar pendientes y reintentar fallidas del lote).
+- **Oleada 4, subida por lotes, PR 2: resumen, cancelar pendientes y reintentar fallidas de un lote:** con el filtro de un lote,
+  Subidas enseña sus contadores (`GET /uploads/lotes/{id}`, `lotes.resumen_de_lote`, solo base local), «Cancelar pendientes»
+  (`POST …/cancelar`; con la casilla «Parar también las que ya se están preparando o subiendo», `solo_pendientes=false`) y
+  «Reintentar fallidas» (`POST …/reintentar`, en el orden del lote; el reintento sigue en él). Cancelar escribe primero todas las
+  de la cola con la guardia `desde={"queued"}` y solo después las saca de la puerta, así ninguna toma la plaza que deja otra; una
+  que ya había arrancado entre medias se cuenta como intacta (no pasa por `cancel_upload_job`, que la cancelaría como lo que es
+  ahora). `queue_retry_for_job` solo acepta la punta de la cadena (reintentar un intento anterior abría otra punta y, si la punta
+  estaba completada, volvía a subir lo subido), y en Subidas «Reintentar» queda apagado en los intentos anteriores. El detalle
+  de una subida dice «Parte de un lote de N · Ver el lote». La puerta de «Subidas en paralelo» guarda el límite leído un segundo
+  y lo olvida al vaciarse la cola (con un lote, cada hilo en espera abría una conexión por vuelta). Sin ver en el navegador.
 
 ## Siguiente
 
@@ -392,8 +402,8 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 
 - Funciones nuevas que faltan:
   - subida por lotes: el plan detallado (modelo, PRs en orden, tests, riesgos y 14 preguntas para Gabriel) está en
-    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); hecho el PR 1 (ver «Hecho»), sigue
-    el PR 2;
+    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); hechos los PR 1 y 2 (ver «Hecho»),
+    sigue el PR 3;
   - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).

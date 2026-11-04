@@ -29,6 +29,10 @@ import { useTardanza } from '../hooks/useTardanza'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { IconoLibros, IconoTipo } from '../components/Iconos'
 import { formatNumero } from '../utils/format'
+import { VistasGuardadas } from '../components/VistasGuardadas'
+import {
+  cargarVistas, conVista, persistirVistas, sinVista, ORDEN_POR_DEFECTO, type FiltrosDeVista, type VistaGuardada,
+} from '../utils/vistasBiblioteca'
 
 // Una sola lista vacía: volver a ponerla no cuenta como cambio y no recarga la biblioteca.
 const NINGUNO: string[] = []
@@ -61,7 +65,7 @@ const LIST_PRIORITY_COUNT = 40
 // Lo que mide una fila de la lista antes de pintarla (FilasVirtuales la
 // corrige con la primera que mide de verdad).
 const LIST_ROW_HEIGHT = 50
-const LIST_COLUMNS = 13
+const LIST_COLUMNS = 7
 const claveDeItem = (it: LibraryItemResponse) => it.id
 
 // Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
@@ -258,8 +262,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [filterEmu, setFilterEmu] = useState<string[]>(NINGUNO)
   const [filterAporte, setFilterAporte] = useState('')
   const [filterSpanish, setFilterSpanish] = useState<string[]>(NINGUNO)
-  const [sortBy, setSortBy] = useState('title_asc')
+  const [sortBy, setSortBy] = useState(ORDEN_POR_DEFECTO)
   const [offset, setOffset] = useState(0)
+  const [vistas, setVistas] = useState<VistaGuardada[]>(cargarVistas)
 
   // Con cualquier filtro puesto se pide la biblioteca en plano. Ver
   // utils/filtrosBiblioteca: recortar a la raíz mientras filtras dejaba la
@@ -271,6 +276,30 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }
   const flatFilter = necesitaTodosLosNiveles(filtros)
   const filtrando = hayAlgunFiltro(filtros)
+
+  // Lo que guarda una vista: la búsqueda tal como está escrita, los filtros y el orden.
+  const filtrosDeAhora: FiltrosDeVista = {
+    search, type: filterType, status: filterStatus, instanceId: filterInstanceId, request: filterRequest,
+    provider: searchProvider, quality: searchQuality, source: searchSource, group: searchGroup,
+    emu: filterEmu, aporte: filterAporte, spanish: filterSpanish, sort: sortBy,
+  }
+  function aplicarVista({ filtros: f }: VistaGuardada) {
+    setSearch(f.search); setDebouncedSearch(f.search)
+    setFilterType(f.type); setFilterStatus(f.status); setFilterInstanceId(f.instanceId); setFilterRequest(f.request)
+    setSearchProvider(f.provider); setSearchQuality(f.quality); setSearchSource(f.source); setSearchGroup(f.group)
+    setFilterEmu(f.emu); setFilterAporte(f.aporte); setFilterSpanish(f.spanish); setSortBy(f.sort)
+    setOffset(0)
+  }
+  function guardarVista(nombre: string) {
+    const sig = conVista(vistas, nombre, filtrosDeAhora, Date.now().toString(36))
+    setVistas(sig)
+    persistirVistas(sig)
+  }
+  function quitarVista(vista: VistaGuardada) {
+    const sig = sinVista(vistas, vista.id)
+    setVistas(sig)
+    persistirVistas(sig)
+  }
 
   // Todos los filtros van al servidor. Proveedor, Resolución, Source, Grupo,
   // eMuwarez y Aportes se filtraban aquí sobre lo cargado, que con más de
@@ -387,7 +416,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     setSelected(null)
     closeDetailPath('library')
     quitarFiltros()
-    setSortBy('title_asc')
+    setSortBy(ORDEN_POR_DEFECTO)
   })
 
   // Deep link: /library/:id (bookmark, reload, or a link shared elsewhere) —
@@ -570,14 +599,31 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // acaben diciendo cosas distintas.
   const tableHeadRow = (
     <tr>
-      <th className="bib-col-titulo">Título</th>
-      <th><HeaderFilter label="Tipo" value={filterType} onChange={v => { setFilterType(v); setOffset(0) }} options={[
-        { value: '', label: 'Todos' }, ...(filterOptions?.types ?? []).map(t => ({ value: t, label: TYPE_LABELS[t] ?? t })),
-      ]} /></th>
-      <th><HeaderFilter label="Origen" value={filterInstanceId} onChange={v => { setFilterInstanceId(v); setOffset(0) }} options={[
-        { value: '', label: 'Todos' },
-        ...(filterOptions?.instances ?? []).map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'}: ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
-      ]} /></th>
+      {/* Tipo, origen, resolución, proveedor, source y grupo ya no son columnas: van en la línea bajo el título, y sus filtros aquí. */}
+      <th className="bib-col-titulo">
+        <div className="bib-cab-titulo">
+          <span className="bib-cab-nombre">Título</span>
+          <HeaderFilter label="Tipo" value={filterType} onChange={v => { setFilterType(v); setOffset(0) }} options={[
+            { value: '', label: 'Todos' }, ...(filterOptions?.types ?? []).map(t => ({ value: t, label: TYPE_LABELS[t] ?? t })),
+          ]} />
+          <HeaderFilter label="Origen" value={filterInstanceId} onChange={v => { setFilterInstanceId(v); setOffset(0) }} options={[
+            { value: '', label: 'Todos' },
+            ...(filterOptions?.instances ?? []).map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'}: ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
+          ]} />
+          <HeaderFilter label="Resolución" value={searchQuality} onChange={setSearchQuality} ocultable options={[
+            { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
+          ]} />
+          <HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} ocultable options={[
+            { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
+          ]} />
+          <HeaderFilter label="Fuente" value={searchSource} onChange={setSearchSource} ocultable options={[
+            { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
+          ]} />
+          <HeaderFilter label="Grupo" value={searchGroup} onChange={setSearchGroup} ocultable options={[
+            { value: '', label: 'Todos' }, ...groupOptions.map(g => ({ value: g, label: g })),
+          ]} />
+        </div>
+      </th>
       <th><HeaderFilter label="Estado" value={filterStatus} onChange={v => { setFilterStatus(v); setOffset(0) }} options={[
         { value: '', label: 'Todos' },
         // Through the same label map the badges use, or the filter
@@ -587,18 +633,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       ]} /></th>
       <th><HeaderFilter label="Petición" value={filterRequest} onChange={v => { setFilterRequest(v); setOffset(0) }} options={[
         { value: '', label: 'Todas' }, ...(filterOptions?.request_statuses ?? []).map(s => ({ value: s, label: s })),
-      ]} /></th>
-      <th><HeaderFilter label="Resolución" value={searchQuality} onChange={setSearchQuality} ocultable options={[
-        { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
-      ]} /></th>
-      <th><HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} ocultable options={[
-        { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
-      ]} /></th>
-      <th><HeaderFilter label="Source" value={searchSource} onChange={setSearchSource} ocultable options={[
-        { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
-      ]} /></th>
-      <th><HeaderFilter label="Grupo" value={searchGroup} onChange={setSearchGroup} ocultable options={[
-        { value: '', label: 'Todos' }, ...groupOptions.map(g => ({ value: g, label: g })),
       ]} /></th>
       <th><HeaderFilter label="Español" value={filterSpanish} onChange={v => { setFilterSpanish(v); setOffset(0) }} options={[
         { value: '', label: 'Todos' },
@@ -673,6 +707,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <option value="size_desc">Orden: Tamaño (Más)</option>
           <option value="size_asc">Orden: Tamaño (Menos)</option>
         </select>
+        <VistasGuardadas vistas={vistas} actual={filtrosDeAhora} onAplicar={aplicarVista} onGuardar={guardarVista} onQuitar={quitarVista} />
         {/* La tabla apagada sola no decía que estuviera cargando. */}
         {tarda && (
           <span role="status" className="bib-cargando">
@@ -721,7 +756,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         viewMode === 'list' ? (
           <div className="activity-section bib-bloque-lista">
             <div className="bib-scroll">
-              <table className="data-table">
+              <table className="data-table bib-tabla">
                 <thead>{tableHeadRow}</thead>
                 <tbody><LibraryTableSkeleton /></tbody>
               </table>
@@ -758,7 +793,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       ) : (
         <div className={`activity-section bib-bloque-lista${refrescando}`}>
           <div ref={listaRef} className="bib-scroll">
-            <table className="data-table">
+            <table className="data-table bib-tabla">
               <thead ref={cabeceraRef}>{tableHeadRow}</thead>
               {items.length === 0 ? (
                 <FilaVacia columnas={LIST_COLUMNS} icon={<IconoLibros />} {...sinResultados} />

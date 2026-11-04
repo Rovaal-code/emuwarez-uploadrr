@@ -2,14 +2,12 @@ import { useState, useCallback, useEffect, useRef, memo } from 'react'
 import { getLibrary } from '../api/library'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
-import { ServiceLabel } from './ServiceIcon'
-import { formatItemType, formatBytes } from '../utils/format'
+import { formatBytes } from '../utils/format'
 import { buildDeepLink, posterUrl, listDisplayTitle } from '../utils/libraryItem'
-import { ProviderTag } from './ProviderIcon'
-import { GruposDeRelease, gruposDeRelease } from './GruposDeRelease'
+import { GrupoDeLaFila, LineaDeCalidad } from './LineaDeCalidad'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import { useTooltip } from './Tooltip'
-import { ValueChip, ValueIcon, TypeValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
+import { ValueChip, ValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
 import { estadoCastellano, CASTELLANO_INFO } from '../utils/castellano'
 import { IconoDesplegar, IconoTipo } from './Iconos'
 
@@ -94,7 +92,6 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   const deepLink = buildDeepLink(item, instances)
   const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Abrir ficha')
   const { triggerProps: expandTip, tooltipNode: expandTooltip } = useTooltip(expanded ? 'Ocultar' : 'Desplegar')
-  const { triggerProps: originTip, tooltipNode: originTooltip } = useTooltip(deepLink ? `Abrir en ${item.instance_name ?? item.instance_type}` : null)
 
   // Desmontada desplegada (un filtro la ha quitado de la lista): que la lista
   // deje de tenerla por abierta, o la seguiría pintando fuera de la vista.
@@ -167,12 +164,11 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   }
 
   const indent = depth * 20
-  const grupos = gruposDeRelease(item)
-  const colSpan = compact ? 12 : 13
+  const colSpan = compact ? 6 : 7
 
   return (
     <>
-      <tr className={canExpand ? 'clickable' : undefined} onClick={canExpand ? toggle : undefined}>
+      <tr className={canExpand ? 'clickable bib-fila' : 'bib-fila'} onClick={canExpand ? toggle : undefined}>
         <td className="bib-celda-titulo">
           {/* La sangría depende de la profundidad: se queda en línea. */}
           <div className="bib-titulo-fila" style={{ paddingLeft: indent }}>
@@ -217,53 +213,23 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
               )}
             </div>
             <div className="bib-titulo-caja">
-              <div
-                className="lib-title-link bib-titulo-enlace"
-                onClick={e => { e.stopPropagation(); onSelect(item) }}
-                {...titleTip}
-              >
-                <DetailTitleText title={listDisplayTitle(item)} />
-                {titleTooltip}
+              <div className="bib-titulo-cab">
+                <div
+                  className="lib-title-link bib-titulo-enlace"
+                  onClick={e => { e.stopPropagation(); onSelect(item) }}
+                  {...titleTip}
+                >
+                  <DetailTitleText title={listDisplayTitle(item)} />
+                  {titleTooltip}
+                </div>
+                <GrupoDeLaFila item={item} />
               </div>
+              <LineaDeCalidad item={item} deepLink={deepLink} />
             </div>
           </div>
         </td>
-        <td className="bib-nowrap">
-          <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{formatItemType(item.item_type)}</span></ValueChip>
-        </td>
-        <td className="bib-nowrap">
-          {item.instance_type
-            ? (
-              <ValueChip linkable={!!deepLink}>
-                {deepLink
-                  ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...originTip}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />{originTooltip}</a>
-                  : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />}
-              </ValueChip>
-            )
-            : <span className="bib-guion">—</span>}
-        </td>
         <td><StatusBadge status={item.local_status} type="local" /></td>
         <td><StatusBadge status={item.request_status} type="request" /></td>
-        <td className="bib-nowrap">
-          {item.resolution
-            ? <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.resolution}</span></ValueChip>
-            : <span className="bib-guion">—</span>}
-        </td>
-        <td className="bib-nowrap">
-          {item.provider
-            ? <ValueChip linkable><ProviderTag code={item.provider} label={item.provider_label} size={16} /></ValueChip>
-            : <span className="bib-guion">—</span>}
-        </td>
-        <td className="bib-nowrap">
-          {item.source
-            ? <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source}</span></ValueChip>
-            : <span className="bib-guion">—</span>}
-        </td>
-        <td className="bib-nowrap">
-          {grupos.length
-            ? <GruposDeRelease grupos={grupos} junto />
-            : <span className="bib-guion">—</span>}
-        </td>
         <td className="bib-nowrap"><SpanishAudioCell item={item} /></td>
         <td className="bib-nowrap"><EmuStatusCell item={item} /></td>
         <td className="bib-nowrap">

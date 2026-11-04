@@ -90,6 +90,15 @@ describe('detalle de una subida completada', () => {
     expect(document.querySelector('table')!.textContent).toContain('Progreso global')
   })
 
+  it('«Grupo» dice el que lleva el nombre del torrent, y no sale si aún no se sabe', async () => {
+    await montar(pagina({ ...completada, nomenclature_snapshot: { release_tag: 'FLUX' } }))
+    const dato = [...document.querySelectorAll('.dsub-dato')].find(d => d.querySelector('dt')?.textContent?.startsWith('Grupo'))!
+    expect(dato.querySelector('dd')!.textContent).toBe('FLUX')
+    await desmontar()
+    await montar(pagina(completada))
+    expect([...document.querySelectorAll('.dsub-dato dt')].map(dt => dt.textContent)).not.toContain('Grupo')
+  })
+
   it('sin petición no hay «Rellenar petición»', async () => {
     await montar(pagina({ ...completada, request_title: null, request_url: null }))
     expect(texto()).not.toContain('Rellenar petición')

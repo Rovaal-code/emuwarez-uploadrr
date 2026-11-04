@@ -9,6 +9,7 @@ import { PeticionDeSubida } from '../PeticionDeSubida'
 import { RellenarPeticion } from '../RellenarPeticion'
 import { ExternalIdLink } from '../ExternalIdLink'
 import { ServiceLabel } from '../ServiceIcon'
+import { GruposDeRelease } from '../GruposDeRelease'
 import {
   ValueChip, UploadButtonIcon, LibraryButtonIcon, ExternalLinkButtonIcon, RetryButtonIcon, CancelButtonIcon,
   DeleteButtonIcon, LogsValueIcon,
@@ -133,6 +134,11 @@ export function ResultadoSubida({ job, seeding, retryError, onStart, onRetry, on
             <ValueChip linkable>
               <ExternalIdLink id={job.result_torrent_id ? `#${job.result_torrent_id}` : 'Ver torrent'} href={job.result_url} label="eMuwarez" />
             </ValueChip>
+          </Dato>
+        )}
+        {job.nomenclature_snapshot?.release_tag && (
+          <Dato etiqueta="Grupo" ayuda="El grupo que lleva el nombre del torrent: el del archivo o, si no tiene uno solo, el de Ajustes.">
+            <GruposDeRelease grupos={[job.nomenclature_snapshot.release_tag]} />
           </Dato>
         )}
         {reintentos > 0 && <Dato etiqueta="Reintentos">x{reintentos}</Dato>}

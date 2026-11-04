@@ -181,6 +181,8 @@ export interface LibraryItemResponse {
   resolution: string | null
   source: string | null
   release_group?: string | null
+  // En una serie o temporada, los grupos de todos sus capítulos (`release_group` solo sale si coinciden todos).
+  release_groups?: string[] | null
   provider: string | null
   provider_label: string | null
   video_codec: string | null
@@ -261,6 +263,8 @@ export interface RequestMatchResponse {
   local_video_codec: string | null
   local_audio_languages: string | null
   local_size: number | null
+  // Los de la copia coincidente: uno si es una película o capítulo, los de todos sus capítulos si es temporada o serie.
+  local_release_groups?: string[]
   local_tmdb_id: string | null
   local_imdb_id: string | null
   local_tvdb_id: string | null

@@ -660,6 +660,8 @@ class LibraryItemResponse(BaseModel):
     resolution: Optional[str] = None
     source: Optional[str] = None
     release_group: Optional[str] = None
+    # En una serie o temporada, los grupos de todos sus capítulos (`release_group` solo sale si coinciden todos).
+    release_groups: Optional[list[str]] = None
     provider: Optional[str] = None
     provider_label: Optional[str] = None
     video_codec: Optional[str] = None
@@ -760,6 +762,7 @@ class RequestMatchResponse(BaseModel):
     local_video_codec: Optional[str] = None
     local_audio_languages: Optional[str] = None
     local_size: Optional[int] = None
+    local_release_groups: list[str] = []
     local_tmdb_id: Optional[str] = None
     local_imdb_id: Optional[str] = None
     local_tvdb_id: Optional[str] = None

@@ -115,3 +115,80 @@ def test_el_filtro_ofrece_los_grupos_que_hay(client, auth_headers):
     conn.close()
     r = client.get("/api/library/filter-options", headers=auth_headers)
     assert r.json()["release_groups"] == ["Loco87", "Okeda"]
+
+
+def test_una_serie_de_grupos_mezclados_lista_todos_en_la_lista_y_en_la_ficha(client, auth_headers):
+    """`release_group` solo sale si coinciden todos; `release_groups` dice cuáles hay, sin los capítulos sin grupo."""
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    conn = connect(db_path()); init_db(conn)
+    _serie(conn, ["Okeda", "Loco87", "Okeda", None])
+    conn.close()
+    serie = _fila(client, auth_headers, "series")
+    assert serie["release_group"] is None
+    assert serie["release_groups"] == ["Loco87", "Okeda"]
+    temporada = client.get(f"/api/library/{_fila(client, auth_headers, 'season')['id']}", headers=auth_headers).json()
+    assert temporada["release_groups"] == ["Loco87", "Okeda"]
+
+
+def test_una_temporada_con_un_solo_grupo_y_un_capitulo_sin_el_lo_ensena(client, auth_headers):
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    conn = connect(db_path()); init_db(conn)
+    _serie(conn, ["Loco87", None])
+    conn.close()
+    temporada = _fila(client, auth_headers, "season")
+    assert temporada["release_group"] is None
+    assert temporada["release_groups"] == ["Loco87"]
+
+
+def test_sin_ningun_grupo_y_en_una_pelicula_no_hay_lista(client, auth_headers):
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    conn = connect(db_path()); init_db(conn)
+    _serie(conn, [None, None])
+    conn.execute("INSERT INTO library_items (item_type, title, local_status, release_group, instance_id, "
+                 "instance_type, instance_name, external_id) VALUES ('movie','Dune','Disponible','FLUX',1,'radarr','Radarr','9')")
+    conn.commit()
+    conn.close()
+    assert _fila(client, auth_headers, "series")["release_groups"] is None
+    pelicula = _fila(client, auth_headers, "movie")
+    assert (pelicula["release_group"], pelicula["release_groups"]) == ("FLUX", None)
+
+
+@pytest.fixture
+def db_conn(isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    init_db(conn)
+    return conn
+
+
+def _peticion_con_copia(conn, categoria: str, **peticion) -> int:
+    columnas = ", ".join(["emu_id", "title", "category", *peticion])
+    marcas = ", ".join("?" * (3 + len(peticion)))
+    return conn.execute(f"INSERT INTO request_items({columnas}) VALUES ({marcas})",
+                        ("r1", "Peti", categoria, *peticion.values())).lastrowid
+
+
+def test_la_peticion_ensena_el_grupo_de_la_copia_coincidente(db_conn):
+    from emuwarez_uploadrr.services.requests import get_request_detail, match_all_requests
+    db_conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id,resolution,source,release_group) "
+                    "VALUES ('movie','Peli','Disponible','1','1080p','WEB-DL','FLUX')")
+    peticion = _peticion_con_copia(db_conn, "Películas", tmdb_id="1")
+    db_conn.commit()
+    match_all_requests(db_conn)
+    assert get_request_detail(db_conn, peticion)["match"]["local_release_groups"] == ["FLUX"]
+
+
+def test_la_peticion_de_una_temporada_ensena_los_grupos_de_sus_capitulos(db_conn):
+    from emuwarez_uploadrr.services.requests import get_request_detail, match_all_requests
+    serie = db_conn.execute("INSERT INTO library_items(item_type,title,local_status,tvdb_id,tmdb_id) "
+                            "VALUES ('series','Serie','Disponible','5','5')").lastrowid
+    temporada = db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number) "
+                                "VALUES ('season','Serie - Temporada 1','Disponible',?,1)", (serie,)).lastrowid
+    for n, grupo in enumerate(["Okeda", "Loco87"], 1):
+        db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,episode_number,"
+                        "resolution,source,release_group) VALUES ('episode',?,'Disponible',?,1,?,'1080p','WEB-DL',?)",
+                        (f"Serie S01E0{n}", temporada, n, grupo))
+    peticion = _peticion_con_copia(db_conn, "Series", tmdb_id="5", req_scope="season", req_season=1)
+    db_conn.commit()
+    match_all_requests(db_conn)
+    assert get_request_detail(db_conn, peticion)["match"]["local_release_groups"] == ["Loco87", "Okeda"]

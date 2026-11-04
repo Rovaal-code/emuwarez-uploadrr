@@ -18,7 +18,7 @@ from .emu_perfil import PERFIL_STATE_KEY
 from ..integrations import emu, tmdb
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, TaskStatus
-from .library import content_display_title
+from .library import content_display_title, grupos_de_release
 from .request_readiness import _biblioteca, refresh_request_readiness
 from .eventos import EVENTO_SYNC_EMPEZADA, EVENTO_SYNC_TERMINADA, publicar
 from .tasks import start_task, finish_task
@@ -600,6 +600,7 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
             it[key] = peor_source(e.get(key) for e in disponibles)
         else:
             it[key] = _uniq(e.get(key) for e in disponibles) if disponibles else None
+    it["release_groups"] = grupos_de_release(disponibles)
     if single:
         it["size_bytes"] = single.get("size_bytes")
         it["path"] = single.get("path")
@@ -1193,6 +1194,7 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
                li.source AS local_source, li.path AS local_path, li.nomenclature_status,
                li.poster_url AS poster_url, li.backdrop_url AS backdrop_url, li.video_codec AS local_video_codec,
                li.audio_languages AS local_audio_languages, li.size_bytes AS local_size,
+               li.release_group AS local_release_group,
                li.tmdb_id AS local_tmdb_id, li.imdb_id AS local_imdb_id, li.tvdb_id AS local_tvdb_id,
                li.mal_id AS local_mal_id,
                li.instance_type, li.instance_name, li.instance_id, li.title_slug
@@ -1227,6 +1229,7 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
             "local_video_codec": md.get("local_video_codec"),
             "local_audio_languages": md.get("local_audio_languages"),
             "local_size": md.get("local_size"),
+            "local_release_groups": [md["local_release_group"]] if md.get("local_release_group") else [],
             "local_tmdb_id": md.get("local_tmdb_id"),
             "local_imdb_id": md.get("local_imdb_id"),
             "local_tvdb_id": md.get("local_tvdb_id"),
@@ -1282,6 +1285,7 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
                 "local_video_codec": eff.get("video_codec"),
                 "local_audio_languages": eff.get("audio_languages"),
                 "local_size": eff.get("size_bytes"),
+                "local_release_groups": eff.get("release_groups") or [],
                 "local_path": eff.get("path"),
             })
     else:

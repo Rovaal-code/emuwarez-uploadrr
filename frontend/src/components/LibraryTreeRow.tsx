@@ -6,9 +6,10 @@ import { ServiceLabel } from './ServiceIcon'
 import { formatItemType, formatBytes } from '../utils/format'
 import { buildDeepLink, posterUrl, listDisplayTitle } from '../utils/libraryItem'
 import { ProviderTag } from './ProviderIcon'
+import { GruposDeRelease, gruposDeRelease } from './GruposDeRelease'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import { useTooltip } from './Tooltip'
-import { ValueChip, ValueIcon, TypeValueIcon, ResolutionValueIcon, SourceValueIcon, ReleaseGroupValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
+import { ValueChip, ValueIcon, TypeValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
 import { estadoCastellano, CASTELLANO_INFO } from '../utils/castellano'
 import { IconoDesplegar, IconoTipo } from './Iconos'
 
@@ -166,6 +167,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   }
 
   const indent = depth * 20
+  const grupos = gruposDeRelease(item)
   const colSpan = compact ? 12 : 13
 
   return (
@@ -258,8 +260,8 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
             : <span className="bib-guion">—</span>}
         </td>
         <td className="bib-nowrap">
-          {item.release_group
-            ? <ValueChip><ValueIcon><ReleaseGroupValueIcon /></ValueIcon><span className="txt">{item.release_group}</span></ValueChip>
+          {grupos.length
+            ? <GruposDeRelease grupos={grupos} junto />
             : <span className="bib-guion">—</span>}
         </td>
         <td className="bib-nowrap"><SpanishAudioCell item={item} /></td>

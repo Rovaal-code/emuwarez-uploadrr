@@ -569,7 +569,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       </div>
 
       <SeedingBloque job={job} seeding={seeding} />
-      <StatsTrackerBloque job={job} />
+      <StatsTrackerBloque key={job.id} job={job} />
 
       {completada ? (
         // Terminada, las fases ya no son la noticia: quedan a un clic.

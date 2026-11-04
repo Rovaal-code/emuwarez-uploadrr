@@ -159,6 +159,15 @@ describe('la conclusión de duplicados y trumps', () => {
     expect(conclusionDuplicados([fila('peor')])).toMatchObject({ nivel: 'peor', clase: 'peor' })
   })
 
+  it('si falta alguna comparación, la conclusión se dice parcial y no afirma «peor que todo»', () => {
+    const peor = conclusionDuplicados([fila('peor'), fila(null)])!
+    expect(peor.nivel).toBe('peor')
+    expect(peor.texto).toContain('parcial')
+    expect(peor.texto).not.toContain('que ya hay')
+    expect(conclusionDuplicados([fila('mejor'), fila(null)])!.texto).toContain('parcial')
+    expect(conclusionDuplicados([fila('peor')])!.texto).not.toContain('parcial')
+  })
+
   it('sin nada comparable no afirma nada', () => {
     expect(conclusionDuplicados([fila(null)])).toMatchObject({ nivel: 'sin-comparar', clase: null })
   })

@@ -341,7 +341,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   a `EMU_BASE_URL` y por el limitador de las consultas sueltas. Una llamada por subida, solo al abrir el detalle o con «Actualizar»
   (nunca por reloj ni en la lista: la clave se comparte con Sonarr, Radarr y qui), con caché de 5 min en memoria (30 s si falló).
   Un fallo del tracker es `disponible: false` con su mensaje, no un error; sin ficha es un 404. Sin migración ni historial: solo
-  la lectura de ahora. Los nombres de los atributos (`seeders`, `leechers`, `times_completed`, `freeleech`, `double_up`) son los de
+  la lectura de ahora. Los nombres de los atributos (`seeders`, `leechers`, `times_completed`, `freeleech`, `double_upload`) son los de
   UNIT3D; **sin probar contra el eMuwarez real**.
 - **Oleada 4, resumen de duplicados y trumps:** el Resumen del asistente de subida pone, sobre la tabla «En eMuwarez ya hay», una
   conclusión en una frase (`conclusionDuplicados`, `utils/resumenSubida.ts`, solo con los veredictos que ya da el servidor): «sería

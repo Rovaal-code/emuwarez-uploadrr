@@ -12,7 +12,7 @@ from emuwarez_uploadrr.services.settings import set_setting
 
 # Lo que devuelve UNIT3D (TorrentResource): los contadores van en `attributes`.
 TORRENTE = {"type": "torrent", "id": "321", "attributes": {
-    "seeders": 7, "leechers": 2, "times_completed": 15, "freeleech": "50%", "double_up": True}}
+    "seeders": 7, "leechers": 2, "times_completed": 15, "freeleech": "50%", "double_upload": True}}
 
 
 @pytest.fixture

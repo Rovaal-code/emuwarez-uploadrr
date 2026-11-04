@@ -339,7 +339,7 @@ def _compute_aportes(mine: dict, matches: list[dict]) -> list[dict]:
 # Lo que acaba un nombre de eMuwarez tras el último guion es el grupo de release («Peli (2020) 1080p WEB-DL x265-Ryodan»);
 # «DL» de un WEB-DL sin grupo no lo es.
 _GRUPO_FINAL_RE = re.compile(r"-([A-Za-z0-9][A-Za-z0-9_.]{0,24})\s*$")
-_NO_ES_GRUPO = frozenset({"dl", "rip", "disc", "remux"})
+_NO_ES_GRUPO = frozenset({"dl", "rip", "ray", "disc", "remux"})  # «WEB-DL», «WEB-Rip», «Blu-Ray»…
 
 
 def grupo_del_nombre(name: Optional[str]) -> Optional[str]:

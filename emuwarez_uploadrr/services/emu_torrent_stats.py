@@ -50,7 +50,7 @@ def _resumir(atributos: dict[str, Any]) -> dict[str, Any]:
         "leechers": _entero(atributos.get("leechers")),
         "completadas": _entero(atributos.get("times_completed")),
         "freeleech": str(atributos["freeleech"]) if atributos.get("freeleech") not in (None, "", "0%") else None,
-        "doble_subida": bool(atributos.get("double_up")),
+        "doble_subida": bool(atributos.get("double_upload")),
     }
 
 

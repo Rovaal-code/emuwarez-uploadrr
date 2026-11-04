@@ -191,6 +191,8 @@ def test_un_capitulo_suelto_no_se_compara_con_el_pack_de_la_temporada(db_conn):
     ("Peli (2020) 1080p BluRay DUAL-eMu", "eMu"),
     ("Peli (2020) 1080p WEB-DL", None),           # el «DL» de WEB-DL no es un grupo
     ("Peli 2020 1080p BDRemux", None),
+    ("Peli (2020) 1080p Blu-Ray", None),           # «Ray» es de Blu-Ray, no un grupo
+    ("Peli (2020) 1080p Blu-Ray x264-eMu", "eMu"),
     ("Peli (2020) 1080p x264-", None),
     ("", None), (None, None),
 ])

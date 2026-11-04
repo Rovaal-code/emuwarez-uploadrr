@@ -1,5 +1,5 @@
 import type { DashboardRecommendationItem } from '../../api/dashboard'
-import { lineaDeEspecificaciones, type RecomendacionesRepartidas } from '../../utils/hoy'
+import { lineaDeEspecificaciones, textoDeAporte, type RecomendacionesRepartidas } from '../../utils/hoy'
 import { recompensaDeRecomendacion } from '../../utils/recomendaciones'
 import { DetailTitleText, LanguageValueIcon, PlainValue, ReleaseGroupValueIcon, SubtitleValueIcon } from '../DetailCard'
 import { EmptyState } from '../EmptyState'
@@ -30,6 +30,12 @@ function Fila({ item, extra, verPeticion, accion, onVerFicha }: {
           <DetailTitleText title={item.content_name} />
         </HoverTitle>
         <div className="panel-item-spec">{spec}</div>
+        {(item.rec_aportes ?? []).length > 0 && (
+          <div className="panel-item-aportes">
+            <span className="solo-lector">Tu copia aporta: </span>
+            {(item.rec_aportes ?? []).map((a, i) => <span key={i} className="panel-aporte">{textoDeAporte(a)}</span>)}
+          </div>
+        )}
         {(grupo || audio.length > 0 || subs.length > 0 || verPeticion) && (
           <div className="panel-item-meta">
             {grupo && (
@@ -70,8 +76,8 @@ export function CarrilListo({ recomendaciones, onSubir, onVerPeticion, onVerFich
   onSubirUnico: (item: DashboardRecommendationItem) => void
   onPedir: (item: DashboardRecommendationItem) => void
 }) {
-  const { peticiones, unicos, faltantes } = recomendaciones
-  const otros = unicos.length + faltantes.length
+  const { peticiones, unicos, faltantes, mejoras } = recomendaciones
+  const otros = unicos.length + faltantes.length + mejoras.length
   const nota = peticiones.length
     ? `${peticiones.length} ${peticiones.length === 1 ? 'petición' : 'peticiones'} · por recompensa`
     : undefined
@@ -102,6 +108,17 @@ export function CarrilListo({ recomendaciones, onSubir, onVerPeticion, onVerFich
               <div className="upload-panel-group">Contenido único que puedes subir</div>
               <ul className="panel-lista">
                 {unicos.map(item => (
+                  <Fila key={item.id} item={item} onVerFicha={onVerFicha}
+                    accion={<button type="button" className="btn btn-secondary btn-sm" onClick={() => onSubirUnico(item)}>Subir</button>} />
+                ))}
+              </ul>
+            </>
+          )}
+          {mejoras.length > 0 && (
+            <>
+              <div className="upload-panel-group">Mejoras posibles: ya está en eMuwarez, pero tu copia aporta</div>
+              <ul className="panel-lista">
+                {mejoras.map(item => (
                   <Fila key={item.id} item={item} onVerFicha={onVerFicha}
                     accion={<button type="button" className="btn btn-secondary btn-sm" onClick={() => onSubirUnico(item)}>Subir</button>} />
                 ))}

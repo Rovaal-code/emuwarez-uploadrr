@@ -1,6 +1,7 @@
 """Datos del panel (Dashboard): resumen, diagnóstico, actividad reciente y recomendaciones."""
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -332,12 +333,31 @@ def _rec_rolled_size(conn: sqlite3.Connection, row: dict, *, season: int | None 
     return r["s"] if r and r["c"] else None
 
 
+def _repartir_cupo(listas: list[list], cupo: int) -> list[list]:
+    """Recorta cada lista (conservando su orden) para que entre todas no pasen de `cupo`: el cupo se reparte a partes
+    iguales entre las que no están vacías y lo que una no usa pasa a las demás."""
+    cuotas = [0] * len(listas)
+    pendiente = max(cupo, 0)
+    while pendiente > 0:
+        con_hueco = [i for i, lista in enumerate(listas) if len(lista) > cuotas[i]]
+        if not con_hueco:
+            break
+        parte = max(pendiente // len(con_hueco), 1)
+        for i in con_hueco:
+            dado = min(parte, len(listas[i]) - cuotas[i], pendiente)
+            cuotas[i] += dado
+            pendiente -= dado
+            if pendiente == 0:
+                break
+    return [lista[:cuota] for lista, cuota in zip(listas, cuotas)]
+
+
 def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100) -> list[dict]:
     from ..season_pack import pack_rollup_sql
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     g1_recs: list[dict] = []  # group 1, already in its final order (the SQL's)
-    recs: list[dict] = []  # groups 2 & 3, sorted at the end
+    recs: list[dict] = []  # groups 2, 3 & 4, sorted at the end
     seen_lib: set[int] = set()  # library ids already shown (so a piece of
     # content isn't repeated across groups 2 & 3 or after appearing in group 1)
 
@@ -417,10 +437,13 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         size_episode = episode if (scope == "episode" or disp_type == "episode") else None
         d["size_bytes"] = _rec_rolled_size(conn, lib, season=season, episode=size_episode)
         d["missing_count"] = None
+        d["rec_aportes"] = []
         g1_recs.append(d)
         seen_lib.add(int(lib_id))
+        seen_lib.add(int(target_id))  # la temporada o el capítulo pedidos tampoco se repiten como idea sin petición
 
-    def _push(row: dict, group: int, *, name: str | None = None, size=None, missing_count=None):
+    def _push(row: dict, group: int, *, name: str | None = None, size=None, missing_count=None,
+              aportes: list | None = None):
         rid = int(row["id"])
         if rid in seen_lib:
             return
@@ -432,6 +455,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         d["rec_request_id"] = None
         d["rec_points"] = None
         d["missing_count"] = missing_count
+        d["rec_aportes"] = aportes or []
         # Recency: for a Faltante candidate (group 3), when it actually BECAME
         # missing (missing_since) is what "newest first" should mean — falls
         # back to Radarr/Sonarr's own "added" date (when Radarr/Sonarr first
@@ -468,6 +492,31 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
               AND (li.item_type != 'season' OR ({pack_rollup_sql("li")}))"""
     ).fetchall():
         _push(dict(row), 2)
+
+    # Group 4 — «Mejoras posibles»: lo que tienes disponible y YA está en eMuwarez, pero tu copia aporta algo que
+    # no tiene ninguno de sus torrents (mayor resolución, mejor source, un códec más eficiente o el castellano que
+    # les falta): lo que la ficha de Biblioteca marca como «Aportas» (emu_in_catalog = 1 con emu_aportes). Mismas
+    # unidades subibles y mismas exigencias de castellano y de pack que el grupo 2. No es un permiso para subir:
+    # eMuwarez tiene reglas de trumps y el Resumen del asistente enseña el veredicto frente a cada torrent.
+    for row in conn.execute(
+        f"""SELECT {cols}, li.emu_aportes,
+              COALESCE(json_extract(li.raw_json, '$.added'),
+                       (SELECT json_extract(p.raw_json, '$.added')
+                        FROM library_items p WHERE p.id = li.parent_id)) AS arr_added
+            FROM library_items li
+            WHERE li.local_status = 'Disponible' AND li.emu_in_catalog = 1
+              AND li.item_type IN ('movie', 'season')
+              AND json_valid(li.emu_aportes) AND json_array_length(li.emu_aportes) > 0
+              AND li.has_spanish_ok = 1
+              AND (li.item_type != 'season' OR ({pack_rollup_sql("li")}))"""
+    ).fetchall():
+        row = dict(row)
+        try:
+            aportes = [a for a in json.loads(row.pop("emu_aportes") or "[]") if isinstance(a, dict)]
+        except ValueError:
+            continue
+        if aportes:
+            _push(row, 4, aportes=aportes)
 
     # Group 3 — monitored content you're missing and that isn't on eMuwarez, a
     # candidate to request. Excludes anything not yet released (unreleased /
@@ -526,16 +575,22 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         _push(row, 3, name=_rec_content_name(conn, row, episode=single_missing_episode),
               missing_count=missing_count)
 
-    # Groups 2 & 3: newest-first within each group (stable sort: order by
-    # recency, then by group so the blocks stay in order 2 → 3). Group 1 keeps
+    # Groups 2, 3 & 4: newest-first within each group (stable sort: order by
+    # recency, then by group so the blocks stay in order 2 → 3 → 4). Group 1 keeps
     # its own order (by reward, from the SQL) and goes first.
     recs.sort(key=lambda d: d.get("_added") or "", reverse=True)
     recs.sort(key=lambda d: d["rec_group"])
     for d in recs:
         d.pop("_added", None)
+    # El tope corta por el final, pero no deja un grupo sin sitio: las peticiones (grupo 1) van primero y lo que
+    # sobra se reparte a partes iguales entre los grupos 2, 3 y 4 (el que no llena su parte la cede a los demás).
+    if limit > 0:
+        g1_recs = g1_recs[:limit]
+        por_grupo = [[d for d in recs if d["rec_group"] == g] for g in (2, 3, 4)]
+        recs = [d for lista in _repartir_cupo(por_grupo, limit - len(g1_recs)) for d in lista]
     recs = g1_recs + recs
     # Los idiomas salen ya como códigos de eMuwarez (ESP primero), los mismos que lleva el nombre del torrent.
     for d in recs:
         d["audio_languages"] = _split_languages(d.get("audio_languages"))
         d["subtitle_languages"] = _split_languages(d.get("subtitle_languages"))
-    return recs if limit <= 0 else recs[:limit]
+    return recs

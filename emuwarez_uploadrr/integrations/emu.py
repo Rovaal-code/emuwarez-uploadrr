@@ -68,6 +68,19 @@ def emu_get_request_detail(
     return _pedir(url, api_key, interactiva=True)
 
 
+def emu_get_torrent(api_key: str, torrent_id: int, base_url: str | None = None) -> dict[str, Any]:
+    """Un torrent (/api/torrents/{id}) con sus contadores del tracker: seeders, leechers, times_completed...
+    UNIT3D los da en `attributes`; devuelve ese diccionario, o la respuesta entera si viene plana."""
+    base = (base_url or EMU_BASE_URL).rstrip("/")
+    url = build_url(base, f"/api/torrents/{int(torrent_id)}", {"api_token": api_key})
+    data = _pedir(url, api_key, interactiva=True)
+    if isinstance(data, dict) and isinstance(data.get("attributes"), dict):
+        return data["attributes"]
+    if not isinstance(data, dict):
+        raise IntegrationError("eMuwarez ha devuelto el torrent en un formato que no se reconoce")
+    return data
+
+
 def emu_get_user(api_key: str, base_url: str | None = None) -> dict[str, Any]:
     """Tu cuenta (/api/user): usuario, grupo, subido, bajado, ratio, buffer, seeding, leeching, bonus y H&R."""
     base = (base_url or EMU_BASE_URL).rstrip("/")

@@ -5,7 +5,7 @@ import { useId } from 'react'
 import { timeAgo } from '../../utils/format'
 import { peticionCubre } from '../../utils/seleccionSubida'
 import {
-  textoCategoria, textoCopia, textoFicheros, textoPistas, tipoDeEnlace, type FilaYaHay, type YaHay,
+  conclusionDuplicados, textoCategoria, textoCopia, textoFicheros, textoPistas, tipoDeEnlace, type FilaYaHay, type YaHay,
 } from '../../utils/resumenSubida'
 import { mergeRemuxTracks } from './RemuxTable'
 import type { Asistente } from './useAsistente'
@@ -103,11 +103,19 @@ function YaHayEnEmu({ yaHay }: { yaHay: YaHay }) {
     return <p className="asist-t13">Sin catálogo local: sincroniza con eMuwarez para saber si ya está.</p>
   }
   const { filas, sinNada, total } = yaHay
+  const conclusion = conclusionDuplicados(filas)
   return (
     <>
       {filas.length === 0 ? (
         <p className="asist-t13">Nada de esto está en eMuwarez todavía.</p>
       ) : (
+        <>
+        {conclusion && (
+          <p className={`asist-t13${conclusion.clase ? ` asist-veredicto asist-veredicto-${conclusion.clase}` : ''}`}
+            role="status" data-testid="conclusion-duplicados">
+            {conclusion.texto}
+          </p>
+        )}
         <div className="asist-tabla-caja asist-tabla-caja-yahay">
           <table className="asist-tabla asist-tabla-yahay">
             <caption className="solo-lector">Torrents de eMuwarez del mismo contenido</caption>
@@ -123,6 +131,7 @@ function YaHayEnEmu({ yaHay }: { yaHay: YaHay }) {
             </tbody>
           </table>
         </div>
+        </>
       )}
       {total > 1 && sinNada > 0 && (
         <p className="asist-t12 text-muted asist-mt-10">{sinNada} de {total} no están en eMuwarez.</p>

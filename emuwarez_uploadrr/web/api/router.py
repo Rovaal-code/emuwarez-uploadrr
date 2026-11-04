@@ -14,6 +14,7 @@ from .nomenclature import router as nomenclature_router
 from .season_pack import router as season_pack_router
 from .uploads import router as uploads_router
 from .seeding import router as seeding_router
+from .tracker_stats import router as tracker_stats_router
 from .logs import router as logs_router
 from .diagnostics import router as diagnostics_router
 from .maintenance import router as maintenance_router
@@ -48,6 +49,7 @@ api_router.include_router(nomenclature_router)
 api_router.include_router(season_pack_router)
 # seeding_router must come before uploads_router so /uploads/seeding isn't read as /uploads/{job_id}.
 api_router.include_router(seeding_router)
+api_router.include_router(tracker_stats_router)
 api_router.include_router(uploads_router)
 api_router.include_router(logs_router)
 api_router.include_router(diagnostics_router)

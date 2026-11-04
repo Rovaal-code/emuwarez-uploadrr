@@ -119,6 +119,7 @@ def _con_ficha(j: dict, ficha: dict | None, **kw) -> UploadJobDetail:
         j, f.get("item_type"), f.get("poster_url") or None, f.get("backdrop_url") or None,
         f.get("instance_type") or None, f.get("instance_name") or None, f.get("request_status") or None,
         f.get("year") or None, f.get("instance_id") or None, f.get("tmdb_id") or None, f.get("title_slug") or None,
+        release_groups=f.get("release_groups") or [],
         **kw,
     )
 
@@ -138,6 +139,7 @@ def _job_to_detail(
     display_title: str | None = None,
     queue_position: int | None = None,
     queue_total: int | None = None,
+    release_groups: list[str] | None = None,
 ) -> UploadJobDetail:
     prepared = j.get("prepared_path")
     source = j.get("source_path") or j.get("path")
@@ -148,6 +150,7 @@ def _job_to_detail(
         backdrop_url=backdrop_url,
         year=year,
         display_title=display_title,
+        release_groups=release_groups or [],
         instance_type=instance_type,
         instance_name=instance_name,
         instance_id=instance_id,

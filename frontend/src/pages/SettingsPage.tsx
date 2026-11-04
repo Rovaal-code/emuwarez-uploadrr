@@ -113,7 +113,7 @@ export function SettingsPage() {
           que la pantalla y necesitan poder desplazarse por dentro. */}
       <div className="aj-cuerpo">
         <SettingsMessageContext.Provider key={reinicio} value={showMessage}>
-          {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}
+          {tab === 'config' && <ConfigTab />}
           {tab === 'notifications' && <NotificationsTab onExposeSave={setSaveAction} />}
           {tab === 'diagnostics' && <DiagnosticsTab status={status} onRefresh={loadStatus} />}
           {tab === 'backup' && <BackupTab status={status} onRefresh={loadStatus} />}

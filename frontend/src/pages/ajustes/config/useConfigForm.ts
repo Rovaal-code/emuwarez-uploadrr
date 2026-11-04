@@ -1,33 +1,37 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useUnsavedGuard } from '../../../utils/unsavedGuard'
 import { fetchSettings, updateSettings, type SettingsData } from '../../../api/settings'
 import { usePerfilEmu } from '../../../context/PerfilEmuContext'
 import { isValidHttpUrl } from '../../../utils/validation'
 import { MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../../../utils/modoPistas'
 import { useSettingsMessageAdapter } from '../mensajes'
-import type { SaveExpose } from '../tipos'
 
 // El estado del formulario de la pestaña Configuración, compartido por todas sus tarjetas: se carga, se
-// compara con lo cargado para saber si hay cambios sin guardar y se guarda de una vez desde el botón de la
-// cabecera. Lo que solo toca una tarjeta (pruebas de conexión, el modal de claves) vive en esa tarjeta.
+// compara con lo cargado para saber cuántos campos han cambiado y se guarda de una vez desde la barra de
+// guardado. Lo que solo toca una tarjeta (pruebas de conexión, el modal de claves) vive en esa tarjeta.
 
-// Serialize the Config form's values so we can compare current vs. loaded and
-// know whether there are unsaved changes. Array order is fixed on purpose.
+// Los valores del formulario, uno por campo, serializados para comparar el estado actual con el cargado.
 function configSignature(v: {
   tags: string[]; providerOrder: string[]; region: string
   emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; capturasPorCapitulo: boolean; modoDePistas: ModoPistas; sinCopiasReflink: boolean; sincronizarAlVolver: boolean
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string; qbitQui?: string; quitarQui?: boolean; quitarQbitPass?: boolean
-}): string {
-  return JSON.stringify([
-    v.tags, v.providerOrder, v.region, v.emuUsername,
-    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.capturasPorCapitulo, v.modoDePistas, v.sinCopiasReflink, v.sincronizarAlVolver, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
-    v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.qbitQui ?? '', v.quitarQui ?? false, v.quitarQbitPass ?? false,
-  ])
+}): Record<string, string> {
+  const campos: Record<string, unknown> = {
+    tags: v.tags, providerOrder: v.providerOrder, region: v.region, emuUsername: v.emuUsername,
+    ignoreSpecials: v.ignoreSpecials, sourceEngine: v.sourceEngine, addLogo: v.addLogo, capturasPorCapitulo: v.capturasPorCapitulo, modoDePistas: v.modoDePistas, sinCopiasReflink: v.sinCopiasReflink, sincronizarAlVolver: v.sincronizarAlVolver, recentLimit: v.recentLimit, uploadMaxConcurrent: v.uploadMaxConcurrent, qbitUrl: v.qbitUrl, qbitTag: v.qbitTag, qbitUser: v.qbitUser, imgEnabled: v.imgEnabled, allowedRoots: v.allowedRoots,
+    newKey: v.newKey ?? '', newEmuKey: v.newEmuKey ?? '', qbitPass: v.qbitPass ?? '', qbitQui: v.qbitQui ?? '', quitarQui: v.quitarQui ?? false, quitarQbitPass: v.quitarQbitPass ?? false,
+  }
+  return Object.fromEntries(Object.entries(campos).map(([k, x]) => [k, JSON.stringify(x)]))
 }
 
-export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
+// Cuántos campos difieren de lo cargado.
+function contarCambios(base: Record<string, string>, actual: Record<string, string>): number {
+  return Object.keys(actual).filter(k => actual[k] !== base[k]).length
+}
+
+export function useConfigForm() {
   const [settings, setSettings] = useState<SettingsData | null>(null)
   const [loading, setLoading] = useState(true)
   // Si la carga falla no se guarda: el formulario tiene valores por defecto, no los ajustes reales.
@@ -76,7 +80,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
   const [allowedRoots, setAllowedRoots] = useState('')
 
   // Unsaved-changes tracking: compare current form values to the loaded ones.
-  const [baseline, setBaseline] = useState('')
+  const [baseline, setBaseline] = useState<Record<string, string> | null>(null)
   // Un grupo escrito sin pulsar «Añadir» también se guarda.
   const borrador = nuevoTag.trim()
   const tagsAGuardar = borrador && !tags.includes(borrador) ? [...tags, borrador] : tags
@@ -85,19 +89,9 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
     ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, sinCopiasReflink, sincronizarAlVolver, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass, qbitQui, quitarQui, quitarQbitPass,
   })
-  const dirty = baseline !== '' && currentSig !== baseline
+  const cambios = baseline ? contarCambios(baseline, currentSig) : 0
+  const dirty = cambios > 0
   useUnsavedGuard('config', dirty)
-
-
-  // Expose the save action to the page-header (top-right button). onSave goes
-  // through a ref so it always runs with the latest form values.
-  const saveRef = useRef<() => void>(() => {})
-  saveRef.current = () => { void handleSave() }
-  const stableSave = useRef(() => saveRef.current()).current
-  useEffect(() => {
-    onExposeSave({ dirty, saving, deshabilitado: settings === null, onSave: stableSave, label: 'Guardar configuración' })
-  }, [dirty, saving, settings, onExposeSave, stableSave])
-  useEffect(() => () => onExposeSave(null), [onExposeSave])
 
   useEffect(() => {
     let activo = true
@@ -240,7 +234,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
     }
   }
   return {
-    settings, setSettings, loading, errorCarga, reintentar, saving, handleSave,
+    settings, setSettings, loading, errorCarga, reintentar, saving, handleSave, cambios,
     tags, setTags, nuevoTag, setNuevoTag, borrador,
     providerOrder, setProviderOrder, region, setRegion,
     newKey, setNewKey, newEmuKey, setNewEmuKey, emuUsername, setEmuUsername,

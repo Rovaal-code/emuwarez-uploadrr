@@ -102,3 +102,26 @@ export function resumirComparaciones(comparaciones: (EmuComparison | null)[]): Y
     sinNada: disponibles.filter(c => c.matches.length === 0).length,
   }
 }
+
+export type NivelDuplicado = 'duplicado' | 'trump' | 'mixto' | 'peor' | 'sin-comparar'
+
+// La conclusión de la tabla «En eMuwarez ya hay», en una frase: qué dicen los veredictos de lo tuyo frente a cada torrent.
+// No es un permiso: eMuwarez tiene sus reglas de trumps y solo ellas deciden si una subida se acepta.
+export function conclusionDuplicados(filas: FilaYaHay[]): { nivel: NivelDuplicado; clase: Veredicto | null; texto: string } | null {
+  if (filas.length === 0) return null
+  const cuenta = (v: Veredicto) => filas.filter(f => f.veredicto === v).length
+  const mejor = cuenta('mejor'), igual = cuenta('igual'), peor = cuenta('peor')
+  if (mejor + igual + peor === 0) {
+    return { nivel: 'sin-comparar', clase: null, texto: 'No se pudo comparar la calidad con lo que ya hay: revisa a mano si sería un duplicado.' }
+  }
+  if (igual > 0) {
+    return { nivel: 'duplicado', clase: 'igual', texto: `Ya ${igual === 1 ? 'hay 1 torrent' : `hay ${formatNumero(igual)} torrents`} con tu misma calidad: la subida sería un duplicado.` }
+  }
+  if (mejor > 0 && peor === 0) {
+    return { nivel: 'trump', clase: 'mejor', texto: `Tu copia mejora ${mejor === 1 ? 'el torrent que hay' : `los ${formatNumero(mejor)} torrents que hay`}: puede ser un trump. Revisa las reglas de trumps antes de subir.` }
+  }
+  if (mejor > 0) {
+    return { nivel: 'mixto', clase: 'igual', texto: `Tu copia mejora ${formatNumero(mejor)} y empeora ${formatNumero(peor)} de lo que hay: no es un trump claro.` }
+  }
+  return { nivel: 'peor', clase: 'peor', texto: 'Tu copia es peor que todo lo que ya hay: eMuwarez probablemente la rechace.' }
+}

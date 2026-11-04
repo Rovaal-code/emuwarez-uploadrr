@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import type { EmuComparison } from '../../api/library'
 import {
-  resumirComparaciones, textoCategoria, textoCopia, textoFicheros, textoPeticion, textoPistas, tipoDeEnlace,
+  conclusionDuplicados, resumirComparaciones, textoCategoria, textoCopia, textoFicheros, textoPeticion, textoPistas, tipoDeEnlace,
 } from '../resumenSubida'
 
 const coincidencia = (nombre: string, extra: Partial<EmuComparison['matches'][number]> = {}) =>
@@ -129,5 +129,37 @@ describe('lo que ya hay en eMuwarez', () => {
     const r = resumirComparaciones([comparacion([coincidencia('E01', { veredicto: 'igual' })]), comparacion([]), comparacion([], false)])
     expect(r).toMatchObject({ estado: 'listo', total: 2, sinNada: 1 })
     expect((r as { filas: unknown[] }).filas).toHaveLength(1)
+  })
+})
+
+describe('la conclusión de duplicados y trumps', () => {
+  const fila = (veredicto: 'mejor' | 'igual' | 'peor' | null) => ({ clave: String(Math.random()), nombre: 'T', calidad: '1080p', veredicto })
+
+  it('sin torrents en eMuwarez no hay conclusión que dar', () => {
+    expect(conclusionDuplicados([])).toBeNull()
+  })
+
+  it('una calidad igual a alguna es un duplicado, aunque otras sean peores', () => {
+    const c = conclusionDuplicados([fila('peor'), fila('igual')])!
+    expect(c.nivel).toBe('duplicado')
+    expect(c.texto).toContain('duplicado')
+  })
+
+  it('mejor que todo es un posible trump y manda revisar las reglas', () => {
+    const c = conclusionDuplicados([fila('mejor'), fila('mejor')])!
+    expect(c).toMatchObject({ nivel: 'trump', clase: 'mejor' })
+    expect(c.texto).toContain('reglas de trumps')
+  })
+
+  it('mejor que unos y peor que otros no es un trump claro', () => {
+    expect(conclusionDuplicados([fila('mejor'), fila('peor')])).toMatchObject({ nivel: 'mixto' })
+  })
+
+  it('peor que todo se dice como rechazo probable', () => {
+    expect(conclusionDuplicados([fila('peor')])).toMatchObject({ nivel: 'peor', clase: 'peor' })
+  })
+
+  it('sin nada comparable no afirma nada', () => {
+    expect(conclusionDuplicados([fila(null)])).toMatchObject({ nivel: 'sin-comparar', clase: null })
   })
 })

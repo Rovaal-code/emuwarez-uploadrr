@@ -853,6 +853,19 @@ describe('los pasos y el Resumen', () => {
         ['Dune 2021 2160p BluRay', '2160p BluRay', 'peor'],
       ])
       expect(texto()).toContain('Del catálogo local, sincronizado hace 3 h. No cuenta como permiso: revisa las reglas de trumps.')
+      // Con una calidad igual a alguna, la conclusión dice que sería un duplicado.
+      expect(document.querySelector('[data-testid="conclusion-duplicados"]')!.textContent).toContain('duplicado')
+    })
+
+    it('si lo tuyo mejora todo lo que hay, la conclusión dice que puede ser un trump', async () => {
+      m(biblioteca.getEmuComparison).mockResolvedValue({
+        available: true, message: null, in_catalog: 1, matches: [
+          { name: 'Dune 2021 720p HDTV', resolution: '720p', source: 'HDTV', codec: null, has_spanish: 1, size: 1, veredicto: 'mejor' },
+        ],
+      })
+      await alResumenDePelicula()
+      const c = await esperar(() => document.querySelector('[data-testid="conclusion-duplicados"]'))
+      expect(c.textContent).toContain('puede ser un trump')
     })
 
     it('sin nada en el catálogo lo dice', async () => {

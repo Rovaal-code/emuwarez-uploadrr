@@ -343,6 +343,15 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   Un fallo del tracker es `disponible: false` con su mensaje, no un error; sin ficha es un 404. Sin migración ni historial: solo
   la lectura de ahora. Los nombres de los atributos (`seeders`, `leechers`, `times_completed`, `freeleech`, `double_up`) son los de
   UNIT3D; **sin probar contra el eMuwarez real**.
+- **Oleada 4, resumen de duplicados y trumps:** el Resumen del asistente de subida pone, sobre la tabla «En eMuwarez ya hay», una
+  conclusión en una frase (`conclusionDuplicados`, `utils/resumenSubida.ts`, solo con los veredictos que ya da el servidor): «sería
+  un duplicado» si alguno tiene tu misma calidad; «puede ser un trump» si mejoras todos; «no es un trump claro» si mejoras unos y
+  empeoras otros; «probablemente la rechace» si eres peor que todos; y no afirma nada si no se pudo comparar. Sigue sin ser un
+  permiso: no se conocen las reglas de trumps de eMuwarez y el texto manda revisarlas.
+- **Oleada 4, el grupo de release en las listas:** columna «Grupo» en «Tu copia vs eMuwarez» (tu copia, y el grupo que cierra el
+  nombre de cada torrent, `grupo_del_nombre`: lo que sigue al último guion, sin contar el «DL» de un WEB-DL) y en la lista de
+  Subidas (`release_groups` de lo que se sube: el de la copia o los de todos los capítulos de una temporada). **No** se añadió a la
+  lista de Peticiones: una petición no pide grupo y su copia local ya enseña el suyo en el detalle (`local_release_groups`).
 
 ## Siguiente
 
@@ -357,7 +366,7 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 
 - Funciones nuevas que faltan:
   - subida por lotes;
-  - resumen de duplicados y trumps;
+  - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).
 - Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): ~~P1 Panel~~, ~~P4 detalle de subida~~ y ~~P5 asistente con Resumen~~ (hechos),

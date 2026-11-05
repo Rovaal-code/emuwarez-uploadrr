@@ -40,11 +40,12 @@ export function useSeleccionLote<T extends { id: number } = LibraryItemResponse,
 
   const tiene = useCallback((clave: K) => seleccion.has(clave), [seleccion])
 
-  // «Subir seleccionadas» pide fichas antes de abrir el modal: si mientras tanto se marca, desmarca o limpia algo,
-  // lo preparado ya no es lo marcado y no se abre. Cada cambio crea un Map nuevo, así que basta comparar referencias.
+  // Lo marcado ahora mismo, para quien lo lee después de esperar: «Subir seleccionadas» pide fichas antes de abrir el
+  // modal y, si mientras tanto se marca, desmarca o limpia algo, vuelve a prepararlo con lo nuevo. Cada cambio crea un
+  // Map nuevo, así que basta comparar referencias.
   const actual = useRef(seleccion)
   useEffect(() => { actual.current = seleccion }, [seleccion])
-  const sigueIgual = useCallback((antes: ReadonlyMap<K, T>) => actual.current === antes, [])
+  const vigente = useCallback(() => actual.current, [])
 
-  return { seleccion, total: seleccion.size, lleno: seleccion.size >= maximo, alternar, limpiar, tiene, sigueIgual }
+  return { seleccion, total: seleccion.size, lleno: seleccion.size >= maximo, alternar, limpiar, tiene, vigente }
 }

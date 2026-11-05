@@ -74,8 +74,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // sola) y al encolar el lote.
   const [modoSeleccion, setModoSeleccion] = useState(false)
   const {
-    seleccion, total: totalSeleccion, lleno: loteLleno, alternar: alternarLote, limpiar: limpiarLote, tiene: marcada,
-    sigueIgual: seleccionSigue,
+    total: totalSeleccion, lleno: loteLleno, alternar: alternarLote, limpiar: limpiarLote, tiene: marcada,
+    vigente: seleccionVigente,
   } = useSeleccionLote<DashboardRecommendationItem, string>(MAX_ELEMENTOS_LOTE, claveDelPanel)
   const [loteAbierto, setLoteAbierto] = useState<EntradaLote[] | null>(null)
   // Cada salida del Panel lo sube: un «Subir seleccionadas» que aún esperaba sus fichas no abre el lote al volver.
@@ -283,17 +283,25 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     abriendo.current = true
     setErrorAccion(null)
     try {
-      const marcadas = seleccion
-      const filas = [...marcadas.values()]
       const fichas = new Map<number, Promise<LibraryItemResponse>>()
       const fichaDe = (id: number) => {
         if (!fichas.has(id)) fichas.set(id, getLibraryItem(id))
         return fichas.get(id)!
       }
       const salidasAntes = salidas.current
-      const resultados = await Promise.allSettled(filas.map(f => fichaDe(f.library_target_id ?? f.id)))
-      // Salir de la página o cambiar lo marcado mientras se piden las fichas: lo preparado ya no vale.
-      if (salidas.current !== salidasAntes || !seleccionSigue(marcadas)) return
+      // Si lo marcado cambia mientras se piden las fichas, se prepara otra vez con lo de ahora (las ya pedidas no se
+      // repiten); salir de la página lo deja.
+      let marcadas = seleccionVigente()
+      let filas: DashboardRecommendationItem[]
+      let resultados: PromiseSettledResult<LibraryItemResponse>[]
+      for (;;) {
+        filas = [...marcadas.values()]
+        resultados = await Promise.allSettled(filas.map(f => fichaDe(f.library_target_id ?? f.id)))
+        if (salidas.current !== salidasAntes) return
+        const ahora = seleccionVigente()
+        if (ahora === marcadas) break
+        marcadas = ahora
+      }
       const entradas: EntradaLote[] = []
       const perdidas: string[] = []
       resultados.forEach((r, i) => {

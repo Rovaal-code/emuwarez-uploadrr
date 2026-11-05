@@ -337,10 +337,10 @@ describe('«Subir seleccionadas» en Peticiones', () => {
     expect(document.querySelector('.lote-lista')).toBeNull()
   })
 
-  it('cambiar lo marcado mientras se piden las fichas no abre un lote con lo de antes', async () => {
-    let soltar: () => void = () => {}
+  it('cambiar lo marcado mientras se piden las fichas abre el lote con lo marcado al final', async () => {
+    const pendientes: (() => void)[] = []
     vi.mocked(getRequestDetail).mockImplementation(id => new Promise(resolve => {
-      soltar = () => resolve({ id, match: { library_item_id: 5, library_target_id: DESTINO[id] } } as unknown as RequestDetailResponse)
+      pendientes.push(() => resolve({ id, match: { library_item_id: 5, library_target_id: DESTINO[id] } } as unknown as RequestDetailResponse))
     }))
     await paginaConSeleccion([PELICULA, TEMPORADA])
     await seleccionar()
@@ -348,14 +348,12 @@ describe('«Subir seleccionadas» en Peticiones', () => {
     await pulsar(casilla('Lost - Temporada 2'))
     await pulsar(boton('Subir seleccionadas (2)'))
     await pulsar(casilla('Única'))
-    await act(async () => { soltar() })
-    expect(document.querySelector('.lote-lista')).toBeNull()
-    // Con lo marcado ahora, sí se abre.
-    vi.mocked(getRequestDetail).mockImplementation(async id => ({
-      id, match: { library_item_id: 5, library_target_id: DESTINO[id] },
-    }) as unknown as RequestDetailResponse)
+    // Un segundo clic mientras prepara no se pierde ni abre dos: la preparación en marcha sigue lo marcado.
     await pulsar(boton('Subir seleccionadas (1)'))
-    await esperar(() => document.querySelector('.lote-lista'))
+    while (!document.querySelector('.lote-lista')) {
+      await act(async () => { pendientes.shift()?.() })
+      if (!pendientes.length) await esperar(() => pendientes.length > 0 || document.querySelector('.lote-lista'))
+    }
     expect(titulosLote()).toEqual(['Lost (2016) - Temporada 2'])
   })
 })

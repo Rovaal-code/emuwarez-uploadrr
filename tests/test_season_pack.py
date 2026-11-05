@@ -1412,7 +1412,11 @@ def test_las_comprobaciones_de_un_pack_listo_dan_el_nombre_del_torrent(isolated_
 
 
 def test_las_comprobaciones_de_un_pack_dicen_si_tiene_audio_sin_idioma(isolated_db, tmp_path, monkeypatch):
-    from emuwarez_uploadrr.services import season_pack, upload_checks
+    from emuwarez_uploadrr.services import image_hosts, integration_tests, season_pack, upload_checks
+    # El ámbito «environment» no debe salir a la red aunque haya carpeta de Uploadrr.
+    monkeypatch.setattr(image_hosts, "test_image_host", lambda *a, **k: {"ok": True})
+    monkeypatch.setattr(integration_tests, "test_emuwarez_connection", lambda *a, **k: {"ok": True})
+    monkeypatch.setattr(integration_tests, "test_qbit_connection", lambda *a, **k: {"ok": True})
     conn = _open(isolated_db)
     season_id = _pack_con_proveedores_distintos(conn, tmp_path)
     plan = build_season_pack_plan(season_id, conn=conn, provider_override="NF")

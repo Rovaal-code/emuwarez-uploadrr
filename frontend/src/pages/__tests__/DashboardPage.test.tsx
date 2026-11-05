@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/dashboard', () => ({ getDashboardSummary: vi.fn(), getDashboardRecommendations: vi.fn() }))
 vi.mock('../../api/uploads', () => ({
-  getUploads: vi.fn(), queueLote: vi.fn(), runUploadChecks: vi.fn(), getUploadChecksProgress: vi.fn(),
+  getUploads: vi.fn(), getUploadJob: vi.fn(), queueLote: vi.fn(), runUploadChecks: vi.fn(),
+  getUploadChecksProgress: vi.fn(),
 }))
 vi.mock('../../api/nomenclature', () => ({ getNomenclatureFields: vi.fn(), previewNomenclatureFields: vi.fn() }))
 vi.mock('../../api/settings', () => ({ fetchSettings: vi.fn() }))
@@ -43,7 +44,8 @@ import { getEmuComparison, getLibrary, getLibraryItem } from '../../api/library'
 import { getNomenclatureFields } from '../../api/nomenclature'
 import { getVersionInfo } from '../../api/maintenance'
 import { fetchSettings } from '../../api/settings'
-import { getUploads, queueLote, runUploadChecks } from '../../api/uploads'
+import { getUploadJob, getUploads, queueLote, runUploadChecks } from '../../api/uploads'
+import { suscribirse } from '../../api/eventos'
 import { SeccionVisible } from '../../context/SeccionVisible'
 import { SyncContext } from '../../context/SyncContext'
 import type { DashboardSummaryResponse, LibraryItemResponse, UploadJob } from '../../types/api'
@@ -113,6 +115,41 @@ describe('Panel', () => {
     await pagina()
     await esperar(() => carril('En curso').textContent?.includes('Papillon (1973)'))
     expect(vi.mocked(getUploads).mock.calls.some(([q]) => q?.status === 'queued,staging,preparing,running')).toBe(true)
+  })
+
+  it('la vieja que termina fuera de las 100 más nuevas se despide con su estado; la fallida llega con las fallidas', async () => {
+    const enCola = Array.from({ length: 100 }, (_, i) =>
+      trabajo({ id: 1000 + i, status: 'queued', title: `Cola ${i}`, queue_position: i + 1 }))
+    const subiendo = (id: number, title: string) =>
+      trabajo({ id, status: 'running', title, started_at: new Date().toISOString() })
+    const acabada = (id: number, status: string, title: string, extra: Partial<UploadJob> = {}) =>
+      trabajo({ id, status, title, finished_at: new Date().toISOString(), ...extra })
+    let termino = false
+    vi.mocked(getUploads).mockImplementation(async q => {
+      if (q?.status === 'failed') return termino ? [acabada(7, 'failed', 'Papillon (1973)', { error_message: 'Duplicado' })] : []
+      if (q?.status) return termino ? enCola : [subiendo(7, 'Papillon (1973)'), subiendo(8, 'Ran (1985)'), ...enCola]
+      return enCola
+    })
+    vi.mocked(getUploadJob).mockImplementation(async id => {
+      if (id === 8) return acabada(8, 'completed', 'Ran (1985)')
+      throw new Error('404')
+    })
+    await pagina()
+    await esperar(() => carril('En curso').textContent?.includes('Ran (1985)'))
+    expect(getUploadJob).not.toHaveBeenCalled()
+
+    // Terminan: ya no están entre las vivas ni entre las 100 más nuevas. Llega el aviso de la subida.
+    termino = true
+    await act(async () => {
+      for (const [tipo, cb] of vi.mocked(suscribirse).mock.calls) if (tipo === 'subida-estado') (cb as () => void)()
+    })
+    await esperar(() => vi.mocked(getUploadJob).mock.calls.length > 0)
+    // La fallida llega con la lista de fallidas; solo se pide sola la completada.
+    expect(vi.mocked(getUploadJob).mock.calls.map(([id]) => id)).toEqual([8])
+    // Ya no cuentan como vivas (94 en cola fuera de las 6 filas), pero las dos se quedan despidiéndose.
+    await esperar(() => carril('En curso').textContent?.includes('+94 en cola'))
+    expect(carril('En curso').textContent).toContain('Ran (1985)')
+    expect(carril('En curso').textContent).toContain('Papillon (1973)')
   })
 
   it('con datos: los dos carriles en su orden y la franja de cinco números', async () => {

@@ -108,6 +108,10 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
     # para quien comprueba varias temporadas sin abrir el asistente («Subir por
     # lotes»). None en lo demás: una película o un capítulo lo calculan aparte.
     nombre: Optional[str] = None
+    # Y sus avisos (los del plan: proveedor, fuente, pista de audio sin idioma), que el asistente deja corregir y el
+    # lote no; `sin_idioma` si uno de ellos es el del audio (el lote la deja desmarcada).
+    avisos: list[str] = []
+    sin_idioma = False
     _set_checks_progress(item_id, checks=[])  # reset — a previous run's leftovers shouldn't leak in
 
     # The label states the outcome: the positive phrase when the check passes,
@@ -135,7 +139,7 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         # grupo puede acabar en otra.
         ready = complete and bool(checks) and all(c["status"] in ("ok", "skip") for c in checks)
         _set_checks_progress(item_id, checks=checks, done=True, ready=ready)
-        return {"checks": checks, "ready": ready, "nombre": nombre}
+        return {"checks": checks, "ready": ready, "nombre": nombre, "avisos": avisos, "sin_idioma": sin_idioma}
 
     item = get_library_item(conn, item_id) if scope != "environment" else None
     if scope != "environment" and not item:
@@ -172,6 +176,10 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         ok = plan["status"] == "valid"
         if ok:
             nombre = plan.get("season_pack_title") or None
+            audio = plan.get("audio_warning")
+            avisos = [*(plan.get("warnings") or []),
+                      *(a for a in (plan.get("source_mismatch_warning"), audio) if a)]
+            sin_idioma = bool(audio)
         msg = "; ".join(plan["errors"]) if not ok else (
             f"Pack listo: {len(plan['episodes'])} episodio(s) → {plan.get('pack_folder')}"
         )

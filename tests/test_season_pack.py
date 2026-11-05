@@ -1404,6 +1404,26 @@ def test_las_comprobaciones_de_un_pack_listo_dan_el_nombre_del_torrent(isolated_
     plan = build_season_pack_plan(season_id, conn=conn, provider_override="NF")
     assert listo["nombre"] == plan["season_pack_title"]
     assert "NF" in listo["nombre"]
+    # Y los avisos del plan, que el lote enseña por temporada (el asistente los deja corregir).
+    esperados = [*plan["warnings"], *(w for w in (plan.get("source_mismatch_warning"), plan.get("audio_warning")) if w)]
+    assert listo["avisos"] == esperados
+    assert listo["sin_idioma"] is bool(plan.get("audio_warning"))
+    conn.close()
+
+
+def test_las_comprobaciones_de_un_pack_dicen_si_tiene_audio_sin_idioma(isolated_db, tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import season_pack, upload_checks
+    conn = _open(isolated_db)
+    season_id = _pack_con_proveedores_distintos(conn, tmp_path)
+    plan = build_season_pack_plan(season_id, conn=conn, provider_override="NF")
+    plan["audio_warning"] = "La pista 2 no tiene idioma."
+    monkeypatch.setattr(season_pack, "build_season_pack_plan", lambda *a, **k: plan)
+
+    r = upload_checks.run_upload_checks(conn, season_id, scope="content")
+
+    assert r["sin_idioma"] is True
+    assert r["avisos"][-1] == "La pista 2 no tiene idioma."
+    assert upload_checks.run_upload_checks(conn, season_id, scope="environment")["avisos"] == []
     conn.close()
 
 

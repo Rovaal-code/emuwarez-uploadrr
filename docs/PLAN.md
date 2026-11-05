@@ -445,6 +445,11 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   el lote se abre con el resto. Las otras ideas entran sin petición. `queueLote` lleva `request_item_id` por elemento. El
   tour lo menciona en «Listo para subir». Sin ver en el navegador.
 
+- **Oleada 4, subida por lotes, después del PR 6:** «En curso» del Panel pide aparte todas las subidas vivas
+  (`status=queued,staging,preparing,running`, hasta 500) y las junta con las 100 más nuevas: con lotes grandes, la que sube
+  (la más vieja) ya no se cae de la lista. Y en «Subir por lotes» cada temporada enseña los avisos de su plan
+  (`run_upload_checks` devuelve `avisos` y `sin_idioma` del pack: proveedor, source que no cuadra, pista de audio sin idioma);
+  con audio sin idioma llega desmarcada («Súbela suelta para elegir el idioma»), como una película. Sin ver en el navegador.
 ## Siguiente
 
 Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que quedaba por ver se comprobó el 03/11 (ver en

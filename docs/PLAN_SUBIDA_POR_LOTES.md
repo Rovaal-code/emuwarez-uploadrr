@@ -596,8 +596,8 @@ Gabriel decide (pregunta 14): o lo acepta, o se agrupan, o se publica a mano.
 - Que la sincronización de peticiones no cuente los `queued` como ocupados (pregunta 13).
 - Salió al implementar (sin pregunta): en `encolar_lote`, guardar los `campos` y crear el trabajo en la misma transacción
   (hoy, si encolar falla justo después de guardarlos, la propuesta queda cambiada aunque el elemento salga saltado; ver
-  #215); enseñar por temporada los avisos propios del pack (pista de audio sin idioma, source que no cuadra), que hoy el lote
-  no muestra; y elegir el proveedor de un pack cuyos capítulos traen proveedores distintos (hoy se salta: «Súbela suelta»).
+  #215); y elegir el proveedor de un pack cuyos capítulos traen proveedores distintos (hoy se salta: «Súbela suelta»). Los
+  avisos propios de cada pack ya se enseñan (después del PR 6, ver PLAN.md).
 
 ---
 

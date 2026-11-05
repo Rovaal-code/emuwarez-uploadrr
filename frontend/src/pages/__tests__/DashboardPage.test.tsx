@@ -104,6 +104,17 @@ beforeEach(() => {
 afterEach(desmontar)
 
 describe('Panel', () => {
+  it('con más de 100 subidas, la que sube sigue en «En curso» aunque no esté entre las 100 más nuevas', async () => {
+    // Las 100 más nuevas son de un lote en cola; la que sube es más vieja y solo llega con la petición de las vivas.
+    const enCola = Array.from({ length: 100 }, (_, i) =>
+      trabajo({ id: 1000 + i, status: 'queued', title: `Cola ${i}`, queue_position: i + 1 }))
+    const subiendo = trabajo({ id: 7, status: 'running', title: 'Papillon (1973)', started_at: new Date().toISOString() })
+    vi.mocked(getUploads).mockImplementation(async q => (q?.status ? [subiendo, ...enCola] : enCola))
+    await pagina()
+    await esperar(() => carril('En curso').textContent?.includes('Papillon (1973)'))
+    expect(vi.mocked(getUploads).mock.calls.some(([q]) => q?.status === 'queued,staging,preparing,running')).toBe(true)
+  })
+
   it('con datos: los dos carriles en su orden y la franja de cinco números', async () => {
     vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
       rec({ id: 1, content_name: 'La bola negra (2026)', rec_request_id: 11, rec_points: 120000, resolution: '1080p', source: 'WEB-DL', has_spanish_audio: 1, has_spanish_subs: 0, size_bytes: 6 * 1024 ** 3 }),

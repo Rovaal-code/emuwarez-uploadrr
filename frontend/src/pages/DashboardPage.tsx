@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getDashboardSummary, getDashboardRecommendations, type DashboardRecommendationItem } from '../api/dashboard'
 import { getUploads } from '../api/uploads'
+import { ACTIVE_JOB_STATUSES } from '../utils/uploadStatus'
 import { fetchSettings } from '../api/settings'
 import { getVersionInfo } from '../api/maintenance'
 import { getLibraryItem } from '../api/library'
@@ -142,7 +143,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const loadActiveUploads = useCallback(async () => {
     const seq = ++subidasSeq.current
     try {
-      const todas = await getUploads({ hide_preparatory: true, limit: 100 })
+      // Las 100 más nuevas no bastan con lotes grandes: con más de 100 vivas, la que sube (la más vieja) se caía de
+      // «En curso». Las vivas se piden aparte, todas, y se juntan con las recientes.
+      const [recientes, vivas] = await Promise.all([
+        getUploads({ hide_preparatory: true, limit: 100 }),
+        getUploads({ status: [...ACTIVE_JOB_STATUSES].join(','), limit: 500 }),
+      ])
+      const vistas = new Set(recientes.map(j => j.id))
+      const todas = [...recientes, ...vivas.filter(j => !vistas.has(j.id))]
       if (seq === subidasSeq.current) registrarSubidas(todas)
     } catch { /* ignore — next tick retries */ }
   }, [registrarSubidas])

@@ -588,7 +588,8 @@ Hecho (detalle en PLAN.md, «Hecho»):
 - Petición enlazada desde Biblioteca, selección en Peticiones, «Borrar lote» y la cola no para las peticiones (PR 8, #220;
   preguntas 6, 9, 10 y 13).
 - Notificación por lote a elegir en Ajustes (PR 9, #221; pregunta 5).
-- Freno tras 5 fallos seguidos con el mismo motivo (PR 10; pregunta 4).
+- Freno tras 5 fallos seguidos con el mismo motivo (PR 10; pregunta 4): las de la cola quedan canceladas con el motivo y
+  «Reintentar fallidas» las relanza.
 
 Descartado:
 - Unificar las tandas del asistente con `POST /uploads/lote` (pregunta 11): no mientras no den problemas.

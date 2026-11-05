@@ -3,7 +3,10 @@
  * cosa con un 422), distinto en cada tanda, y también sin `crypto.getRandomValues`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MAX_ELEMENTOS_LOTE, PATRON_LOTE_ID, nuevoLoteId } from '../lote'
+import type { LibraryItemResponse } from '../../types/api'
+import {
+  MAX_ELEMENTOS_LOTE, PATRON_LOTE_ID, marcadaPorDefecto, nombresRepetidos, nuevoLoteId, razonNoSubible,
+} from '../lote'
 
 afterEach(() => { vi.unstubAllGlobals() })
 
@@ -35,5 +38,64 @@ describe('el patrón del lote', () => {
 
   it('el tope de elementos es el del servidor', () => {
     expect(MAX_ELEMENTOS_LOTE).toBe(50)
+  })
+})
+
+const pelicula = (parcial: Partial<LibraryItemResponse> = {}) =>
+  ({ id: 1, item_type: 'movie', title: 'Dune', local_status: 'Disponible', has_spanish_ok: 1, ...parcial }) as LibraryItemResponse
+
+describe('razonNoSubible', () => {
+  it('una película en disco y con castellano se puede subir, también si ya se subió', () => {
+    expect(razonNoSubible(pelicula())).toBeNull()
+    expect(razonNoSubible(pelicula({ local_status: 'Subido' }))).toBeNull()
+  })
+
+  it('habla de la película, no del capítulo', () => {
+    const razon = razonNoSubible(pelicula({ local_status: 'Faltante' }))!
+    expect(razon).toBe('La película está «Faltante»: no la tienes en disco.')
+    expect(razon).not.toContain('capítulo')
+  })
+
+  it('un capítulo dice «el capítulo»', () => {
+    expect(razonNoSubible(pelicula({ item_type: 'episode', local_status: 'Faltante' })))
+      .toBe('El capítulo está «Faltante»: no lo tienes en disco.')
+  })
+
+  it('sin castellano, o sin poder leer sus pistas, no se puede', () => {
+    expect(razonNoSubible(pelicula({ has_spanish_ok: 0 }))).toBe('No tiene castellano ni en el audio ni en los subtítulos.')
+    expect(razonNoSubible(pelicula({ has_spanish_ok: null }))).toContain('no se puede confirmar que tenga castellano')
+  })
+
+  it('una serie o una temporada todavía no van por lotes', () => {
+    expect(razonNoSubible(pelicula({ item_type: 'series' }))).toBe('Por ahora el lote solo admite películas.')
+    expect(razonNoSubible(pelicula({ item_type: 'season' }))).toBe('Por ahora el lote solo admite películas.')
+  })
+})
+
+describe('marcadaPorDefecto', () => {
+  it('desmarca un duplicado y una copia peor que todo lo que hay', () => {
+    expect(marcadaPorDefecto('duplicado')).toBe(false)
+    expect(marcadaPorDefecto('peor')).toBe(false)
+  })
+
+  it('marca el resto, también sin nada con lo que comparar', () => {
+    expect(marcadaPorDefecto(null)).toBe(true)
+    expect(marcadaPorDefecto('trump')).toBe(true)
+    expect(marcadaPorDefecto('mixto')).toBe(true)
+    expect(marcadaPorDefecto('sin-comparar')).toBe(true)
+  })
+})
+
+describe('nombresRepetidos', () => {
+  it('marca las dos filas con el mismo nombre final, no las demás', () => {
+    expect(nombresRepetidos([
+      { id: 1, nombre: 'Dune (2021) 1080p WEB-DL' },
+      { id: 2, nombre: 'Dune (2021) 2160p WEB-DL' },
+      { id: 3, nombre: 'Dune (2021) 1080p WEB-DL ' },
+    ])).toEqual(new Set([1, 3]))
+  })
+
+  it('sin nombre no cuenta como repetido', () => {
+    expect(nombresRepetidos([{ id: 1, nombre: null }, { id: 2, nombre: '' }, { id: 3, nombre: undefined }]).size).toBe(0)
   })
 })

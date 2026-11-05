@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useTransition, memo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, useTransition, memo } from 'react'
 import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getLibraryItem, type LibraryFilterOptions } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
 import { getLocalStatusInfo } from '../utils/status'
@@ -30,6 +30,10 @@ import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { IconoLibros, IconoTipo } from '../components/Iconos'
 import { formatNumero } from '../utils/format'
 import { VistasGuardadas } from '../components/VistasGuardadas'
+import { BarraLote } from '../components/lote/BarraLote'
+import { CasillaLote } from '../components/lote/CasillaLote'
+import { SubidaPorLotesModal } from '../components/lote/SubidaPorLotesModal'
+import { useSeleccionLote } from '../hooks/useSeleccionLote'
 import {
   cargarVistas, conVista, persistirVistas, sinVista, ORDEN_POR_DEFECTO, type FiltrosDeVista, type VistaGuardada,
 } from '../utils/vistasBiblioteca'
@@ -71,13 +75,25 @@ const claveDeItem = (it: LibraryItemResponse) => it.id
 // Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
 // new function identity every render, defeating memo — so this takes a
 // stable onSelect (openDetail, itself wrapping setSelected) and calls it with `item` internally.
-const PosterCard = memo(function PosterCard({ item, onSelect, priority }: { item: LibraryItemResponse; onSelect: (item: LibraryItemResponse) => void; priority?: boolean }) {
+// «Subir por lotes»: con `onToggle`, una película lleva su casilla arriba a la izquierda (arriba a la derecha va el
+// estado), fuera del layout: la tarjeta no puede cambiar de alto (RejillaVirtual la mide).
+const PosterCard = memo(function PosterCard({ item, onSelect, priority, seleccionado = false, loteLleno = false, onToggle }: {
+  item: LibraryItemResponse
+  onSelect: (item: LibraryItemResponse) => void
+  priority?: boolean
+  seleccionado?: boolean
+  loteLleno?: boolean
+  onToggle?: (item: LibraryItemResponse) => void
+}) {
   return (
     <div
-      className="clickable bib-tarjeta"
+      className={seleccionado ? 'clickable bib-tarjeta lote-marcada' : 'clickable bib-tarjeta'}
       onClick={() => onSelect(item)}
     >
       <div className="bib-tarjeta-marco">
+        {onToggle && item.item_type === 'movie' && (
+          <CasillaLote item={item} seleccionado={seleccionado} bloqueada={loteLleno} onAlternar={onToggle} className="lote-casilla-poster" />
+        )}
         {item.poster_url ? (
           <img
             src={posterUrl(item.poster_url, 'w342')}
@@ -192,6 +208,17 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
   const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
+
+  // «Subir por lotes»: el botón «Seleccionar» pone las casillas (solo en películas); lo marcado sobrevive a cambiar
+  // de filtro, de vista y a aplicar una vista guardada, y se limpia al salir de Biblioteca o al encolar el lote.
+  const [modoSeleccion, setModoSeleccion] = useState(false)
+  const { seleccion, total: totalSeleccion, lleno: loteLleno, alternar: alternarLote, limpiar: limpiarLote } = useSeleccionLote()
+  // Lo que se abrió en el modal: una copia, que salir de Biblioteca limpia la selección.
+  const [loteAbierto, setLoteAbierto] = useState<LibraryItemResponse[] | null>(null)
+  const alternarModoSeleccion = () => {
+    if (modoSeleccion) limpiarLote()
+    setModoSeleccion(m => !m)
+  }
 
   // Movie/episode leaf rows: open the existing single-item modals as before.
   // Season/Series rows: 'upload' opens the same unified wizard too — it asks
@@ -417,6 +444,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     closeDetailPath('library')
     quitarFiltros()
     setSortBy(ORDEN_POR_DEFECTO)
+    limpiarLote()
+    setModoSeleccion(false)
   })
 
   // Deep link: /library/:id (bookmark, reload, or a link shared elsewhere) —
@@ -511,6 +540,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const archivos = data?.archivos ?? 0
   const hayMas = hayMasQueCargar(items.length, data?.total ?? 0)
   const resumenResultados = textoDeResultados(items.length, data?.total ?? 0, filtrando)
+  // Lo marcado que el filtro de ahora no enseña. Solo se cuenta con la selección puesta: son hasta 20.000 filas.
+  const idsALaVista = useMemo(
+    () => (modoSeleccion ? new Set((data?.items ?? []).map(i => i.id)) : null), [modoSeleccion, data])
+  const ocultasPorFiltro = idsALaVista ? [...seleccion.keys()].filter(id => !idsALaVista.has(id)).length : 0
+  const onToggleLote = modoSeleccion ? alternarLote : undefined
 
   // La tabla solo se apaga si la espera se nota. Filtrar u ordenar tarda unos
   // milisegundos, y apagarla en cuanto sale la petición se veía como un
@@ -545,8 +579,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       onReload={load}
       priority={i < LIST_PRIORITY_COUNT}
       onExpandedChange={alDesplegar}
+      seleccionado={seleccion.has(item.id)}
+      loteLleno={loteLleno}
+      onAlternar={onToggleLote}
     />
-  ), [instances, openDetail, handleTreeAction, load, alDesplegar])
+  ), [instances, openDetail, handleTreeAction, load, alDesplegar, seleccion, loteLleno, onToggleLote])
 
   // Modals/overlays, shared by the list view and the detail page so an action
   // triggered from the detail page (Subir/Petición) shows its window without
@@ -572,6 +609,14 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       )}
       {requestItem && (
         <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
+      )}
+      {loteAbierto && (
+        <SubidaPorLotesModal
+          peliculas={loteAbierto}
+          onClose={() => setLoteAbierto(null)}
+          onDone={() => { limpiarLote(); setModoSeleccion(false); load() }}
+          onNavigate={onNavigate}
+        />
       )}
     </>
   )
@@ -708,6 +753,16 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <option value="size_asc">Orden: Tamaño (Menos)</option>
         </select>
         <VistasGuardadas vistas={vistas} actual={filtrosDeAhora} onAplicar={aplicarVista} onGuardar={guardarVista} onQuitar={quitarVista} />
+        <Tooltip content="Marca varias películas para subirlas de una vez">
+          <button
+            type="button"
+            className={`btn btn-secondary btn-sm${modoSeleccion ? ' lote-boton-activo' : ''}`}
+            onClick={alternarModoSeleccion}
+            aria-pressed={modoSeleccion}
+          >
+            Seleccionar
+          </button>
+        </Tooltip>
         {/* La tabla apagada sola no decía que estuviera cargando. */}
         {tarda && (
           <span role="status" className="bib-cargando">
@@ -786,8 +841,14 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
             hueco={viewMode === 'grid-lg' ? 20 : 16}
             contenedor={rejillaRef}
             pintar={(item, i) => viewMode === 'grid-lg'
-              ? <LargePosterCard item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />
-              : <PosterCard item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />}
+              ? <LargePosterCard
+                  item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT}
+                  seleccionado={seleccion.has(item.id)} loteLleno={loteLleno} onToggle={onToggleLote}
+                />
+              : <PosterCard
+                  item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT}
+                  seleccionado={seleccion.has(item.id)} loteLleno={loteLleno} onToggle={onToggleLote}
+                />}
           />
         </div>
       ) : (
@@ -812,6 +873,15 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
             </table>
           </div>
         </div>
+      )}
+
+      {modoSeleccion && (
+        <BarraLote
+          total={totalSeleccion}
+          ocultas={ocultasPorFiltro}
+          onSubir={() => setLoteAbierto([...seleccion.values()])}
+          onLimpiar={limpiarLote}
+        />
       )}
 
       {modals}

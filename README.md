@@ -215,7 +215,7 @@ pasar por el registro:
 git -c core.autocrlf=false archive HEAD | docker build -t ghcr.io/kisnov/emuwarez-uploadrr:edge   --build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Kisnov/Uploadrr-EMU.git main | cut -f1)   --build-arg APP_COMMIT=$(git rev-parse HEAD) -
 docker save ghcr.io/kisnov/emuwarez-uploadrr:edge | gzip > emuwarez-edge.tar.gz
 # En el servidor: carga la imagen y recrea el contenedor sin descargar nada
-docker load -i emuwarez-edge.tar.gz && docker compose up -d --pull never
+docker load -i emuwarez-edge.tar.gz && EMUWAREZ_UPLOADRR_TAG=edge docker compose up -d --pull never
 ```
 
 ## Uso sin Docker

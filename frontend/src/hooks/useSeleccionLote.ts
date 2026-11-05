@@ -12,7 +12,8 @@ const porId = (item: { id: number }) => item.id
  * `alternar` y `limpiar` son estables: las filas y tarjetas reciben `seleccionado` (un booleano) y `alternar`,
  * nunca el Map, que rompería su `memo` y repintaría todas con cada clic.
  *
- * Biblioteca marca por id; el Panel, por `claveDelPanel` (una fila por petición). `claveDe` tiene que ser estable
+ * Biblioteca marca por id (Peticiones, por el de la petición); el Panel, por `claveDelPanel` (una fila por
+ * petición). `claveDe` tiene que ser estable
  * (una función de módulo).
  */
 export function useSeleccionLote<T extends { id: number } = LibraryItemResponse, K = number>(

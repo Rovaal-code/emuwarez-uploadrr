@@ -53,7 +53,7 @@ export const TOUR_STEPS: TourStep[] = [
     selector: '[data-tour="requests-content"]',
     title: 'Peticiones',
     placement: 'top-center',
-    description: 'Las peticiones abiertas en eMuwarez, comparadas contra tu biblioteca para saber cuáles podrías cubrir.',
+    description: 'Las peticiones abiertas en eMuwarez, comparadas contra tu biblioteca para saber cuáles podrías cubrir. Con «Seleccionar» marcas varias de las que ya se pueden subir y las subes de una vez, cada una con su petición.',
   },
   {
     id: 'uploads',

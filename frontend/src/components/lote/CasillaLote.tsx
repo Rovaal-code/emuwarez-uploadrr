@@ -1,7 +1,7 @@
 /**
  * La casilla para marcar un elemento para «Subir por lotes»: en Biblioteca, en la fila de la lista y en las
- * tarjetas de póster; en el Panel, en las filas de «Listo para subir». El clic no sale de ella: ni despliega la fila
- * ni abre la ficha. `titulo` (por defecto el `title` del elemento) es el nombre que oye el lector.
+ * tarjetas de póster; en el Panel, en las filas de «Listo para subir»; en Peticiones, en la celda Título de las que
+ * se pueden subir. El clic no sale de ella: ni despliega la fila ni abre la ficha. `titulo` (por defecto el `title` del elemento) es el nombre que oye el lector.
  */
 export function CasillaLote<T extends { title: string | null }>({
   item, titulo, seleccionado, bloqueada = false, onAlternar, className,

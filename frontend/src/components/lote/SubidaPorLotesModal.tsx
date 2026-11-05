@@ -34,7 +34,8 @@ function motivosDelRechazo(e: ApiClientError): string[] {
 }
 
 export function SubidaPorLotesModal({ entradas, onClose, onDone, onNavigate }: {
-  // Lo marcado en Biblioteca (películas, series y temporadas) o en el Panel (con su petición y su alcance). Se copia
+  // Lo marcado en Biblioteca (películas, series y temporadas) o en el Panel y Peticiones (con su petición y su
+  // alcance). Se copia
   // al abrir: salir de la sección limpia la selección de origen.
   entradas: readonly EntradaLote[]
   onClose: () => void

@@ -11,7 +11,7 @@ import { EmptyState, FilaVacia } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
 import { StatusBadge } from '../components/StatusBadge'
 import { getReadinessActionLabel, getReadinessLabel, getReclamadaInfo, getRequestStatusInfo } from '../utils/status'
-import { HoverTitle, useTooltip } from '../components/Tooltip'
+import { HoverTitle, Tooltip, useTooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { getLibraryItem } from '../api/library'
@@ -40,6 +40,11 @@ import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
 import { IconoBloqueado, IconoDocumental, IconoPelicula, IconoPuntos, IconoSerie } from '../components/Iconos'
 import { Modal } from '../components/Modal'
+import { BarraLote } from '../components/lote/BarraLote'
+import { CasillaLote } from '../components/lote/CasillaLote'
+import { SubidaPorLotesModal } from '../components/lote/SubidaPorLotesModal'
+import { useSeleccionLote } from '../hooks/useSeleccionLote'
+import { entradaDePeticion, peticionSeleccionableEnLote, type EntradaLote } from '../utils/lote'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
 // per-request URL yet — points at the general requests listing instead of
@@ -643,6 +648,24 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
   const [wizardPreselect, setWizardPreselect] = useState<{ season?: number | null; episode?: number | null } | undefined>(undefined)
   const [wizardRequestId, setWizardRequestId] = useState<number | undefined>(undefined)
+  // «Subir seleccionadas»: el botón «Seleccionar» pone casillas en las peticiones que se pueden subir (las mismas que
+  // «Listo para subir» del Panel). Lo marcado sobrevive a filtrar y ordenar, y se limpia al salir de Peticiones y al
+  // encolar el lote.
+  const [modoSeleccion, setModoSeleccion] = useState(false)
+  const {
+    seleccion, total: totalSeleccion, lleno: loteLleno, alternar: alternarLote, limpiar: limpiarLote,
+  } = useSeleccionLote<RequestItemResponse>()
+  const [loteAbierto, setLoteAbierto] = useState<EntradaLote[] | null>(null)
+  // Si ya se están pidiendo las fichas del lote, y por qué no se pudo abrir alguna.
+  const abriendoLote = useRef(false)
+  const [errorLote, setErrorLote] = useState<string | null>(null)
+  // Cada salida de Peticiones lo sube: un «Subir seleccionadas» que aún esperaba sus fichas no abre el lote al volver.
+  const salidas = useRef(0)
+  const alternarModoSeleccion = () => {
+    if (modoSeleccion) limpiarLote()
+    setErrorLote(null)
+    setModoSeleccion(m => !m)
+  }
   const votesHeaderTip = useTooltip('Votos (otros usuarios que la quieren)')
   const commentsHeaderTip = useTooltip('Comentarios')
 
@@ -807,12 +830,57 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     setSourceFilter(NINGUNO); setAuthorFilter(NINGUNO); setInstanceFilter(NINGUNO)
     setOffset(0)
   }
-  // Al salir, de vuelta a la tabla sin filtros y con el orden por defecto.
+  // Al salir, de vuelta a la tabla sin filtros, con el orden por defecto y sin nada marcado.
   useAlSalir(() => {
     closeRequestDetail()
     quitarFiltros()
     setSortBy(ORDEN_POR_GRUPOS)
+    salidas.current++
+    limpiarLote()
+    setModoSeleccion(false)
+    setLoteAbierto(null)
+    setErrorLote(null)
   })
+
+  // «Subir seleccionadas»: la fila a la que se refiere cada petición, la misma que abre su «Subir a eMuwarez» (la
+  // temporada o el capítulo pedidos, `match.library_target_id`, que la lista no trae: sin temporada pedida es la fila
+  // que cruzó), y el modal de «Subir por lotes» con la petición y su alcance. Las que ya no están se dicen y el resto
+  // sigue.
+  const subirSeleccionadas = async () => {
+    if (abriendoLote.current) return
+    abriendoLote.current = true
+    setErrorLote(null)
+    try {
+      const peticiones = [...seleccion.values()]
+      const fichas = new Map<number, Promise<LibraryItemResponse>>()
+      const fichaDe = (id: number) => {
+        if (!fichas.has(id)) fichas.set(id, getLibraryItem(id))
+        return fichas.get(id)!
+      }
+      const filaDe = async (p: RequestItemResponse): Promise<LibraryItemResponse> => {
+        if (p.req_season == null) return fichaDe(p.library_item_id!)
+        const d = await getRequestDetail(p.id)
+        return fichaDe(d.match?.library_target_id ?? d.match?.library_item_id ?? p.library_item_id!)
+      }
+      const salidasAntes = salidas.current
+      const resultados = await Promise.allSettled(peticiones.map(filaDe))
+      if (salidas.current !== salidasAntes) return
+      const entradas: EntradaLote[] = []
+      const perdidas: string[] = []
+      resultados.forEach((r, i) => {
+        if (r.status === 'fulfilled') entradas.push(entradaDePeticion(peticiones[i], r.value))
+        else perdidas.push(`«${requestDisplayTitle(peticiones[i])}»`)
+      })
+      if (perdidas.length > 0) {
+        setErrorLote(perdidas.length === 1
+          ? `No se pudo abrir ${perdidas[0]}: puede que ya no esté en la biblioteca tras la última sincronización.`
+          : `No se pudieron abrir ${perdidas.join(', ')}: puede que ya no estén en la biblioteca tras la última sincronización.`)
+      }
+      if (entradas.length > 0) setLoteAbierto(entradas)
+    } finally {
+      abriendoLote.current = false
+    }
+  }
 
   // Same hand-off, but live — the sessionStorage read above only fires on
   // mount, so clicking a notification while Peticiones is ALREADY the open
@@ -857,6 +925,11 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const hayComentarios = displayItems.some(i => i.comments != null)
 
   const columnas = 8 + Number(mostrarAutor) + Number(hayVotos) + Number(hayComentarios)
+  // «Seleccionar» solo sale si hay algo que marcar (o el modo ya está puesto). Lo marcado que el filtro de ahora no
+  // enseña se cuenta aparte en la barra.
+  const haySeleccionables = displayItems.some(peticionSeleccionableEnLote)
+  const idsALaVista = modoSeleccion ? new Set(displayItems.map(i => i.id)) : null
+  const ocultasPorFiltro = idsALaVista ? [...seleccion.keys()].filter(id => !idsALaVista.has(id)).length : 0
   const fila = (item: RequestItemResponse) => (
     <tr
       key={item.id}
@@ -865,6 +938,13 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     >
       <td>
         <div className="pet-titulo-fila">
+          {/* La casilla va dentro de la celda Título, no en una columna nueva: `columnas` cuenta las de la tabla. */}
+          {modoSeleccion && peticionSeleccionableEnLote(item) && (
+            <CasillaLote
+              item={item} titulo={requestDisplayTitle(item)} seleccionado={seleccion.has(item.id)}
+              bloqueada={loteLleno} onAlternar={alternarLote}
+            />
+          )}
           <RequestPoster url={item.poster_url} category={item.category} />
           <div className="pet-min-0">
             <HoverTitle
@@ -944,6 +1024,18 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <select className="form-input form-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
             {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
+          {(haySeleccionables || modoSeleccion) && (
+            <Tooltip content="Marca varias peticiones listas para subirlas de una vez">
+              <button
+                type="button"
+                className={`btn btn-secondary btn-sm${modoSeleccion ? ' lote-boton-activo' : ''}`}
+                onClick={alternarModoSeleccion}
+                aria-pressed={modoSeleccion}
+              >
+                Seleccionar
+              </button>
+            </Tooltip>
+          )}
           <label className="checkbox-label pet-ver-autor">
             <input
               type="checkbox"
@@ -1040,6 +1132,20 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
             )}
           </div>
         )}
+
+        {modoSeleccion && (
+          <>
+            {errorLote && <div className="pet-error-lote" role="alert">{errorLote}</div>}
+            <BarraLote
+              total={totalSeleccion}
+              ocultas={ocultasPorFiltro}
+              vacia="Marca las peticiones listas que quieras subir juntas"
+              textoSubir={`Subir seleccionadas (${totalSeleccion})`}
+              onSubir={subirSeleccionadas}
+              onLimpiar={limpiarLote}
+            />
+          </>
+        )}
       </>
       )}
 
@@ -1056,6 +1162,15 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           requestId={wizardRequestId}
           onClose={() => setWizardItem(null)}
           onDone={() => { setWizardItem(null); loadItems(offset) }}
+          onNavigate={onNavigate}
+        />
+      )}
+
+      {loteAbierto && (
+        <SubidaPorLotesModal
+          entradas={loteAbierto}
+          onClose={() => setLoteAbierto(null)}
+          onDone={() => { limpiarLote(); setModoSeleccion(false); loadItems(offset) }}
           onNavigate={onNavigate}
         />
       )}

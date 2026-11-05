@@ -4,7 +4,7 @@
  * y filtra por él.
  */
 import type { DashboardRecommendationItem } from '../api/dashboard'
-import type { LibraryItemResponse } from '../types/api'
+import type { LibraryItemResponse, RequestItemResponse } from '../types/api'
 import { seasonNotReadyReason } from './libraryItem'
 import type { NivelDuplicado } from './resumenSubida'
 
@@ -178,10 +178,45 @@ export function claveDelPanel(fila: DashboardRecommendationItem): string {
  * si la petición es de un capítulo, el capítulo). Una idea sin petición entra sola.
  */
 export function entradaDelPanel(fila: DashboardRecommendationItem, item: LibraryItemResponse): EntradaLote {
-  if (fila.rec_request_id == null) return { item }
-  return {
-    item,
-    requestId: fila.rec_request_id,
-    alcance: { season: fila.season_number, episode: fila.item_type === 'episode' ? fila.episode_number : null },
-  }
+  return entradaConPeticion(
+    item, fila.rec_request_id, fila.season_number, fila.item_type === 'episode' ? fila.episode_number : null)
+}
+
+/**
+ * Lo que entra en el lote por una petición (del Panel o de Peticiones): la fila real y, si hay petición, su id y su
+ * alcance (`episode` solo si la petición es de un capítulo). Sin petición, el elemento solo.
+ */
+function entradaConPeticion(
+  item: LibraryItemResponse, requestId: number | null | undefined,
+  season: number | null | undefined, episode: number | null | undefined,
+): EntradaLote {
+  if (requestId == null) return { item }
+  return { item, requestId, alcance: { season: season ?? null, episode: episode ?? null } }
+}
+
+// ── «Subir seleccionadas» desde Peticiones ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Si una petición de la lista de Peticiones se puede marcar para el lote: las mismas que salen en «Listo para subir»
+ * del Panel (`get_dashboard_recommendations`, grupo 1): su mejor coincidencia es «Compatible», cruza con una fila de
+ * la biblioteca y su copia no se ha visto sin castellano.
+ */
+export function peticionSeleccionableEnLote(
+  peticion: Pick<RequestItemResponse, 'compatibility_status' | 'library_item_id' | 'readiness_status'>,
+): boolean {
+  return peticion.compatibility_status === 'Compatible'
+    && peticion.library_item_id != null
+    && peticion.readiness_status !== 'no_castellano'
+}
+
+/**
+ * Lo que entra en el lote por una petición de Peticiones, como abre el asistente su «Subir a eMuwarez»: `item` es la
+ * fila a la que se refiere (`match.library_target_id`: la temporada o el capítulo pedidos, no la serie que cruzó), con
+ * la petición y su alcance (la temporada y, si la petición es de un capítulo, el capítulo).
+ */
+export function entradaDePeticion(
+  peticion: Pick<RequestItemResponse, 'id' | 'req_scope' | 'req_season' | 'req_episode'>, item: LibraryItemResponse,
+): EntradaLote {
+  return entradaConPeticion(
+    item, peticion.id, peticion.req_season, peticion.req_scope === 'episode' ? peticion.req_episode : null)
 }

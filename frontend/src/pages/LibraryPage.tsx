@@ -69,8 +69,8 @@ const GRID_PRIORITY_COUNT = 30
 const LIST_PRIORITY_COUNT = 40
 // Lo que mide una fila de la lista antes de pintarla (FilasVirtuales la
 // corrige con la primera que mide de verdad).
-const LIST_ROW_HEIGHT = 50
-const LIST_COLUMNS = 7
+const LIST_ROW_HEIGHT = 77
+const LIST_COLUMNS = 12
 const claveDeItem = (it: LibraryItemResponse) => it.id
 
 // Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
@@ -661,31 +661,19 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // acaben diciendo cosas distintas.
   const tableHeadRow = (
     <tr>
-      {/* Tipo, origen, resolución, proveedor, source y grupo ya no son columnas: van en la línea bajo el título, y sus filtros aquí. */}
+      {/* El tipo va bajo el título (no es columna): su filtro se queda con el nombre de la columna. */}
       <th className="bib-col-titulo">
         <div className="bib-cab-titulo">
           <span className="bib-cab-nombre">Título</span>
           <HeaderFilter label="Tipo" value={filterType} onChange={v => { setFilterType(v); setOffset(0) }} options={[
             { value: '', label: 'Todos' }, ...(filterOptions?.types ?? []).map(t => ({ value: t, label: TYPE_LABELS[t] ?? t })),
           ]} />
-          <HeaderFilter label="Origen" value={filterInstanceId} onChange={v => { setFilterInstanceId(v); setOffset(0) }} options={[
-            { value: '', label: 'Todos' },
-            ...(filterOptions?.instances ?? []).map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'}: ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
-          ]} />
-          <HeaderFilter label="Resolución" value={searchQuality} onChange={setSearchQuality} ocultable options={[
-            { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
-          ]} />
-          <HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} ocultable options={[
-            { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
-          ]} />
-          <HeaderFilter label="Fuente" value={searchSource} onChange={setSearchSource} ocultable options={[
-            { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
-          ]} />
-          <HeaderFilter label="Grupo" value={searchGroup} onChange={setSearchGroup} ocultable options={[
-            { value: '', label: 'Todos' }, ...groupOptions.map(g => ({ value: g, label: g })),
-          ]} />
         </div>
       </th>
+      <th><HeaderFilter label="Origen" value={filterInstanceId} onChange={v => { setFilterInstanceId(v); setOffset(0) }} options={[
+        { value: '', label: 'Todos' },
+        ...(filterOptions?.instances ?? []).map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'}: ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
+      ]} /></th>
       <th><HeaderFilter label="Estado" value={filterStatus} onChange={v => { setFilterStatus(v); setOffset(0) }} options={[
         { value: '', label: 'Todos' },
         // Through the same label map the badges use, or the filter
@@ -695,6 +683,18 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       ]} /></th>
       <th><HeaderFilter label="Petición" value={filterRequest} onChange={v => { setFilterRequest(v); setOffset(0) }} options={[
         { value: '', label: 'Todas' }, ...(filterOptions?.request_statuses ?? []).map(s => ({ value: s, label: s })),
+      ]} /></th>
+      <th><HeaderFilter label="Resolución" value={searchQuality} onChange={setSearchQuality} ocultable options={[
+        { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
+      ]} /></th>
+      <th><HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} ocultable options={[
+        { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
+      ]} /></th>
+      <th><HeaderFilter label="Fuente" value={searchSource} onChange={setSearchSource} ocultable options={[
+        { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
+      ]} /></th>
+      <th><HeaderFilter label="Grupo" value={searchGroup} onChange={setSearchGroup} ocultable options={[
+        { value: '', label: 'Todos' }, ...groupOptions.map(g => ({ value: g, label: g })),
       ]} /></th>
       <th><HeaderFilter label="Español" value={filterSpanish} onChange={v => { setFilterSpanish(v); setOffset(0) }} options={[
         { value: '', label: 'Todos' },

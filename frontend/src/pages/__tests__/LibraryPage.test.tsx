@@ -170,3 +170,31 @@ describe('Seleccionar en Biblioteca', () => {
     expect(barra()!.textContent).not.toContain('seleccionada')
   })
 })
+
+describe('Columnas de la lista', () => {
+  const cabeceras = () => [...document.querySelectorAll('thead th')]
+
+  it('cada dato filtrable tiene su columna con su filtro en la cabecera, alineada con las celdas', async () => {
+    await pagina()
+    const nombres = cabeceras().map(th => th.textContent?.replace(/[▾▼▲]/g, '').trim())
+    expect(nombres).toEqual([
+      'TítuloTipo', 'Origen', 'Estado', 'Petición', 'Resolución', 'Proveedor', 'Fuente', 'Grupo',
+      'Español', 'EMuwarez', 'Tamaño', 'Acciones',
+    ])
+    for (const col of ['Origen', 'Resolución', 'Proveedor', 'Fuente', 'Grupo']) {
+      const th = cabeceras().find(c => c.textContent?.includes(col))!
+      expect(th.querySelectorAll('.hf-trigger')).toHaveLength(1)
+    }
+    // El tipo no es columna: su filtro acompaña al nombre del título.
+    expect(cabeceras()[0].querySelector('.hf-trigger')!.textContent).toContain('Tipo')
+    expect(document.querySelectorAll('tr.bib-fila')[0].querySelectorAll(':scope > td')).toHaveLength(cabeceras().length)
+  })
+
+  it('el menú de la columna Grupo se abre desde su propia cabecera', async () => {
+    await pagina()
+    const th = cabeceras()[7]
+    await pulsar(th.querySelector('.hf-trigger')!)
+    expect(document.body.textContent).toContain('Desmarcar todo')
+    expect(cabeceras()[0].querySelectorAll('.hf-trigger')).toHaveLength(1)
+  })
+})

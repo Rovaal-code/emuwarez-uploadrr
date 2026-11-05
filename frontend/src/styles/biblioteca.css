@@ -116,7 +116,7 @@
   flex: 1;
   min-height: 0;
 }
-/* Márgenes laterales de 8 px en vez de 12: con la línea bajo el título, el título necesita ese sitio. */
+/* Márgenes laterales de 8 px en vez de 12: con doce columnas cada píxel cuenta. */
 .data-table.bib-tabla td,
 .data-table.bib-tabla th:not(:has(> .hf-trigger)) {
   padding-left: 8px;
@@ -126,7 +126,7 @@
   padding-left: 8px;
   padding-right: 8px;
 }
-/* Con menos ancho la tabla se desplaza en horizontal en vez de aplastar el título y el grupo de release. */
+/* Con menos ancho la tabla se desplaza en horizontal en vez de aplastar el título. */
 .data-table th.hijos-col-titulo { min-width: 340px; }
 .data-table th.bib-col-titulo {
   width: 100%;
@@ -134,7 +134,7 @@
   padding-top: 3px;
   padding-bottom: 3px;
 }
-/* El nombre de la columna y los filtros de lo que va en la línea bajo el título. */
+/* El nombre de la columna y el filtro de tipo (el tipo va bajo el título). */
 .bib-cab-titulo {
   display: flex;
   flex-wrap: wrap;
@@ -200,8 +200,8 @@
   align-items: center;
 }
 .poster-thumb.skeleton-bar.bib-esq-poster {
-  width: 30px;
-  height: 45px;
+  width: 44px;
+  height: 66px;
   border-radius: 4px;
   flex-shrink: 0;
 }
@@ -230,8 +230,8 @@
 /* max-width 0 y el 100% de su cabecera: el título se lleva lo que dejan las demás columnas y corta con puntos suspensivos. */
 .data-table td.bib-celda-titulo { max-width: 0; }
 .data-table tr.bib-fila > td {
-  padding-top: 7px;
-  padding-bottom: 7px;
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
 .data-table td.bib-nowrap { white-space: nowrap; }
 .bib-titulo-fila {
@@ -254,8 +254,8 @@
 }
 .poster-thumb.bib-miniatura {
   flex-shrink: 0;
-  width: 28px;
-  height: 42px;
+  width: 44px;
+  height: 66px;
   border-radius: 4px;
   overflow: hidden;
   display: flex;
@@ -263,11 +263,10 @@
   justify-content: center;
 }
 .bib-miniatura-icono {
-  font-size: 14px;
+  font-size: 22px;
   opacity: 0.35;
 }
 .bib-titulo-caja {
-  container: bib-titulo / inline-size;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -281,26 +280,11 @@
   min-width: 0;
   max-width: 100%;
 }
-/* Línea del título: el título y, pegado a la derecha, el grupo de release. */
-.bib-titulo-cab {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  height: 20px;
-}
-.bib-rg { flex: none; margin-left: auto; }
 .bib-rg-ninguno {
   font-size: 12px;
   color: var(--text-muted);
 }
-.bib-rg .value-chip {
-  padding: 0 7px;
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 600;
-}
-/* Línea de calidad: las especificaciones en texto atenuado y el origen a la derecha. */
+/* Línea bajo el título: tipo, códec e idiomas en texto atenuado. */
 .bib-spec {
   display: flex;
   align-items: center;
@@ -316,14 +300,6 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.bib-spec-origen {
-  flex: none;
-  margin-left: auto;
-}
-/* Con poco sitio el origen enlazado se queda en su icono (el nombre sigue en el filtro y en el tooltip). */
-@container bib-titulo (max-width: 430px) {
-  .bib-spec-origen-enlace .service-inline > span:last-child { display: none; }
 }
 .bib-guion { color: var(--text-muted); }
 .bib-guion.bib-guion-12 { font-size: 12px; }

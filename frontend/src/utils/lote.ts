@@ -128,7 +128,8 @@ export function expandirEntradas(
     }
     for (const t of temporadas) poner(t, requestId)
   }
-  return { elementos, peticiones, avisos }
+  // Dos peticiones sobre lo mismo que falta darían el mismo aviso dos veces.
+  return { elementos, peticiones, avisos: [...new Set(avisos)] }
 }
 
 /** `expandirEntradas` de una selección de Biblioteca (sin peticiones ni alcance). */

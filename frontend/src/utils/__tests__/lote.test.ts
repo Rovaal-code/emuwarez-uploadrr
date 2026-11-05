@@ -152,6 +152,14 @@ describe('expandirEntradas (desde el Panel)', () => {
       '«#11»: la petición es del capítulo S01E04, que no está en la biblioteca.',
     ])
   })
+
+  it('dos peticiones sobre lo mismo que falta dan un solo aviso', () => {
+    const r = expandirEntradas([
+      { item: de(10, 'series'), requestId: 7, alcance: { season: 3 } },
+      { item: de(10, 'series'), requestId: 8, alcance: { season: 3 } },
+    ], temporadas)
+    expect(r.avisos).toEqual(['«#10»: la temporada 3 no está en la biblioteca.'])
+  })
 })
 
 describe('las filas del Panel', () => {

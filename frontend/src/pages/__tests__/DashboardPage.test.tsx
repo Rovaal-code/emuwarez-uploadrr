@@ -707,4 +707,18 @@ describe('«Subir seleccionadas» en «Listo para subir»', () => {
     await seleccionar()
     expect(casilla('Lost (2016) - Temporada 2').checked).toBe(false)
   })
+
+  it('salir mientras se piden las fichas no abre el lote al volver', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [PETICION_TEMPORADA] })
+    let soltar: () => void = () => {}
+    vi.mocked(getLibraryItem).mockImplementation(id => new Promise(resolve => { soltar = () => resolve(FICHAS[id]) }))
+    await pagina()
+    await seleccionar()
+    await pulsar(casilla('Lost (2016) - Temporada 2'))
+    await pulsar(boton('Subir seleccionadas (1)'))
+    await act(async () => { fijarVisible(false) })
+    await act(async () => { soltar() })
+    await act(async () => { fijarVisible(true) })
+    expect(document.querySelector('.lote-lista')).toBeNull()
+  })
 })

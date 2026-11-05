@@ -76,9 +76,13 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     seleccion, total: totalSeleccion, lleno: loteLleno, alternar: alternarLote, limpiar: limpiarLote, tiene: marcada,
   } = useSeleccionLote<DashboardRecommendationItem, string>(MAX_ELEMENTOS_LOTE, claveDelPanel)
   const [loteAbierto, setLoteAbierto] = useState<EntradaLote[] | null>(null)
+  // Cada salida del Panel lo sube: un «Subir seleccionadas» que aún esperaba sus fichas no abre el lote al volver.
+  const salidas = useRef(0)
   useAlSalir(() => {
+    salidas.current++
     limpiarLote()
     setModoSeleccion(false)
+    setLoteAbierto(null)
   })
   // Una sincronización que termina, o volver a la pestaña, sube `lastInvalidatedAt` y recarga lo cargado. El mensaje
   // de que terminó sale en la barra de arriba (ver SyncProgressBanner), no aquí.
@@ -266,7 +270,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         if (!fichas.has(id)) fichas.set(id, getLibraryItem(id))
         return fichas.get(id)!
       }
+      const salidasAntes = salidas.current
       const resultados = await Promise.allSettled(filas.map(f => fichaDe(f.library_target_id ?? f.id)))
+      if (salidas.current !== salidasAntes) return
       const entradas: EntradaLote[] = []
       const perdidas: string[] = []
       resultados.forEach((r, i) => {

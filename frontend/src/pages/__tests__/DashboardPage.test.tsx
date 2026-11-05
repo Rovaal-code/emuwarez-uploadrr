@@ -2,16 +2,25 @@
 /**
  * El Panel con el servidor simulado: los dos carriles y la banda de avisos con datos y vacíos, la franja de cinco
  * números, la cuenta de eMuwarez en la cabecera y lo que hace «Subir» (abrir el asistente sobre la fila de la petición).
+ * Y «Subir seleccionadas»: marcar filas de «Listo para subir» y subirlas juntas con el modal de «Subir por lotes»
+ * (el de verdad), cada una con su petición.
  */
+import { act, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/dashboard', () => ({ getDashboardSummary: vi.fn(), getDashboardRecommendations: vi.fn() }))
-vi.mock('../../api/uploads', () => ({ getUploads: vi.fn() }))
+vi.mock('../../api/uploads', () => ({
+  getUploads: vi.fn(), queueLote: vi.fn(), runUploadChecks: vi.fn(), getUploadChecksProgress: vi.fn(),
+}))
+vi.mock('../../api/nomenclature', () => ({ getNomenclatureFields: vi.fn(), previewNomenclatureFields: vi.fn() }))
 vi.mock('../../api/settings', () => ({ fetchSettings: vi.fn() }))
 vi.mock('../../api/maintenance', () => ({ getVersionInfo: vi.fn() }))
-vi.mock('../../api/library', () => ({ getLibraryItem: vi.fn() }))
+vi.mock('../../api/library', () => ({
+  getLibraryItem: vi.fn(), getLibrary: vi.fn(), getEmuComparison: vi.fn(), suggestProvider: vi.fn(),
+}))
 vi.mock('../../api/eventos', () => ({
   suscribirse: vi.fn(() => () => {}), canalVivo: vi.fn(() => true), observarCanal: vi.fn(() => () => {}),
+  seguirProgreso: vi.fn(() => () => {}),
 }))
 // La cuenta de eMuwarez: sin perfil no pinta nada (como el componente real); con perfil, un hueco reconocible.
 const cuenta = vi.hoisted(() => ({ hayPerfil: false }))
@@ -30,14 +39,15 @@ vi.mock('../../components/RequestFormModal', () => ({
 
 import type { DashboardRecommendationItem } from '../../api/dashboard'
 import { getDashboardRecommendations, getDashboardSummary } from '../../api/dashboard'
-import { getLibraryItem } from '../../api/library'
+import { getEmuComparison, getLibrary, getLibraryItem } from '../../api/library'
+import { getNomenclatureFields } from '../../api/nomenclature'
 import { getVersionInfo } from '../../api/maintenance'
 import { fetchSettings } from '../../api/settings'
-import { getUploads } from '../../api/uploads'
+import { getUploads, queueLote, runUploadChecks } from '../../api/uploads'
 import { SeccionVisible } from '../../context/SeccionVisible'
 import { SyncContext } from '../../context/SyncContext'
 import type { DashboardSummaryResponse, LibraryItemResponse, UploadJob } from '../../types/api'
-import { desmontar, esperar, montar, pulsar, texto } from '../../components/__tests__/dom'
+import { boton, desmontar, elegir, esperar, montar, pulsar, texto } from '../../components/__tests__/dom'
 import { DashboardPage } from '../DashboardPage'
 import { recortarEnCurso } from '../../components/hoy/CarrilEnCurso'
 
@@ -57,12 +67,19 @@ const trabajo = (extra: Partial<UploadJob>) => ({ id: 1, status: 'queued', ...ex
 const navegar = vi.fn()
 const fichaDe = (id: number) => ({ id, item_type: 'movie', title: `Ficha ${id}` }) as unknown as LibraryItemResponse
 
-async function pagina() {
-  await montar(
+let fijarVisible: (v: boolean) => void = () => {}
+function Envoltorio() {
+  const [visible, setVisible] = useState(true)
+  fijarVisible = setVisible
+  return (
     <SyncContext.Provider value={{ lastInvalidatedAt: 0, startAllSync: vi.fn(), isAnySyncing: false, todoPendiente: false } as never}>
-      <SeccionVisible visible><DashboardPage onNavigate={navegar} /></SeccionVisible>
-    </SyncContext.Provider>,
+      <SeccionVisible visible={visible}><DashboardPage onNavigate={navegar} /></SeccionVisible>
+    </SyncContext.Provider>
   )
+}
+
+async function pagina() {
+  await montar(<Envoltorio />)
   await esperar(() => document.querySelector('.panel-carriles'))
 }
 
@@ -518,5 +535,190 @@ describe('el tope de filas vivas de «En curso»', () => {
   it('sin pasarse del tope, todas tal cual', () => {
     const filas = [fila(1, 'running'), fila(2, 'completed')]
     expect(recortarEnCurso(filas)).toEqual({ visibles: filas, ocultas: [] })
+  })
+})
+
+// ── «Subir seleccionadas» ───────────────────────────────────────────────────────────────────────────────────────
+
+describe('«Subir seleccionadas» en «Listo para subir»', () => {
+  const ficha = (id: number, extra: Partial<LibraryItemResponse>) => ({
+    id, item_type: 'movie', title: `Ficha ${id}`, year: 2016, local_status: 'Disponible', has_spanish_ok: 1,
+    resolution: '1080p', source: 'WEB-DL', video_codec: 'x264', ...extra,
+  }) as LibraryItemResponse
+  // La serie 5 (Lost) con sus temporadas 51 y 55, su capítulo 66; la temporada 77 de otra (Fargo); la película 20.
+  const FICHAS: Record<number, LibraryItemResponse> = {
+    5: ficha(5, { item_type: 'series', title: 'Lost' }),
+    51: ficha(51, { item_type: 'season', title: 'Lost - Temporada 1', parent_id: 5, season_number: 1 }),
+    55: ficha(55, { item_type: 'season', title: 'Lost - Temporada 2', parent_id: 5, season_number: 2 }),
+    66: ficha(66, { item_type: 'episode', title: 'Lost S01E12', season_number: 1, episode_number: 12 }),
+    77: ficha(77, { item_type: 'season', title: 'Fargo - Temporada 1', parent_id: 7, season_number: 1 }),
+    20: ficha(20, { title: 'Única', source: 'BluRay' }),
+  }
+  const ENTORNO = { ready: true, checks: [{ id: 'emuwarez', label: 'eMuwarez responde', status: 'ok' as const, message: '' }] }
+
+  const casillas = () => [...document.querySelectorAll<HTMLInputElement>('.panel-item input[type="checkbox"]')]
+  const casilla = (titulo: string) => document.querySelector<HTMLInputElement>(`input[aria-label="Seleccionar «${titulo}»"]`)!
+  const seleccionar = () => pulsar(botonDe(carril('Listo para subir'), 'Seleccionar'))
+  const titulosLote = () => [...document.querySelectorAll('.lote-fila-titulo')].map(e => e.textContent)
+  const peticionesLote = () => [...document.querySelectorAll('.lote-fila-peticion')].map(e => e.textContent)
+
+  beforeEach(() => {
+    vi.mocked(getLibraryItem).mockImplementation(async id => FICHAS[id] ?? fichaDe(id))
+    vi.mocked(getLibrary).mockImplementation(async q => {
+      const items = q!.parent_id === 5 ? [FICHAS[55], FICHAS[51]] : []
+      return { items, total: items.length } as never
+    })
+    vi.mocked(runUploadChecks).mockImplementation(async (id, scope) => (scope === 'environment'
+      ? ENTORNO
+      : { ready: true, nombre: `Pack ${id}`, checks: [{ id: 'accesible', label: 'Fichero accesible', status: 'ok' as const, message: '' }] }))
+    vi.mocked(getNomenclatureFields).mockImplementation(async id => ({
+      fields: { source: 'BluRay', provider: null }, torrent_name: `Nombre ${id}`, internal_mkv_title: '', blocked: false,
+    }) as never)
+    vi.mocked(getEmuComparison).mockResolvedValue({ available: true, message: null, matches: [] })
+    vi.mocked(queueLote).mockImplementation(async elementos => ({
+      lote_id: '0123456789ab', encolados: elementos.length, saltados: 0,
+      resultados: elementos.map((e, i) => ({ item_id: e.item_id, status: 'queued' as const, job_id: 100 + i, errors: [] })),
+    }))
+  })
+
+  const PETICION_TEMPORADA = rec({
+    id: 5, library_target_id: 55, item_type: 'season', season_number: 2, rec_request_id: 77, rec_points: 500,
+    content_name: 'Lost (2016) - Temporada 2',
+  })
+  const PETICION_CAPITULO = rec({
+    id: 5, library_target_id: 66, item_type: 'episode', season_number: 1, episode_number: 12, rec_request_id: 78,
+    rec_points: 400, content_name: 'Lost (2016) - S01E12',
+  })
+  const UNICA = rec({ id: 20, rec_group: 2, content_name: 'Única (2016)' })
+
+  it('«Seleccionar» pone casillas en las peticiones y en las otras ideas, no en las faltantes', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+      PETICION_TEMPORADA, UNICA,
+      rec({ id: 30, rec_group: 3, content_name: 'Faltante (2001)', missing_count: 2 }),
+      rec({ id: 40, rec_group: 4, content_name: 'Mejora (2002)' }),
+    ] })
+    await pagina()
+    expect(casillas()).toHaveLength(0)
+    expect(document.querySelector('.lote-barra')).toBeNull()
+    await seleccionar()
+    expect(botonDe(carril('Listo para subir'), 'Seleccionar')!.getAttribute('aria-pressed')).toBe('true')
+    expect(casillas().map(c => c.getAttribute('aria-label'))).toEqual([
+      'Seleccionar «Lost (2016) - Temporada 2»', 'Seleccionar «Única (2016)»', 'Seleccionar «Mejora (2002)»',
+    ])
+    expect(texto()).toContain('Marca las peticiones o ideas que quieras subir juntas')
+    expect(boton('Subir seleccionadas (0)')!.disabled).toBe(true)
+    await pulsar(casilla('Lost (2016) - Temporada 2'))
+    await pulsar(casilla('Mejora (2002)'))
+    expect(texto()).toContain('2 seleccionadas')
+    expect(boton('Subir seleccionadas (2)')!.disabled).toBe(false)
+    // Apagarlo quita las casillas y lo marcado.
+    await seleccionar()
+    expect(casillas()).toHaveLength(0)
+    await seleccionar()
+    expect(casillas().filter(c => c.checked)).toHaveLength(0)
+  })
+
+  it('sube lo marcado como un lote: cada fila con su petición, la de capítulo como ese capítulo, la idea sin petición', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [PETICION_TEMPORADA, PETICION_CAPITULO, UNICA] })
+    await pagina()
+    await seleccionar()
+    await pulsar(casilla('Lost (2016) - Temporada 2'))
+    await pulsar(casilla('Lost (2016) - S01E12'))
+    await pulsar(casilla('Única (2016)'))
+    const cargasAntes = vi.mocked(getDashboardRecommendations).mock.calls.length
+    await pulsar(boton('Subir seleccionadas (3)'))
+    await esperar(() => document.querySelector('.lote-lista'))
+    // La fila real de cada una, como «Subir»: la temporada y el capítulo de la petición, no la serie.
+    expect(vi.mocked(getLibraryItem).mock.calls.map(c => c[0])).toEqual([55, 66, 20])
+    expect(titulosLote()).toEqual(['Lost (2016) - Temporada 2', 'Lost (2016) - S01E12', 'Única (2016)'])
+    expect(peticionesLote()).toEqual(['Petición #77', 'Petición #78'])
+
+    await pulsar(boton('Continuar (3)'))
+    await esperar(() => boton('Subir 3') && !boton('Subir 3')!.disabled)
+    await pulsar(boton('Subir 3'))
+    await esperar(() => texto().includes('3 de 3 encoladas'))
+    expect(vi.mocked(queueLote).mock.calls[0][0].map(e => [e.item_id, e.request_item_id])).toEqual([
+      [55, 77], [66, 78], [20, undefined],
+    ])
+    // Encolado: la selección se limpia, el modo se apaga y el Panel se recarga.
+    expect(document.querySelector('.lote-barra')).toBeNull()
+    expect(casillas()).toHaveLength(0)
+    expect(vi.mocked(getDashboardRecommendations).mock.calls.length).toBeGreaterThan(cargasAntes)
+    await seleccionar()
+    expect(casillas().filter(c => c.checked)).toHaveLength(0)
+  })
+
+  it('una petición de serie entera sale como sus temporadas con la petición; dos sobre la misma fila, una con elección', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+      rec({ id: 5, library_target_id: 5, item_type: 'series', rec_request_id: 90, rec_points: 900, content_name: 'Lost (2016)' }),
+      rec({ id: 7, library_target_id: 77, item_type: 'season', season_number: 1, rec_request_id: 80, rec_points: 800, content_name: 'Fargo (2016) - Temporada 1' }),
+      rec({ id: 7, library_target_id: 77, item_type: 'season', season_number: 1, rec_request_id: 81, rec_points: 700, content_name: 'Fargo (2016) - Temporada 1 (otra)' }),
+    ] })
+    await pagina()
+    await seleccionar()
+    for (const c of casillas()) await pulsar(c)
+    expect(texto()).toContain('3 seleccionadas')
+    await pulsar(boton('Subir seleccionadas (3)'))
+    await esperar(() => document.querySelector('.lote-lista'))
+    // La fila 77 se pide una vez aunque la cubran dos peticiones.
+    expect(vi.mocked(getLibraryItem).mock.calls.map(c => c[0])).toEqual([5, 77])
+    expect(titulosLote()).toEqual(['Lost (2016) - Temporada 1', 'Lost (2016) - Temporada 2', 'Fargo (2016) - Temporada 1'])
+    expect(peticionesLote()).toEqual(['Petición #90', 'Petición #90'])
+    const select = document.querySelector<HTMLSelectElement>('.lote-fila-peticion-elegir')!
+    expect([...select.options].map(o => o.textContent)).toEqual(['Petición #80', 'Petición #81'])
+    expect(select.value).toBe('80')
+    await elegir(select, '81')
+
+    await pulsar(boton('Continuar (3)'))
+    await esperar(() => boton('Subir 3') && !boton('Subir 3')!.disabled)
+    await pulsar(boton('Subir 3'))
+    await esperar(() => texto().includes('3 de 3 encoladas'))
+    expect(vi.mocked(queueLote).mock.calls[0][0].map(e => [e.item_id, e.request_item_id])).toEqual([
+      [51, 90], [55, 90], [77, 81],
+    ])
+  })
+
+  it('si alguna ya no está, lo dice y abre el lote con el resto', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [PETICION_TEMPORADA, UNICA] })
+    vi.mocked(getLibraryItem).mockImplementation(async id => {
+      if (id === 20) throw new Error('404')
+      return FICHAS[id]
+    })
+    await pagina()
+    await seleccionar()
+    await pulsar(casilla('Lost (2016) - Temporada 2'))
+    await pulsar(casilla('Única (2016)'))
+    await pulsar(boton('Subir seleccionadas (2)'))
+    await esperar(() => document.querySelector('.lote-lista'))
+    expect(document.querySelector('[role="alert"]')!.textContent).toContain('No se pudo abrir «Única (2016)»')
+    expect(titulosLote()).toEqual(['Lost (2016) - Temporada 2'])
+  })
+
+  it('salir del Panel limpia la selección y quita el modo', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [PETICION_TEMPORADA] })
+    await pagina()
+    await seleccionar()
+    await pulsar(casilla('Lost (2016) - Temporada 2'))
+    expect(texto()).toContain('1 seleccionada')
+    await act(async () => { fijarVisible(false) })
+    await act(async () => { fijarVisible(true) })
+    expect(casillas()).toHaveLength(0)
+    expect(document.querySelector('.lote-barra')).toBeNull()
+    await seleccionar()
+    expect(casilla('Lost (2016) - Temporada 2').checked).toBe(false)
+  })
+
+  it('salir mientras se piden las fichas no abre el lote al volver', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [PETICION_TEMPORADA] })
+    let soltar: () => void = () => {}
+    vi.mocked(getLibraryItem).mockImplementation(id => new Promise(resolve => { soltar = () => resolve(FICHAS[id]) }))
+    await pagina()
+    await seleccionar()
+    await pulsar(casilla('Lost (2016) - Temporada 2'))
+    await pulsar(boton('Subir seleccionadas (1)'))
+    await act(async () => { fijarVisible(false) })
+    await act(async () => { soltar() })
+    await act(async () => { fijarVisible(true) })
+    expect(document.querySelector('.lote-lista')).toBeNull()
   })
 })

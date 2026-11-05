@@ -22,9 +22,10 @@ con [Uploadrr-EMU](https://github.com/Kisnov/Uploadrr-EMU), que va dentro de la 
 - **Subidas**: un asistente comprueba el contenido, genera el nombre (también para packs de temporada) y lanza
   Uploadrr-EMU. Opcionalmente renombra y reordena las pistas (cuatro modos, apagado por defecto). Progreso en
   directo, límite de subidas en paralelo y varios grupos de subida guardados para el tag. «Seleccionar» en
-  Biblioteca marca varias películas, series o temporadas y «Subir por lotes» las encola de una vez (una serie, como
-  el pack de cada temporada), con su nombre, sus comprobaciones y lo que ya hay en eMuwarez de cada una; en Subidas
-  el lote se sigue, se cancela o se reintenta junto.
+  Biblioteca marca varias películas, series o temporadas y «Subir por lotes» las encola de una vez (una serie se
+  abre en sus temporadas y solo entran como pack las que están listas; las demás se listan con su motivo), con su
+  nombre, sus comprobaciones y lo que ya hay en eMuwarez de cada una; en el Panel, «Seleccionar» en «Listo para subir» hace lo mismo con las peticiones (cada subida, enlazada a su petición)
+  y las otras ideas. En Subidas el lote se sigue, se cancela o se reintenta junto.
 - **Guía**: cada campo de la nomenclatura de eMuwarez, con ejemplos y de dónde lo saca la aplicación.
 - **Tareas**: sincronización periódica de biblioteca y peticiones, y aviso de versión nueva en la campana.
 - **Instancias**: tus Radarr y Sonarr.

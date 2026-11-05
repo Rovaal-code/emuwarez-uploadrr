@@ -21,8 +21,9 @@ import { fetchSettings } from '../../api/settings'
 import { ApiClientError } from '../../api/client'
 import type { EmuComparison } from '../../api/library'
 import type { LibraryItemResponse } from '../../types/api'
+import type { EntradaLote } from '../../utils/lote'
 import { SubidaPorLotesModal } from '../lote/SubidaPorLotesModal'
-import { boton, desmontar, diferida, esperar, montar, pulsar, texto } from './dom'
+import { boton, desmontar, diferida, elegir, esperar, montar, pulsar, texto } from './dom'
 
 const m = vi.mocked
 
@@ -50,7 +51,11 @@ const onDone = vi.fn()
 const onNavigate = vi.fn()
 
 async function abrir(seleccion: LibraryItemResponse[]) {
-  await montar(<SubidaPorLotesModal seleccion={seleccion} onClose={onClose} onDone={onDone} onNavigate={onNavigate} />)
+  await abrirEntradas(seleccion.map(item => ({ item })))
+}
+
+async function abrirEntradas(entradas: EntradaLote[]) {
+  await montar(<SubidaPorLotesModal entradas={entradas} onClose={onClose} onDone={onDone} onNavigate={onNavigate} />)
 }
 
 const llamadas = (scope: 'environment' | 'content') => m(subidas.runUploadChecks).mock.calls.filter(c => c[1] === scope)
@@ -503,5 +508,90 @@ describe('series y temporadas', () => {
     expect(incluir('Fargo - Temporada 1').disabled).toBe(true)
     expect(incluir('Fargo - Temporada 2').disabled).toBe(true)
     expect(botonSubir()!.disabled).toBe(true)
+  })
+})
+
+// ── Desde el Panel: con la petición de cada fila y su alcance ───────────────────────────────────────────────────
+
+const capitulo = (id: number, de: LibraryItemResponse, temporadaN: number, n: number) => ({
+  id, item_type: 'episode', title: `${de.title} S${String(temporadaN).padStart(2, '0')}E${String(n).padStart(2, '0')}`,
+  year: 2020, season_number: temporadaN, episode_number: n, local_status: 'Disponible', has_spanish_ok: 1,
+  resolution: '1080p', source: 'WEB-DL',
+}) as LibraryItemResponse
+
+const enviados = () => m(subidas.queueLote).mock.calls[0][0].map(e => ({ item_id: e.item_id, request_item_id: e.request_item_id }))
+const peticionesPaso1 = () => [...document.querySelectorAll('.lote-fila-peticion')].map(e => e.textContent)
+
+describe('desde el Panel', () => {
+  beforeEach(() => {
+    m(biblioteca.getLibrary).mockImplementation(async q => {
+      const items = TEMPORADAS[q!.parent_id as number] ?? []
+      return { items, total: items.length } as never
+    })
+    m(subidas.runUploadChecks).mockImplementation(async (id, scope) =>
+      scope === 'environment' ? ENTORNO : id > 100 ? PACK_LISTO(id) : LISTO)
+  })
+
+  it('cada elemento lleva su petición; una de capítulo sube ese capítulo', async () => {
+    await abrirEntradas([
+      { item: DUNE, requestId: 77, alcance: { season: null, episode: null } },
+      { item: capitulo(66, LOST, 1, 12), requestId: 78, alcance: { season: 1, episode: 12 } },
+      { item: ALIEN },
+    ])
+    expect(titulosPaso1()).toEqual(['Dune (2021)', 'Lost (2020) - S01E12', 'Alien (2021)'])
+    expect(peticionesPaso1()).toEqual(['Petición #77', 'Petición #78'])
+    await alResumen(3)
+    await pulsar(boton('Subir 3'))
+    await esperar(() => texto().includes('3 de 3 encoladas'))
+    expect(enviados()).toEqual([
+      { item_id: 11, request_item_id: 77 }, { item_id: 66, request_item_id: 78 }, { item_id: 12, request_item_id: undefined },
+    ])
+    // Sin petición no se manda la clave (como desde Biblioteca).
+    expect('request_item_id' in m(subidas.queueLote).mock.calls[0][0][2]).toBe(false)
+  })
+
+  it('una petición de serie entera se cambia por sus temporadas, todas con la petición; una de temporada, solo esa', async () => {
+    await abrirEntradas([
+      { item: FARGO, requestId: 90, alcance: { season: null, episode: null } },
+      { item: LOST, requestId: 91, alcance: { season: 2, episode: null } },
+    ])
+    await esperar(() => texto().includes('Continuar'))
+    // Lost se carga una vez aunque la pidieran dos filas.
+    expect(temporadas()).toEqual([
+      { parent_id: 200, type: 'season', limit: 500 }, { parent_id: 100, type: 'season', limit: 500 },
+    ])
+    expect(titulosPaso1()).toEqual(['Fargo (2020) - Temporada 1', 'Fargo (2020) - Temporada 2', 'Lost (2020) - Temporada 2'])
+    await alResumen(3)
+    await pulsar(boton('Subir 3'))
+    await esperar(() => texto().includes('3 de 3 encoladas'))
+    expect(enviados()).toEqual([
+      { item_id: 201, request_item_id: 90 }, { item_id: 202, request_item_id: 90 }, { item_id: 102, request_item_id: 91 },
+    ])
+  })
+
+  it('dos peticiones sobre el mismo elemento salen como una fila y se elige cuál se enlaza', async () => {
+    const t1 = TEMPORADAS[200][0]
+    await abrirEntradas([
+      { item: t1, requestId: 80, alcance: { season: 1, episode: null } },
+      { item: t1, requestId: 81, alcance: { season: 1, episode: null } },
+    ])
+    expect(titulosPaso1()).toEqual(['Fargo (2020) - Temporada 1'])
+    const select = document.querySelector<HTMLSelectElement>('select[aria-label="Petición que se enlaza con «Fargo (2020) - Temporada 1»"]')!
+    expect([...select.options].map(o => o.textContent)).toEqual(['Petición #80', 'Petición #81'])
+    expect(select.value).toBe('80')
+    await elegir(select, '81')
+    await alResumen(1)
+    await pulsar(boton('Subir 1'))
+    await esperar(() => texto().includes('1 de 1 encolada'))
+    expect(enviados()).toEqual([{ item_id: 201, request_item_id: 81 }])
+  })
+
+  it('una petición de capítulo cuya fila no es el capítulo (no está en la biblioteca) no entra y lo dice', async () => {
+    await abrirEntradas([
+      { item: TEMPORADAS[200][1], requestId: 85, alcance: { season: 2, episode: 4 } },
+      { item: DUNE },
+    ])
+    expect(texto()).toContain('«Fargo - Temporada 2»: la petición es del capítulo S02E04, que no está en la biblioteca.')
+    expect(titulosPaso1()).toEqual(['Dune (2021)'])
   })
 })

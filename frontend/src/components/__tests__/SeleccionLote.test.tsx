@@ -10,7 +10,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../api/library', () => ({ getLibrary: vi.fn() }))
 
 import { getLibrary } from '../../api/library'
+import type { DashboardRecommendationItem } from '../../api/dashboard'
 import { useSeleccionLote } from '../../hooks/useSeleccionLote'
+import { claveDelPanel } from '../../utils/lote'
 import type { LibraryItemResponse } from '../../types/api'
 import { LargePosterCard } from '../LargePosterCard'
 import { LibraryTreeRow } from '../LibraryTreeRow'
@@ -28,8 +30,8 @@ const elemento = (id: number, parcial: Partial<LibraryItemResponse> = {}) =>
 const casilla = (titulo: string) => document.querySelector<HTMLInputElement>(`input[aria-label="Seleccionar «${titulo}»"]`)
 
 describe('useSeleccionLote', () => {
-  let api: ReturnType<typeof useSeleccionLote>
-  const vistos: ReturnType<typeof useSeleccionLote>[] = []
+  let api: ReturnType<typeof useSeleccionLote<LibraryItemResponse>>
+  const vistos: ReturnType<typeof useSeleccionLote<LibraryItemResponse>>[] = []
   function Prueba({ maximo }: { maximo: number }) {
     api = useSeleccionLote(maximo)
     vistos.push(api)
@@ -56,6 +58,24 @@ describe('useSeleccionLote', () => {
     expect(new Set(vistos.map(v => v.limpiar)).size).toBe(1)
     await act(async () => { api.limpiar() })
     expect(api.total).toBe(0)
+  })
+
+  it('con otra clave (la del Panel), dos filas del mismo elemento son dos marcas', async () => {
+    let panel!: ReturnType<typeof useSeleccionLote<DashboardRecommendationItem, string>>
+    function PruebaPanel() {
+      panel = useSeleccionLote<DashboardRecommendationItem, string>(50, claveDelPanel)
+      return null
+    }
+    const fila = (rec: number | null, objetivo: number | null) =>
+      ({ id: 5, rec_request_id: rec, library_target_id: objetivo, title: 'Serie' }) as DashboardRecommendationItem
+    await montar(<PruebaPanel />)
+    await act(async () => { panel.alternar(fila(77, 55)) })
+    await act(async () => { panel.alternar(fila(78, 55)) })
+    await act(async () => { panel.alternar(fila(null, null)) })
+    expect([...panel.seleccion.keys()]).toEqual(['77-55', '78-55', 'u-5'])
+    expect(panel.tiene('78-55')).toBe(true)
+    await act(async () => { panel.alternar(fila(78, 55)) })
+    expect(panel.tiene('78-55')).toBe(false)
   })
 })
 
@@ -165,5 +185,12 @@ describe('la barra de la selección', () => {
     await montar(<BarraLote total={0} ocultas={0} onSubir={() => {}} onLimpiar={() => {}} />)
     expect(texto()).toContain('Marca las películas, series o temporadas que quieras subir juntas')
     expect(boton('Subir por lotes')!.disabled).toBe(true)
+  })
+
+  it('el Panel le pone su texto', async () => {
+    await montar(<BarraLote total={2} vacia="Marca las peticiones" textoSubir="Subir seleccionadas (2)" onSubir={() => {}} onLimpiar={() => {}} />)
+    expect(texto()).toContain('2 seleccionadas')
+    expect(texto()).not.toContain('oculta')
+    expect(boton('Subir seleccionadas (2)')!.disabled).toBe(false)
   })
 })

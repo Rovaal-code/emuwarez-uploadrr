@@ -594,6 +594,10 @@ Gabriel decide (pregunta 14): o lo acepta, o se agrupan, o se publica a mano.
 - Unificar las tandas del asistente con `POST /uploads/lote` (reescribir los 3 tests de tanda de `UploadWizardModal.test.tsx`,
   ≈ 387-456 y ≈ 595-720) (pregunta 11).
 - Que la sincronización de peticiones no cuente los `queued` como ocupados (pregunta 13).
+- Salió al implementar (sin pregunta): en `encolar_lote`, guardar los `campos` y crear el trabajo en la misma transacción
+  (hoy, si encolar falla justo después de guardarlos, la propuesta queda cambiada aunque el elemento salga saltado; ver
+  #215); enseñar por temporada los avisos propios del pack (pista de audio sin idioma, source que no cuadra), que hoy el lote
+  no muestra; y elegir el proveedor de un pack cuyos capítulos traen proveedores distintos (hoy se salta: «Súbela suelta»).
 
 ---
 

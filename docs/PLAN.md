@@ -430,6 +430,20 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   capítulos o TMDb) y no se manda `provider`; con proveedores distintos su comprobación falla y la temporada se salta con ese
   motivo y «Súbela suelta para elegirlo». Los avisos del plan (pista de audio sin idioma, source distinto) no se enseñan por
   temporada. Sin ver en el navegador.
+- **Oleada 4, subida por lotes, PR 6: «Subir seleccionadas» en «Listo para subir» del Panel:** «Seleccionar» en la cabecera
+  del carril pone casilla en las peticiones y en las otras ideas («Contenido único» y «Mejoras posibles», también plegadas);
+  no en faltantes, que solo se piden. La selección (`useSeleccionLote`, ahora con clave propia: `claveDelPanel`, petición +
+  fila que se sube, porque el grupo 1 hace una fila por petición y dos pueden apuntar al mismo elemento) se limpia al salir
+  del Panel, al apagar «Seleccionar» y al encolar. «Subir seleccionadas (N)», en un pie del carril fuera del scroller
+  (`BarraLote` con su texto, `Carril` con `accion` y `pie`), pide la fila real de cada una (`getLibraryItem(library_target_id
+  ?? id)`, una vez por fila) y abre el modal de «Subir por lotes», que ahora recibe `entradas` (`{ item, requestId?, alcance?
+  }`, `EntradaLote`; Biblioteca manda solo `item`). En el paso 1 (`expandirEntradas`) una serie pedida entera sale como sus
+  temporadas aptas y una pedida por temporada solo como esa, todas con la petición; una petición de capítulo sube ese capítulo
+  (el tipo que cuenta es el de la fila real); dos peticiones sobre el mismo elemento son una fila con un desplegable para
+  elegir cuál se enlaza (la primera por defecto); cada fila dice «Petición #N». Una petición de capítulo cuya fila resultó ser
+  la temporada (el capítulo no está) no entra y se dice arriba; las que ya no están en la biblioteca, en el aviso del Panel, y
+  el lote se abre con el resto. Las otras ideas entran sin petición. `queueLote` lleva `request_item_id` por elemento. El
+  tour lo menciona en «Listo para subir». Sin ver en el navegador.
 
 ## Siguiente
 
@@ -443,9 +457,8 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 ## Oleada 4
 
 - Funciones nuevas que faltan:
-  - subida por lotes: el plan detallado (modelo, PRs en orden, tests, riesgos y 14 preguntas para Gabriel) está en
-    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); hechos los PR 1 a 5 (ver «Hecho»),
-    sigue el PR 6 (selección en «Listo para subir» del Panel);
+  - ~~subida por lotes~~ (hecho, PR 1 a 6, ver «Hecho»; el plan está en `docs/PLAN_SUBIDA_POR_LOTES.md`). Queda el PR 7,
+    opcional y punto por punto, pendiente de que Gabriel responda las preguntas de su §8;
   - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).

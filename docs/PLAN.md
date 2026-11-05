@@ -495,8 +495,8 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
 ## Oleada 4
 
 - Funciones nuevas que faltan:
-  - ~~subida por lotes~~ (hecho, PR 1 a 6, ver «Hecho»; el plan está en `docs/PLAN_SUBIDA_POR_LOTES.md`). Queda el PR 7,
-    opcional y punto por punto, pendiente de que Gabriel responda las preguntas de su §8;
+  - ~~subida por lotes~~ (hecho, PR 1 a 10, ver «Hecho»; el plan está en `docs/PLAN_SUBIDA_POR_LOTES.md`, con las respuestas de
+    Gabriel en su §8). Queda que Gabriel la pruebe (ver «Siguiente»);
   - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).

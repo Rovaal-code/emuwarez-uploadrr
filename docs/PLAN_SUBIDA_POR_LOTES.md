@@ -4,7 +4,7 @@ Documento autosuficiente para quien lo ejecute. Primera versión hecha leyendo `
 ejecutar nada. **Revisado el mismo día contra `adef702`** (después de #207 y #208, que cambiaron Biblioteca y Peticiones) con
 cinco revisiones en paralelo (cola y BD, endpoint y comprobaciones, Biblioteca y Panel, modal y Subidas, tests y CI); lo que
 cambió está en §9. Los números de línea son aproximados (≈). Gabriel respondió las preguntas de §8 el 05/11 (resumen al
-principio de §8); la recomendación sigue en cada una. Al terminar cada PR, actualiza `docs/PLAN.md` (ver «Cómo se trabaja» allí).
+principio de §8; lo que quedó, en §6 «PR 7 en adelante»). Al terminar cada PR, actualiza `docs/PLAN.md` (ver «Cómo se trabaja» allí).
 
 ---
 
@@ -582,22 +582,25 @@ Gabriel decide (pregunta 14): o lo acepta, o se agrupan, o se publica a mano.
   capítulo sube ese capítulo; una de serie entera expande a temporadas con la misma petición; dos peticiones sobre el mismo
   elemento salen como una fila con elección de petición; «Otras ideas» entra sin petición. Tests en `DashboardPage.test.tsx`.
 
-### PR 7 (opcional, cada punto por separado y solo si Gabriel lo quiere)
-- Notificación agregada del lote (`upload_batch_done`): tipo nuevo en `notification_center.EVENT_TYPES` y sus iconos en
-  `NotificationBell.tsx` (comentario ≈ 30-33 de `notification_center.py`), `emit(..., dispatch=False)` para los trabajos del lote,
-  y un gancho en `_finalize_job_status`/`_fail` que detecte el último del lote; ajustes de notificaciones y sus tests (pregunta 5).
-- Freno tras X fallos seguidos con el mismo motivo (pregunta 4).
-- Enlazar la petición abierta desde Biblioteca (pregunta 6).
-- Capítulos sueltos de temporadas no aptas dentro del lote (pregunta 8).
-- Selección en la página de Peticiones (pregunta 9).
-- «Borrar lote» desde Subidas (pregunta 10).
-- Unificar las tandas del asistente con `POST /uploads/lote` (reescribir los 3 tests de tanda de `UploadWizardModal.test.tsx`,
-  ≈ 387-456 y ≈ 595-720) (pregunta 11).
-- Que la sincronización de peticiones no cuente los `queued` como ocupados (pregunta 13).
-- Salió al implementar (sin pregunta): en `encolar_lote`, guardar los `campos` y crear el trabajo en la misma transacción
-  (hoy, si encolar falla justo después de guardarlos, la propuesta queda cambiada aunque el elemento salga saltado; ver
-  #215); y elegir el proveedor de un pack cuyos capítulos traen proveedores distintos (hoy se salta: «Súbela suelta»). Los
-  avisos propios de cada pack ya se enseñan (después del PR 6, ver PLAN.md).
+### PR 7 en adelante: lo que quedó tras las respuestas de Gabriel (05/11)
+Hecho (detalle en PLAN.md, «Hecho»):
+- Avisos de cada pack y «En curso» con más de 100 vivas (PR 7, #219).
+- Petición enlazada desde Biblioteca, selección en Peticiones, «Borrar lote» y la cola no para las peticiones (PR 8, #220;
+  preguntas 6, 9, 10 y 13).
+- Notificación por lote a elegir en Ajustes (PR 9, #221; pregunta 5).
+- Freno tras 5 fallos seguidos con el mismo motivo (PR 10; pregunta 4): las de la cola quedan canceladas con el motivo y
+  «Reintentar fallidas» las relanza.
+
+Descartado:
+- Unificar las tandas del asistente con `POST /uploads/lote` (pregunta 11): no mientras no den problemas.
+- Elegir el proveedor de un pack cuyos capítulos traen proveedores distintos (B): un season pack es de un solo proveedor; se
+  queda «Súbela suelta».
+- Capítulos sueltos de temporadas no aptas dentro del lote (pregunta 8): se quedó en «solo packs aptos».
+
+Pendiente de que Gabriel lo pruebe:
+- (A) En `encolar_lote`, guardar los `campos` y crear el trabajo en la misma transacción (hoy, si encolar falla justo después
+  de guardarlos, la propuesta queda cambiada aunque el elemento salga saltado; ver #215).
+- La prueba manual de §8 «No verificado»: Uploadrr-EMU ante un duplicado real, 50 hilos en el NAS y la interfaz en `:edge`.
 
 ---
 
@@ -681,8 +684,10 @@ cancelación necesitan `subidas_reales` + `puerta`.
 
 **Respuestas de Gabriel (05/11/2026).** Las 1, 2, 3, 7, 8 y 12 se hicieron con la recomendación (PR 1-6). La 14 ya no aplica
 (los PR 1-6 salieron juntos). **6, 9, 10 y 13: sí**, hechas en el PR 8 (ver PLAN.md). **5: sí, a elegir en Ajustes** («una
-por subida» o «una por lote»), hecha en el PR 9. **4:** propuesta pendiente de confirmar: parar el lote tras 5 fallos seguidos con el mismo motivo.
-**11:** explicada; la recomendación es no hacerla mientras no dé problemas.
+por subida» o «una por lote»), hecha en el PR 9. **4: sí**: el lote se para tras 5 fallos seguidos con el mismo motivo (los
+propios de cada elemento no cuentan), en el PR 10. **11: no** mientras las tandas del asistente no den problemas. **A** (guardar
+los `campos` y crear el trabajo en la misma transacción): lo decide al probar los lotes. **B** (elegir proveedor en un pack de
+proveedores mezclados): no, un season pack tiene que ser de un solo proveedor; se queda «Súbela suelta».
 
 1. **¿Vale un lote sin edición por elemento?** (nombres automáticos; solo se sugiere proveedor a los WEB-DL sin proveedor; las
    filas con avisos de nombre llegan desmarcadas; editar = subir suelto). Es la decisión que más condiciona el coste y la calidad

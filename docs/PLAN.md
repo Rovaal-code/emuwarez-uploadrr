@@ -469,6 +469,16 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   pestaña marca el aviso nuevo en los canales que avisaban de las subidas. Y «Subir seleccionadas» (Panel y Peticiones) no
   abre un lote viejo si lo marcado cambia mientras se piden las fichas: lo vuelve a preparar con lo de ahora
   (`useSeleccionLote().vigente`). Sin ver en el navegador.
+
+- **Oleada 4, subida por lotes, PR 10 (pregunta 4): freno tras 5 fallos seguidos con el mismo motivo.** Cuando una subida de un
+  lote falla, `lotes.frenar_si_fallo_sistemico` (desde `_notify_upload_failed`, por donde pasan todos los fallos; el arranque
+  no) mira las puntas terminadas por orden de fin: si los 5 últimos fallos que cuentan comparten motivo (primera línea de
+  `error_message`), las que siguen en cola quedan `cancelled` con fase `lote_parado` y el motivo («Lote parado: 5 fallos
+  seguidos por «…»»); las que ya se preparan o suben siguen. No cuentan los fallos propios de cada elemento
+  (`MARCAS_DE_FALLO_POR_ELEMENTO`: los de la app y los títulos de panel de Uploadrr-EMU, como «Potential duplicate on»); una
+  completada corta la racha. Decide uno solo (un `RLock` del proceso, que también envuelve cada elemento de `encolar_lote`: si la racha llega mientras se encola, el resto sale `blocked`). Con «Una por subida», un
+  aviso «Lote parado»; con «Una por lote», una línea en el resumen. El banner del lote lo dice y «Reintentar fallidas» las
+  relanza. Sin ver en el navegador.
 ## Siguiente
 
 Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que quedaba por ver se comprobó el 03/11 (ver en
@@ -478,11 +488,15 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 - a 1280×800 el pie del asistente de subida queda cortado y el cuerpo del modal hace scroll por dentro;
 - a 390 px el sidebar no se pliega.
 
+Subida por lotes: hecha (PR 1-10, ver «Hecho» y `docs/PLAN_SUBIDA_POR_LOTES.md` §6 «PR 7 en adelante»). Falta que Gabriel la
+pruebe en `:edge` (duplicado real en Uploadrr-EMU, 50 hilos en el NAS, la rejilla con 200 seleccionadas) y que decida, al
+probarla, si guardar los `campos` y crear el trabajo van en una sola transacción.
+
 ## Oleada 4
 
 - Funciones nuevas que faltan:
-  - ~~subida por lotes~~ (hecho, PR 1 a 6, ver «Hecho»; el plan está en `docs/PLAN_SUBIDA_POR_LOTES.md`). Queda el PR 7,
-    opcional y punto por punto, pendiente de que Gabriel responda las preguntas de su §8;
+  - ~~subida por lotes~~ (hecho, PR 1 a 10, ver «Hecho»; el plan está en `docs/PLAN_SUBIDA_POR_LOTES.md`, con las respuestas de
+    Gabriel en su §8). Queda que Gabriel la pruebe (ver «Siguiente»);
   - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).

@@ -173,7 +173,20 @@ def _notify_upload_failed(job_id: int, error_message: str | None, result_url: st
     terminal-failure branch of _run_uploadrr_subprocess (timeout, non-zero
     exit, executable not found, unexpected exception). `result_url`: la ficha
     del torrent, si llegó a subirse antes de fallar. Con «Una por lote», una
-    subida de un lote no avisa sola: avisa el lote cuando termina."""
+    subida de un lote no avisa sola: avisa el lote cuando termina.
+
+    Como todo fallo de una subida pasa por aquí (también _fail de la
+    preparación), después mira el freno del lote: si este fallo completa una
+    racha de fallos con el mismo motivo, las del lote que esperan en la cola no
+    se lanzan (lotes.frenar_si_fallo_sistemico, que nunca lanza). Va después
+    del aviso de la subida, así «Lote parado» queda por encima en la campana."""
+    _avisar_subida_fallida(job_id, error_message, result_url)
+    from ..lotes import frenar_si_fallo_sistemico
+    frenar_si_fallo_sistemico(job_id)
+
+
+def _avisar_subida_fallida(job_id: int, error_message: str | None, result_url: str | None) -> None:
+    """El aviso «Subida fallida» de _notify_upload_failed (o nada, si lo da su lote). Nunca lanza."""
     try:
         from ..notification_center import emit
         conn = _get_db_conn()

@@ -60,11 +60,27 @@ def test_con_el_catalogo_sincronizando_responde_ocupado_y_no_toca_nada(db_conn, 
     assert fetch == [1]
 
 
-@pytest.mark.parametrize("estado", ["queued", "staging", "preparing", "running"])
+@pytest.mark.parametrize("estado", ["staging", "preparing", "running"])
 def test_con_una_subida_en_curso_responde_ocupado(db_conn, fetch, estado):
     _subida(db_conn, estado)
     assert reqs.sync_emu_requests(db_conn, force=True) == {"status": "busy", "message": SUBIDA}
     assert fetch == []
+
+
+def test_una_subida_en_cola_no_para_la_sincronizacion(db_conn, fetch):
+    """Mientras espera turno no llama a eMuwarez: un lote de 40 en cola no deja horas sin peticiones nuevas."""
+    _subida(db_conn, "queued")
+    assert reqs.sync_emu_requests(db_conn, force=True)["status"] == "ok"
+    assert fetch == [1]
+    # En cuanto una arranca, vuelve a contar.
+    _subida(db_conn, "preparing")
+    assert reqs.sync_emu_requests(db_conn, force=True) == {"status": "busy", "message": SUBIDA}
+    assert fetch == [1]
+
+
+def test_los_estados_en_marcha_son_los_activos_menos_la_cola():
+    from emuwarez_uploadrr.services.upload_states import ACTIVE_JOB_STATUSES
+    assert reqs.ESTADOS_EN_MARCHA == ACTIVE_JOB_STATUSES - {"queued"}
 
 
 @pytest.mark.parametrize("estado", ["completed", "failed", "cancelled", "ready"])

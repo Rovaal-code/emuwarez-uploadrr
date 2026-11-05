@@ -335,6 +335,102 @@ def test_solo_se_reintenta_la_punta_de_la_cadena(db_conn, tmp_path):
     assert lotes.contar_por_lote(db_conn, [LOTE]) == {LOTE: 1}
 
 
+def _existe(conn, job_id: int) -> bool:
+    return conn.execute("SELECT 1 FROM upload_jobs WHERE id = ?", (job_id,)).fetchone() is not None
+
+
+def test_borrar_lote_borra_las_terminadas_con_su_cadena_y_deja_las_en_curso(db_conn, tmp_path):
+    """Como «Borrar» en cada fila: la cadena entera del elemento, también su intento suelto anterior (D5)."""
+    item = _peli(db_conn, tmp_path, "A")
+    suelta = _encolar(db_conn, item, lote_id=None)
+    _fallar(db_conn, suelta)
+    completada = uq.queue_upload_for_item(item, lote_id=LOTE, conn=db_conn)["job"]["id"]  # encadena sobre la suelta
+    _poner(db_conn, completada, "completed")
+    fallida = _encolar(db_conn, _peli(db_conn, tmp_path, "B"))
+    _fallar(db_conn, fallida)
+    reintento = uq.queue_retry_for_job(fallida, conn=db_conn)["job"]["id"]
+    _fallar(db_conn, reintento)
+    cancelada = _encolar(db_conn, _peli(db_conn, tmp_path, "C"))
+    _poner(db_conn, cancelada, "cancelled")
+    en_cola = _encolar(db_conn, _peli(db_conn, tmp_path, "D"))
+    subiendo = _encolar(db_conn, _peli(db_conn, tmp_path, "E"))
+    _poner(db_conn, subiendo, "running")
+    de_otro_lote = _encolar(db_conn, _peli(db_conn, tmp_path, "F"), lote_id=OTRO)
+    _poner(db_conn, de_otro_lote, "completed")
+    db_conn.execute("INSERT INTO upload_job_logs (upload_job_id, level, message, created_at) "
+                    "VALUES (?, 'info', 'x', CURRENT_TIMESTAMP)", (fallida,))
+    db_conn.commit()
+
+    hecho = lotes.borrar_lote(db_conn, LOTE)
+
+    assert hecho == {"borradas": 3, "intentos": 5, "en_curso": 2}
+    for job in (suelta, completada, fallida, reintento, cancelada):
+        assert not _existe(db_conn, job)
+    assert (_estado(db_conn, en_cola), _estado(db_conn, subiendo), _estado(db_conn, de_otro_lote)) == (
+        "queued", "running", "completed")
+    assert db_conn.execute("SELECT COUNT(*) FROM upload_job_logs WHERE upload_job_id = ?", (fallida,)).fetchone()[0] == 0
+    resumen = lotes.resumen_de_lote(db_conn, LOTE)
+    assert (resumen["total"], resumen["en_cola"], resumen["en_marcha"]) == (2, 1, 1)
+
+
+def test_borrar_lote_usa_el_mismo_borrado_que_una_fila_suelta(db_conn, tmp_path, monkeypatch):
+    """Ni SQL propio ni otra regla: cada elemento pasa por delete_upload_job con el token de siempre."""
+    from emuwarez_uploadrr.services import upload_execution
+    llamadas = []
+    original = upload_execution.delete_upload_job
+
+    def espia(job_id, confirmation=None, conn=None):
+        llamadas.append((job_id, confirmation))
+        return original(job_id, confirmation=confirmation, conn=conn)
+    monkeypatch.setattr(upload_execution, "delete_upload_job", espia)
+    a = _encolar(db_conn, _peli(db_conn, tmp_path, "A"))
+    b = _encolar(db_conn, _peli(db_conn, tmp_path, "B"))
+    _poner(db_conn, a, "completed")
+    _fallar(db_conn, b)
+
+    assert lotes.borrar_lote(db_conn, LOTE) == {"borradas": 2, "intentos": 2, "en_curso": 0}
+    assert llamadas == [(a, upload_execution.DELETE_CONFIRMATION_TOKEN), (b, upload_execution.DELETE_CONFIRMATION_TOKEN)]
+    assert lotes.resumen_de_lote(db_conn, LOTE) is None
+
+
+def test_borrar_lote_no_toca_una_que_volvio_a_la_cola_entre_medias(db_conn, tmp_path, monkeypatch):
+    """Se leyó fallida, pero antes de borrarla alguien la reintentó: su cadena tiene un intento vivo y se queda."""
+    job = _encolar(db_conn, _peli(db_conn, tmp_path))
+    _fallar(db_conn, job)
+    foto = lotes._puntas(db_conn, LOTE)
+    reintento = uq.queue_retry_for_job(job, conn=db_conn)["job"]["id"]
+    monkeypatch.setattr(lotes, "_puntas", lambda conn, lote_id: foto)
+
+    assert lotes.borrar_lote(db_conn, LOTE) == {"borradas": 0, "intentos": 0, "en_curso": 1}
+    assert _existe(db_conn, job) and _estado(db_conn, reintento) == "queued"
+
+
+def test_la_api_borra_el_lote(client, auth_headers, db_conn, tmp_path):
+    hecha = _encolar(db_conn, _peli(db_conn, tmp_path, "A"))
+    en_cola = _encolar(db_conn, _peli(db_conn, tmp_path, "B"))
+    _poner(db_conn, hecha, "completed")
+    ruta = f"/api/uploads/lotes/{LOTE}/borrar"
+    token = {"confirmation": "BORRAR_SUBIDA"}
+
+    sin_token = client.post(ruta, json={}, headers=auth_headers)
+    assert sin_token.status_code == 400 and _existe(db_conn, hecha)
+
+    resp = client.post(ruta, json=token, headers=auth_headers)
+    assert resp.status_code == 200, resp.text
+    cuerpo = resp.json()
+    assert (cuerpo["borradas"], cuerpo["intentos"], cuerpo["en_curso"]) == (1, 1, 1)
+    assert (cuerpo["resumen"]["total"], cuerpo["resumen"]["en_cola"]) == (1, 1)
+    assert not _existe(db_conn, hecha) and _estado(db_conn, en_cola) == "queued"
+
+    # Con todo terminado, no queda lote.
+    _poner(db_conn, en_cola, "cancelled")
+    cuerpo = client.post(ruta, json=token, headers=auth_headers).json()
+    assert (cuerpo["borradas"], cuerpo["resumen"]) == (1, None)
+    assert client.post(ruta, json=token, headers=auth_headers).status_code == 404
+    assert client.post("/api/uploads/lotes/NOVALE/borrar", json=token, headers=auth_headers).status_code == 422
+    assert client.post(ruta, json=token).status_code == 401
+
+
 def test_la_puerta_lee_el_limite_una_vez_por_segundo_y_lo_olvida_al_vaciarse(monkeypatch):
     from emuwarez_uploadrr.services.upload_execution import concurrencia
     lecturas = []
@@ -537,6 +633,63 @@ def test_cada_elemento_lleva_su_peticion_sus_comprobaciones_y_el_proveedor_solo_
     assert (p, kw_p["request_item_id"], kw_p["checks"], kw_p["provider_override"]) == (peli, 7, LISTO, None)
     assert (t, kw_t["provider_override"]) == (temporada, "")
     assert kw_p["lote_id"] == kw_t["lote_id"]
+
+
+def _peticion_compatible(conn, emu_id: str, cruce: int) -> int:
+    from emuwarez_uploadrr.models import RequestItem
+    from emuwarez_uploadrr.services.requests import upsert_request
+    rid = upsert_request(conn, RequestItem(id=None, emu_id=emu_id, title=f"Petición {emu_id}", emu_status="Sin llenar",
+                                           url=f"https://emu-warez.com/requests/{emu_id}"))
+    conn.execute("INSERT INTO request_matches (library_item_id, request_item_id, status, confidence) "
+                 "VALUES (?, ?, 'Compatible', 0.9)", (cruce, rid))
+    conn.commit()
+    return rid
+
+
+def _peticion_del_trabajo(conn, job_id: int) -> tuple:
+    return tuple(conn.execute("SELECT request_item_id, request_title FROM upload_jobs WHERE id = ?",
+                              (job_id,)).fetchone())
+
+
+def test_desde_biblioteca_enlaza_la_peticion_abierta_de_cada_elemento(db_conn, tmp_path, sin_comprobaciones):
+    """Sin petición elegida, la abierta del elemento si hay una sola; con dos posibles (ambiguo), ninguna."""
+    con_peticion = _peli(db_conn, tmp_path, "A")
+    rid = _peticion_compatible(db_conn, "1", con_peticion)
+    sin_peticion = _peli(db_conn, tmp_path, "B")
+    ambigua = _peli(db_conn, tmp_path, "C")
+    _peticion_compatible(db_conn, "2", ambigua)
+    _peticion_compatible(db_conn, "3", ambigua)
+
+    r = lotes.encolar_lote(db_conn, [_el(con_peticion), _el(sin_peticion), _el(ambigua)])
+
+    a, b, c = (x["job_id"] for x in r["resultados"])
+    assert _peticion_del_trabajo(db_conn, a) == (rid, "Petición 1")
+    assert _peticion_del_trabajo(db_conn, b) == (None, None)
+    assert _peticion_del_trabajo(db_conn, c) == (None, None)
+
+
+def test_la_peticion_elegida_en_el_panel_gana(db_conn, tmp_path, sin_comprobaciones):
+    peli = _peli(db_conn, tmp_path)
+    _peticion_compatible(db_conn, "1", peli)
+    elegida = _peticion_compatible(db_conn, "2", _peli(db_conn, tmp_path, "Otra"))
+
+    job = lotes.encolar_lote(db_conn, [_el(peli, request_item_id=elegida)])["resultados"][0]["job_id"]
+
+    assert _peticion_del_trabajo(db_conn, job) == (elegida, "Petición 2")
+
+
+def test_si_falla_buscar_la_peticion_se_sube_igual_sin_ella(db_conn, tmp_path, sin_comprobaciones, monkeypatch):
+    from emuwarez_uploadrr.services import requests as reqs
+
+    def rota(conn, item_id):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(reqs, "peticion_que_enlazar", rota)
+    peli = _peli(db_conn, tmp_path)
+
+    r = lotes.encolar_lote(db_conn, [_el(peli)])
+
+    assert r["encolados"] == 1
+    assert _peticion_del_trabajo(db_conn, r["resultados"][0]["job_id"]) == (None, None)
 
 
 def test_campos_se_guardan_como_save_fields_y_no_si_el_elemento_se_salta(db_conn, tmp_path, sin_comprobaciones,

@@ -685,6 +685,17 @@ export interface LoteAccionResult {
   resumen: LoteResumen | null
 }
 
+// Lo que hizo «Borrar lote» (web/schemas.py::LoteBorrarResponse).
+export interface LoteBorrarResult {
+  // Elementos del lote borrados, y cuántas filas eran contando sus reintentos.
+  borradas: number
+  intentos: number
+  // Los que seguían en cola o en marcha: no se tocan.
+  en_curso: number
+  // Lo que queda del lote; null si ya no queda ninguno.
+  resumen: LoteResumen | null
+}
+
 // Phase 6C — Upload execution
 
 export interface UploadJobLog {

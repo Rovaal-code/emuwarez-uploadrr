@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { cancelarLote, reintentarLote } from '../api/uploads'
-import type { LoteAccionResult, LoteResumen } from '../types/api'
+import { borrarLote, cancelarLote, reintentarLote } from '../api/uploads'
+import type { LoteAccionResult, LoteBorrarResult, LoteResumen } from '../types/api'
 import { useTooltip } from './Tooltip'
 import { Modal } from './Modal'
 
@@ -34,11 +34,26 @@ function textoReintento(r: LoteAccionResult): string {
   return cuenta(r.reintentadas, 'reintentada', 'reintentadas')
 }
 
+// «3 borradas (con 2 reintentos) · 1 sigue en cola o en marcha»: lo que dice el banner tras «Borrar lote».
+function textoBorrado(r: LoteBorrarResult): string {
+  if (r.borradas === 0 && r.en_curso === 0) return 'No había ninguna terminada que borrar.'
+  const reintentos = r.intentos - r.borradas
+  const partes = [
+    cuenta(r.borradas, 'borrada', 'borradas') + (reintentos > 0 ? ` (con ${cuenta(reintentos, 'reintento', 'reintentos')})` : ''),
+  ]
+  if (r.en_curso > 0) {
+    partes.push(r.en_curso === 1
+      ? '1 sigue en cola o en marcha y no se ha borrado'
+      : `${r.en_curso} siguen en cola o en marcha y no se han borrado`)
+  }
+  return partes.join(' · ')
+}
+
 type Aviso = { texto: string; saltadas: LoteAccionResult['saltadas'] } | { error: string }
 
 /**
  * Sobre la tabla de Subidas filtrada por un lote: cuántas hay en cada estado, «Cancelar pendientes», «Reintentar
- * fallidas» y «Quitar filtro». El resumen lo pide UploadsPage en su `load()`, que ya refrescan los avisos del servidor.
+ * fallidas», «Borrar lote» (las terminadas) y «Quitar filtro». El resumen lo pide UploadsPage en su `load()`, que ya refrescan los avisos del servidor.
  */
 export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }: {
   loteId: string
@@ -47,10 +62,11 @@ export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }
   // Lo que dicen las filas cargadas, hasta que llega el resumen.
   totalConocido: number | null
   onQuitar: () => void
-  // Tras cancelar o reintentar: recargar la lista y el resumen.
+  // Tras cancelar, reintentar o borrar: recargar la lista y el resumen.
   onHecho: () => Promise<void> | void
 }) {
   const [confirmar, setConfirmar] = useState(false)
+  const [confirmarBorrar, setConfirmarBorrar] = useState(false)
   const [tambienEnMarcha, setTambienEnMarcha] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState<Aviso | null>(null)
@@ -60,6 +76,10 @@ export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }
   const puedeReintentar = !!resumen?.puede_reintentar && !ocupado
   const cancelarTip = useTooltip(resumen?.puede_cancelar ? null : 'No queda ninguna en cola ni en marcha')
   const reintentarTip = useTooltip(resumen?.puede_reintentar ? null : 'No hay ninguna fallida ni cancelada')
+  // Lo que «Borrar lote» se llevaría: los elementos terminados, salgan bien o mal.
+  const terminadas = resumen ? resumen.completadas + resumen.fallidas + resumen.canceladas : 0
+  const puedeBorrar = terminadas > 0 && !ocupado
+  const borrarTip = useTooltip(terminadas > 0 ? null : 'No hay ninguna terminada que borrar')
 
   const abrirCancelar = () => { setTambienEnMarcha(false); setConfirmar(true) }
 
@@ -83,6 +103,17 @@ export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }
       await onHecho()
     } catch (e: unknown) {
       setAviso({ error: e instanceof Error ? e.message : 'No se pudieron reintentar las fallidas del lote.' })
+    } finally { setOcupado(false) }
+  }
+
+  const hacerBorrar = async () => {
+    setConfirmarBorrar(false); setOcupado(true); setAviso(null)
+    try {
+      const r = await borrarLote(loteId)
+      setAviso({ texto: textoBorrado(r), saltadas: [] })
+      await onHecho()
+    } catch (e: unknown) {
+      setAviso({ error: e instanceof Error ? e.message : 'No se pudo borrar el lote.' })
     } finally { setOcupado(false) }
   }
 
@@ -114,6 +145,11 @@ export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }
             {...reintentarTip.triggerProps}>
             Reintentar fallidas
             {reintentarTip.tooltipNode}
+          </button>
+          <button type="button" className="btn btn-danger btn-sm" disabled={!puedeBorrar}
+            onClick={() => setConfirmarBorrar(true)} {...borrarTip.triggerProps}>
+            Borrar lote
+            {borrarTip.tooltipNode}
           </button>
           <button type="button" className="btn btn-secondary btn-sm" onClick={onQuitar}>Quitar filtro</button>
         </div>
@@ -161,6 +197,40 @@ export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }
               </button>
               <button className="btn btn-primary" type="button" disabled={enCola === 0 && !tambienEnMarcha} onClick={hacerCancelar}>
                 {tambienEnMarcha ? 'Cancelar todas' : 'Cancelar las pendientes'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {confirmarBorrar && (
+        <Modal titulo="Borrar el lote" onClose={() => setConfirmarBorrar(false)} className="sub-modal-520">
+          <div className="modal-body">
+            <p className="sub-t13">
+              Se borrarán las <strong>{cuenta(terminadas, 'subida terminada', 'subidas terminadas')}</strong> del lote
+              (completadas, fallidas o canceladas), con todo lo registrado de cada una: registro de actividad, capturas
+              y demás datos generados. Esta acción no se puede deshacer.
+            </p>
+            <p className="sub-t13">
+              Como al borrar una fila suelta, cada subida se borra <strong>entera, con todos sus intentos</strong>:
+              también los que hiciste de ese mismo contenido fuera de este lote (sueltos o en otro lote).
+            </p>
+            {enCola + enMarcha > 0 && (
+              <p className="sub-t13">
+                {enCola + enMarcha === 1
+                  ? <>La que sigue en cola o en marcha <strong>no se borra</strong>.</>
+                  : <>Las <strong>{enCola + enMarcha}</strong> que siguen en cola o en marcha <strong>no se borran</strong>.</>}
+              </p>
+            )}
+            <p className="sub-muted sub-t13">
+              Los archivos de vídeo de tu biblioteca no se tocan. Solo se borra el registro en esta aplicación.
+            </p>
+            <div className="sub-modal-pie">
+              <button className="btn btn-secondary" type="button" onClick={() => setConfirmarBorrar(false)}>
+                No borrar
+              </button>
+              <button className="btn btn-danger" type="button" onClick={hacerBorrar}>
+                {terminadas === 1 ? 'Borrar 1 subida' : `Borrar ${terminadas} subidas`}
               </button>
             </div>
           </div>

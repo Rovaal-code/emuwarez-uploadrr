@@ -2,14 +2,15 @@
 /**
  * Subidas con el servidor simulado: el chip «Lote · N» de las subidas de una tanda (solo con más de un elemento), el
  * filtro por lote que pone al pulsarlo (lo aplica el servidor, en la lista y en el total) y cómo se quita; el banner
- * del lote (contadores, cancelar pendientes y reintentar fallidas) y el reintento de una cadena, solo desde su punta.
+ * del lote (contadores, cancelar pendientes, reintentar fallidas y borrar el lote) y el reintento de una cadena, solo
+ * desde su punta.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/uploads', () => ({
   getUploads: vi.fn(), countUploads: vi.fn(), getUploadJob: vi.fn(), startUploadJob: vi.fn(),
   retryUploadJobQueued: vi.fn(), cancelUploadJob: vi.fn(), getUploadJobLogs: vi.fn(), deleteUploadJob: vi.fn(),
-  getLote: vi.fn(), cancelarLote: vi.fn(), reintentarLote: vi.fn(),
+  getLote: vi.fn(), cancelarLote: vi.fn(), reintentarLote: vi.fn(), borrarLote: vi.fn(),
 }))
 vi.mock('../../api/instances', () => ({ getInstances: vi.fn(async () => []) }))
 vi.mock('../../api/seeding', () => ({ getSeeding: vi.fn(async () => null) }))
@@ -17,7 +18,9 @@ vi.mock('../../api/eventos', () => ({
   suscribirse: vi.fn(() => () => {}), canalVivo: vi.fn(() => true), observarCanal: vi.fn(() => () => {}),
 }))
 
-import { cancelarLote, countUploads, getLote, getUploadJob, getUploads, reintentarLote } from '../../api/uploads'
+import {
+  borrarLote, cancelarLote, countUploads, deleteUploadJob, getLote, getUploadJob, getUploads, reintentarLote,
+} from '../../api/uploads'
 import { ApiClientError } from '../../api/client'
 import { SeccionVisible } from '../../context/SeccionVisible'
 import { SyncContext } from '../../context/SyncContext'
@@ -133,6 +136,7 @@ describe('el banner del lote', () => {
     expect(contadores()).toEqual(['1 en cola', '1 en marcha', '1 completada'])
     expect(boton('Cancelar pendientes')!.disabled).toBe(false)
     expect(boton('Reintentar fallidas')!.disabled).toBe(true)
+    expect(boton('Borrar lote')!.disabled).toBe(false)
   })
 
   it('«Cancelar pendientes» pregunta antes y, sin la casilla, cancela solo las de la cola', async () => {
@@ -185,6 +189,40 @@ describe('el banner del lote', () => {
     expect(aviso.textContent).toContain('1 reintentada')
     expect(aviso.querySelector('li')!.textContent).toBe('Serie - S01E02: Ya hay otra subida en marcha.')
     expect(vi.mocked(getUploads).mock.calls.length).toBeGreaterThan(peticiones)
+  })
+
+  it('«Borrar lote» pregunta antes, avisa de que borra la cadena entera y de las que no toca', async () => {
+    vi.mocked(getLote).mockResolvedValue({ ...RESUMEN, fallidas: 2, total: 5 })
+    vi.mocked(borrarLote).mockResolvedValue({ borradas: 3, intentos: 5, en_curso: 2, resumen: null })
+    await filtrarPorLote()
+    const peticiones = vi.mocked(getUploads).mock.calls.length
+    await pulsar(boton('Borrar lote'))
+    const dialogo = document.querySelector('[role="dialog"]')!
+    expect(dialogo.textContent).toContain('3 subidas terminadas')
+    expect(dialogo.textContent).toContain('fuera de este lote')
+    expect(dialogo.textContent).toContain('Las 2 que siguen en cola o en marcha no se borran')
+    expect(borrarLote).not.toHaveBeenCalled()
+    await pulsar(boton('Borrar 3 subidas'))
+    expect(borrarLote).toHaveBeenCalledWith(LOTE)
+    await esperar(() => document.querySelector('.sub-lote-aviso')?.textContent ===
+      '3 borradas (con 2 reintentos) · 2 siguen en cola o en marcha y no se han borrado')
+    expect(vi.mocked(getUploads).mock.calls.length).toBeGreaterThan(peticiones)
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    // El borrado suelto sigue siendo otra cosa.
+    expect(deleteUploadJob).not.toHaveBeenCalled()
+  })
+
+  it('«No borrar» cierra sin borrar nada, y sin terminadas no se puede borrar', async () => {
+    await filtrarPorLote()
+    await pulsar(boton('Borrar lote'))
+    await pulsar(boton('No borrar'))
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(borrarLote).not.toHaveBeenCalled()
+
+    await desmontar()
+    vi.mocked(getLote).mockResolvedValue({ ...RESUMEN, completadas: 0, en_cola: 2 })
+    await filtrarPorLote()
+    expect(boton('Borrar lote')!.disabled).toBe(true)
   })
 
   it('un fallo de la acción se enseña, no se traga', async () => {

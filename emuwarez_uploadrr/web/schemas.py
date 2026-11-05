@@ -1493,10 +1493,22 @@ class LoteAccionResponse(BaseModel):
     resumen: Optional[LoteResumen] = None
 
 
+class LoteBorrarResponse(BaseModel):
+    """«Borrar lote» (services/lotes.borrar_lote)."""
+    # Elementos del lote borrados, y cuántas filas eran contando sus reintentos.
+    borradas: int = 0
+    intentos: int = 0
+    # Los que seguían en cola, preparándose o subiendo: no se tocan.
+    en_curso: int = 0
+    # Lo que queda del lote; None si ya no queda ninguno.
+    resumen: Optional[LoteResumen] = None
+
+
 class UploadLoteElemento(BaseModel):
     """Un elemento de «Subir por lotes» (services/lotes.encolar_lote)."""
     item_id: int
-    # La petición que cubre (desde el Panel); None desde Biblioteca.
+    # La petición que cubre (desde el Panel). Sin ella (desde Biblioteca), el servidor enlaza la abierta del elemento si
+    # hay una sola (services/requests.peticion_que_enlazar).
     request_item_id: Optional[int] = None
     # Las comprobaciones de contenido que vio el usuario. Sin `ready` el elemento se salta.
     checks: UploadChecksSnapshot

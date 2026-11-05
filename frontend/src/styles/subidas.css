@@ -124,26 +124,63 @@
   background: color-mix(in srgb, var(--color-info) 24%, transparent);
 }
 
-/* Con el filtro de lote puesto, junto a los filtros: «Lote de N subidas · Quitar filtro de lote». */
-.sub-lote-filtro {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+/* Con el filtro de lote puesto, sobre la tabla (BannerLote): contadores, acciones y lo que hizo la última. */
+.sub-lote-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in srgb, var(--color-info) 32%, transparent);
+  background: color-mix(in srgb, var(--color-info) 8%, transparent);
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.sub-lote-quitar {
-  padding: 0;
-  border: none;
-  background: none;
-  font: inherit;
-  color: var(--text-accent);
-  cursor: pointer;
+.sub-lote-banner-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
 }
 
-.sub-lote-quitar:hover {
-  text-decoration: underline;
+.sub-lote-banner-titulo {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sub-lote-contadores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sub-lote-contador-en_marcha { color: var(--color-uploading); }
+.sub-lote-contador-completadas { color: var(--color-available); }
+.sub-lote-contador-fallidas { color: var(--color-error); }
+.sub-lote-contador-canceladas { color: var(--text-muted); }
+
+.sub-lote-banner-acciones {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.sub-lote-aviso {
+  margin: 0;
+}
+
+.sub-lote-saltadas {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.checkbox-label.sub-lote-casilla {
+  margin: 4px 0 8px;
 }
 
 .sub-poster {

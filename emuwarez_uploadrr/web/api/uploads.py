@@ -4,9 +4,9 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
-from ...database import connect, init_db
+from ...database import connect, db, init_db
 from ...services.library import content_display_title
 from ...services.upload_preflight import (
     build_upload_preflight,
@@ -24,12 +24,17 @@ from ...services.upload_execution import (
     compute_progress_phase,
 )
 from ...services.subida_pasos import NOMBRES, pasos_de_subida, reanudar_desde, subpasos_que_reutilizaria
+from ...services import lotes
 from ...services.lotes import PATRON_LOTE_ID, contar_por_lote
 from ...services.upload_queue import get_queue_positions
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..schemas import (
     CommandPreviewResponse,
+    LoteAccionResponse,
+    LoteCancelarBody,
+    LoteReintentarBody,
+    LoteResumen,
     OkResponse,
     UploadArtifact,
     UploadArtifactsResponse,
@@ -394,6 +399,46 @@ def count_uploads(
     }
     with _get_conn() as conn:
         return {"total": count_upload_jobs(filters=filters, conn=conn)}
+
+
+def _resumen_o_404(conn, lote_id: str) -> LoteResumen:
+    resumen = lotes.resumen_de_lote(conn, lote_id)
+    if resumen is None:
+        raise HTTPException(status_code=404, detail="Lote no encontrado.")
+    return LoteResumen(**resumen)
+
+
+@router.get("/uploads/lotes/{lote_id}", response_model=LoteResumen)
+def get_lote(lote_id: str = Path(pattern=PATRON_LOTE_ID), current_user: dict = Depends(require_auth)):
+    """Cuántos elementos del lote hay en cada estado. Solo lee la base local."""
+    with db(_db_path()) as conn:
+        return _resumen_o_404(conn, lote_id)
+
+
+@router.post("/uploads/lotes/{lote_id}/cancelar", response_model=LoteAccionResponse)
+def cancelar_lote(
+    body: LoteCancelarBody,
+    lote_id: str = Path(pattern=PATRON_LOTE_ID),
+    current_user: dict = Depends(require_auth),
+):
+    """Cancela las que esperan en la cola (y, con solo_pendientes=false, también las que ya están en marcha)."""
+    with db(_db_path()) as conn:
+        _resumen_o_404(conn, lote_id)
+        hecho = lotes.cancelar_lote(conn, lote_id, solo_pendientes=body.solo_pendientes)
+        return LoteAccionResponse(**hecho, resumen=_resumen_o_404(conn, lote_id))
+
+
+@router.post("/uploads/lotes/{lote_id}/reintentar", response_model=LoteAccionResponse)
+def reintentar_lote(
+    body: LoteReintentarBody,
+    lote_id: str = Path(pattern=PATRON_LOTE_ID),
+    current_user: dict = Depends(require_auth),
+):
+    """Reencola cada elemento fallido o cancelado del lote, en su orden."""
+    with db(_db_path()) as conn:
+        _resumen_o_404(conn, lote_id)
+        hecho = lotes.reintentar_fallidas(conn, lote_id, desde_el_principio=body.desde_el_principio)
+        return LoteAccionResponse(**hecho, resumen=_resumen_o_404(conn, lote_id))
 
 
 @router.get("/uploads/{job_id}", response_model=UploadJobDetail)

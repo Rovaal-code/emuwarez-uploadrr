@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import Callable
 
 from ...database import get_setting_canonical
@@ -73,6 +74,20 @@ class _UploadConcurrencyGate:
         self._waiting: set[int] = set()
         self._retirados: set[int] = set()
         self._liberaciones = 0
+        # El límite leído hace menos de un segundo (valor, cuándo). Con muchas subidas en espera (un lote)
+        # cada vuelta de cada hilo abría una conexión para leer el ajuste, y cada liberación los despierta a
+        # todos. Se olvida cuando la cola se vacía: un cambio del ajuste se nota como mucho un segundo tarde.
+        self._limite_leido: tuple[int, float] | None = None
+
+    def _limite(self) -> int:
+        with self._cond:
+            leido = self._limite_leido
+        if leido is not None and time.monotonic() - leido[1] < 1.0:
+            return leido[0]
+        limite = _limite_de_subidas()
+        with self._cond:
+            self._limite_leido = (limite, time.monotonic())
+        return limite
 
     def acquire(self, job_id: int, *, cancelada: Callable[[], bool] | None = None) -> bool:
         """True con la plaza tomada; False si se retiró mientras esperaba.
@@ -90,7 +105,7 @@ class _UploadConcurrencyGate:
             while True:
                 if cancelada is not None and _sin_fallos(cancelada):
                     return False
-                limit = _limite_de_subidas()
+                limit = self._limite()
                 with self._cond:
                     if job_id in self._retirados:
                         self._retirados.discard(job_id)
@@ -119,6 +134,8 @@ class _UploadConcurrencyGate:
         finally:
             with self._cond:
                 self._waiting.discard(job_id)
+                if not self._waiting:
+                    self._limite_leido = None
                 # Una retirada que llegó mientras esperaba ya no hace falta,
                 # salga como salga (con plaza, retirada o por `cancelada`).
                 self._retirados.discard(job_id)

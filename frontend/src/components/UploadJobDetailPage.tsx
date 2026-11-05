@@ -440,7 +440,7 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
   )
 }
 
-export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, onDelete, onOpenLibraryItem, seeding, retryError }: {
+export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, onDelete, onOpenLibraryItem, onVerLote, seeding, retryError }: {
   job: UploadJob
   onBack: () => void
   onStart: (job: UploadJob) => void
@@ -448,6 +448,8 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   onCancel: (jobId: number) => void
   onDelete: (job: UploadJob) => void
   onOpenLibraryItem?: (id: number) => void
+  // «Ver el lote»: Subidas cierra este detalle y filtra la tabla por ese lote.
+  onVerLote?: (loteId: string) => void
   seeding: SeedingEstado
   retryError?: string | null
 }) {
@@ -533,6 +535,8 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   }, [logs])
 
   const progress = job.progress
+  // Un lote que se quedó en un elemento no agrupa nada: como en el chip de la tabla, solo con más de uno.
+  const loteId = job.lote_id && (job.lote_total ?? 0) > 1 ? job.lote_id : null
   const mediaIcon = <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
 
   const pasosDeSubida = !isStaging && job.pasos && job.pasos.length > 0 ? <PasosDeSubida pasos={job.pasos} /> : null
@@ -544,6 +548,17 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       <DetailHero backdropUrl={job.backdrop_url}>
       <div className="dsub-barra-sup">
         <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a Subidas</button>
+        {loteId && (
+          <span className="dsub-lote">
+            Parte de un lote de {job.lote_total}
+            {onVerLote && (
+              <>
+                {' · '}
+                <button type="button" className="dsub-lote-ver" onClick={() => onVerLote(loteId)}>Ver el lote</button>
+              </>
+            )}
+          </span>
+        )}
       </div>
 
       <div className="dsub-titulo-caja">

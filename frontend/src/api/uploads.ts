@@ -6,6 +6,8 @@ import type {
   UploadStartRequest,
   UploadStartResult,
   OkResponse,
+  LoteResumen,
+  LoteAccionResult,
 } from '../types/api'
 import type { TrackRemuxOverride } from './nomenclature'
 import { latestInChain } from '../utils/uploadStatus'
@@ -138,6 +140,23 @@ export async function startUploadJob(
 export async function retryUploadJobQueued(jobId: number, desdeElPrincipio = false): Promise<UploadQueueResult> {
   const consulta = desdeElPrincipio ? '?desde_el_principio=true' : ''
   return api.post<UploadQueueResult>(`/uploads/${jobId}/retry-queued${consulta}`, {})
+}
+
+// El resumen de un lote: cuántos de sus elementos hay en cada estado. 404 si no hay ninguno con ese lote_id.
+export async function getLote(loteId: string): Promise<LoteResumen> {
+  return api.get<LoteResumen>(`/uploads/lotes/${encodeURIComponent(loteId)}`)
+}
+
+// Cancela lo que queda del lote: con `soloPendientes`, solo las que esperan en la cola; sin él, también las que ya
+// se preparan o suben.
+export async function cancelarLote(loteId: string, soloPendientes: boolean): Promise<LoteAccionResult> {
+  return api.post<LoteAccionResult>(`/uploads/lotes/${encodeURIComponent(loteId)}/cancelar`, { solo_pendientes: soloPendientes })
+}
+
+// Reencola cada elemento fallido o cancelado del lote, en su orden. Como el reintento de una sola, reanuda desde el
+// paso que falló si se puede; `desdeElPrincipio` lo rehace todo.
+export async function reintentarLote(loteId: string, desdeElPrincipio = false): Promise<LoteAccionResult> {
+  return api.post<LoteAccionResult>(`/uploads/lotes/${encodeURIComponent(loteId)}/reintentar`, { desde_el_principio: desdeElPrincipio })
 }
 
 export async function cancelUploadJob(jobId: number): Promise<unknown> {

@@ -214,3 +214,189 @@ def test_la_api_rechaza_un_lote_mal_formado(client, auth_headers, db_conn, tmp_p
     assert client.get(f"/api/uploads?lote_id={malo}", headers=auth_headers).status_code == 422
     assert client.get(f"/api/uploads/count?lote_id={malo}", headers=auth_headers).status_code == 422
     assert db_conn.execute("SELECT COUNT(*) FROM upload_jobs").fetchone()[0] == 0
+
+
+# ---------------------------------------------------------------------------
+# PR 2: resumen, cancelar pendientes y reintentar fallidas
+# ---------------------------------------------------------------------------
+
+def _estado(conn, job_id: int) -> str:
+    return conn.execute("SELECT status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()[0]
+
+
+def _poner(conn, job_id: int, estado: str) -> None:
+    conn.execute("UPDATE upload_jobs SET status = ?, stage = ? WHERE id = ?", (estado, estado, job_id))
+    conn.commit()
+
+
+def test_resumen_de_lote_cuenta_cada_estado_sobre_las_puntas(db_conn, tmp_path):
+    ids = [_encolar(db_conn, _peli(db_conn, tmp_path, t)) for t in "ABCDE"]
+    _poner(db_conn, ids[1], "preparing")
+    _poner(db_conn, ids[2], "completed")
+    _poner(db_conn, ids[3], "cancelled")
+    _fallar(db_conn, ids[4])
+    uq.queue_retry_for_job(ids[4], conn=db_conn)  # vuelve a la cola: el fallido deja de ser punta
+
+    resumen = lotes.resumen_de_lote(db_conn, LOTE)
+
+    assert {k: resumen[k] for k in ("total", "en_cola", "en_marcha", "completadas", "fallidas", "canceladas")} == {
+        "total": 5, "en_cola": 2, "en_marcha": 1, "completadas": 1, "fallidas": 0, "canceladas": 1}
+    assert (resumen["terminado"], resumen["puede_cancelar"], resumen["puede_reintentar"]) == (False, True, True)
+    assert lotes.resumen_de_lote(db_conn, OTRO) is None
+
+
+def test_cancelar_pendientes_deja_en_paz_lo_que_ya_esta_en_marcha(db_conn, tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import upload_queue
+    en_marcha = _encolar(db_conn, _peli(db_conn, tmp_path, "A"))
+    pendientes = [_encolar(db_conn, _peli(db_conn, tmp_path, t)) for t in "BC"]
+    _poner(db_conn, en_marcha, "running")
+    retiradas = []
+
+    def retirar(job_id):
+        # Al sacar la primera de la puerta, todas las pendientes ya están canceladas en la base.
+        retiradas.append((job_id, [_estado(db_conn, j) for j in pendientes]))
+    monkeypatch.setattr(upload_queue, "retirar_de_la_cola", retirar)
+
+    hecho = lotes.cancelar_lote(db_conn, LOTE)
+
+    assert hecho == {"canceladas": 2, "intactas": 0}
+    assert [_estado(db_conn, j) for j in pendientes] == ["cancelled", "cancelled"]
+    assert _estado(db_conn, en_marcha) == "running"
+    assert retiradas == [(j, ["cancelled", "cancelled"]) for j in pendientes]
+
+
+def test_cancelar_pendientes_no_toca_una_que_arranco_entre_medias(db_conn, tmp_path, monkeypatch):
+    """La lista se leyó con la subida en cola, pero cuando se escribe ya se está preparando: no es pendiente."""
+    job = _encolar(db_conn, _peli(db_conn, tmp_path))
+    foto = lotes._puntas(db_conn, LOTE)
+    _poner(db_conn, job, "preparing")
+    monkeypatch.setattr(lotes, "_puntas", lambda conn, lote_id: foto)
+
+    assert lotes.cancelar_lote(db_conn, LOTE) == {"canceladas": 0, "intactas": 1}
+    assert _estado(db_conn, job) == "preparing"
+
+
+def test_cancelar_todo_para_tambien_lo_que_se_prepara(db_conn, tmp_path):
+    preparando = _encolar(db_conn, _peli(db_conn, tmp_path, "A"))
+    pendiente = _encolar(db_conn, _peli(db_conn, tmp_path, "B"))
+    hecha = _encolar(db_conn, _peli(db_conn, tmp_path, "C"))
+    _poner(db_conn, preparando, "preparing")
+    _poner(db_conn, hecha, "completed")
+
+    hecho = lotes.cancelar_lote(db_conn, LOTE, solo_pendientes=False)
+
+    assert hecho == {"canceladas": 2, "intactas": 0}
+    assert (_estado(db_conn, preparando), _estado(db_conn, pendiente), _estado(db_conn, hecha)) == (
+        "cancelled", "cancelled", "completed")
+
+
+def test_reintentar_fallidas_reencola_en_orden_y_sigue_en_el_lote(db_conn, tmp_path):
+    fallida = _encolar(db_conn, _peli(db_conn, tmp_path, "A"))
+    hecha = _encolar(db_conn, _peli(db_conn, tmp_path, "B"))
+    cancelada = _encolar(db_conn, _peli(db_conn, tmp_path, "C"))
+    _fallar(db_conn, fallida)
+    _poner(db_conn, hecha, "completed")
+    _poner(db_conn, cancelada, "cancelled")
+
+    hecho = lotes.reintentar_fallidas(db_conn, LOTE)
+
+    assert (hecho["reintentadas"], hecho["saltadas"]) == (2, [])
+    nuevas = db_conn.execute(
+        "SELECT retry_of_job_id, lote_id FROM upload_jobs WHERE retry_of_job_id IS NOT NULL ORDER BY id").fetchall()
+    assert [tuple(f) for f in nuevas] == [(fallida, LOTE), (cancelada, LOTE)]
+    assert lotes.resumen_de_lote(db_conn, LOTE)["en_cola"] == 2
+
+
+def test_reintentar_fallidas_salta_la_que_ya_no_se_puede_reintentar(db_conn, tmp_path):
+    job = _encolar(db_conn, _peli(db_conn, tmp_path))
+    _fallar(db_conn, job)
+    db_conn.execute("DELETE FROM library_items")
+    db_conn.commit()
+
+    hecho = lotes.reintentar_fallidas(db_conn, LOTE)
+
+    assert hecho["reintentadas"] == 0
+    assert [s["job_id"] for s in hecho["saltadas"]] == [job]
+    assert hecho["saltadas"][0]["errors"]
+
+
+def test_solo_se_reintenta_la_punta_de_la_cadena(db_conn, tmp_path):
+    """Reintentar un intento anterior abría otra punta para el mismo elemento (y el lote contaba uno de más)."""
+    job = _encolar(db_conn, _peli(db_conn, tmp_path))
+    _fallar(db_conn, job)
+    reintento = uq.queue_retry_for_job(job, conn=db_conn)["job"]["id"]
+    _fallar(db_conn, reintento)
+
+    otra_vez = uq.queue_retry_for_job(job, conn=db_conn)
+
+    assert otra_vez["status"] == "blocked"
+    assert f"#{reintento}" in otra_vez["errors"][0]
+    assert uq.queue_retry_for_job(reintento, conn=db_conn)["status"] == "queued"
+    assert lotes.contar_por_lote(db_conn, [LOTE]) == {LOTE: 1}
+
+
+def test_la_puerta_lee_el_limite_una_vez_por_segundo_y_lo_olvida_al_vaciarse(monkeypatch):
+    from emuwarez_uploadrr.services.upload_execution import concurrencia
+    lecturas = []
+    monkeypatch.setattr(concurrencia, "get_upload_max_concurrent", lambda conn=None: lecturas.append(1) or 1)
+    puerta = concurrencia._UploadConcurrencyGate()
+
+    assert [puerta._limite() for _ in range(5)] == [1] * 5
+    assert len(lecturas) == 1
+
+    puerta.acquire(1)  # entra y la cola queda vacía: se olvida lo leído
+    puerta.release()
+    assert puerta._limite_leido is None
+    puerta._limite()
+    assert len(lecturas) == 2
+
+
+def test_la_api_del_lote(client, auth_headers, db_conn, tmp_path):
+    a = _encolar(db_conn, _peli(db_conn, tmp_path, "A"))
+    b = _encolar(db_conn, _peli(db_conn, tmp_path, "B"))
+    _fallar(db_conn, a)
+
+    resumen = client.get(f"/api/uploads/lotes/{LOTE}", headers=auth_headers)
+    assert resumen.status_code == 200, resumen.text
+    assert (resumen.json()["total"], resumen.json()["fallidas"], resumen.json()["en_cola"]) == (2, 1, 1)
+
+    cancelar = client.post(f"/api/uploads/lotes/{LOTE}/cancelar", json={}, headers=auth_headers).json()
+    assert (cancelar["canceladas"], cancelar["resumen"]["canceladas"]) == (1, 1)
+    assert _estado(db_conn, b) == "cancelled"
+
+    reintentar = client.post(f"/api/uploads/lotes/{LOTE}/reintentar", json={}, headers=auth_headers).json()
+    assert (reintentar["reintentadas"], reintentar["resumen"]["en_cola"]) == (2, 2)
+
+    assert client.get(f"/api/uploads/lotes/{OTRO}", headers=auth_headers).status_code == 404
+    assert client.post(f"/api/uploads/lotes/{OTRO}/cancelar", json={}, headers=auth_headers).status_code == 404
+    assert client.get("/api/uploads/lotes/NOVALE", headers=auth_headers).status_code == 422
+    assert client.get(f"/api/uploads/lotes/{LOTE}").status_code == 401
+
+
+def test_cancelar_todo_para_tambien_la_que_arranco_entre_medias(db_conn, tmp_path, monkeypatch):
+    """Con «parar también las que están en marcha», una que estaba en cola al leer y ya se prepara al escribir
+    también se para (por cancel_upload_job), no se queda contada como intacta."""
+    job = _encolar(db_conn, _peli(db_conn, tmp_path))
+    foto = lotes._puntas(db_conn, LOTE)
+    _poner(db_conn, job, "preparing")
+    monkeypatch.setattr(lotes, "_puntas", lambda conn, lote_id: foto)
+
+    assert lotes.cancelar_lote(db_conn, LOTE, solo_pendientes=False) == {"canceladas": 1, "intactas": 0}
+    assert _estado(db_conn, job) == "cancelled"
+
+
+def test_dos_reintentos_a_la_vez_no_dejan_dos_puntas(db_conn, tmp_path):
+    """La guardia de queue_retry_for_job va fuera de la transacción: la de dentro cierra la carrera."""
+    item = _peli(db_conn, tmp_path)
+    job = _encolar(db_conn, item)
+    _fallar(db_conn, job)
+    primero = uq.queue_retry_for_job(job, conn=db_conn)["job"]["id"]
+    _fallar(db_conn, primero)
+    fila = dict(db_conn.execute("SELECT * FROM library_items WHERE id = ?", (item,)).fetchone())
+
+    # Lo que haría el segundo reintento si hubiera pasado la guardia de fuera antes de que existiera el primero.
+    segundo = uq._insert_and_start_queued_job(db_conn, fila, retry_of_job_id=job, lote_id=LOTE)
+
+    assert segundo["status"] == "blocked"
+    assert f"#{primero}" in segundo["errors"][0]
+    assert lotes.contar_por_lote(db_conn, [LOTE]) == {LOTE: 1}

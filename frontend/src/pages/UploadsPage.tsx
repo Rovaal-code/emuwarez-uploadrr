@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef, Fragment, useCallback } from 'react'
-import { getUploads, countUploads, getUploadJob, startUploadJob, retryUploadJobQueued, cancelUploadJob } from '../api/uploads'
+import { getUploads, countUploads, getUploadJob, startUploadJob, retryUploadJobQueued, cancelUploadJob, getLote } from '../api/uploads'
 import { useInstancias } from '../hooks/useInstancias'
 import { ApiClientError } from '../api/client'
-import type { UploadJob, InstanceSafeResponse } from '../types/api'
+import type { UploadJob, InstanceSafeResponse, LoteResumen } from '../types/api'
 import { EmptyState, FilaVacia } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
 import { GruposDeRelease } from '../components/GruposDeRelease'
@@ -29,6 +29,7 @@ import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../
 import { useAlSalir, useSeccionVisible } from '../context/SeccionVisible'
 import { IconoSubida, IconoTipo } from '../components/Iconos'
 import { Modal } from '../components/Modal'
+import { BannerLote } from '../components/BannerLote'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -148,7 +149,8 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
 }) {
   const canCancel = CANCELLABLE_STATUSES.has(job.status)
   const canDelete = DELETABLE_STATUSES.has(job.status)
-  const canRetry = RETRYABLE_STATUSES.has(job.status)
+  // Un intento anterior de una cadena ya se reintentó: el servidor solo acepta reintentar el último.
+  const canRetry = !indent && RETRYABLE_STATUSES.has(job.status)
   const isPreparingOrRunning = job.status === 'preparing' || job.status === 'running'
   const phaseInfo = isPreparingOrRunning ? currentPhaseInfo(job) : null
   const phaseLabelText = phaseInfo?.label ?? (isPreparingOrRunning ? phaseLabel(job.progress_phase) : null)
@@ -158,7 +160,9 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
   const { triggerProps: emuTip, tooltipNode: emuTooltip } = useTooltip(job.result_url ? 'Ver en eMuwarez' : null)
   const { triggerProps: originTip, tooltipNode: originTooltip } = useTooltip(deepLink ? `Abrir en ${job.instance_name ?? job.instance_type}` : null)
   const retryToggleTip = useTooltip(retryToggle ? (retryToggle.expanded ? 'Ocultar intentos anteriores' : 'Ver intentos anteriores') : null)
-  const retryBtnTip = useTooltip(canRetry ? 'Reintentar subida' : 'Solo se puede reintentar una subida cancelada o fallida')
+  const retryBtnTip = useTooltip(canRetry
+    ? 'Reintentar subida'
+    : indent ? 'Reintenta el último intento de la cadena' : 'Solo se puede reintentar una subida cancelada o fallida')
   const deleteBtnTip = useTooltip(canDelete
     ? ((job.retry_count ?? 0) > 0
         ? 'Borrar esta subida del historial, con todos sus intentos'
@@ -346,6 +350,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // Solo las subidas de un lote (el chip «Lote · N»): lo filtra el servidor, que devuelve el último intento de cada
   // elemento.
   const [loteFiltro, setLoteFiltro] = useState<string | null>(null)
+  // El resumen de ese lote (contadores y qué se puede hacer): se pide con la lista, en el mismo load().
+  const [loteResumen, setLoteResumen] = useState<LoteResumen | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
   // Cuántas se piden (las más recientes), cuántas hay en total con el filtro de estado, y si ya llegó la primera
   // respuesta (hasta entonces «no está en la lista» no quiere decir nada).
@@ -389,13 +395,18 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         lote_id: loteFiltro ?? undefined,
       }
       // Si falla solo el recuento, la lista se enseña igual y el total queda sin conocer.
-      const [data, cuantas] = await Promise.all([
+      // El resumen del lote: un 404 (ya no queda ninguna) lo quita; otro fallo deja el que había.
+      const [data, cuantas, resumen] = await Promise.all([
         getUploads({ ...filtros, limit: limite }),
         countUploads(filtros).catch(() => null),
+        loteFiltro
+          ? getLote(loteFiltro).catch(e => (e instanceof ApiClientError && e.status === 404 ? null : undefined))
+          : Promise.resolve(null),
       ])
       if (seq === loadSeqRef.current) {
         setJobs(data)
         setTotal(cuantas)
+        if (resumen !== undefined) setLoteResumen(resumen)
         setCargado(true)
         setError(null)
       }
@@ -439,6 +450,14 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const filtrando = !!(search || statusFilter || typeFilter || loteFiltro)
   // Cuántos elementos tiene el lote filtrado: lo dice cualquiera de sus filas (antes de recargar, la del chip pulsado).
   const loteTotal = loteFiltro ? jobs.find(j => j.lote_id === loteFiltro)?.lote_total ?? null : null
+  // Solo el del lote que se mira: al cambiar de lote, el anterior no vale hasta que llegue el nuevo.
+  const resumenDelLote = loteResumen?.lote_id === loteFiltro ? loteResumen : null
+  // «Ver el lote» desde el detalle de una de sus subidas: de vuelta a la tabla, con el lote entero (sin otros filtros).
+  const verLote = (loteId: string) => {
+    closeUpload()
+    setSearch(''); setStatusFilter(''); setTypeFilter('')
+    setLoteFiltro(loteId)
+  }
   // Las que faltan por cargar (sin total conocido, si la lista llena el límite pedido). La búsqueda por título y el
   // filtro de tipo miran solo las cargadas.
   const hayMas = hayMasPorCargar(total, jobs.length, limite, MAX_LIMITE)
@@ -672,6 +691,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           onCancel={id => handleCancel(id)}
           onDelete={j => setDeleteJob(j)}
           onOpenLibraryItem={goToLibraryItem}
+          onVerLote={verLote}
           seeding={seeding}
           retryError={retryError}
         />
@@ -710,14 +730,18 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <option value="status">Orden: Estado</option>
           <option value="duration_desc">Orden: Duración</option>
         </select>
-        {loteFiltro && (
-          <span className="sub-lote-filtro">
-            {loteTotal != null ? `Lote de ${loteTotal} ${loteTotal === 1 ? 'subida' : 'subidas'}` : 'Lote'}
-            {' · '}
-            <button type="button" className="sub-lote-quitar" onClick={() => setLoteFiltro(null)}>Quitar filtro de lote</button>
-          </span>
-        )}
       </div>
+
+      {loteFiltro && (
+        <BannerLote
+          key={loteFiltro}
+          loteId={loteFiltro}
+          resumen={resumenDelLote}
+          totalConocido={loteTotal}
+          onQuitar={() => setLoteFiltro(null)}
+          onHecho={() => load()}
+        />
+      )}
 
       {/* Ver RequestsPage: solo bloquea si no hay nada que enseñar todavía. */}
       {loading && jobs.length === 0 && !filtrando ? <LoadingState label="Cargando Subidas…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 && !filtrando ? (

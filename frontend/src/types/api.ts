@@ -657,6 +657,34 @@ export interface UploadJob {
   progress?: UploadProgressState | null
 }
 
+// Un lote visto entero (GET /uploads/lotes/{id}, web/schemas.py::LoteResumen): cuántos de sus elementos hay en cada
+// estado, contando solo el último intento de cada uno, y qué se puede hacer con él.
+export interface LoteResumen {
+  lote_id: string
+  total: number
+  en_cola: number
+  // Las que ya se preparan o suben (todo lo vivo que no espera en la cola).
+  en_marcha: number
+  completadas: number
+  fallidas: number
+  canceladas: number
+  creado: string | null
+  terminado: boolean
+  puede_cancelar: boolean
+  puede_reintentar: boolean
+}
+
+// Lo que hizo «Cancelar pendientes» o «Reintentar fallidas» con un lote (web/schemas.py::LoteAccionResponse).
+export interface LoteAccionResult {
+  canceladas: number
+  // Las que no se tocaron al cancelar: habían empezado o terminado entre la lectura y la escritura.
+  intactas: number
+  reintentadas: number
+  // Las que no se pudieron reintentar, con el motivo.
+  saltadas: { job_id: number; title: string | null; errors: string[] }[]
+  resumen: LoteResumen | null
+}
+
 // Phase 6C — Upload execution
 
 export interface UploadJobLog {

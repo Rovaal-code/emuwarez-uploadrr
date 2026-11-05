@@ -467,7 +467,8 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   puntas, `app_state` `lote_avisado:<id>`) van en un `BEGIN IMMEDIATE`; «Reintentar fallidas» cambia la firma y vuelve a
   avisar al terminar. Cancelar también cierra el lote; reiniciar no avisa. Sin migración: al pasar a «Una por lote», la
   pestaña marca el aviso nuevo en los canales que avisaban de las subidas. Y «Subir seleccionadas» (Panel y Peticiones) no
-  abre el lote si lo marcado cambió mientras se pedían las fichas (`useSeleccionLote().sigueIgual`). Sin ver en el navegador.
+  abre un lote viejo si lo marcado cambia mientras se piden las fichas: lo vuelve a preparar con lo de ahora
+  (`useSeleccionLote().vigente`). Sin ver en el navegador.
 ## Siguiente
 
 Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que quedaba por ver se comprobó el 03/11 (ver en

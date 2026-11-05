@@ -3,8 +3,8 @@
 Documento autosuficiente para quien lo ejecute. Primera versión hecha leyendo `master` en `b934813` (04/11/2026), sin
 ejecutar nada. **Revisado el mismo día contra `adef702`** (después de #207 y #208, que cambiaron Biblioteca y Peticiones) con
 cinco revisiones en paralelo (cola y BD, endpoint y comprobaciones, Biblioteca y Panel, modal y Subidas, tests y CI); lo que
-cambió está en §9. Los números de línea son aproximados (≈). Pendiente de que Gabriel responda las preguntas de §8; la
-recomendación va en cada una. Al terminar cada PR, actualiza `docs/PLAN.md` (ver «Cómo se trabaja» allí).
+cambió está en §9. Los números de línea son aproximados (≈). Gabriel respondió las preguntas de §8 el 05/11 (resumen al
+principio de §8); la recomendación sigue en cada una. Al terminar cada PR, actualiza `docs/PLAN.md` (ver «Cómo se trabaja» allí).
 
 ---
 
@@ -125,7 +125,7 @@ recomendación va en cada una. Al terminar cada PR, actualiza `docs/PLAN.md` (ve
 | D6 | **Un fallo no detiene al resto** (igual que la tanda actual). | Es el comportamiento vigente y lo esperado; lo sistémico se mitiga en §5.5 (precondiciones una vez antes de encolar). |
 | D7 | **Duplicado y «peor» avisan, no bloquean** (igual que el Resumen actual): los niveles `duplicado` y `peor` llegan **desmarcados** y avisados; el usuario puede marcarlos. `null` (nada con qué comparar) y `sin-comparar` llegan marcados. | Evita subir 30 duplicados por un clic de más, sin impedir un re-subir legítimo. A confirmar (pregunta 3). |
 | D8 | **Tope de 50 elementos por lote** (`MAX_ELEMENTOS_LOTE`, copia vigilada en el frontend). | Cada elemento = 1 hilo esperando en la puerta (ver §5.1); 50 es holgado y acotado. A confirmar (pregunta 2). |
-| D9 | La **petición se enlaza solo desde el Panel** (`rec_request_id` por fila). Desde Biblioteca no se enlaza (igual que hoy). | Paridad con el asistente actual. A confirmar (pregunta 6). |
+| D9 | La petición elegida en el Panel o en Peticiones se enlaza tal cual. **Desde Biblioteca, el servidor enlaza la petición abierta «Compatible» que cubre el elemento** si hay una sola en el nivel más cercano (`requests.peticion_que_enlazar`); si hay dos, ninguna. | Respondido por Gabriel (pregunta 6: sí). |
 | D10 | **El proveedor solo viaja por elemento en temporadas** (`provider` → `provider_override`, que `queue_upload_for_item` solo aplica a `season`). En película/capítulo el proveedor sugerido va dentro de `campos` (el juego **completo** de campos de `getNomenclatureFields(id).fields` + el proveedor), como hace `save-fields`. | `provider_override` se descarta en silencio fuera de las temporadas, y `save-fields` reconstruye la propuesta entera con lo que recibe: mandar solo `{provider}` vaciaría el resto. |
 | D11 | **El servidor no se fía del cliente para el contenido**: `encolar_lote` salta un elemento cuyo `checks.ready` sea falso y, en película/capítulo, repite `run_upload_checks(scope="content")` (barato: abrir, probar un enlace, leer columnas). Los packs ya los revisa `_paso_nombre`. | Hoy nadie comprueba el castellano de una película en el servidor; un lote sería una segunda puerta de entrada sin esa comprobación. |
 
@@ -678,6 +678,11 @@ cancelación necesitan `subidas_reales` + `puerta`.
 ## 8. Riesgos y preguntas abiertas para Gabriel (por impacto)
 
 ### Preguntas (solo él puede decidir)
+
+**Respuestas de Gabriel (05/11/2026).** Las 1, 2, 3, 7, 8 y 12 se hicieron con la recomendación (PR 1-6). La 14 ya no aplica
+(los PR 1-6 salieron juntos). **6, 9, 10 y 13: sí**, hechas en el PR 8 (ver PLAN.md). **5: sí, a elegir en Ajustes** («una
+por subida» o «una por lote»). **4:** propuesta pendiente de confirmar: parar el lote tras 5 fallos seguidos con el mismo motivo.
+**11:** explicada; la recomendación es no hacerla mientras no dé problemas.
 
 1. **¿Vale un lote sin edición por elemento?** (nombres automáticos; solo se sugiere proveedor a los WEB-DL sin proveedor; las
    filas con avisos de nombre llegan desmarcadas; editar = subir suelto). Es la decisión que más condiciona el coste y la calidad

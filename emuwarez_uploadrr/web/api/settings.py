@@ -101,6 +101,8 @@ class SettingsResponse(BaseModel):
     notify_ui_events: list[str] = []
     notify_discord_events: list[str] = []
     notify_telegram_events: list[str] = []
+    # Las subidas de un lote: una notificación por subida o una sola al terminar el lote.
+    notify_lote_modo: str = AJUSTES["notify_lote_modo"].defecto
     # "Otros"
     series_ignore_specials: bool = True
     # Sincronizar una instancia de Radarr/Sonarr en cuanto vuelve a responder tras estar caída.
@@ -164,6 +166,7 @@ class SettingsUpdateRequest(BaseModel):
     notify_ui_events: Optional[list[str]] = None
     notify_discord_events: Optional[list[str]] = None
     notify_telegram_events: Optional[list[str]] = None
+    notify_lote_modo: Optional[str] = None
     series_ignore_specials: Optional[bool] = None
     sincronizar_al_volver_instancia: Optional[bool] = None
     source_engine_enabled: Optional[bool] = None

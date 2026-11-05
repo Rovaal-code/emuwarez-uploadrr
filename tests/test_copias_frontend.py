@@ -221,6 +221,26 @@ def test_los_modos_de_pistas_coinciden():
         "entre services/mkv_remux.py y utils/modoPistas.ts")
 
 
+def test_los_modos_de_aviso_de_lote_coinciden():
+    """Ajustes → Notificaciones ofrece cómo avisa un lote y el servidor lo valida con un 422; la campana reconoce
+    el aviso del lote por su tipo. Si se separan, el desplegable ofrece un valor que no se puede guardar o la
+    campana enseña el aviso sin icono y sin llevar al lote."""
+    from emuwarez_uploadrr.services.ajustes_registro import AJUSTES, MODOS_AVISO_LOTE
+    from emuwarez_uploadrr.services.notification_center import EVENT_TYPES
+
+    fuente = _texto("utils/lote.ts")
+    m = re.search(r"MODOS_AVISO_LOTE[^=]*=\s*\[(.*?)\n\]", fuente, re.S)
+    assert m, "no se encontró MODOS_AVISO_LOTE en el frontend"
+    delante = tuple(re.findall(r"value:\s*'([^']+)'", m.group(1)))
+    assert delante == MODOS_AVISO_LOTE, f"\nfrontend: {delante}\nbackend:  {MODOS_AVISO_LOTE}"
+
+    defecto = re.search(r"MODO_AVISO_LOTE_POR_DEFECTO[^=]*=\s*'([^']+)'", fuente)
+    assert defecto and defecto.group(1) == AJUSTES["notify_lote_modo"].defecto
+
+    evento = re.search(r"EVENTO_LOTE_TERMINADO\s*=\s*'([^']+)'", fuente)
+    assert evento and evento.group(1) in EVENT_TYPES
+
+
 def test_las_dos_mitades_de_cada_modo_coinciden():
     """`reordena`/`renombra` deciden en Python lo que se aplica y en TypeScript
     si la columna del nombre se puede editar. Descuadradas, la tabla ofrece

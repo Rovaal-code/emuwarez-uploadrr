@@ -5,6 +5,7 @@
  * del lote (contadores, cancelar pendientes, reintentar fallidas y borrar el lote) y el reintento de una cadena, solo
  * desde su punta.
  */
+import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/uploads', () => ({
@@ -274,6 +275,17 @@ describe('el lote recién encolado desde Biblioteca', () => {
   it('al entrar, la tabla sale filtrada por él y la marca se gasta', async () => {
     sessionStorage.setItem('emuwarez_open_lote', LOTE)
     await pagina()
+    await esperar(() => ultimaPeticion()?.lote_id === LOTE)
+    await esperar(() => banner()?.textContent?.includes('Lote de 3 subidas'))
+    expect(sessionStorage.getItem('emuwarez_open_lote')).toBeNull()
+  })
+
+  it('con Subidas ya abierta, el aviso de la campana también la filtra por el lote', async () => {
+    await pagina()
+    await esperar(() => ultimaPeticion() !== undefined)
+    expect(ultimaPeticion()?.lote_id).toBeUndefined()
+    sessionStorage.setItem('emuwarez_open_lote', LOTE)
+    await act(async () => { window.dispatchEvent(new CustomEvent('emuwarez:open-lote', { detail: LOTE })) })
     await esperar(() => ultimaPeticion()?.lote_id === LOTE)
     await esperar(() => banner()?.textContent?.includes('Lote de 3 subidas'))
     expect(sessionStorage.getItem('emuwarez_open_lote')).toBeNull()

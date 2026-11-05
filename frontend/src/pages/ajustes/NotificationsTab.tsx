@@ -5,6 +5,8 @@ import { type IntegrationTestResult } from '../../api/integrationTests'
 import { testDiscordNotification, testTelegramNotification } from '../../api/notifications'
 import { ServiceIcon } from '../../components/ServiceIcon'
 import { CheckStatusIcon } from '../../components/DetailCard'
+import { InfoIcon } from '../../components/InfoIcon'
+import { MODOS_AVISO_LOTE, MODO_AVISO_LOTE_POR_DEFECTO, conAvisoDeLote, type ModoAvisoLote } from '../../utils/lote'
 import { useSettingsMessageAdapter } from './mensajes'
 import type { SaveExpose } from './tipos'
 
@@ -40,13 +42,13 @@ function notifSignature(v: {
   uiEnabled: boolean; uiEvents: string[]
   discordEnabled: boolean; discordWebhook?: string; telegramEnabled: boolean
   telegramToken?: string; telegramChatId: string; discordEvents: string[]; telegramEvents: string[]
-  quitarDiscord?: boolean; quitarTelegram?: boolean
+  quitarDiscord?: boolean; quitarTelegram?: boolean; loteModo: ModoAvisoLote
 }): string {
   return JSON.stringify([
     v.uiEnabled, v.uiEvents,
     v.discordEnabled, v.discordWebhook ?? '', v.telegramEnabled, v.telegramToken ?? '',
     v.telegramChatId, v.discordEvents, v.telegramEvents,
-    v.quitarDiscord ?? false, v.quitarTelegram ?? false,
+    v.quitarDiscord ?? false, v.quitarTelegram ?? false, v.loteModo,
   ])
 }
 
@@ -76,12 +78,14 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
   const [eventTypes, setEventTypes] = useState<{ code: string; label: string }[]>([])
   const [discordEvents, setDiscordEvents] = useState<string[]>([])
   const [telegramEvents, setTelegramEvents] = useState<string[]>([])
+  // Las subidas de un lote: una notificación por subida o una sola cuando termina el lote.
+  const [loteModo, setLoteModo] = useState<ModoAvisoLote>(MODO_AVISO_LOTE_POR_DEFECTO)
 
   const [baseline, setBaseline] = useState('')
   const currentSig = notifSignature({
     uiEnabled, uiEvents,
     discordEnabled, discordWebhook, telegramEnabled, telegramToken, telegramChatId, discordEvents, telegramEvents,
-    quitarDiscord, quitarTelegram,
+    quitarDiscord, quitarTelegram, loteModo,
   })
   const dirty = baseline !== '' && currentSig !== baseline
   useUnsavedGuard('notificaciones', dirty)
@@ -106,11 +110,13 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
         setEventTypes(s.notify_event_types ?? [])
         setDiscordEvents(s.notify_discord_events ?? [])
         setTelegramEvents(s.notify_telegram_events ?? [])
+        setLoteModo(s.notify_lote_modo ?? MODO_AVISO_LOTE_POR_DEFECTO)
         setBaseline(notifSignature({
           uiEnabled: s.notify_ui_enabled, uiEvents: s.notify_ui_events ?? [],
           discordEnabled: s.notify_discord_enabled, telegramEnabled: s.notify_telegram_enabled,
           telegramChatId: s.notify_telegram_chat_id ?? '', discordEvents: s.notify_discord_events ?? [],
           telegramEvents: s.notify_telegram_events ?? [],
+          loteModo: s.notify_lote_modo ?? MODO_AVISO_LOTE_POR_DEFECTO,
         }))
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
@@ -119,6 +125,16 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
 
   function toggleEvent(setter: React.Dispatch<React.SetStateAction<string[]>>, code: string, checked: boolean) {
     setter(prev => (checked ? [...new Set([...prev, code])] : prev.filter(c => c !== code)))
+  }
+
+  // Al pasar a «Una por lote», cada canal que avisaba de las subidas avisa también del lote: si no, uno que guardó su
+  // selección antes de existir ese aviso se quedaría sin ninguno de las subidas de un lote.
+  function cambiarModoLote(modo: ModoAvisoLote) {
+    setLoteModo(modo)
+    if (modo !== 'por_lote') return
+    setUiEvents(conAvisoDeLote)
+    setDiscordEvents(conAvisoDeLote)
+    setTelegramEvents(conAvisoDeLote)
   }
 
   async function handleSave() {
@@ -133,6 +149,7 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
         notify_telegram_chat_id: telegramChatId.trim(),
         notify_discord_events: discordEvents,
         notify_telegram_events: telegramEvents,
+        notify_lote_modo: loteModo,
       }
       if (discordWebhook.trim()) payload.notify_discord_webhook_url = discordWebhook.trim()
       else if (quitarDiscord) payload.clear = ['notify_discord_webhook_url']
@@ -143,6 +160,7 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
       setUiEvents(updated.notify_ui_events ?? [])
       setDiscordEvents(updated.notify_discord_events ?? [])
       setTelegramEvents(updated.notify_telegram_events ?? [])
+      setLoteModo(updated.notify_lote_modo ?? MODO_AVISO_LOTE_POR_DEFECTO)
       setDiscordWebhook('')
       setTelegramToken('')
       setQuitarDiscord(false)
@@ -152,6 +170,7 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
         discordEnabled: updated.notify_discord_enabled, telegramEnabled: updated.notify_telegram_enabled,
         telegramChatId: updated.notify_telegram_chat_id ?? '', discordEvents: updated.notify_discord_events ?? [],
         telegramEvents: updated.notify_telegram_events ?? [],
+        loteModo: updated.notify_lote_modo ?? MODO_AVISO_LOTE_POR_DEFECTO,
       }))
       setMsg({ ok: true, text: '✓ Notificaciones guardadas' })
     } catch (e: unknown) {
@@ -314,6 +333,30 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
           disabled={!telegramEnabled}
           onToggle={(code, checked) => toggleEvent(setTelegramEvents, code, checked)}
         />
+      </div>
+
+      <div className="placeholder-card">
+        <h3 className="aj-card-titulo aj-mb-14">
+          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 3 3 7.5l9 4.5 9-4.5L12 3z" /><path d="m3 12 9 4.5 9-4.5" /><path d="m3 16.5 9 4.5 9-4.5" />
+          </svg>
+          Subidas por lotes
+        </h3>
+        <div className="form-group aj-mb-12">
+          <label className="form-label aj-flex-c-6" htmlFor="aviso-lote">
+            Notificaciones de un lote
+            <InfoIcon text="Cómo avisan las subidas lanzadas juntas (un lote o una tanda del asistente). Una por subida: cada una avisa al completarse o fallar, como una suelta. Una por lote: no avisa ninguna por separado y, cuando termina la última, llega un solo aviso con el resumen (cuántas se completaron, fallaron o se cancelaron). Si luego reintentas las fallidas, al terminar los reintentos llega otro resumen. Las subidas sueltas avisan siempre una a una." />
+          </label>
+          <select id="aviso-lote" className="form-input form-select" value={loteModo}
+                  onChange={e => cambiarModoLote(e.target.value as ModoAvisoLote)}>
+            {MODOS_AVISO_LOTE.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+        </div>
+        <p className="aj-muted-12 aj-mt-0">
+          {loteModo === 'por_lote'
+            ? 'El aviso del lote sale por los canales que tengan marcado «Lote de subidas terminado».'
+            : 'Cada subida de un lote avisa por su cuenta, con «Subida completada» o «Subida fallida».'}
+        </p>
       </div>
       </div>
     </div>

@@ -115,15 +115,29 @@ def _job_poster_url(conn, job: dict | None) -> str | None:
     return row["poster_url"] if row else None
 
 
+def _avisa_su_lote(conn, job: dict | None) -> bool:
+    """Si el aviso de este trabajo lo da su lote («Una por lote» en Ajustes →
+    Notificaciones). Entonces no se avisa de la subida y, si era la última
+    del lote, sale el resumen. Se llama después de escribir el estado final."""
+    from ..lotes import avisar_si_lote_terminado, aviso_va_en_el_lote
+    if not aviso_va_en_el_lote(conn, job):
+        return False
+    avisar_si_lote_terminado(job["lote_id"])
+    return True
+
+
 def _notify_upload_completed(job_id: int, result_url: str | None, aviso: str | None = None) -> None:
     """Emit a 'subida completada' notification. Best-effort: never lets a
     notification failure affect the upload result. `aviso` se añade al texto
-    (p. ej. un pack de temporada incompleto)."""
+    (p. ej. un pack de temporada incompleto). Con «Una por lote», una subida
+    de un lote no avisa sola: avisa el lote cuando termina (services/lotes.py)."""
     try:
         from ..notification_center import emit
         conn = _get_db_conn()
         try:
             job = get_upload_job(job_id, conn=conn)
+            if _avisa_su_lote(conn, job):
+                return
             title = (job or {}).get("title") or "Subida"
             artifacts = get_upload_job_artifacts(job_id, conn=conn)
             has_trailer = any(a.get("artifact_type") == "trailer_url" for a in artifacts)
@@ -158,12 +172,15 @@ def _notify_upload_failed(job_id: int, error_message: str | None, result_url: st
     notification failure affect the upload result. Called from every
     terminal-failure branch of _run_uploadrr_subprocess (timeout, non-zero
     exit, executable not found, unexpected exception). `result_url`: la ficha
-    del torrent, si llegó a subirse antes de fallar."""
+    del torrent, si llegó a subirse antes de fallar. Con «Una por lote», una
+    subida de un lote no avisa sola: avisa el lote cuando termina."""
     try:
         from ..notification_center import emit
         conn = _get_db_conn()
         try:
             job = get_upload_job(job_id, conn=conn)
+            if _avisa_su_lote(conn, job):
+                return
             title = (job or {}).get("title") or "Subida"
             body = "Ha fallado al subirse a eMuwarez."
             if result_url:

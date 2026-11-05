@@ -14,6 +14,7 @@ import { useRefrescoPorAvisos } from '../hooks/useRefrescoPorAvisos'
 import { IconoPelicula } from './Iconos'
 import { guardedLeave } from '../utils/unsavedGuard'
 import { accionesOptimistas } from '../utils/accionesOptimistas'
+import { CLAVE_ABRIR_LOTE, EVENTO_ABRIR_LOTE, EVENTO_LOTE_TERMINADO, loteDeNotificacion } from '../utils/lote'
 
 const POLL_MS = 30000
 
@@ -48,6 +49,15 @@ function MissingWarningIcon() {
   )
 }
 
+function LoteTerminadoIcon() {
+  // Tres capas apiladas: varias subidas juntas.
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 3 3 7.5l9 4.5 9-4.5L12 3z" /><path d="m3 12 9 4.5 9-4.5" /><path d="m3 16.5 9 4.5 9-4.5" />
+    </svg>
+  )
+}
+
 function NuevaVersionIcon() {
   // Flecha hacia abajo sobre una bandeja: descargar/actualizar.
   return (
@@ -65,6 +75,7 @@ function NotifTitleIcon({ eventType, level }: { eventType: string; level: string
   const icon =
     eventType === 'upload_completed' ? <UploadButtonIcon /> :
     eventType === 'upload_failed' ? <CancelButtonIcon /> :
+    eventType === EVENTO_LOTE_TERMINADO ? <LoteTerminadoIcon /> :
     (eventType === 'request_published' || eventType === 'request_new_ready') ? <RequestCardIcon /> :
     eventType === 'request_match_found' ? <MatchFoundIcon /> :
     eventType === 'content_missing_new' ? <MissingWarningIcon /> :
@@ -169,6 +180,15 @@ function goToNotification(n: NotificationItem) {
     navigateTo('/uploads', () => {
       try { sessionStorage.setItem('emuwarez_open_upload', String(n.entity_id)) } catch { /* ignore */ }
       window.dispatchEvent(new CustomEvent('emuwarez:open-upload', { detail: n.entity_id }))
+    })
+    return
+  }
+  // El aviso de un lote: Subidas, filtrada por ese lote.
+  const lote = n.entity_type === 'upload_lote' ? loteDeNotificacion(n.entity_id) : null
+  if (lote) {
+    navigateTo('/uploads', () => {
+      try { sessionStorage.setItem(CLAVE_ABRIR_LOTE, lote) } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_LOTE, { detail: lote }))
     })
     return
   }

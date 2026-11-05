@@ -1,5 +1,6 @@
 import { api } from './client'
 import type { ModoPistas } from '../utils/modoPistas'
+import type { ModoAvisoLote } from '../utils/lote'
 
 export type UploadrrRuntimeType = 'uploadrr_emu' | 'uploadrr_generic'
 
@@ -45,6 +46,7 @@ export interface SettingsData {
   notify_ui_events: string[]
   notify_discord_events: string[]
   notify_telegram_events: string[]
+  notify_lote_modo: ModoAvisoLote
   series_ignore_specials: boolean
   sincronizar_al_volver_instancia: boolean
   recent_activity_limit: number
@@ -91,6 +93,7 @@ export interface SettingsUpdatePayload {
   notify_ui_events?: string[]
   notify_discord_events?: string[]
   notify_telegram_events?: string[]
+  notify_lote_modo?: ModoAvisoLote
   series_ignore_specials?: boolean
   sincronizar_al_volver_instancia?: boolean
   recent_activity_limit?: number

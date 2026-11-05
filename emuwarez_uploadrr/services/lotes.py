@@ -81,6 +81,142 @@ def resumen_de_lote(conn: sqlite3.Connection, lote_id: str) -> dict | None:
     }
 
 
+# ── El aviso de fin de lote (Ajustes → Notificaciones → «Una por lote») ──────────────────────────────────────────
+#
+# Con «Una por lote», las subidas de un lote no avisan una a una (_notify_upload_completed/_failed): cuando la última
+# punta del lote llega a un estado final se emite una sola notificación `upload_batch_done` con el resumen. Un lote
+# que se ha quedado en un elemento (se subió otra vez fuera de él) avisa como una suelta, igual que Subidas solo
+# agrupa con más de uno.
+#
+# Que avise una sola vez: «¿soy el último?» y apuntar que ya se avisó van en la misma transacción BEGIN IMMEDIATE, y
+# lo apuntado (app_state `lote_avisado:<lote_id>`) es la FIRMA del lote, los ids de sus puntas. Cada trabajo escribe
+# su estado final antes de llamar aquí, así que el último en escribir siempre ve el lote entero terminado; si dos
+# terminan a la vez y los dos lo ven, el segundo encuentra la firma ya apuntada y no avisa. «Reintentar fallidas»
+# cambia las puntas (los reintentos son filas nuevas), así que cuando terminan los reintentos la firma es otra y el
+# lote vuelve a avisar, con el resumen del lote entero. Reiniciar la aplicación no avisa: reconcile_interrupted_jobs
+# marca los trabajos como fallidos sin pasar por aquí.
+
+_CLAVE_LOTE_AVISADO = "lote_avisado:"
+# Cuántos títulos de fallidas caben en el aviso; el resto se cuenta.
+_MAX_TITULOS_FALLIDAS = 5
+
+
+def avisa_por_lote(conn: sqlite3.Connection) -> bool:
+    """Si Ajustes → Notificaciones dice «Una por lote»."""
+    from .ajustes_registro import AVISO_LOTE_POR_LOTE
+    from .settings import leer_ajuste
+    return leer_ajuste(conn, "notify_lote_modo") == AVISO_LOTE_POR_LOTE
+
+
+def aviso_va_en_el_lote(conn: sqlite3.Connection, job: dict | None) -> bool:
+    """Si el aviso de fin de este trabajo lo sustituye el resumen de su lote: es de un lote de más de un elemento y
+    el ajuste dice «Una por lote». Una subida suelta (sin lote) avisa siempre como siempre."""
+    lote_id = (job or {}).get("lote_id")
+    if not lote_id or not avisa_por_lote(conn):
+        return False
+    return contar_por_lote(conn, [lote_id]).get(lote_id, 0) > 1
+
+
+def _apuntar_si_terminado(conn: sqlite3.Connection, lote_id: str) -> list[dict] | None:
+    """Las puntas del lote si acaba de terminar y nadie ha avisado de él con estas mismas puntas; apunta su firma en
+    la misma transacción. None si no toca avisar."""
+    from ..database import get_state, set_state
+    from .upload_states import TERMINAL_STATUSES
+
+    previo = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            puntas = _puntas(conn, lote_id)
+            firma = ",".join(str(p["id"]) for p in puntas)
+            clave = _CLAVE_LOTE_AVISADO + lote_id
+            if (len(puntas) <= 1 or any(p.get("status") not in TERMINAL_STATUSES for p in puntas)
+                    or get_state(conn, clave) == firma):
+                conn.execute("ROLLBACK")
+                return None
+            set_state(conn, clave, firma)
+            conn.execute("COMMIT")
+            return puntas
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.isolation_level = previo
+
+
+def _contar(n: int, singular: str, plural: str) -> str:
+    return f"{n} {singular if n == 1 else plural}"
+
+
+def _emitir_resumen(conn: sqlite3.Connection, lote_id: str, puntas: list[dict]) -> None:
+    from .notification_center import emit
+
+    estados = [p.get("status") for p in puntas]
+    completadas, fallidas, canceladas = (estados.count(e) for e in ("completed", "failed", "cancelled"))
+    cuerpo = (f"{_contar(len(puntas), 'subida', 'subidas')}, {_contar(completadas, 'completada', 'completadas')}, "
+              f"{_contar(fallidas, 'fallida', 'fallidas')}, {_contar(canceladas, 'cancelada', 'canceladas')}.")
+    titulos = [f"«{p.get('title') or 'Subida'}»" for p in puntas if p.get("status") == "failed"]
+    if titulos:
+        resto = len(titulos) - _MAX_TITULOS_FALLIDAS
+        cuerpo += ("\nFallidas: " + ", ".join(titulos[:_MAX_TITULOS_FALLIDAS])
+                   + (f" y {resto} más" if resto > 0 else "") + ".")
+    cuerpo += f"\nLote {lote_id}."
+    if completadas == len(puntas):
+        nivel = "success"
+    elif fallidas and not completadas:
+        nivel = "error"
+    elif fallidas or (canceladas and completadas):
+        nivel = "warning"
+    else:
+        nivel = "info"
+    # La campana abre Subidas filtrada por el lote: el lote_id (12 hexadecimales) cabe entero en entity_id, que es un
+    # entero (48 bits, por debajo de los 53 que un número de JavaScript guarda sin perder nada).
+    emit(conn, "upload_batch_done", "Lote terminado", cuerpo, level=nivel,
+         entity_type="upload_lote", entity_id=int(lote_id, 16))
+
+
+def avisar_si_lote_terminado(lote_id: str | None) -> bool:
+    """Con «Una por lote», si el lote acaba de terminar (ninguna punta en cola, preparándose ni subiendo), emite su
+    único aviso. Lo llama quien acaba de dejar una punta del lote en un estado final (terminar, fallar, cancelar),
+    DESPUÉS de escribirlo. Se puede llamar de más: solo avisa una vez por juego de puntas. Nunca lanza.
+    True si ha avisado."""
+    if not lote_id_valido(lote_id):
+        return False
+    try:
+        from ..database import connect
+        conn = connect()
+        try:
+            if not avisa_por_lote(conn):
+                return False
+            puntas = _apuntar_si_terminado(conn, lote_id)
+            if puntas is None:
+                return False
+            _emitir_resumen(conn, lote_id, puntas)
+            return True
+        finally:
+            conn.close()
+    except Exception:
+        logging.getLogger("emuwarez.notifications").exception("No se pudo emitir el aviso del lote %s", lote_id)
+        return False
+
+
+def avisar_si_termina_su_lote(job_id: int) -> bool:
+    """avisar_si_lote_terminado para el lote del trabajo `job_id`, si es de uno. Nunca lanza."""
+    try:
+        from ..database import connect
+        conn = connect()
+        try:
+            fila = conn.execute("SELECT lote_id FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+        finally:
+            conn.close()
+    except Exception:
+        logging.getLogger("emuwarez.notifications").exception("No se pudo leer el lote de la subida %s", job_id)
+        return False
+    return avisar_si_lote_terminado(fila["lote_id"] if fila else None)
+
+
 def cancelar_lote(conn: sqlite3.Connection, lote_id: str, *, solo_pendientes: bool = True) -> dict:
     """Cancela lo que queda del lote. Primero los que esperan en la cola, todos de una vez y antes de sacarlos de la
     puerta: así ninguno toma la plaza que deja otro. Un trabajo que ya había arrancado entre la lectura y la
@@ -119,6 +255,9 @@ def cancelar_lote(conn: sqlite3.Connection, lote_id: str, *, solo_pendientes: bo
                 canceladas.append(job["id"])
             else:
                 intactas += 1
+    if canceladas:
+        # Si con esto no queda nada en marcha, el lote ha terminado (también si se ha cancelado entero).
+        avisar_si_lote_terminado(lote_id)
     return {"canceladas": len(canceladas), "intactas": intactas}
 
 

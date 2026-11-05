@@ -476,7 +476,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `error_message`), las que siguen en cola quedan `cancelled` con fase `lote_parado` y el motivo («Lote parado: 5 fallos
   seguidos por «…»»); las que ya se preparan o suben siguen. No cuentan los fallos propios de cada elemento
   (`MARCAS_DE_FALLO_POR_ELEMENTO`: los de la app y los títulos de panel de Uploadrr-EMU, como «Potential duplicate on»); una
-  completada corta la racha. Decide uno solo (`BEGIN IMMEDIATE`, app_state `lote_frenado:<id>`). Con «Una por subida», un
+  completada corta la racha. Decide uno solo (un `RLock` del proceso, que también envuelve cada elemento de `encolar_lote`: si la racha llega mientras se encola, el resto sale `blocked`). Con «Una por subida», un
   aviso «Lote parado»; con «Una por lote», una línea en el resumen. El banner del lote lo dice y «Reintentar fallidas» las
   relanza. Sin ver en el navegador.
 ## Siguiente

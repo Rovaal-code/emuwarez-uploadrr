@@ -187,6 +187,19 @@ describe('qué llega desmarcado o se salta', () => {
     expect(incluir('Alien').disabled).toBe(true)
     expect(botonSubir()!.disabled).toBe(true)
   })
+
+  it('una que ya se salta por otro motivo no bloquea a la otra con el mismo nombre', async () => {
+    m(nom.getNomenclatureFields).mockResolvedValue({ fields: { ...CAMPOS }, torrent_name: 'Igual', internal_mkv_title: '', blocked: false })
+    const MAL = { ready: false, checks: [{ id: 'spanish', label: 'No tiene castellano', status: 'fail' as const, message: '' }] }
+    m(subidas.runUploadChecks).mockImplementation(async (id, scope) =>
+      scope === 'environment' ? ENTORNO : id === 12 ? MAL : LISTO)
+    await abrir([DUNE, ALIEN])
+    await alResumen(2)
+    expect(fila(11).textContent).not.toContain('mismo nombre')
+    expect(fila(12).textContent).toContain('No tiene castellano')
+    expect(incluir('Dune').disabled).toBe(false)
+    await esperar(() => botonSubir() && !botonSubir()!.disabled)
+  })
 })
 
 describe('cuándo se habilita «Subir»', () => {

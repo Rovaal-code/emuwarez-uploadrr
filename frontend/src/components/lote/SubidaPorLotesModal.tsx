@@ -67,7 +67,10 @@ export function SubidaPorLotesModal({ peliculas, onClose, onDone, onNavigate }: 
     setElegidas(new Map())
   }
 
-  const repetidos = nombresRepetidos(cola.map(id => ({ id, nombre: analisis.analisis.get(id)?.nombre })))
+  // Solo chocan las que se podrían subir: una que ya se salta por otro motivo no puede bloquear a la otra.
+  const candidatas = cola.filter(id =>
+    comprobaciones.batchContentChecks.get(id)?.ready !== false && !analisis.analisis.get(id)?.bloqueo)
+  const repetidos = nombresRepetidos(candidatas.map(id => ({ id, nombre: analisis.analisis.get(id)?.nombre })))
   const filas: FilaResumenLote[] = cola.map(id => {
     const item = elementos.find(e => e.id === id)!
     const contenido = comprobaciones.batchContentChecks.get(id)

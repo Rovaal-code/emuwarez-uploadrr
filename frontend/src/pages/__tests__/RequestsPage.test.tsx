@@ -336,4 +336,26 @@ describe('«Subir seleccionadas» en Peticiones', () => {
     await act(async () => { fijarVisible(true) })
     expect(document.querySelector('.lote-lista')).toBeNull()
   })
+
+  it('cambiar lo marcado mientras se piden las fichas no abre un lote con lo de antes', async () => {
+    let soltar: () => void = () => {}
+    vi.mocked(getRequestDetail).mockImplementation(id => new Promise(resolve => {
+      soltar = () => resolve({ id, match: { library_item_id: 5, library_target_id: DESTINO[id] } } as unknown as RequestDetailResponse)
+    }))
+    await paginaConSeleccion([PELICULA, TEMPORADA])
+    await seleccionar()
+    await pulsar(casilla('Única'))
+    await pulsar(casilla('Lost - Temporada 2'))
+    await pulsar(boton('Subir seleccionadas (2)'))
+    await pulsar(casilla('Única'))
+    await act(async () => { soltar() })
+    expect(document.querySelector('.lote-lista')).toBeNull()
+    // Con lo marcado ahora, sí se abre.
+    vi.mocked(getRequestDetail).mockImplementation(async id => ({
+      id, match: { library_item_id: 5, library_target_id: DESTINO[id] },
+    }) as unknown as RequestDetailResponse)
+    await pulsar(boton('Subir seleccionadas (1)'))
+    await esperar(() => document.querySelector('.lote-lista'))
+    expect(titulosLote()).toEqual(['Lost (2016) - Temporada 2'])
+  })
 })

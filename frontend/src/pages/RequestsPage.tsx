@@ -654,6 +654,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [modoSeleccion, setModoSeleccion] = useState(false)
   const {
     seleccion, total: totalSeleccion, lleno: loteLleno, alternar: alternarLote, limpiar: limpiarLote,
+    sigueIgual: seleccionSigue,
   } = useSeleccionLote<RequestItemResponse>()
   const [loteAbierto, setLoteAbierto] = useState<EntradaLote[] | null>(null)
   // Si ya se están pidiendo las fichas del lote, y por qué no se pudo abrir alguna.
@@ -851,7 +852,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     abriendoLote.current = true
     setErrorLote(null)
     try {
-      const peticiones = [...seleccion.values()]
+      const marcadas = seleccion
+      const peticiones = [...marcadas.values()]
       const fichas = new Map<number, Promise<LibraryItemResponse>>()
       const fichaDe = (id: number) => {
         if (!fichas.has(id)) fichas.set(id, getLibraryItem(id))
@@ -864,7 +866,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       }
       const salidasAntes = salidas.current
       const resultados = await Promise.allSettled(peticiones.map(filaDe))
-      if (salidas.current !== salidasAntes) return
+      // Salir de la página o cambiar lo marcado mientras se piden las fichas: lo preparado ya no vale.
+      if (salidas.current !== salidasAntes || !seleccionSigue(marcadas)) return
       const entradas: EntradaLote[] = []
       const perdidas: string[] = []
       resultados.forEach((r, i) => {

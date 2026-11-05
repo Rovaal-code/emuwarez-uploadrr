@@ -13,14 +13,27 @@ con [Uploadrr-EMU](https://github.com/Kisnov/Uploadrr-EMU), que va dentro de la 
 
 ## Qué hace
 
-- **Panel**: recomendaciones de qué subir y las últimas tareas ejecutadas.
-- **Biblioteca**: películas y series de Radarr/Sonarr con su estado (Disponible, Faltante, Subiendo, Subido,
-  Error) y si llevan castellano (Ambos, Audio, Subs, No). Filtros por columna con varias opciones a la vez.
-  En la ficha de cada ítem: MediaInfo, pistas, temporadas y capítulos.
-- **Peticiones**: las peticiones abiertas de eMuwarez cruzadas con lo que ya tienes (compatible, parcial, no
-  compatible), con prioridad y candidato sugerido.
-- **Subidas**: un asistente comprueba el contenido, genera el nombre (también para packs de temporada) y lanza
-  Uploadrr-EMU. Opcionalmente renombra y reordena las pistas (cuatro modos, apagado por defecto). Progreso en
+- **Panel**: lo que puedes subir hoy. Arriba, tu perfil de eMuwarez (ratio, subido, bajado, buffer, BON…) y un solo
+  «Sincronizar todo» (biblioteca, catálogo y peticiones, una tras otra). «Listo para subir» son las peticiones que ya
+  puedes cubrir, por recompensa, con el grupo de release y los idiomas de cada copia; «Subir» abre el asistente sobre
+  la petición. «En curso» enseña las subidas en marcha y las últimas terminadas. Una banda «Necesita atención» avisa
+  de instancias caídas, subidas fallidas y versión nueva.
+- **Biblioteca**: películas y series de Radarr/Sonarr con su estado (Disponible, Faltante, Subiendo, Subido, Error) y
+  si llevan castellano (Ambos, Audio, Subs, No). Cada fila lleva bajo el título una línea con el tipo, la resolución,
+  el source, el proveedor, el códec y los idiomas, y el **grupo de release** a la derecha. Los filtros están en la
+  cabecera, con varias opciones a la vez, y una combinación de filtros y orden se guarda como **vista** para volver
+  a ella con un clic. En la ficha de cada ítem: MediaInfo, pistas, temporadas y capítulos, el grupo de release y la
+  petición que cubre.
+- **Peticiones**: las peticiones abiertas de eMuwarez cruzadas con lo que ya tienes, agrupadas por lo que puedes
+  hacer: «Lista para subir», «Parcial», «No la tienes» y «Cerradas» (reclamadas, llenas o ya subidas), con la mayor
+  recompensa primero. La columna Autor está oculta salvo que la actives. Se sincronizan una vez al día, y «Rellenar
+  petición» abre la petición con la URL del torrent ya copiada al acabar una subida.
+- **Subidas**: un asistente con pasos (contenido, nombre y pistas, **resumen**) comprueba el contenido, genera el nombre
+  (también para packs de temporada) y lanza Uploadrr-EMU. El resumen enseña lo que se sube (nombre, ficheros,
+  categoría, petición, pistas y tipo de copia) y lo que ya hay en eMuwarez del mismo contenido, con si lo tuyo es
+  mejor, igual o peor, antes de pulsar «Subir». Opcionalmente renombra y reordena las pistas (cuatro modos, apagado
+  por defecto). El detalle de una subida terminada abre por el resultado (enlace a eMuwarez, estado de siembra en
+  qBittorrent y dónde se fue el tiempo); si falla, se reintenta desde el paso que falló. Progreso en
   directo, límite de subidas en paralelo y varios grupos de subida guardados para el tag. «Seleccionar» en
   Biblioteca marca varias películas, series o temporadas y «Subir por lotes» las encola de una vez (una serie se
   abre en sus temporadas y solo entran como pack las que están listas; las demás se listan con su motivo), con su
@@ -29,12 +42,20 @@ con [Uploadrr-EMU](https://github.com/Kisnov/Uploadrr-EMU), que va dentro de la 
   la petición abierta que la cubre si hay una sola. En Subidas el lote se sigue, se cancela, se reintenta o se borra junto
   (las que siguen en cola o subiendo no se borran). En Ajustes → Notificaciones se elige si un lote avisa una vez por subida o una sola vez
   al terminar, con el resumen.
+- **Estadísticas**: tu ratio, lo subido, lo bajado y el bonus en gráficos, día a día, junto a las cifras de la
+  biblioteca y de las peticiones.
 - **Guía**: cada campo de la nomenclatura de eMuwarez, con ejemplos y de dónde lo saca la aplicación.
-- **Tareas**: sincronización periódica de biblioteca y peticiones, y aviso de versión nueva en la campana.
+- **Tareas**: sincronización periódica de biblioteca y peticiones, vigilancia de instancias (sincroniza una Radarr o
+  Sonarr cuando vuelve a responder), mantenimiento nocturno con copias automáticas y aviso de versión nueva en la campana.
 - **Instancias**: tus Radarr y Sonarr.
 - **Logs**: registros de la aplicación y de cada subida, con los secretos redactados.
-- **Configuración**: claves de TMDb, eMuwarez y hosts de imágenes (se comprueban contra el proveedor),
-  mapeo de rutas, notificaciones (Discord, Telegram, webhook), diagnóstico, backup y mantenimiento.
+- **Configuración**: un índice de secciones con buscador y una barra de guardado que cuenta los campos cambiados.
+  Claves de TMDb, eMuwarez y hosts de imágenes (se comprueban contra el proveedor), qBittorrent, mapeo de rutas,
+  notificaciones (Discord, Telegram, webhook), un widget para [Homepage](https://gethomepage.dev) con su propia clave de
+  solo lectura, diagnóstico, backup y mantenimiento.
+
+Además: **Ctrl+K** (o Cmd+K) abre una paleta para saltar a una sección o a una película o serie, y en ventanas
+estrechas el menú lateral es un cajón con botón de hamburguesa.
 
 **Panel**
 
@@ -154,9 +175,9 @@ Abre `http://localhost:9494`: el asistente de configuración inicial se abre sol
 La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.env`) elige cuál usa el compose:
 
 - `latest` (sin la variable): la última versión publicada. La publica el workflow *Publicar versión*, a mano
-  o solo los días impares del mes si hay cambios suficientes, siempre después de pasar los tests; o `scripts/desplegar.sh`
-  desde tu equipo. Se actualiza con `docker compose pull && docker compose up -d`.
-- `0.11.0`: una versión concreta, de las que tienen etiqueta `v0.11.0` en el repo. Sirve para quedarte en ella o
+  o solo los días impares del mes si hay cambios suficientes, siempre después de pasar los tests (con la entrada `ref`
+  publica la versión de un commit anterior); o `scripts/desplegar.sh` desde tu equipo. Se actualiza con `docker compose pull && docker compose up -d`.
+- `0.16.2`: una versión concreta, de las que tienen etiqueta `v0.16.2` en el repo. Sirve para quedarte en ella o
   para volver atrás si la nueva falla.
 - El sha del commit de una versión: cada versión publicada tiene también esa etiqueta.
 - `edge`: lo más nuevo. Una prueba sin publicar como versión (la punta de `master` con el workflow en *solo
@@ -164,7 +185,7 @@ La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.en
   se queda por detrás de `latest`.
 
 ```bash
-EMUWAREZ_UPLOADRR_TAG=0.11.0 docker compose up -d
+EMUWAREZ_UPLOADRR_TAG=0.16.2 docker compose up -d
 ```
 
 Si la versión nueva cambió el esquema de la base, la versión vieja no arranca y lo dice en el registro: la base ya
@@ -187,6 +208,16 @@ docker compose -f docker-compose.example.yml up -d
 > Uploadrr-EMU va empaquetado dentro de la imagen: no hay que montar ni configurar nada aparte para él. Su
 > `config.yaml` y sus temporales persisten bajo el volumen `/config`.
 
+Sin minutos de CI, o para probar un commit, construye la imagen en tu equipo, guárdala y cárgala en el servidor, sin
+pasar por el registro:
+
+```bash
+git -c core.autocrlf=false archive HEAD | docker build -t ghcr.io/kisnov/emuwarez-uploadrr:edge   --build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Kisnov/Uploadrr-EMU.git main | cut -f1)   --build-arg APP_COMMIT=$(git rev-parse HEAD) -
+docker save ghcr.io/kisnov/emuwarez-uploadrr:edge | gzip > emuwarez-edge.tar.gz
+# En el servidor: carga la imagen y recrea el contenedor sin descargar nada
+docker load -i emuwarez-edge.tar.gz && EMUWAREZ_UPLOADRR_TAG=edge docker compose up -d --pull never
+```
+
 ## Uso sin Docker
 
 Necesita Python 3.12+, Node 26, `mediainfo`, `ffmpeg`, `mkvtoolnix` y una copia de Uploadrr-EMU (ruta en el ajuste
@@ -204,7 +235,7 @@ la nomenclatura, subir…): ver [`README_CLI_READY.md`](README_CLI_READY.md).
 ## Desarrollo
 
 ```bash
-# Backend, en Linux (hardlinks, mediainfo, mkvtoolnix): ~2960 tests, ~11 min
+# Backend, en Linux (hardlinks, mediainfo, mkvtoolnix): ~4000 tests, ~11 min
 pip install -e ".[web,dev]"
 python -m pytest tests -q -p no:cacheprovider
 

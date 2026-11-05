@@ -308,7 +308,7 @@ def test_fallos_a_la_vez_paran_una_sola_vez(db_conn, retiradas, ronda):
     assert len(_avisos(db_conn, "Lote parado")) == 1
 
 
-def test_la_decision_se_apunta_y_no_se_repite(db_conn):
+def test_una_segunda_evaluacion_ya_no_encuentra_nada_que_parar(db_conn, retiradas):
     marcha, cola = _lote(db_conn, en_marcha=5, en_cola=2)
     for job in marcha:
         db_conn.execute("UPDATE upload_jobs SET status = 'failed', error_message = ?, finished_at = ? WHERE id = ?",
@@ -316,8 +316,38 @@ def test_la_decision_se_apunta_y_no_se_repite(db_conn):
     db_conn.commit()
 
     assert lotes._decidir_parada(db_conn, LOTE, marcha[-1]) == (MOTIVO, cola)
-    # Las mismas puntas siguen en cola (la primera aún no ha escrito): la segunda no decide nada.
+    assert lotes.frenar_si_fallo_sistemico(marcha[-1]) == 2
+    # Lo que se evalúe después (o esperaba el candado) ve las de la cola ya canceladas: ni para ni avisa otra vez.
     assert lotes._decidir_parada(db_conn, LOTE, marcha[-2]) is None
+    assert lotes.frenar_si_fallo_sistemico(marcha[-2]) == 0
+    assert len(_avisos(db_conn, "Lote parado")) == 1
+    assert db_conn.execute("SELECT COUNT(*) FROM app_state WHERE key LIKE 'lote_frenado:%'").fetchone()[0] == 0
+
+
+def test_si_cancelar_una_falla_las_demas_se_paran_y_esa_se_para_despues(db_conn, retiradas, monkeypatch):
+    from emuwarez_uploadrr.services import upload_states
+    marcha, cola = _lote(db_conn, en_marcha=6, en_cola=3)
+    escribir = upload_states.escribir_estado
+    rota = {cola[1]}
+
+    def escribir_a_veces(job_id, **kw):
+        if job_id in rota and kw.get("stage") == lotes.ETAPA_LOTE_PARADO:
+            raise RuntimeError("database is locked")
+        return escribir(job_id, **kw)
+    monkeypatch.setattr(upload_states, "escribir_estado", escribir_a_veces)
+
+    for job in marcha[:5]:
+        uq._fail(job, SISTEMICO)
+    assert _estados(db_conn, cola) == ["cancelled", "queued", "cancelled"]
+    assert [j for j, _ in retiradas] == [cola[0], cola[2]]
+    assert "2 subidas no llegaron a empezar" in _avisos(db_conn, "Lote parado")[0]["body"]
+
+    # La que no se pudo parar no queda apuntada como parada: el siguiente fallo la vuelve a mirar.
+    rota.clear()
+    uq._fail(marcha[5], SISTEMICO)
+    assert _estados(db_conn, cola) == ["cancelled"] * 3
+    avisos = _avisos(db_conn, "Lote parado")
+    assert len(avisos) == 2 and "1 subida no llegó a empezar" in avisos[1]["body"]
 
 
 # ---------------------------------------------------------------------------
@@ -437,3 +467,45 @@ def test_el_freno_nunca_lanza(db_conn, monkeypatch):
     _trabajo(db_conn, status="failed")
     assert lotes.frenar_si_fallo_sistemico(1) == 0
     assert lotes.frenar_si_fallo_sistemico(999) == 0
+
+
+# ---------------------------------------------------------------------------
+# encolar_lote: si el lote se para mientras se encola, el resto no se crea
+# ---------------------------------------------------------------------------
+
+LISTO = {"checks": [{"id": "accesible", "label": "El archivo es accesible", "status": "ok", "message": ""}],
+         "ready": True}
+
+
+def test_si_los_primeros_fallan_mientras_se_encola_el_resto_se_salta(db_conn, tmp_path, monkeypatch, retiradas):
+    """Los cinco primeros fallan nada más crearse (desde el mismo hilo que encola, así que el freno entra con el
+    candado ya cogido): no hay nada en cola que parar, pero los dos últimos ya no se crean."""
+    from emuwarez_uploadrr.services import upload_checks
+    monkeypatch.setattr(uq, "_season_upload_preconditions", lambda conn: [])
+    monkeypatch.setattr(upload_checks, "run_upload_checks", lambda conn, item_id, scope="all", **kw: LISTO)
+    encolar = uq.queue_upload_for_item
+
+    def encolar_y_fallar(*a, **kw):
+        resultado = encolar(*a, **kw)
+        if resultado.get("status") == "queued":
+            uq._fail(resultado["job"]["id"], SISTEMICO)
+        return resultado
+    monkeypatch.setattr(uq, "queue_upload_for_item", encolar_y_fallar)
+    items = [_peli(db_conn, tmp_path, t) for t in "ABCDEFG"]
+
+    r = lotes.encolar_lote(db_conn, [{"item_id": i, "checks": LISTO} for i in items])
+
+    assert [x["status"] for x in r["resultados"]] == ["queued"] * 5 + ["blocked"] * 2
+    assert all(x["errors"] == [PARADO] and x["job_id"] is None for x in r["resultados"][5:])
+    assert (r["encolados"], r["saltados"]) == (5, 2)
+    creados = [f[0] for f in db_conn.execute("SELECT library_item_id FROM upload_jobs ORDER BY id")]
+    assert creados == items[:5]
+
+
+def test_sin_racha_encolar_lote_no_se_salta_nada(db_conn, tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import upload_checks
+    monkeypatch.setattr(uq, "_season_upload_preconditions", lambda conn: [])
+    monkeypatch.setattr(upload_checks, "run_upload_checks", lambda conn, item_id, scope="all", **kw: LISTO)
+    items = [_peli(db_conn, tmp_path, t) for t in "ABC"]
+    r = lotes.encolar_lote(db_conn, [{"item_id": i, "checks": LISTO} for i in items])
+    assert (r["encolados"], r["saltados"]) == (3, 0)

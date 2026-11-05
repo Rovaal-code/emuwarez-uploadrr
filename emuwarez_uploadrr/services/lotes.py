@@ -10,6 +10,7 @@ import logging
 import re
 import secrets
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from typing import Iterable
 
@@ -301,10 +302,12 @@ def reintentar_fallidas(conn: sqlite3.Connection, lote_id: str, *, desde_el_prin
 # - Las paradas quedan `cancelled` con stage ETAPA_LOTE_PARADO y el motivo en error_message: no llegaron a empezar
 #   (como las de «Cancelar pendientes»), «Reintentar fallidas» ya relanza las canceladas, la racha ya se las salta y
 #   no salen como «Subida fallida» en «Necesita atención» del Panel.
-# - Decide uno solo: «¿hay que parar?» y apuntar qué puntas se paran (app_state `lote_frenado:<lote_id>`) van en la
-#   misma transacción BEGIN IMMEDIATE. Otro fallo que se evalúe a la vez solo vería como pendientes las que no están
-#   apuntadas, así que no para dos veces ni avisa dos veces. Un reintento es una fila nueva, con otro id: si la
-#   racha vuelve, el lote se puede parar otra vez.
+# - Decide uno solo: decidir y cancelar las de la cola van bajo _FRENO, un candado del proceso. Otro fallo que se
+#   evalúe a la vez espera y ya no encuentra nada en cola, así que no para dos veces ni avisa dos veces. Una que no se
+#   pudo cancelar sigue en cola y el siguiente fallo la vuelve a mirar. Un reintento es una fila nueva: si la racha
+#   vuelve, el lote se puede parar otra vez.
+# - encolar_lote mira la racha antes de crear cada trabajo, bajo el mismo candado: si los primeros ya han fallado
+#   seguidos mientras se encolaban los demás, el resto se salta en vez de lanzarse.
 # - Lo dispara _notify_upload_failed (upload_execution/estado.py), por donde pasa todo fallo de una subida: _fail de
 #   la preparación y las cuatro salidas fallidas de Uploadrr-EMU. reconcile_interrupted_jobs, al arrancar, no pasa
 #   por ahí, y su motivo tampoco cuenta.
@@ -312,7 +315,10 @@ def reintentar_fallidas(conn: sqlite3.Connection, lote_id: str, *, desde_el_prin
 FALLOS_SEGUIDOS_PARA_PARAR = 5
 # La fase de las puntas que para el freno (status 'cancelled'): así se distinguen de una cancelación a mano.
 ETAPA_LOTE_PARADO = "lote_parado"
-_CLAVE_LOTE_FRENADO = "lote_frenado:"
+# Serializa el freno entero (decidir → cancelar las de la cola → sacarlas de la puerta) y, en encolar_lote, «mirar la
+# racha + crear el trabajo». Vale porque el servidor es un solo proceso (CLAUDE.md: sin más workers de uvicorn).
+# Reentrante: un fallo síncrono dentro de queue_upload_for_item que llegue al freno desde el mismo hilo no se bloquea.
+_FRENO = threading.RLock()
 _MAX_MOTIVO = 200
 
 # Fallos que solo dicen algo del propio elemento. Se buscan sin distinguir mayúsculas en la primera línea de
@@ -402,57 +408,45 @@ def _racha_de_fallos(puntas: list[dict]) -> str | None:
 
 
 def _decidir_parada(conn: sqlite3.Connection, lote_id: str, job_id: int) -> tuple[str, list[int]] | None:
-    """(motivo, ids de las puntas en cola que hay que parar) si el fallo de `job_id` completa la racha y nadie ha
-    decidido ya parar esas mismas; apunta la decisión en la misma transacción. None si no toca parar."""
-    from ..database import get_state, set_state
-
-    previo = conn.isolation_level
-    conn.isolation_level = None
-    try:
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            puntas = _puntas(conn, lote_id)
-            por_id = {p["id"]: p for p in puntas}
-            propio = por_id.get(job_id)
-            clave = _CLAVE_LOTE_FRENADO + lote_id
-            # Solo las que siguen siendo puntas: un id viejo ya no es del lote.
-            ya = {int(i) for i in (get_state(conn, clave) or "").split(",") if i.isdigit()} & por_id.keys()
-            pendientes = [p["id"] for p in puntas if p.get("status") == "queued" and p["id"] not in ya]
-            motivo = None
-            # El fallo que dispara tiene que contar: uno por elemento no cambia la racha.
-            if (len(puntas) > 1 and propio and propio.get("status") == "failed" and pendientes
-                    and motivo_de_fallo(propio.get("error_message")) is not None):
-                motivo = _racha_de_fallos(puntas)
-            if motivo is None:
-                conn.execute("ROLLBACK")
-                return None
-            set_state(conn, clave, ",".join(str(i) for i in sorted(ya | set(pendientes))))
-            conn.execute("COMMIT")
-            return motivo, pendientes
-        except BaseException:
-            if conn.in_transaction:
-                conn.execute("ROLLBACK")
-            raise
-    finally:
-        conn.isolation_level = previo
+    """(motivo, ids de las puntas en cola que hay que parar) si el fallo de `job_id` completa la racha. None si no
+    toca parar. Se llama bajo _FRENO."""
+    puntas = _puntas(conn, lote_id)
+    propio = next((p for p in puntas if p["id"] == job_id), None)
+    pendientes = [p["id"] for p in puntas if p.get("status") == "queued"]
+    # El fallo que dispara tiene que contar: uno por elemento no cambia la racha.
+    if (len(puntas) <= 1 or not propio or propio.get("status") != "failed" or not pendientes
+            or motivo_de_fallo(propio.get("error_message")) is None):
+        return None
+    motivo = _racha_de_fallos(puntas)
+    return (motivo, pendientes) if motivo else None
 
 
 def _parar_pendientes(conn: sqlite3.Connection, pendientes: list[int], motivo: str) -> list[int]:
     """Como «Cancelar pendientes»: todas de una vez y antes de sacarlas de la puerta, así ninguna toma la plaza que
-    deja otra. Una que arrancó entre la decisión y la escritura sigue su curso."""
+    deja otra. Una que arrancó entre la decisión y la escritura sigue su curso; una cuya escritura falla sigue en
+    cola (el siguiente fallo la vuelve a mirar) y no para a las demás. Se llama bajo _FRENO."""
     from .upload_execution import append_upload_log
     from .upload_queue import retirar_de_la_cola
     from .upload_states import escribir_estado
 
     ahora = datetime.now(timezone.utc).isoformat()
     texto = texto_de_parada(motivo)
-    paradas = [j for j in pendientes
-               if escribir_estado(j, desde={"queued"}, status="cancelled", stage=ETAPA_LOTE_PARADO, finished_at=ahora,
-                                  error_message=texto, conn=conn)]
+    paradas: list[int] = []
+    for job_id in pendientes:
+        try:
+            if escribir_estado(job_id, desde={"queued"}, status="cancelled", stage=ETAPA_LOTE_PARADO,
+                               finished_at=ahora, error_message=texto, conn=conn):
+                paradas.append(job_id)
+        except Exception:
+            logger.exception("Freno del lote: no se pudo parar la subida %s; sigue en cola", job_id)
     for job_id in paradas:
-        retirar_de_la_cola(job_id)
-        append_upload_log(job_id, "warning",
-                          f"{texto}. No llegó a empezar: «Reintentar fallidas» en el lote la relanza.", stream="system")
+        try:
+            retirar_de_la_cola(job_id)
+            append_upload_log(job_id, "warning",
+                              f"{texto}. No llegó a empezar: «Reintentar fallidas» en el lote la relanza.",
+                              stream="system")
+        except Exception:
+            logger.exception("Freno del lote: no se pudo sacar de la cola la subida %s", job_id)
     return paradas
 
 
@@ -481,11 +475,12 @@ def frenar_si_fallo_sistemico(job_id: int) -> int:
             lote_id = fila["lote_id"] if fila else None
             if not lote_id_valido(lote_id):
                 return 0
-            decision = _decidir_parada(conn, lote_id, job_id)
-            if decision is None:
-                return 0
-            motivo, pendientes = decision
-            paradas = _parar_pendientes(conn, pendientes, motivo)
+            with _FRENO:
+                decision = _decidir_parada(conn, lote_id, job_id)
+                if decision is None:
+                    return 0
+                motivo, pendientes = decision
+                paradas = _parar_pendientes(conn, pendientes, motivo)
             logger.warning("Lote %s parado tras %d fallos seguidos por «%s»: %d subida(s) en cola no se lanzan",
                            lote_id, FALLOS_SEGUIDOS_PARA_PARAR, motivo, len(paradas))
             if paradas:
@@ -532,6 +527,14 @@ class LoteRechazado(Exception):
     def __init__(self, motivos: list[str]):
         super().__init__("; ".join(motivos))
         self.motivos = motivos
+
+
+class _LoteParado(Exception):
+    """Mientras se encolaba el lote, sus primeros elementos ya han fallado seguidos por el mismo motivo."""
+
+    def __init__(self, motivo: str):
+        super().__init__(motivo)
+        self.motivo = motivo
 
 
 def _bloqueado(item_id: int, *motivos: str) -> dict:
@@ -592,15 +595,21 @@ def _encolar_uno(conn: sqlite3.Connection, el: dict, lote_id: str, vistos: set[i
     if request_item_id is None:
         request_item_id = _peticion_de(conn, item_id)
     campos = el.get("campos")
-    if campos and tipo != "season":
-        preview = update_nomenclature_fields_preview(item_id, campos, conn=conn)
-        save_manual_nomenclature_fields(item_id, campos, preview, conn=conn)
-    resultado = queue_upload_for_item(
-        item_id, request_item_id=request_item_id, checks=checks,
-        # El proveedor solo cuenta en un pack; el de una película va dentro de `campos`.
-        provider_override=el.get("provider") if tipo == "season" else None,
-        lote_id=lote_id, conn=conn,
-    )
+    # «¿Ya está parado el lote?» y crear el trabajo, sin que el freno se cuele entre medias (ver _FRENO). Antes de
+    # escribir nada: un elemento que se salta no cambia su propuesta de nomenclatura.
+    with _FRENO:
+        motivo = _racha_de_fallos(_puntas(conn, lote_id))
+        if motivo:
+            raise _LoteParado(motivo)
+        if campos and tipo != "season":
+            preview = update_nomenclature_fields_preview(item_id, campos, conn=conn)
+            save_manual_nomenclature_fields(item_id, campos, preview, conn=conn)
+        resultado = queue_upload_for_item(
+            item_id, request_item_id=request_item_id, checks=checks,
+            # El proveedor solo cuenta en un pack; el de una película va dentro de `campos`.
+            provider_override=el.get("provider") if tipo == "season" else None,
+            lote_id=lote_id, conn=conn,
+        )
     job = resultado.get("job") or {}
     if resultado.get("status") != "queued":
         return _bloqueado(item_id, *(resultado.get("errors") or ["No se pudo encolar."]))
@@ -614,7 +623,9 @@ def encolar_lote(conn: sqlite3.Connection, elementos: list[dict]) -> dict:
     resultado de las comprobaciones que vio el
     usuario, `campos` el juego completo de campos de nomenclatura (película o capítulo, solo si la interfaz sugirió
     un proveedor), `provider` el proveedor elegido para un pack. Un elemento que no se puede subir se salta con su
-    motivo y el resto sigue. Si no se encola ninguno, no queda lote (`lote_id` None)."""
+    motivo y el resto sigue. Si mientras se encola el freno ya ve una racha de fallos (los primeros fallaron seguidos
+    por el mismo motivo), ese elemento y los que quedan se saltan con «Lote parado: …». Si no se encola ninguno, no
+    queda lote (`lote_id` None)."""
     from .upload_queue import _season_upload_preconditions
 
     if not 1 <= len(elementos) <= MAX_ELEMENTOS_LOTE:
@@ -630,10 +641,20 @@ def encolar_lote(conn: sqlite3.Connection, elementos: list[dict]) -> dict:
     lote_id = nuevo_lote_id()
     vistos: set[int] = set()
     resultados: list[dict] = []
+    parado: str | None = None
     for el in elementos:
+        if parado:
+            # El freno ya saltó: el resto no se crea (ni se lanza), con el mismo motivo que las paradas.
+            resultados.append(_bloqueado(int(el["item_id"]), parado))
+            continue
         try:
             resultado = _encolar_uno(conn, el, lote_id, vistos, temporadas)
             conn.commit()
+        except _LoteParado as exc:
+            conn.rollback()
+            parado = texto_de_parada(exc.motivo)
+            logger.warning("Lote %s: %s; no se encola el resto", lote_id, parado)
+            resultado = _bloqueado(int(el["item_id"]), parado)
         except Exception:
             logger.exception("Lote %s: no se pudo encolar el elemento %s", lote_id, el.get("item_id"))
             conn.rollback()

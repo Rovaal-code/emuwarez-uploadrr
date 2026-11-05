@@ -478,6 +478,10 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 - a 1280×800 el pie del asistente de subida queda cortado y el cuerpo del modal hace scroll por dentro;
 - a 390 px el sidebar no se pliega.
 
+Subida por lotes: hecha (PR 1-10, ver «Hecho» y `docs/PLAN_SUBIDA_POR_LOTES.md` §6 «PR 7 en adelante»). Falta que Gabriel la
+pruebe en `:edge` (duplicado real en Uploadrr-EMU, 50 hilos en el NAS, la rejilla con 200 seleccionadas) y que decida, al
+probarla, si guardar los `campos` y crear el trabajo van en una sola transacción.
+
 ## Oleada 4
 
 - Funciones nuevas que faltan:

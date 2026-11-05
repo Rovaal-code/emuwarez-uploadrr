@@ -450,6 +450,14 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   (la más vieja) ya no se cae de la lista. Y en «Subir por lotes» cada temporada enseña los avisos de su plan
   (`run_upload_checks` devuelve `avisos` y `sin_idioma` del pack: proveedor, source que no cuadra, pista de audio sin idioma);
   con audio sin idioma llega desmarcada («Súbela suelta para elegir el idioma»), como una película. Sin ver en el navegador.
+
+- **Oleada 4, subida por lotes, PR 8 (preguntas 6, 9, 10 y 13):** un lote desde Biblioteca enlaza cada elemento a la petición
+  abierta «Compatible» que lo cubre si hay una sola en el nivel más cercano (`requests.peticion_que_enlazar`, con `_cubre` y
+  `_scoped_library_id`; la elegida en el Panel gana). Peticiones tiene «Seleccionar» y «Subir seleccionadas» como el Panel
+  (`peticionSeleccionableEnLote`, `entradaDePeticion`; una petición de temporada o capítulo pide su detalle para dar con la
+  fila). «Borrar lote» en el banner del lote de Subidas (`POST /uploads/lotes/{id}/borrar`, mismo token y mismo
+  `delete_upload_job` que el borrado suelto, cadena entera; las vivas no se tocan). La sincronización de peticiones ya no se
+  para por las subidas en cola (`ESTADOS_EN_MARCHA`). Sin ver en el navegador.
 ## Siguiente
 
 Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que quedaba por ver se comprobó el 03/11 (ver en

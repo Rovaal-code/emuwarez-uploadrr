@@ -21,6 +21,7 @@ from ...services.upload_execution import (
     cancel_upload_job,
     delete_upload_job,
     retry_upload_job,
+    DELETE_CONFIRMATION_TOKEN,
     compute_progress_phase,
 )
 from ...services.subida_pasos import NOMBRES, pasos_de_subida, reanudar_desde, subpasos_que_reutilizaria
@@ -32,6 +33,7 @@ from ..runtime import _db_path
 from ..schemas import (
     CommandPreviewResponse,
     LoteAccionResponse,
+    LoteBorrarResponse,
     LoteCancelarBody,
     LoteReintentarBody,
     LoteResumen,
@@ -452,6 +454,26 @@ def reintentar_lote(
         _resumen_o_404(conn, lote_id)
         hecho = lotes.reintentar_fallidas(conn, lote_id, desde_el_principio=body.desde_el_principio)
         return LoteAccionResponse(**hecho, resumen=_resumen_o_404(conn, lote_id))
+
+
+@router.post("/uploads/lotes/{lote_id}/borrar", response_model=LoteBorrarResponse)
+def borrar_lote(
+    body: UploadDeleteRequest,
+    lote_id: str = Path(pattern=PATRON_LOTE_ID),
+    current_user: dict = Depends(require_auth),
+):
+    """«Borrar lote»: borra cada elemento terminado del lote como «Borrar» en una fila suelta (con su cadena de
+    intentos entera); los que siguen en cola o en marcha no se tocan. Pide el mismo token que el borrado suelto."""
+    if body.confirmation != DELETE_CONFIRMATION_TOKEN:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": f"Confirmación requerida: {DELETE_CONFIRMATION_TOKEN}", "error": "confirmation_required"},
+        )
+    with db(_db_path()) as conn:
+        _resumen_o_404(conn, lote_id)
+        hecho = lotes.borrar_lote(conn, lote_id)
+        resumen = lotes.resumen_de_lote(conn, lote_id)
+        return LoteBorrarResponse(**hecho, resumen=LoteResumen(**resumen) if resumen else None)
 
 
 @router.get("/uploads/{job_id}", response_model=UploadJobDetail)

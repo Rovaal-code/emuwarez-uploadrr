@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('../client', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
 
 import { api } from '../client'
-import { cancelarLote, countUploads, getLote, getUploadJobLogs, getUploads, queueLote, queueUpload, reintentarLote } from '../uploads'
+import { borrarLote, cancelarLote, countUploads, getLote, getUploadJobLogs, getUploads, queueLote, queueUpload, reintentarLote } from '../uploads'
 
 const get = vi.mocked(api.get)
 const post = vi.mocked(api.post)
@@ -78,6 +78,11 @@ describe('las acciones de un lote', () => {
     expect(post).toHaveBeenLastCalledWith('/uploads/lotes/0123456789ab/reintentar', { desde_el_principio: false })
     await reintentarLote('0123456789ab', true)
     expect(post).toHaveBeenLastCalledWith('/uploads/lotes/0123456789ab/reintentar', { desde_el_principio: true })
+  })
+
+  it('borrar el lote manda el mismo token que el borrado suelto', async () => {
+    await borrarLote('0123456789ab')
+    expect(post).toHaveBeenLastCalledWith('/uploads/lotes/0123456789ab/borrar', { confirmation: 'BORRAR_SUBIDA' })
   })
 })
 

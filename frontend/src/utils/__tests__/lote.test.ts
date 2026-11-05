@@ -6,8 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LibraryItemResponse } from '../../types/api'
 import type { DashboardRecommendationItem } from '../../api/dashboard'
 import {
-  MAX_ELEMENTOS_LOTE, PATRON_LOTE_ID, claveDelPanel, entradaDelPanel, expandirEntradas, expandirSeleccion,
-  marcadaPorDefecto, nombresRepetidos, nuevoLoteId, razonNoSubible, seleccionableEnLote,
+  MAX_ELEMENTOS_LOTE, PATRON_LOTE_ID, claveDelPanel, entradaDePeticion, entradaDelPanel, expandirEntradas,
+  expandirSeleccion, marcadaPorDefecto, nombresRepetidos, nuevoLoteId, peticionSeleccionableEnLote, razonNoSubible,
+  seleccionableEnLote,
 } from '../lote'
 
 afterEach(() => { vi.unstubAllGlobals() })
@@ -180,6 +181,31 @@ describe('las filas del Panel', () => {
     expect(entradaDelPanel(fila({ rec_request_id: 78, item_type: 'episode', season_number: 1, episode_number: 12 }), ficha))
       .toEqual({ item: ficha, requestId: 78, alcance: { season: 1, episode: 12 } })
     expect(entradaDelPanel(fila({ season_number: 2 }), ficha)).toEqual({ item: ficha })
+  })
+})
+
+describe('las peticiones de Peticiones', () => {
+  const ficha = pelicula({ id: 55 })
+
+  it('se marcan las que el Panel tiene en «Listo para subir»: compatibles, con fila y sin «no_castellano»', () => {
+    const lista = { compatibility_status: 'Compatible', library_item_id: 5, readiness_status: 'ready_to_upload' }
+    expect(peticionSeleccionableEnLote(lista)).toBe(true)
+    // Sin preparación guardada todavía también: el Panel solo quita las que se han visto sin castellano.
+    expect(peticionSeleccionableEnLote({ ...lista, readiness_status: null })).toBe(true)
+    expect(peticionSeleccionableEnLote({ ...lista, readiness_status: 'no_castellano' })).toBe(false)
+    expect(peticionSeleccionableEnLote({ ...lista, library_item_id: null })).toBe(false)
+    expect(peticionSeleccionableEnLote({ ...lista, compatibility_status: 'Parcial' })).toBe(false)
+    expect(peticionSeleccionableEnLote({ ...lista, compatibility_status: 'Reclamado' })).toBe(false)
+  })
+
+  it('lleva su id y su alcance, el capítulo solo si es de capítulo (como su «Subir a eMuwarez»)', () => {
+    const sin = { req_scope: null, req_season: null, req_episode: null }
+    expect(entradaDePeticion({ id: 70, ...sin }, ficha))
+      .toEqual({ item: ficha, requestId: 70, alcance: { season: null, episode: null } })
+    expect(entradaDePeticion({ id: 71, ...sin, req_scope: 'season', req_season: 2, req_episode: 3 }, ficha))
+      .toEqual({ item: ficha, requestId: 71, alcance: { season: 2, episode: null } })
+    expect(entradaDePeticion({ id: 72, req_scope: 'episode', req_season: 1, req_episode: 12 }, ficha))
+      .toEqual({ item: ficha, requestId: 72, alcance: { season: 1, episode: 12 } })
   })
 })
 

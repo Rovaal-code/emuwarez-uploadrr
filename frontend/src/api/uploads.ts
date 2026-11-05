@@ -8,6 +8,7 @@ import type {
   OkResponse,
   LoteResumen,
   LoteAccionResult,
+  LoteBorrarResult,
 } from '../types/api'
 import type { NomenclatureFields, TrackRemuxOverride } from './nomenclature'
 import { latestInChain } from '../utils/uploadStatus'
@@ -69,7 +70,8 @@ export async function queueUpload(
 // Un elemento de «Subir por lotes» (web/schemas.py::UploadLoteElemento).
 export interface ElementoLote {
   item_id: number
-  // La petición que cubre (desde el Panel); sin ella desde Biblioteca.
+  // La petición que cubre (desde el Panel). Sin ella (desde Biblioteca), el servidor enlaza la abierta del elemento
+  // si hay una sola.
   request_item_id?: number | null
   // Las comprobaciones que vio el usuario: contenido del elemento más las de entorno. Sin `ready`, se salta.
   checks: UploadChecksResult
@@ -207,6 +209,12 @@ const DELETE_CONFIRMATION_TOKEN = 'BORRAR_SUBIDA'
 
 export async function deleteUploadJob(jobId: number): Promise<OkResponse> {
   return api.post<OkResponse>(`/uploads/${jobId}/delete`, { confirmation: DELETE_CONFIRMATION_TOKEN })
+}
+
+// «Borrar lote»: cada subida terminada del lote, como «Borrar» en su fila (con la cadena de intentos entera). Las que
+// siguen en cola o en marcha no se tocan. Mismo token que el borrado suelto.
+export async function borrarLote(loteId: string): Promise<LoteBorrarResult> {
+  return api.post<LoteBorrarResult>(`/uploads/lotes/${encodeURIComponent(loteId)}/borrar`, { confirmation: DELETE_CONFIRMATION_TOKEN })
 }
 
 export interface UploadCheck {

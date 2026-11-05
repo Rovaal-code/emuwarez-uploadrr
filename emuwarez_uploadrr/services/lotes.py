@@ -142,6 +142,30 @@ def reintentar_fallidas(conn: sqlite3.Connection, lote_id: str, *, desde_el_prin
     return {"reintentadas": len(encoladas), "saltadas": saltadas}
 
 
+def borrar_lote(conn: sqlite3.Connection, lote_id: str) -> dict:
+    """«Borrar lote»: borra cada elemento terminado del lote (completado, fallido o cancelado) por el mismo camino que
+    «Borrar» en una fila suelta (delete_upload_job), así que se va la cadena de intentos entera del elemento, también
+    los de otros lotes o sueltos (D5), y sus enlaces en la carpeta de subidas si nadie más los usa. Los que siguen en
+    cola, preparándose o subiendo no se tocan: se cuentan en `en_curso`. Nunca toca el fichero de la biblioteca."""
+    from .upload_execution import DELETE_CONFIRMATION_TOKEN, delete_upload_job
+    from .upload_states import ACTIVE_JOB_STATUSES
+
+    borradas = intentos = en_curso = 0
+    for job in _puntas(conn, lote_id):
+        if job.get("status") in ACTIVE_JOB_STATUSES:
+            en_curso += 1
+            continue
+        resultado = delete_upload_job(job["id"], confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)
+        if resultado.get("ok"):
+            borradas += 1
+            intentos += len(resultado.get("deleted_job_ids") or [])
+        elif resultado.get("error") == "invalid_status":
+            # Algún intento de su cadena volvió a la cola entre la lectura y el borrado: se deja, como en una suelta.
+            en_curso += 1
+        # not_found: otra cadena ya se la llevó (o un borrado a la vez); no queda nada que contar.
+    return {"borradas": borradas, "intentos": intentos, "en_curso": en_curso}
+
+
 class LoteRechazado(Exception):
     """El lote entero no se puede encolar (falta una clave, Uploadrr-EMU no está): cada elemento fallaría igual."""
 
@@ -159,6 +183,17 @@ def _primer_fallo(comprobaciones: dict) -> str:
         if c.get("status") == "fail":
             return f"{c.get('label')}: {c.get('message')}" if c.get("message") else str(c.get("label"))
     return "No pasó las comprobaciones previas."
+
+
+def _peticion_de(conn: sqlite3.Connection, item_id: int) -> int | None:
+    """Sin petición elegida (un lote desde Biblioteca): la abierta que cubre el elemento, si hay una sola. Enlazarla es
+    un extra: si falla la búsqueda, el elemento se sube igual, sin petición."""
+    from .requests import peticion_que_enlazar
+    try:
+        return peticion_que_enlazar(conn, item_id)
+    except Exception:
+        logger.exception("No se pudo buscar la petición del elemento %s; se sube sin enlazar", item_id)
+        return None
 
 
 def _encolar_uno(conn: sqlite3.Connection, el: dict, lote_id: str, vistos: set[int], temporadas: set[int]) -> dict:
@@ -193,12 +228,15 @@ def _encolar_uno(conn: sqlite3.Connection, el: dict, lote_id: str, vistos: set[i
     if trabajo_activo(conn, item_id):
         return _bloqueado(item_id, "Ya hay una subida en curso para este contenido.")
 
+    request_item_id = el.get("request_item_id")
+    if request_item_id is None:
+        request_item_id = _peticion_de(conn, item_id)
     campos = el.get("campos")
     if campos and tipo != "season":
         preview = update_nomenclature_fields_preview(item_id, campos, conn=conn)
         save_manual_nomenclature_fields(item_id, campos, preview, conn=conn)
     resultado = queue_upload_for_item(
-        item_id, request_item_id=el.get("request_item_id"), checks=checks,
+        item_id, request_item_id=request_item_id, checks=checks,
         # El proveedor solo cuenta en un pack; el de una película va dentro de `campos`.
         provider_override=el.get("provider") if tipo == "season" else None,
         lote_id=lote_id, conn=conn,
@@ -211,7 +249,9 @@ def _encolar_uno(conn: sqlite3.Connection, el: dict, lote_id: str, vistos: set[i
 
 def encolar_lote(conn: sqlite3.Connection, elementos: list[dict]) -> dict:
     """Encola varias subidas como un lote, en el orden dado (el de la cola). Cada elemento es
-    `{item_id, request_item_id?, checks, campos?, provider?}`: `checks` el resultado de las comprobaciones que vio el
+    `{item_id, request_item_id?, checks, campos?, provider?}`: `request_item_id` la petición que cubre (la que eligió
+    el Panel; sin ella, la abierta del elemento si hay una sola, ver requests.peticion_que_enlazar), `checks` el
+    resultado de las comprobaciones que vio el
     usuario, `campos` el juego completo de campos de nomenclatura (película o capítulo, solo si la interfaz sugirió
     un proveedor), `provider` el proveedor elegido para un pack. Un elemento que no se puede subir se salta con su
     motivo y el resto sigue. Si no se encola ninguno, no queda lote (`lote_id` None)."""

@@ -163,15 +163,19 @@ def _resolve_emu_api_key(conn: sqlite3.Connection) -> Optional[str]:
 
 
 _SYNC_EN_CURSO = threading.Lock()
+# Las subidas que gastan llamadas de eMuwarez: todas las activas menos las que esperan en la cola.
+ESTADOS_EN_MARCHA = ACTIVE_JOB_STATUSES - {"queued"}
 
 
 def _motivo_ocupado(conn: sqlite3.Connection) -> Optional[str]:
-    """Por qué ahora no toca sincronizar: el catálogo y las subidas gastan las mismas 30 llamadas por minuto de la clave."""
+    """Por qué ahora no toca sincronizar: el catálogo y las subidas gastan las mismas 30 llamadas por minuto de la clave.
+    Una subida que espera turno en la cola (`queued`) no gasta ninguna, así que no cuenta: si no, un lote largo dejaría
+    horas sin peticiones nuevas. Las que se preparan o suben, sí."""
     if emu_catalog.get_sync_progress().get("active"):
         return "Se está sincronizando el catálogo de eMuwarez; vuelve a probar cuando termine."
-    marcas = ",".join("?" * len(ACTIVE_JOB_STATUSES))
+    en_marcha = tuple(sorted(ESTADOS_EN_MARCHA))
     if conn.execute(
-        f"SELECT 1 FROM upload_jobs WHERE status IN ({marcas}) LIMIT 1", tuple(ACTIVE_JOB_STATUSES)
+        f"SELECT 1 FROM upload_jobs WHERE status IN ({','.join('?' * len(en_marcha))}) LIMIT 1", en_marcha
     ).fetchone():
         return "Hay una subida en marcha; vuelve a probar cuando termine."
     return None
@@ -1068,6 +1072,51 @@ def _cubre(peticion: dict, fila: dict) -> bool:
     if peticion.get("req_scope") == "episode":
         return fila.get("item_type") == "episode" and fila.get("episode_number") == peticion.get("req_episode")
     return True
+
+
+def peticion_que_enlazar(conn: sqlite3.Connection, item_id: int) -> Optional[int]:
+    """La petición abierta que enlazaría una subida de esta fila sin que nadie la elija (un lote desde Biblioteca),
+    o None si no hay ninguna o hay más de una (ambiguo: mejor sin enlazar que enlazar la que no es).
+
+    Las mismas reglas que el resto: una petición cuenta si su cruce guardado es «Compatible» (las que el Panel ofrece
+    en «Listo para subir» con su `rec_request_id`), y es de esta fila si la fila a la que va (`_scoped_library_id`)
+    es esta o, como en la ficha (`peticiones_de_la_ficha`), una temporada o serie de la que cuelga y la petición la
+    cubre (`_cubre`; la de la serie entera cubre cada temporada). Gana la más cercana: la de la propia fila, luego la
+    de su temporada, luego la de su serie. Solo lee."""
+    fila = conn.execute("SELECT id, item_type, parent_id, season_number, episode_number FROM library_items "
+                        "WHERE id = ?", (item_id,)).fetchone()
+    if not fila:
+        return None
+    fila = dict(fila)
+    # La fila y sus antepasados, del más cercano al más lejano (el control de vistos, por si hay un ciclo).
+    linea = [int(fila["id"])]
+    padre = fila.get("parent_id")
+    while padre is not None and padre not in linea:
+        linea.append(int(padre))
+        p = conn.execute("SELECT parent_id FROM library_items WHERE id = ?", (padre,)).fetchone()
+        padre = p["parent_id"] if p else None
+    marcas = ",".join("?" * len(linea))
+    # El cruce que cuenta de cada petición es el más seguro, como en el Panel.
+    candidatas = conn.execute(
+        f"""SELECT ri.id, ri.req_scope, ri.req_season, ri.req_episode, li.id AS lib_id, li.item_type
+            FROM request_matches rm
+            JOIN request_items ri ON ri.id = rm.request_item_id
+            JOIN library_items li ON li.id = rm.library_item_id
+            WHERE rm.library_item_id IN ({marcas}) AND rm.status = 'Compatible'
+              AND rm.id = (SELECT rm2.id FROM request_matches rm2 WHERE rm2.request_item_id = ri.id
+                           ORDER BY rm2.confidence DESC LIMIT 1)""",
+        linea,
+    ).fetchall()
+    por_nivel: dict[int, set[int]] = {}
+    for c in candidatas:
+        peticion = dict(c)
+        destino = _scoped_library_id(conn, {"id": peticion["lib_id"], "item_type": peticion["item_type"]}, peticion)
+        if destino in linea and _cubre(peticion, fila):
+            por_nivel.setdefault(linea.index(destino), set()).add(int(peticion["id"]))
+    if not por_nivel:
+        return None
+    cercanas = por_nivel[min(por_nivel)]
+    return next(iter(cercanas)) if len(cercanas) == 1 else None
 
 
 def peticiones_de_la_ficha(conn: sqlite3.Connection, fila: dict) -> dict:

@@ -69,6 +69,14 @@
   align-self: center;
 }
 
+/* «Subir seleccionadas»: por qué no se pudo abrir alguna, encima de la barra del lote (lote.css). */
+.pet-error-lote {
+  flex-shrink: 0;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--color-warning);
+}
+
 /* Casilla «Mostrar autor» de la barra de filtros */
 .checkbox-label.pet-ver-autor {
   margin-left: auto;

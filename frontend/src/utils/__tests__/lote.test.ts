@@ -4,9 +4,10 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LibraryItemResponse } from '../../types/api'
+import type { DashboardRecommendationItem } from '../../api/dashboard'
 import {
-  MAX_ELEMENTOS_LOTE, PATRON_LOTE_ID, expandirSeleccion, marcadaPorDefecto, nombresRepetidos, nuevoLoteId,
-  razonNoSubible, seleccionableEnLote,
+  MAX_ELEMENTOS_LOTE, PATRON_LOTE_ID, claveDelPanel, entradaDelPanel, expandirEntradas, expandirSeleccion,
+  marcadaPorDefecto, nombresRepetidos, nuevoLoteId, razonNoSubible, seleccionableEnLote,
 } from '../lote'
 
 afterEach(() => { vi.unstubAllGlobals() })
@@ -112,6 +113,65 @@ describe('expandirSeleccion', () => {
 
   it('una serie sin temporadas cargadas no aporta nada', () => {
     expect(expandirSeleccion([de(10, 'series'), de(1, 'movie')], new Map()).map(e => e.id)).toEqual([1])
+  })
+})
+
+describe('expandirEntradas (desde el Panel)', () => {
+  const de = (id: number, item_type: string, parcial: Partial<LibraryItemResponse> = {}) =>
+    pelicula({ id, item_type, title: `#${id}`, ...parcial })
+  const T = (id: number, serie: number, n: number) => de(id, 'season', { parent_id: serie, season_number: n })
+  const temporadas = new Map([[10, [T(12, 10, 2), T(11, 10, 1)]]])
+
+  it('una serie con `alcance.season` da solo esa temporada; sin ella, todas; las dos con su petición', () => {
+    const r = expandirEntradas([
+      { item: de(10, 'series'), requestId: 7, alcance: { season: 2 } },
+      { item: de(10, 'series'), requestId: 8 },
+    ], temporadas)
+    expect(r.elementos.map(e => e.id)).toEqual([12, 11])
+    expect([...r.peticiones]).toEqual([[12, [7, 8]], [11, [8]]])
+    expect(r.avisos).toEqual([])
+  })
+
+  it('la misma fila por dos peticiones sale una vez con las dos, sin repetir', () => {
+    const r = expandirEntradas([
+      { item: de(1, 'movie'), requestId: 5 }, { item: de(1, 'movie'), requestId: 6 }, { item: de(1, 'movie'), requestId: 5 },
+      { item: de(1, 'movie') },
+    ], new Map())
+    expect(r.elementos.map(e => e.id)).toEqual([1])
+    expect(r.peticiones.get(1)).toEqual([5, 6])
+  })
+
+  it('avisa de una temporada o un capítulo pedidos que no están', () => {
+    const r = expandirEntradas([
+      { item: de(10, 'series'), requestId: 7, alcance: { season: 3 } },
+      { item: T(11, 10, 1), requestId: 9, alcance: { season: 1, episode: 4 } },
+    ], temporadas)
+    expect(r.elementos).toEqual([])
+    expect(r.avisos).toEqual([
+      '«#10»: la temporada 3 no está en la biblioteca.',
+      '«#11»: la petición es del capítulo S01E04, que no está en la biblioteca.',
+    ])
+  })
+})
+
+describe('las filas del Panel', () => {
+  const fila = (parcial: Partial<DashboardRecommendationItem>) => ({
+    id: 5, item_type: 'season', rec_request_id: null, library_target_id: null, season_number: null, episode_number: null,
+    ...parcial,
+  }) as DashboardRecommendationItem
+  const ficha = pelicula({ id: 55 })
+
+  it('la clave junta la petición y la fila que se sube', () => {
+    expect(claveDelPanel(fila({ rec_request_id: 77, library_target_id: 55 }))).toBe('77-55')
+    expect(claveDelPanel(fila({}))).toBe('u-5')
+  })
+
+  it('una petición lleva su id y su alcance (el capítulo solo si es de capítulo); una idea, nada', () => {
+    expect(entradaDelPanel(fila({ rec_request_id: 77, season_number: 2, episode_number: 3 }), ficha))
+      .toEqual({ item: ficha, requestId: 77, alcance: { season: 2, episode: null } })
+    expect(entradaDelPanel(fila({ rec_request_id: 78, item_type: 'episode', season_number: 1, episode_number: 12 }), ficha))
+      .toEqual({ item: ficha, requestId: 78, alcance: { season: 1, episode: 12 } })
+    expect(entradaDelPanel(fila({ season_number: 2 }), ficha)).toEqual({ item: ficha })
   })
 })
 

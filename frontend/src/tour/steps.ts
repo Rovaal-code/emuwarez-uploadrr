@@ -16,7 +16,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: 'dashboard',
     selector: '[data-tour="dashboard-ready"]',
     title: 'Listo para subir',
-    description: 'Las peticiones de eMuwarez que tu biblioteca ya cubre, la que más paga primero. «Subir» abre el asistente con la petición ya elegida.',
+    description: 'Las peticiones de eMuwarez que tu biblioteca ya cubre, la que más paga primero. «Subir» abre el asistente con la petición ya elegida; con «Seleccionar» marcas varias y las subes de una vez, cada una con su petición.',
   },
   {
     id: 'dashboard-running',

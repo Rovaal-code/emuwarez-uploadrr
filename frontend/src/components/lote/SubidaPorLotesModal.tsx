@@ -1,13 +1,16 @@
-// «Subir por lotes»: varias películas y temporadas (packs) de Biblioteca encoladas de una vez, con el nombre que
-// genere la nomenclatura para cada una (sin editar: para eso está el asistente). Una serie marcada entra como sus
-// temporadas. Paso 1, qué entra; paso 2, el resumen de cada una y las comprobaciones (las del entorno una sola
+// «Subir por lotes»: varias películas y temporadas (packs) de Biblioteca, o lo marcado en «Listo para subir» del
+// Panel (con la petición de cada fila y, si la petición es de un capítulo, ese capítulo), encoladas de una vez, con
+// el nombre que genere la nomenclatura para cada una (sin editar: para eso está el asistente). Una serie marcada
+// entra como sus temporadas. Paso 1, qué entra; paso 2, el resumen de cada una y las comprobaciones (las del entorno una sola
 // vez); «Subir N» manda el lote al servidor (POST /uploads/lote), que encola cada una en este orden y salta la que
 // no pueda con su motivo.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiClientError } from '../../api/client'
 import { queueLote, type LoteEncolado } from '../../api/uploads'
 import type { LibraryItemResponse } from '../../types/api'
-import { CLAVE_ABRIR_LOTE, MAX_ELEMENTOS_LOTE, marcadaPorDefecto, nombresRepetidos, razonNoSubible } from '../../utils/lote'
+import {
+  CLAVE_ABRIR_LOTE, MAX_ELEMENTOS_LOTE, marcadaPorDefecto, nombresRepetidos, razonNoSubible, type EntradaLote,
+} from '../../utils/lote'
 import type { ProveedoresElegidos } from '../../utils/origenProveedor'
 import { useComprobacionesTanda } from '../asistente/useComprobaciones'
 import { Modal } from '../Modal'
@@ -30,22 +33,25 @@ function motivosDelRechazo(e: ApiClientError): string[] {
   return Array.isArray(detalle) && detalle.length ? detalle.map(String) : [e.message]
 }
 
-export function SubidaPorLotesModal({ seleccion, onClose, onDone, onNavigate }: {
-  // Lo marcado en Biblioteca (películas, series y temporadas). Se copia al abrir: salir de Biblioteca limpia la
-  // selección de origen.
-  seleccion: readonly LibraryItemResponse[]
+export function SubidaPorLotesModal({ entradas, onClose, onDone, onNavigate }: {
+  // Lo marcado en Biblioteca (películas, series y temporadas) o en el Panel (con su petición y su alcance). Se copia
+  // al abrir: salir de la sección limpia la selección de origen.
+  entradas: readonly EntradaLote[]
   onClose: () => void
   // En cuanto el servidor encola alguna: limpia la selección (también si luego se cierra con Escape).
   onDone?: () => void
   onNavigate?: (page: string) => void
 }) {
-  const [copia] = useState(() => [...seleccion])
+  const [copia] = useState(() => [...entradas])
   const expansion = useExpansionLote(copia, MAX_ELEMENTOS_LOTE)
   const elementos = useMemo(() => expansion.elementos ?? [], [expansion.elementos])
   const [paso, setPaso] = useState<Paso>('contenido')
   // Lo cambiado a mano en el paso 1; hasta entonces, las que llegan marcadas al expandir.
   const [marcadasAMano, setMarcadasAMano] = useState<ReadonlySet<number> | null>(null)
   const marcadas = marcadasAMano ?? expansion.iniciales
+  // Dos peticiones sobre el mismo elemento: la elegida a mano; si no, la primera.
+  const [peticionElegida, setPeticionElegida] = useState<ReadonlyMap<number, number>>(() => new Map())
+  const peticionDe = (id: number): number | undefined => peticionElegida.get(id) ?? expansion.peticiones.get(id)?.[0]
   const enCola = useMemo(
     () => elementos.filter(e => marcadas.has(e.id) && !razonNoSubible(e)),
     [elementos, marcadas],
@@ -106,11 +112,15 @@ export function SubidaPorLotesModal({ seleccion, onClose, onDone, onNavigate }: 
   const subir = async () => {
     if (fase !== 'idle') return
     const incluidas = filas.filter(f => f.incluida)
-    const elementosLote = incluidas.map(f => ({
-      item_id: f.item.id,
-      checks: comprobaciones.mergedChecksFor(f.item.id)!,
-      ...(f.analisis?.campos ? { campos: f.analisis.campos } : {}),
-    }))
+    const elementosLote = incluidas.map(f => {
+      const peticion = peticionDe(f.item.id)
+      return {
+        item_id: f.item.id,
+        ...(peticion != null ? { request_item_id: peticion } : {}),
+        checks: comprobaciones.mergedChecksFor(f.item.id)!,
+        ...(f.analisis?.campos ? { campos: f.analisis.campos } : {}),
+      }
+    })
     if (elementosLote.length === 0 || elementosLote.some(e => !e.checks)) return
     setFase('processing'); setRechazo(null); setFalloEnvio(null)
     try {
@@ -170,6 +180,8 @@ export function SubidaPorLotesModal({ seleccion, onClose, onDone, onNavigate }: 
           elementos={elementos} marcadas={marcadas} onAlternar={alternar} onContinuar={() => setPaso('resumen')}
           expandiendo={expansion.elementos ? null : { hechas: expansion.hechas, series: expansion.series }}
           avisos={expansion.avisos}
+          peticiones={expansion.peticiones} peticionDe={peticionDe}
+          onElegirPeticion={(id, peticion) => setPeticionElegida(prev => new Map(prev).set(id, peticion))}
         />
       )}
 

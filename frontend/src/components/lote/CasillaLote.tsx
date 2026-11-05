@@ -1,15 +1,17 @@
-import type { LibraryItemResponse } from '../../types/api'
-
 /**
- * La casilla para marcar un elemento de Biblioteca para «Subir por lotes», en la fila de la lista y en las
- * tarjetas de póster. El clic no sale de ella: ni despliega la fila ni abre la ficha.
+ * La casilla para marcar un elemento para «Subir por lotes»: en Biblioteca, en la fila de la lista y en las
+ * tarjetas de póster; en el Panel, en las filas de «Listo para subir». El clic no sale de ella: ni despliega la fila
+ * ni abre la ficha. `titulo` (por defecto el `title` del elemento) es el nombre que oye el lector.
  */
-export function CasillaLote({ item, seleccionado, bloqueada = false, onAlternar, className }: {
-  item: LibraryItemResponse
+export function CasillaLote<T extends { title: string | null }>({
+  item, titulo, seleccionado, bloqueada = false, onAlternar, className,
+}: {
+  item: T
+  titulo?: string
   seleccionado: boolean
   // Lleno el lote: las que no están marcadas no se pueden marcar.
   bloqueada?: boolean
-  onAlternar: (item: LibraryItemResponse) => void
+  onAlternar: (item: T) => void
   className?: string
 }) {
   return (
@@ -24,7 +26,7 @@ export function CasillaLote({ item, seleccionado, bloqueada = false, onAlternar,
         checked={seleccionado}
         disabled={bloqueada && !seleccionado}
         onChange={() => onAlternar(item)}
-        aria-label={`Seleccionar «${item.title}»`}
+        aria-label={`Seleccionar «${titulo ?? item.title ?? ''}»`}
       />
     </label>
   )

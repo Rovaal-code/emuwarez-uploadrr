@@ -13,7 +13,10 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
-import { CarrilListo } from '../components/hoy/CarrilListo'
+import { CarrilListo, type SeleccionCarril } from '../components/hoy/CarrilListo'
+import { SubidaPorLotesModal } from '../components/lote/SubidaPorLotesModal'
+import { useSeleccionLote } from '../hooks/useSeleccionLote'
+import { MAX_ELEMENTOS_LOTE, claveDelPanel, entradaDelPanel, type EntradaLote } from '../utils/lote'
 import { CarrilEnCurso } from '../components/hoy/CarrilEnCurso'
 import { BandaAtencion } from '../components/hoy/BandaAtencion'
 import { Franja } from '../components/hoy/Franja'
@@ -22,7 +25,7 @@ import { queSalieron, soloVivas, idsDe, ultimasTerminadas, ESPERA_MS, DESVANECER
 import {
   avisosDeAtencion, fallidasRecientes, lineaSincronizacion, ordenarEnCurso, repartirRecomendaciones,
 } from '../utils/hoy'
-import { useSeccionVisible } from '../context/SeccionVisible'
+import { useAlSalir, useSeccionVisible } from '../context/SeccionVisible'
 
 // La versión publicada se mira como mucho una vez por hora (el servidor tampoco pregunta más a menudo).
 const VERSION_CADA_MS = 3_600_000
@@ -65,6 +68,18 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // se pulsó perdería el foco y el cierre del modal no sabría a dónde devolverlo), y por qué falló la última vez.
   const abriendo = useRef(false)
   const [errorAccion, setErrorAccion] = useState<string | null>(null)
+  // «Subir seleccionadas»: el botón «Seleccionar» pone casillas en las filas de «Listo para subir» (peticiones y
+  // otras ideas, no faltantes). Lo marcado se limpia al salir del Panel (la sección se queda montada y se recarga
+  // sola) y al encolar el lote.
+  const [modoSeleccion, setModoSeleccion] = useState(false)
+  const {
+    seleccion, total: totalSeleccion, lleno: loteLleno, alternar: alternarLote, limpiar: limpiarLote, tiene: marcada,
+  } = useSeleccionLote<DashboardRecommendationItem, string>(MAX_ELEMENTOS_LOTE, claveDelPanel)
+  const [loteAbierto, setLoteAbierto] = useState<EntradaLote[] | null>(null)
+  useAlSalir(() => {
+    limpiarLote()
+    setModoSeleccion(false)
+  })
   // Una sincronización que termina, o volver a la pestaña, sube `lastInvalidatedAt` y recarga lo cargado. El mensaje
   // de que terminó sale en la barra de arriba (ver SyncProgressBanner), no aquí.
   const { lastInvalidatedAt } = useSync()
@@ -238,6 +253,46 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     }
   }
 
+  // «Subir seleccionadas»: la fila real de cada una (como «Subir»: la temporada o el capítulo de la petición) y el
+  // modal de «Subir por lotes» con su petición y su alcance. Las que ya no están se dicen y el resto sigue.
+  const subirSeleccionadas = async () => {
+    if (abriendo.current) return
+    abriendo.current = true
+    setErrorAccion(null)
+    try {
+      const filas = [...seleccion.values()]
+      const fichas = new Map<number, Promise<LibraryItemResponse>>()
+      const fichaDe = (id: number) => {
+        if (!fichas.has(id)) fichas.set(id, getLibraryItem(id))
+        return fichas.get(id)!
+      }
+      const resultados = await Promise.allSettled(filas.map(f => fichaDe(f.library_target_id ?? f.id)))
+      const entradas: EntradaLote[] = []
+      const perdidas: string[] = []
+      resultados.forEach((r, i) => {
+        if (r.status === 'fulfilled') entradas.push(entradaDelPanel(filas[i], r.value))
+        else perdidas.push(`«${filas[i].content_name}»`)
+      })
+      if (perdidas.length > 0) {
+        setErrorAccion(perdidas.length === 1
+          ? `No se pudo abrir ${perdidas[0]}: puede que ya no esté en la biblioteca tras la última sincronización.`
+          : `No se pudieron abrir ${perdidas.join(', ')}: puede que ya no estén en la biblioteca tras la última sincronización.`)
+      }
+      if (entradas.length > 0) setLoteAbierto(entradas)
+    } finally {
+      abriendo.current = false
+    }
+  }
+  const seleccionCarril: SeleccionCarril = {
+    activa: modoSeleccion,
+    onAlternarModo: () => {
+      if (modoSeleccion) limpiarLote()
+      setModoSeleccion(m => !m)
+    },
+    tiene: marcada, alternar: alternarLote, lleno: loteLleno, total: totalSeleccion,
+    onSubir: subirSeleccionadas, onLimpiar: limpiarLote,
+  }
+
   return (
     <div className="panel-pagina">
       {wizardItem && (
@@ -246,6 +301,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       )}
       {requestItem && (
         <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
+      )}
+      {loteAbierto && (
+        <SubidaPorLotesModal
+          entradas={loteAbierto}
+          onClose={() => setLoteAbierto(null)}
+          onDone={() => { limpiarLote(); setModoSeleccion(false); loadData(); loadActiveUploads() }}
+          onNavigate={onNavigate}
+        />
       )}
 
       <div className="page-header panel-cabecera">
@@ -267,7 +330,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       <div className="panel-carriles">
         <CarrilListo recomendaciones={reparto}
           onSubir={item => abrir(item, 'peticion')} onVerPeticion={abrirPeticion} onVerFicha={abrirFicha}
-          onSubirUnico={item => abrir(item, 'unico')} onPedir={item => abrir(item, 'pedir')} />
+          onSubirUnico={item => abrir(item, 'unico')} onPedir={item => abrir(item, 'pedir')} seleccion={seleccionCarril} />
         <CarrilEnCurso filas={filasDeSubida} recientes={recientes} onOpen={goToUpload} onVerTodas={() => onNavigate?.('uploads')} />
       </div>
 

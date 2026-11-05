@@ -3,6 +3,7 @@
  * `lote_id` (el de una tanda lo genera el navegador; el de «Subir por lotes», el servidor), y Subidas las agrupa
  * y filtra por él.
  */
+import type { DashboardRecommendationItem } from '../api/dashboard'
 import type { LibraryItemResponse } from '../types/api'
 import { seasonNotReadyReason } from './libraryItem'
 import type { NivelDuplicado } from './resumenSubida'
@@ -66,28 +67,76 @@ export function razonNoSubible(item: LibraryItemResponse): string | null {
 }
 
 /**
- * Lo marcado, con cada serie cambiada por sus temporadas (en orden de temporada) y en el orden en que se marcó.
- * Una temporada que llega dos veces (marcada sola y por su serie) sale una vez, en el primer sitio donde aparece.
- * Una serie de la que no se cargaron las temporadas (no está en `temporadasDe`) no aporta nada.
+ * Lo que entra en «Subir por lotes»: el elemento de Biblioteca y, desde el Panel, la petición que cubre y su alcance
+ * (como la preselección del asistente: `season` y, si la petición es de un capítulo, `episode`). Desde Biblioteca
+ * solo va `item`.
  */
+export interface EntradaLote {
+  item: LibraryItemResponse
+  requestId?: number
+  alcance?: { season?: number | null; episode?: number | null }
+}
+
+export interface EntradasExpandidas {
+  elementos: LibraryItemResponse[]
+  // Las peticiones que cubre cada elemento, sin repetir y en el orden en que llegaron (la primera, la que se enlaza
+  // si no se elige otra). Sin entrada, ninguna.
+  peticiones: Map<number, number[]>
+  // Una petición cuya temporada o capítulo no está en la biblioteca.
+  avisos: string[]
+}
+
+/**
+ * Lo marcado, con cada serie cambiada por sus temporadas (en orden de temporada; con `alcance.season`, solo esa) y
+ * en el orden en que se marcó. Lo que llega dos veces (una temporada marcada sola y por su serie, o dos peticiones
+ * sobre la misma fila) sale una vez, en el primer sitio donde aparece, y junta sus peticiones. Una serie de la que
+ * no se cargaron las temporadas (no está en `temporadasDe`) no aporta nada. El tipo que cuenta es el de la fila real
+ * (`item`): una petición de capítulo cuya fila resultó ser la temporada o la serie (el capítulo no está) no entra.
+ */
+export function expandirEntradas(
+  entradas: readonly EntradaLote[],
+  temporadasDe: ReadonlyMap<number, readonly LibraryItemResponse[]>,
+): EntradasExpandidas {
+  const vistos = new Set<number>()
+  const elementos: LibraryItemResponse[] = []
+  const peticiones = new Map<number, number[]>()
+  const avisos: string[] = []
+  const poner = (item: LibraryItemResponse, requestId: number | undefined) => {
+    if (!vistos.has(item.id)) {
+      vistos.add(item.id)
+      elementos.push(item)
+    }
+    if (requestId == null) return
+    const suyas = peticiones.get(item.id) ?? []
+    if (!suyas.includes(requestId)) peticiones.set(item.id, [...suyas, requestId])
+  }
+  for (const { item, requestId, alcance } of entradas) {
+    const season = alcance?.season ?? null
+    const episode = alcance?.episode ?? null
+    if (episode != null && item.item_type !== 'episode') {
+      const codigo = `S${String(season ?? 0).padStart(2, '0')}E${String(episode).padStart(2, '0')}`
+      avisos.push(`«${item.title}»: la petición es del capítulo ${codigo}, que no está en la biblioteca.`)
+      continue
+    }
+    if (item.item_type !== 'series') { poner(item, requestId); continue }
+    const cargadas = temporadasDe.get(item.id)
+    const temporadas = [...(cargadas ?? [])]
+      .filter(t => season == null || t.season_number === season)
+      .sort((a, b) => (a.season_number ?? Number.MAX_SAFE_INTEGER) - (b.season_number ?? Number.MAX_SAFE_INTEGER))
+    if (cargadas && cargadas.length > 0 && season != null && temporadas.length === 0) {
+      avisos.push(`«${item.title}»: la temporada ${season} no está en la biblioteca.`)
+    }
+    for (const t of temporadas) poner(t, requestId)
+  }
+  return { elementos, peticiones, avisos }
+}
+
+/** `expandirEntradas` de una selección de Biblioteca (sin peticiones ni alcance). */
 export function expandirSeleccion(
   seleccion: readonly LibraryItemResponse[],
   temporadasDe: ReadonlyMap<number, readonly LibraryItemResponse[]>,
 ): LibraryItemResponse[] {
-  const vistos = new Set<number>()
-  const fuera: LibraryItemResponse[] = []
-  const poner = (item: LibraryItemResponse) => {
-    if (vistos.has(item.id)) return
-    vistos.add(item.id)
-    fuera.push(item)
-  }
-  for (const item of seleccion) {
-    if (item.item_type !== 'series') { poner(item); continue }
-    const temporadas = [...(temporadasDe.get(item.id) ?? [])]
-      .sort((a, b) => (a.season_number ?? Number.MAX_SAFE_INTEGER) - (b.season_number ?? Number.MAX_SAFE_INTEGER))
-    temporadas.forEach(poner)
-  }
-  return fuera
+  return expandirEntradas(seleccion.map(item => ({ item })), temporadasDe).elementos
 }
 
 /**
@@ -110,4 +159,28 @@ export function nombresRepetidos(filas: readonly { id: number; nombre: string | 
     porNombre.set(clave, [...(porNombre.get(clave) ?? []), id])
   }
   return new Set([...porNombre.values()].filter(ids => ids.length > 1).flat())
+}
+
+// ── «Subir seleccionadas» desde «Listo para subir» del Panel ────────────────────────────────────────────────────
+
+/**
+ * La clave de una fila del Panel en la selección: la petición (o `u`, sin petición) y la fila que se subiría. Dos
+ * peticiones sobre el mismo elemento son dos filas (el grupo 1 hace una por petición); el modal las junta.
+ */
+export function claveDelPanel(fila: DashboardRecommendationItem): string {
+  return `${fila.rec_request_id ?? 'u'}-${fila.library_target_id ?? fila.id}`
+}
+
+/**
+ * Lo que entra en el lote por una fila del Panel, como abre el asistente su «Subir»: `item` es la fila real de la
+ * biblioteca (`getLibraryItem(library_target_id ?? id)`), y una petición lleva su id y su alcance (la temporada y,
+ * si la petición es de un capítulo, el capítulo). Una idea sin petición entra sola.
+ */
+export function entradaDelPanel(fila: DashboardRecommendationItem, item: LibraryItemResponse): EntradaLote {
+  if (fila.rec_request_id == null) return { item }
+  return {
+    item,
+    requestId: fila.rec_request_id,
+    alcance: { season: fila.season_number, episode: fila.item_type === 'episode' ? fila.episode_number : null },
+  }
 }

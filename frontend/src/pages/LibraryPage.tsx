@@ -34,7 +34,7 @@ import { BarraLote } from '../components/lote/BarraLote'
 import { CasillaLote } from '../components/lote/CasillaLote'
 import { SubidaPorLotesModal } from '../components/lote/SubidaPorLotesModal'
 import { useSeleccionLote } from '../hooks/useSeleccionLote'
-import { seleccionableEnLote } from '../utils/lote'
+import { seleccionableEnLote, type EntradaLote } from '../utils/lote'
 import {
   cargarVistas, conVista, persistirVistas, sinVista, ORDEN_POR_DEFECTO, type FiltrosDeVista, type VistaGuardada,
 } from '../utils/vistasBiblioteca'
@@ -216,7 +216,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [modoSeleccion, setModoSeleccion] = useState(false)
   const { seleccion, total: totalSeleccion, lleno: loteLleno, alternar: alternarLote, limpiar: limpiarLote } = useSeleccionLote()
   // Lo que se abrió en el modal: una copia, que salir de Biblioteca limpia la selección.
-  const [loteAbierto, setLoteAbierto] = useState<LibraryItemResponse[] | null>(null)
+  const [loteAbierto, setLoteAbierto] = useState<EntradaLote[] | null>(null)
   const alternarModoSeleccion = () => {
     if (modoSeleccion) limpiarLote()
     setModoSeleccion(m => !m)
@@ -629,7 +629,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       )}
       {loteAbierto && (
         <SubidaPorLotesModal
-          seleccion={loteAbierto}
+          entradas={loteAbierto}
           onClose={() => setLoteAbierto(null)}
           onDone={() => { limpiarLote(); setModoSeleccion(false); load() }}
           onNavigate={onNavigate}
@@ -896,7 +896,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <BarraLote
           total={totalSeleccion}
           ocultas={ocultasPorFiltro}
-          onSubir={() => setLoteAbierto([...seleccion.values()])}
+          onSubir={() => setLoteAbierto([...seleccion.values()].map(item => ({ item })))}
           onLimpiar={limpiarLote}
         />
       )}

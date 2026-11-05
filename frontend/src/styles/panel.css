@@ -56,6 +56,13 @@
   color: var(--text-muted);
   white-space: nowrap;
 }
+/* La nota y una acción («Seleccionar» en «Listo para subir»), juntas a la derecha del título. */
+.panel-carril-fin {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
 /* Filas de los carriles */
 .panel-lista { list-style: none; margin: 0; padding: 0; }

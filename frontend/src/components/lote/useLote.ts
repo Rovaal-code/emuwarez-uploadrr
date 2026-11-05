@@ -7,7 +7,7 @@ import { getEmuComparison, getLibrary, suggestProvider } from '../../api/library
 import { getNomenclatureFields, previewNomenclatureFields, type NomenclatureFields } from '../../api/nomenclature'
 import { fetchSettings } from '../../api/settings'
 import type { LibraryItemResponse } from '../../types/api'
-import { expandirSeleccion, razonNoSubible } from '../../utils/lote'
+import { expandirEntradas, razonNoSubible, type EntradaLote } from '../../utils/lote'
 import { conclusionDuplicados, resumirComparaciones, type NivelDuplicado } from '../../utils/resumenSubida'
 import { PROVIDER_SOURCES } from '../asistente/constantes'
 
@@ -151,22 +151,31 @@ export interface ExpansionLote {
   elementos: LibraryItemResponse[] | null
   // Las que llegan marcadas: las que se pueden subir, hasta el tope del lote (cuenta después de expandir).
   iniciales: ReadonlySet<number>
+  // Desde el Panel: las peticiones que cubre cada elemento (la primera es la que se enlaza si no se elige otra).
+  peticiones: ReadonlyMap<number, readonly number[]>
   // Cuántas series hay que expandir y cuántas van.
   series: number
   hechas: number
-  // Una serie sin temporadas o que no se pudo cargar.
+  // Una serie sin temporadas o que no se pudo cargar, o una petición cuya temporada o capítulo no está.
   avisos: string[]
 }
 
+type Expandido = Pick<ExpansionLote, 'elementos' | 'iniciales' | 'peticiones' | 'avisos'>
+
 /**
  * El paso 1: cada serie marcada, cambiada por sus temporadas (como el asistente, `getLibrary` con `parent_id`), de
- * una en una para poder decir cuántas van. `seleccion` es la copia tomada al abrir: no cambia.
+ * una en una para poder decir cuántas van. `entradas` es la copia tomada al abrir: no cambia. Una serie que llega
+ * dos veces (dos peticiones de temporadas distintas) se carga una vez.
  */
-export function useExpansionLote(seleccion: readonly LibraryItemResponse[], maximo: number): ExpansionLote {
-  const series = seleccion.filter(e => e.item_type === 'series')
+export function useExpansionLote(entradas: readonly EntradaLote[], maximo: number): ExpansionLote {
+  const series = [...new Map(
+    entradas.filter(e => e.item.item_type === 'series').map(e => [e.item.id, e.item] as const),
+  ).values()]
   const [hechas, setHechas] = useState(0)
-  const [resultado, setResultado] = useState<Pick<ExpansionLote, 'elementos' | 'iniciales' | 'avisos'>>(() => (
-    series.length === 0 ? listo(seleccion, new Map(), [], maximo) : { elementos: null, iniciales: new Set(), avisos: [] }
+  const [resultado, setResultado] = useState<Expandido>(() => (
+    series.length === 0
+      ? listo(entradas, new Map(), [], maximo)
+      : { elementos: null, iniciales: new Set(), peticiones: new Map(), avisos: [] }
   ))
 
   useEffect(() => {
@@ -188,7 +197,7 @@ export function useExpansionLote(seleccion: readonly LibraryItemResponse[], maxi
         }
         setHechas(n => n + 1)
       }
-      if (vivo) setResultado(listo(seleccion, temporadas, avisos, maximo))
+      if (vivo) setResultado(listo(entradas, temporadas, avisos, maximo))
     }
     run()
     return () => { vivo = false }
@@ -199,10 +208,13 @@ export function useExpansionLote(seleccion: readonly LibraryItemResponse[], maxi
 }
 
 function listo(
-  seleccion: readonly LibraryItemResponse[], temporadas: ReadonlyMap<number, readonly LibraryItemResponse[]>,
+  entradas: readonly EntradaLote[], temporadas: ReadonlyMap<number, readonly LibraryItemResponse[]>,
   avisos: string[], maximo: number,
-): Pick<ExpansionLote, 'elementos' | 'iniciales' | 'avisos'> {
-  const elementos = expandirSeleccion(seleccion, temporadas)
-  const iniciales = new Set(elementos.filter(e => !razonNoSubible(e)).slice(0, maximo).map(e => e.id))
-  return { elementos, iniciales, avisos }
+): Expandido {
+  const expandido = expandirEntradas(entradas, temporadas)
+  const iniciales = new Set(expandido.elementos.filter(e => !razonNoSubible(e)).slice(0, maximo).map(e => e.id))
+  return {
+    elementos: expandido.elementos, iniciales, peticiones: expandido.peticiones,
+    avisos: [...avisos, ...expandido.avisos],
+  }
 }

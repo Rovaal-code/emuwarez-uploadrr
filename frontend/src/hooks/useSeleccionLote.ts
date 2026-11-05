@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react'
 import type { LibraryItemResponse } from '../types/api'
 import { MAX_ELEMENTOS_LOTE } from '../utils/lote'
 
+const porId = (item: { id: number }) => item.id
+
 /**
  * Lo marcado para «Subir por lotes». Vive en el estado de la página y no en el DOM: la lista y la rejilla solo
  * pintan lo que se ve (FilasVirtuales, RejillaVirtual). Se guarda el elemento entero y no solo su id, porque un
@@ -9,26 +11,33 @@ import { MAX_ELEMENTOS_LOTE } from '../utils/lote'
  *
  * `alternar` y `limpiar` son estables: las filas y tarjetas reciben `seleccionado` (un booleano) y `alternar`,
  * nunca el Map, que rompería su `memo` y repintaría todas con cada clic.
+ *
+ * Biblioteca marca por id; el Panel, por `claveDelPanel` (una fila por petición). `claveDe` tiene que ser estable
+ * (una función de módulo).
  */
-export function useSeleccionLote(maximo = MAX_ELEMENTOS_LOTE) {
-  const [seleccion, setSeleccion] = useState<ReadonlyMap<number, LibraryItemResponse>>(() => new Map())
+export function useSeleccionLote<T extends { id: number } = LibraryItemResponse, K = number>(
+  maximo = MAX_ELEMENTOS_LOTE,
+  claveDe: (item: T) => K = porId as unknown as (item: T) => K,
+) {
+  const [seleccion, setSeleccion] = useState<ReadonlyMap<K, T>>(() => new Map())
 
-  const alternar = useCallback((item: LibraryItemResponse) => {
+  const alternar = useCallback((item: T) => {
     setSeleccion(prev => {
+      const clave = claveDe(item)
       const sig = new Map(prev)
-      if (sig.has(item.id)) sig.delete(item.id)
+      if (sig.has(clave)) sig.delete(clave)
       else if (sig.size >= maximo) return prev
-      else sig.set(item.id, item)
+      else sig.set(clave, item)
       return sig
     })
-  }, [maximo])
+  }, [maximo, claveDe])
 
   // Sin nada marcado no cambia el estado: no repinta la página para nada.
   const limpiar = useCallback(() => {
     setSeleccion(prev => (prev.size === 0 ? prev : new Map()))
   }, [])
 
-  const tiene = useCallback((id: number) => seleccion.has(id), [seleccion])
+  const tiene = useCallback((clave: K) => seleccion.has(clave), [seleccion])
 
   return { seleccion, total: seleccion.size, lleno: seleccion.size >= maximo, alternar, limpiar, tiene }
 }

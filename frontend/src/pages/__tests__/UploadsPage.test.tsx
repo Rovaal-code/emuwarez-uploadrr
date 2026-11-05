@@ -51,7 +51,7 @@ const filaDe = (titulo: string) =>
   [...document.querySelectorAll('tbody tr')].find(tr => tr.querySelector('.sub-titulo')?.textContent === titulo)!
 const RESUMEN: LoteResumen = {
   lote_id: LOTE, total: 3, en_cola: 1, en_marcha: 1, completadas: 1, fallidas: 0, canceladas: 0, creado: null,
-  terminado: false, puede_cancelar: true, puede_reintentar: false,
+  terminado: false, puede_cancelar: true, puede_reintentar: false, parado: null, paradas: 0,
 }
 const accion = (extra: Partial<LoteAccionResult>): LoteAccionResult =>
   ({ canceladas: 0, intactas: 0, reintentadas: 0, saltadas: [], resumen: null, ...extra })
@@ -190,6 +190,23 @@ describe('el banner del lote', () => {
     expect(aviso.textContent).toContain('1 reintentada')
     expect(aviso.querySelector('li')!.textContent).toBe('Serie - S01E02: Ya hay otra subida en marcha.')
     expect(vi.mocked(getUploads).mock.calls.length).toBeGreaterThan(peticiones)
+  })
+
+  it('si el freno paró el lote, dice por qué, cuántas paró y cómo relanzarlas', async () => {
+    const parado = 'Lote parado: 5 fallos seguidos por «Forbidden (403)»'
+    vi.mocked(getLote).mockResolvedValue({
+      ...RESUMEN, en_cola: 0, en_marcha: 0, completadas: 0, fallidas: 5, canceladas: 3, total: 8,
+      puede_cancelar: false, puede_reintentar: true, parado, paradas: 3,
+    })
+    await filtrarPorLote()
+    expect(document.querySelector('.sub-lote-parado')!.textContent).toBe(
+      `${parado}. 3 subidas no llegaron a empezar; «Reintentar fallidas» las relanza.`)
+    expect(boton('Reintentar fallidas')!.disabled).toBe(false)
+  })
+
+  it('sin freno, no dice nada de él', async () => {
+    await filtrarPorLote()
+    expect(document.querySelector('.sub-lote-parado')).toBeNull()
   })
 
   it('«Borrar lote» pregunta antes, avisa de que borra la cadena entera y de las que no toca', async () => {

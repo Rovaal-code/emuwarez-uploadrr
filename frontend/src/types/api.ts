@@ -672,6 +672,10 @@ export interface LoteResumen {
   terminado: boolean
   puede_cancelar: boolean
   puede_reintentar: boolean
+  // Si lo paró el freno tras varios fallos seguidos con el mismo motivo (services/lotes.py::frenar_si_fallo_sistemico):
+  // «Lote parado: 5 fallos seguidos por «…»», y cuántas no llegaron a empezar (van también en `canceladas`).
+  parado: string | null
+  paradas: number
 }
 
 // Lo que hizo «Cancelar pendientes» o «Reintentar fallidas» con un lote (web/schemas.py::LoteAccionResponse).

@@ -53,7 +53,7 @@ type Aviso = { texto: string; saltadas: LoteAccionResult['saltadas'] } | { error
 
 /**
  * Sobre la tabla de Subidas filtrada por un lote: cuántas hay en cada estado, «Cancelar pendientes», «Reintentar
- * fallidas», «Borrar lote» (las terminadas) y «Quitar filtro». El resumen lo pide UploadsPage en su `load()`, que ya refrescan los avisos del servidor.
+ * fallidas», «Borrar lote» (las terminadas) y «Quitar filtro». Si el freno paró el lote, por qué y cuántas paró. El resumen lo pide UploadsPage en su `load()`, que ya refrescan los avisos del servidor.
  */
 export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }: {
   loteId: string
@@ -154,6 +154,15 @@ export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }
           <button type="button" className="btn btn-secondary btn-sm" onClick={onQuitar}>Quitar filtro</button>
         </div>
       </div>
+
+      {resumen?.parado && (
+        <p className="sub-lote-parado" role="note">
+          {resumen.parado}.{' '}
+          {resumen.paradas === 1
+            ? '1 subida no llegó a empezar; «Reintentar fallidas» la relanza.'
+            : `${resumen.paradas} subidas no llegaron a empezar; «Reintentar fallidas» las relanza.`}
+        </p>
+      )}
 
       {aviso && ('error' in aviso ? (
         <p className="error-text sub-lote-aviso" role="alert">{aviso.error}</p>

@@ -1467,6 +1467,10 @@ class LoteResumen(BaseModel):
     terminado: bool
     puede_cancelar: bool
     puede_reintentar: bool
+    # Si lo paró el freno tras varios fallos seguidos: su motivo («Lote parado: …») y cuántas no llegaron a empezar
+    # (van también en `canceladas`).
+    parado: Optional[str] = None
+    paradas: int = 0
 
 
 class LoteCancelarBody(BaseModel):

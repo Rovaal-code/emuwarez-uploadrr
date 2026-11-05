@@ -458,6 +458,16 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   fila). «Borrar lote» en el banner del lote de Subidas (`POST /uploads/lotes/{id}/borrar`, mismo token y mismo
   `delete_upload_job` que el borrado suelto, cadena entera; las vivas no se tocan). La sincronización de peticiones ya no se
   para por las subidas en cola (`ESTADOS_EN_MARCHA`). Sin ver en el navegador.
+
+- **Oleada 4, subida por lotes, PR 9 (pregunta 5):** Ajustes → Notificaciones → «Subidas por lotes» elige entre «Una por
+  subida» (por defecto, lo de antes) y «Una por lote» (`notify_lote_modo`, copia vigilada en `utils/lote.ts`). Con «Una por
+  lote», las subidas de un lote de más de un elemento no avisan solas y, cuando su última punta llega a un estado final, sale
+  `upload_batch_done` («Lote terminado: N subidas, X completadas, Y fallidas, Z canceladas», con las fallidas por título; en
+  la campana abre Subidas filtrada por el lote). Un solo aviso: «¿ha terminado?» y apuntar la firma del lote (ids de sus
+  puntas, `app_state` `lote_avisado:<id>`) van en un `BEGIN IMMEDIATE`; «Reintentar fallidas» cambia la firma y vuelve a
+  avisar al terminar. Cancelar también cierra el lote; reiniciar no avisa. Sin migración: al pasar a «Una por lote», la
+  pestaña marca el aviso nuevo en los canales que avisaban de las subidas. Y «Subir seleccionadas» (Panel y Peticiones) no
+  abre el lote si lo marcado cambió mientras se pedían las fichas (`useSeleccionLote().sigueIgual`). Sin ver en el navegador.
 ## Siguiente
 
 Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que quedaba por ver se comprobó el 03/11 (ver en

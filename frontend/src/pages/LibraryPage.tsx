@@ -34,6 +34,7 @@ import { BarraLote } from '../components/lote/BarraLote'
 import { CasillaLote } from '../components/lote/CasillaLote'
 import { SubidaPorLotesModal } from '../components/lote/SubidaPorLotesModal'
 import { useSeleccionLote } from '../hooks/useSeleccionLote'
+import { seleccionableEnLote } from '../utils/lote'
 import {
   cargarVistas, conVista, persistirVistas, sinVista, ORDEN_POR_DEFECTO, type FiltrosDeVista, type VistaGuardada,
 } from '../utils/vistasBiblioteca'
@@ -75,8 +76,8 @@ const claveDeItem = (it: LibraryItemResponse) => it.id
 // Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
 // new function identity every render, defeating memo — so this takes a
 // stable onSelect (openDetail, itself wrapping setSelected) and calls it with `item` internally.
-// «Subir por lotes»: con `onToggle`, una película lleva su casilla arriba a la izquierda (arriba a la derecha va el
-// estado), fuera del layout: la tarjeta no puede cambiar de alto (RejillaVirtual la mide).
+// «Subir por lotes»: con `onToggle`, una película, una serie o una temporada lleva su casilla arriba a la izquierda
+// (arriba a la derecha va el estado), fuera del layout: la tarjeta no puede cambiar de alto (RejillaVirtual la mide).
 const PosterCard = memo(function PosterCard({ item, onSelect, priority, seleccionado = false, loteLleno = false, onToggle }: {
   item: LibraryItemResponse
   onSelect: (item: LibraryItemResponse) => void
@@ -91,7 +92,7 @@ const PosterCard = memo(function PosterCard({ item, onSelect, priority, seleccio
       onClick={() => onSelect(item)}
     >
       <div className="bib-tarjeta-marco">
-        {onToggle && item.item_type === 'movie' && (
+        {onToggle && seleccionableEnLote(item) && (
           <CasillaLote item={item} seleccionado={seleccionado} bloqueada={loteLleno} onAlternar={onToggle} className="lote-casilla-poster" />
         )}
         {item.poster_url ? (
@@ -209,8 +210,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
 
-  // «Subir por lotes»: el botón «Seleccionar» pone las casillas (solo en películas); lo marcado sobrevive a cambiar
-  // de filtro, de vista y a aplicar una vista guardada, y se limpia al salir de Biblioteca o al encolar el lote.
+  // «Subir por lotes»: el botón «Seleccionar» pone las casillas (en películas, series y temporadas; no en capítulos);
+  // lo marcado sobrevive a cambiar de filtro, de vista y a aplicar una vista guardada, y se limpia al salir de
+  // Biblioteca o al encolar el lote. Una serie marcada se cambia por sus temporadas en el modal.
   const [modoSeleccion, setModoSeleccion] = useState(false)
   const { seleccion, total: totalSeleccion, lleno: loteLleno, alternar: alternarLote, limpiar: limpiarLote } = useSeleccionLote()
   // Lo que se abrió en el modal: una copia, que salir de Biblioteca limpia la selección.
@@ -541,10 +543,24 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const hayMas = hayMasQueCargar(items.length, data?.total ?? 0)
   const resumenResultados = textoDeResultados(items.length, data?.total ?? 0, filtrando)
   // Lo marcado que el filtro de ahora no enseña. Solo se cuenta con la selección puesta: son hasta 20.000 filas.
+  // Una temporada marcada desde su serie desplegada se ve si se ve su serie.
   const idsALaVista = useMemo(
     () => (modoSeleccion ? new Set((data?.items ?? []).map(i => i.id)) : null), [modoSeleccion, data])
-  const ocultasPorFiltro = idsALaVista ? [...seleccion.keys()].filter(id => !idsALaVista.has(id)).length : 0
+  const ocultasPorFiltro = idsALaVista
+    ? [...seleccion.values()]
+        .filter(e => !idsALaVista.has(e.id) && !(e.parent_id != null && idsALaVista.has(e.parent_id))).length
+    : 0
   const onToggleLote = modoSeleccion ? alternarLote : undefined
+  // Las temporadas marcadas de cada serie, para sus filas hijas en la lista: un texto por serie («12,15»), que el
+  // memo de la fila compara por valor.
+  const temporadasMarcadas = useMemo(() => {
+    const porSerie = new Map<number, number[]>()
+    for (const marcado of seleccion.values()) {
+      if (marcado.item_type !== 'season' || marcado.parent_id == null) continue
+      porSerie.set(marcado.parent_id, [...(porSerie.get(marcado.parent_id) ?? []), marcado.id])
+    }
+    return new Map([...porSerie].map(([serie, ids]) => [serie, ids.join(',')]))
+  }, [seleccion])
 
   // La tabla solo se apaga si la espera se nota. Filtrar u ordenar tarda unos
   // milisegundos, y apagarla en cuanto sale la petición se veía como un
@@ -582,8 +598,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       seleccionado={seleccion.has(item.id)}
       loteLleno={loteLleno}
       onAlternar={onToggleLote}
+      temporadasMarcadas={temporadasMarcadas.get(item.id) ?? ''}
     />
-  ), [instances, openDetail, handleTreeAction, load, alDesplegar, seleccion, loteLleno, onToggleLote])
+  ), [instances, openDetail, handleTreeAction, load, alDesplegar, seleccion, loteLleno, onToggleLote, temporadasMarcadas])
 
   // Modals/overlays, shared by the list view and the detail page so an action
   // triggered from the detail page (Subir/Petición) shows its window without
@@ -612,7 +629,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       )}
       {loteAbierto && (
         <SubidaPorLotesModal
-          peliculas={loteAbierto}
+          seleccion={loteAbierto}
           onClose={() => setLoteAbierto(null)}
           onDone={() => { limpiarLote(); setModoSeleccion(false); load() }}
           onNavigate={onNavigate}
@@ -753,7 +770,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <option value="size_asc">Orden: Tamaño (Menos)</option>
         </select>
         <VistasGuardadas vistas={vistas} actual={filtrosDeAhora} onAplicar={aplicarVista} onGuardar={guardarVista} onQuitar={quitarVista} />
-        <Tooltip content="Marca varias películas para subirlas de una vez">
+        <Tooltip content="Marca películas, series o temporadas para subirlas de una vez">
           <button
             type="button"
             className={`btn btn-secondary btn-sm${modoSeleccion ? ' lote-boton-activo' : ''}`}

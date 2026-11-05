@@ -316,7 +316,8 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   asistente queda siempre a la vista. La columna se llama «Lo tuyo» y no «Tuyo» porque el catálogo local no guarda el autor.
   - Sin hacer: Nomenclatura, Pistas y MediaInfo como pestañas dentro del paso 2 en vez de modales (encaja: `PasoArchivo` y
     `PasoTemporada` tienen ya los tres bloques; hace falta sustituir los booleanos `showRemuxCard`/`showMiCard` por una pestaña
-    activa, en un PR aparte y con comparación visual); en una tanda el Resumen no lista el nombre de cada torrent.
+    activa, en un PR aparte y con comparación visual); en una tanda el Resumen no lista el nombre de cada torrent («Subir por
+    lotes» sí, desde su PR 5; el `nombre` de `run_upload_checks` serviría también aquí para los packs).
 - **Oleada 4, el Panel, segunda ronda (#197):** «En curso» vuelve a enseñar las subidas recientes (las cinco últimas, con su
   insignia); «Listo para subir» enseña el grupo de release y los idiomas de cada petición; con un solo aviso en «Necesita atención»
   la acción queda a la derecha.
@@ -414,6 +415,21 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   «Subir N» llama a `POST /uploads/lote`; el resultado lista las saltadas y «Ver el lote en Subidas» abre Subidas filtrada por
   él (`emuwarez_open_lote`); un 409 enseña sus motivos. Decidido sin Gabriel: la selección se enciende con «Seleccionar» (sin
   él no hay casillas). Sin ver en el navegador (falta comprobar a mano la rejilla con 200 marcadas).
+- **Oleada 4, subida por lotes, PR 5: series y temporadas en el lote:** «Seleccionar» pone casilla también en series y
+  temporadas (en la lista, las filas hijas de una serie desplegada; en pósters, las temporadas cuando un filtro las saca), nunca
+  en capítulos. La fila de una serie recibe sus temporadas marcadas como un texto (`temporadasMarcadas`, «12,15»), para que el
+  memo compare por valor. En el paso 1 del modal cada serie se cambia por sus temporadas (`getLibrary` con `parent_id`, como el
+  asistente, de una en una y con «Cargando las temporadas… (N de M)»; `expandirSeleccion`): una temporada marcada sola y por su
+  serie sale una vez, las aptas para pack llegan marcadas y las demás desmarcadas con el motivo de `seasonNotReadyReason`, y el
+  tope de 50 cuenta después de expandir. Una serie sin temporadas o que no se pudo cargar se dice arriba. En el Resumen, una
+  temporada pasa por las mismas comprobaciones de contenido que una película; su nombre sale del `nombre` nuevo de
+  `run_upload_checks` (el `season_pack_title` del plan, solo con el pack listo; compatible hacia atrás) y lo que ya hay en
+  eMuwarez de `getEmuComparison(id)`, como una tanda de temporadas del asistente. No lleva `campos`. Nombres repetidos se miran
+  entre películas y temporadas. Decidido sin Gabriel (pregunta 8 del plan, la opción recomendada): solo packs aptos, sin
+  capítulos sueltos desde Biblioteca. Tampoco se elige proveedor en el lote: el pack usa el que decide su plan (nombre de los
+  capítulos o TMDb) y no se manda `provider`; con proveedores distintos su comprobación falla y la temporada se salta con ese
+  motivo y «Súbela suelta para elegirlo». Los avisos del plan (pista de audio sin idioma, source distinto) no se enseñan por
+  temporada. Sin ver en el navegador.
 
 ## Siguiente
 
@@ -428,8 +444,8 @@ Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que qued
 
 - Funciones nuevas que faltan:
   - subida por lotes: el plan detallado (modelo, PRs en orden, tests, riesgos y 14 preguntas para Gabriel) está en
-    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); hechos los PR 1 a 4 (ver «Hecho»),
-    sigue el PR 5 (series y temporadas en el lote);
+    `docs/PLAN_SUBIDA_POR_LOTES.md`, revisado contra `adef702` (lo que cambió, en su §9); hechos los PR 1 a 5 (ver «Hecho»),
+    sigue el PR 6 (selección en «Listo para subir» del Panel);
   - ~~resumen de duplicados y trumps~~ (hecho, ver «Hecho»);
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).

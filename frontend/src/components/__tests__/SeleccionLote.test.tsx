@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
- * Marcar películas para «Subir por lotes»: el tope del lote, que la casilla no abra la ficha ni despliegue la fila,
- * que solo las películas la lleven, que la lista siga con siete columnas y lo que dice la barra.
+ * Marcar películas, series y temporadas para «Subir por lotes»: el tope del lote, que la casilla no abra la ficha ni
+ * despliegue la fila, que los capítulos no la lleven, que una serie desplegada se la pase a sus temporadas, que la
+ * lista siga con siete columnas y lo que dice la barra.
  */
 import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -92,13 +93,41 @@ describe('la casilla en la lista', () => {
     expect(casilla('Peli 2')!.disabled).toBe(true)
   })
 
-  it('una serie no la lleva, así que un clic en su fila solo la despliega', async () => {
+  it('una serie la lleva: marcarla no la despliega, y un clic en la fila sí', async () => {
     vi.mocked(getLibrary).mockResolvedValue({ items: [], total: 0 } as never)
     const { onAlternar } = await fila(elemento(5, { item_type: 'series', title: 'Serie' }))
-    expect(document.querySelector('input[type="checkbox"]')).toBeNull()
+    await pulsar(casilla('Serie')!)
+    expect(onAlternar).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }))
+    expect(getLibrary).not.toHaveBeenCalled()
     await pulsar(document.querySelector('tr.bib-fila')!)
     expect(getLibrary).toHaveBeenCalled()
-    expect(onAlternar).not.toHaveBeenCalled()
+    expect(onAlternar).toHaveBeenCalledTimes(1)
+  })
+
+  it('una serie desplegada pasa la casilla a sus temporadas, marcadas según la lista; un capítulo no la lleva', async () => {
+    vi.mocked(getLibrary).mockImplementation(async q => ({
+      items: q?.type === 'season'
+        ? [elemento(51, { item_type: 'season', title: 'Serie - Temporada 1', parent_id: 5 }),
+           elemento(52, { item_type: 'season', title: 'Serie - Temporada 2', parent_id: 5 })]
+        : [elemento(511, { item_type: 'episode', title: 'Serie S01E01', parent_id: 51 })],
+      total: 2,
+    }) as never)
+    const { onAlternar } = await fila(elemento(5, { item_type: 'series', title: 'Serie' }), { temporadasMarcadas: '52' })
+    await pulsar(document.querySelector('tr.bib-fila')!)
+    expect(casilla('Serie - Temporada 1')!.checked).toBe(false)
+    expect(casilla('Serie - Temporada 2')!.checked).toBe(true)
+    await pulsar(casilla('Serie - Temporada 1')!)
+    expect(onAlternar).toHaveBeenCalledWith(expect.objectContaining({ id: 51 }))
+    // Desplegar la temporada enseña sus capítulos, sin casilla.
+    const filaTemporada = [...document.querySelectorAll('tr.bib-fila')].find(tr => tr.textContent?.includes('Temporada 1'))!
+    await pulsar(filaTemporada)
+    expect(texto()).toContain('S01E01')
+    expect(document.querySelectorAll('input[type="checkbox"]')).toHaveLength(3)
+  })
+
+  it('un capítulo no la lleva', async () => {
+    await fila(elemento(7, { item_type: 'episode', title: 'Serie S01E01' }))
+    expect(document.querySelector('input[type="checkbox"]')).toBeNull()
   })
 
   it('sin modo selección no hay casilla', async () => {
@@ -134,7 +163,7 @@ describe('la barra de la selección', () => {
 
   it('sin nada marcado lo explica y no deja subir', async () => {
     await montar(<BarraLote total={0} ocultas={0} onSubir={() => {}} onLimpiar={() => {}} />)
-    expect(texto()).toContain('Marca las películas que quieras subir juntas')
+    expect(texto()).toContain('Marca las películas, series o temporadas que quieras subir juntas')
     expect(boton('Subir por lotes')!.disabled).toBe(true)
   })
 })

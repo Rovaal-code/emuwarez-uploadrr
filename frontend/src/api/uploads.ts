@@ -218,6 +218,9 @@ export interface UploadCheck {
 export interface UploadChecksResult {
   checks: UploadCheck[]
   ready: boolean
+  // Temporada: el nombre del torrent del pack (su `season_pack_title`) si el pack está listo; null si no, y en
+  // lo demás. Lo usa «Subir por lotes», que no abre el asistente para cada pack.
+  nombre?: string | null
 }
 
 // `scope` parte la pasada para una selección de varias temporadas o

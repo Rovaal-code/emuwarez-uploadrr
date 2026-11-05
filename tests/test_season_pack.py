@@ -1392,6 +1392,21 @@ def test_las_comprobaciones_usan_el_proveedor_elegido(isolated_db, tmp_path):
     conn.close()
 
 
+def test_las_comprobaciones_de_un_pack_listo_dan_el_nombre_del_torrent(isolated_db, tmp_path):
+    """«Subir por lotes» enseña el nombre de cada pack sin abrir el asistente: sale
+    del plan que las comprobaciones ya calculan. Un pack bloqueado no lo da."""
+    from emuwarez_uploadrr.services.upload_checks import run_upload_checks
+    conn = _open(isolated_db)
+    season_id = _pack_con_proveedores_distintos(conn, tmp_path)
+
+    assert run_upload_checks(conn, season_id, scope="content")["nombre"] is None
+    listo = run_upload_checks(conn, season_id, scope="content", provider_override="NF")
+    plan = build_season_pack_plan(season_id, conn=conn, provider_override="NF")
+    assert listo["nombre"] == plan["season_pack_title"]
+    assert "NF" in listo["nombre"]
+    conn.close()
+
+
 def test_con_proveedores_distintos_el_aviso_no_dice_que_el_pack_lo_lleva(isolated_db, tmp_path):
     """E01 AMZN y E03 NF en el nombre, E02 AMZN solo en la carpeta: el plan se
     bloquea, así que el aviso no puede decir que el pack lleva AMZN."""

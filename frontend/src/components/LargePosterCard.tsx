@@ -4,6 +4,7 @@ import { PosterStatusIcon } from './PosterStatusIcon'
 import { posterUrl } from '../utils/libraryItem'
 import { IconoTipo } from './Iconos'
 import { CasillaLote } from './lote/CasillaLote'
+import { seleccionableEnLote } from '../utils/lote'
 
 // Bigger, Overseerr/Jellyseerr-style poster card for the "Pósters grandes"
 // view — additive alongside the existing small grid, not a replacement.
@@ -11,8 +12,9 @@ import { CasillaLote } from './lote/CasillaLote'
 // inline onClick closure, so the memo actually skips re-rendering rows
 // whose own item/priority props haven't changed.
 //
-// «Subir por lotes»: con `onToggle`, una película lleva su casilla arriba a la izquierda, encima del póster (arriba
-// a la derecha va el estado). Fuera del layout: la tarjeta no puede cambiar de alto (RejillaVirtual la mide).
+// «Subir por lotes»: con `onToggle`, una película, una serie o una temporada (estas solo salen con un filtro) lleva
+// su casilla arriba a la izquierda, encima del póster (arriba a la derecha va el estado). Fuera del layout: la
+// tarjeta no puede cambiar de alto (RejillaVirtual la mide).
 export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, priority, seleccionado = false, loteLleno = false, onToggle }: {
   item: LibraryItemResponse
   onSelect: (item: LibraryItemResponse) => void
@@ -41,7 +43,7 @@ export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, p
             <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
           </div>
         )}
-        {onToggle && item.item_type === 'movie' && (
+        {onToggle && seleccionableEnLote(item) && (
           <CasillaLote item={item} seleccionado={seleccionado} bloqueada={loteLleno} onAlternar={onToggle} className="lote-casilla-poster" />
         )}
         <div className="poster-grande-estado">

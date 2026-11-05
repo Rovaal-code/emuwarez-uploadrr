@@ -104,6 +104,10 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
     from ..database import get_setting_canonical
 
     checks: list[dict] = []
+    # El nombre del torrent de un pack listo (el `season_pack_title` del plan),
+    # para quien comprueba varias temporadas sin abrir el asistente («Subir por
+    # lotes»). None en lo demás: una película o un capítulo lo calculan aparte.
+    nombre: Optional[str] = None
     _set_checks_progress(item_id, checks=[])  # reset — a previous run's leftovers shouldn't leak in
 
     # The label states the outcome: the positive phrase when the check passes,
@@ -131,7 +135,7 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         # grupo puede acabar en otra.
         ready = complete and bool(checks) and all(c["status"] in ("ok", "skip") for c in checks)
         _set_checks_progress(item_id, checks=checks, done=True, ready=ready)
-        return {"checks": checks, "ready": ready}
+        return {"checks": checks, "ready": ready, "nombre": nombre}
 
     item = get_library_item(conn, item_id) if scope != "environment" else None
     if scope != "environment" and not item:
@@ -166,6 +170,8 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         # sin él, un pack con proveedores distintos seguía bloqueado aquí.
         plan = build_season_pack_plan(item_id, conn=conn, provider_override=provider_override)
         ok = plan["status"] == "valid"
+        if ok:
+            nombre = plan.get("season_pack_title") or None
         msg = "; ".join(plan["errors"]) if not ok else (
             f"Pack listo: {len(plan['episodes'])} episodio(s) → {plan.get('pack_folder')}"
         )

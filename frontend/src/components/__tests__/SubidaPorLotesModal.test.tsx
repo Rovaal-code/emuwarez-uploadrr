@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
 /**
  * «Subir por lotes» con el servidor simulado: qué se comprueba y cuándo (nada en el paso 1; el entorno una vez y el
- * contenido por película en el paso 2), qué llega desmarcado o se salta y por qué, cuándo se habilita «Subir N»,
- * qué se manda a POST /uploads/lote y cómo se enseña lo que respondió.
+ * contenido por elemento en el paso 2), qué llega desmarcado o se salta y por qué, cuándo se habilita «Subir N»,
+ * qué se manda a POST /uploads/lote y cómo se enseña lo que respondió. Y las series: cada una se cambia por sus
+ * temporadas (packs) en el paso 1, y el Resumen de una temporada sale de sus comprobaciones.
  */
 import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/uploads', () => ({ queueLote: vi.fn(), runUploadChecks: vi.fn(), getUploadChecksProgress: vi.fn() }))
 vi.mock('../../api/nomenclature', () => ({ getNomenclatureFields: vi.fn(), previewNomenclatureFields: vi.fn() }))
-vi.mock('../../api/library', () => ({ getEmuComparison: vi.fn(), suggestProvider: vi.fn() }))
+vi.mock('../../api/library', () => ({ getEmuComparison: vi.fn(), getLibrary: vi.fn(), suggestProvider: vi.fn() }))
 vi.mock('../../api/settings', () => ({ fetchSettings: vi.fn() }))
 vi.mock('../../api/eventos', () => ({ seguirProgreso: vi.fn(() => () => {}) }))
 
@@ -48,8 +49,8 @@ const onClose = vi.fn()
 const onDone = vi.fn()
 const onNavigate = vi.fn()
 
-async function abrir(peliculas: LibraryItemResponse[]) {
-  await montar(<SubidaPorLotesModal peliculas={peliculas} onClose={onClose} onDone={onDone} onNavigate={onNavigate} />)
+async function abrir(seleccion: LibraryItemResponse[]) {
+  await montar(<SubidaPorLotesModal seleccion={seleccion} onClose={onClose} onDone={onDone} onNavigate={onNavigate} />)
 }
 
 const llamadas = (scope: 'environment' | 'content') => m(subidas.runUploadChecks).mock.calls.filter(c => c[1] === scope)
@@ -344,5 +345,163 @@ describe('lo que se manda y lo que vuelve', () => {
     await esperar(() => texto().includes('1 de 1 encolada'))
     await escape()
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ── Series y temporadas ─────────────────────────────────────────────────────────────────────────────────────────
+
+const serie = (id: number, title: string) =>
+  ({ id, item_type: 'series', title, year: 2020, local_status: 'Disponible', has_spanish_ok: 1 }) as LibraryItemResponse
+const temporada = (id: number, de: LibraryItemResponse, n: number, extra: Partial<LibraryItemResponse> = {}) => ({
+  id, item_type: 'season', title: `${de.title} - Temporada ${n}`, year: 2020, parent_id: de.id, season_number: n,
+  local_status: 'Disponible', has_spanish_ok: 1, resolution: '1080p', video_codec: 'x264', source: 'WEB-DL', ...extra,
+}) as LibraryItemResponse
+
+const LOST = serie(100, 'Lost')
+const FARGO = serie(200, 'Fargo')
+// Lost: tres aptas para pack y una incompleta; Fargo: dos aptas. Las da getLibrary desordenadas.
+const TEMPORADAS: Record<number, LibraryItemResponse[]> = {
+  100: [temporada(103, LOST, 3), temporada(101, LOST, 1), temporada(102, LOST, 2),
+        temporada(104, LOST, 4, { local_status: 'Parcial' })],
+  200: [temporada(201, FARGO, 1), temporada(202, FARGO, 2)],
+}
+const packDe = (id: number) => `Pack ${id} S01 1080p WEB-DL x264-GRP`
+const PACK_LISTO = (id: number) => ({ ...LISTO, nombre: packDe(id) })
+
+const titulosPaso1 = () => [...document.querySelectorAll('.lote-fila-titulo')].map(e => e.textContent)
+const temporadas = () => m(biblioteca.getLibrary).mock.calls.map(c => c[0])
+
+describe('series y temporadas', () => {
+  beforeEach(() => {
+    m(biblioteca.getLibrary).mockImplementation(async q => {
+      const items = TEMPORADAS[q!.parent_id as number] ?? []
+      return { items, total: items.length } as never
+    })
+    m(subidas.runUploadChecks).mockImplementation(async (id, scope) =>
+      scope === 'environment' ? ENTORNO : id > 100 ? PACK_LISTO(id) : LISTO)
+  })
+
+  it('dos series con 3 y 2 temporadas aptas dan 5 filas marcadas; la no apta, desmarcada con su motivo', async () => {
+    await abrir([LOST, FARGO])
+    await esperar(() => texto().includes('Continuar'))
+    expect(temporadas()).toEqual([
+      { parent_id: 100, type: 'season', limit: 500 }, { parent_id: 200, type: 'season', limit: 500 },
+    ])
+    expect(titulosPaso1()).toEqual([
+      'Lost (2020) - Temporada 1', 'Lost (2020) - Temporada 2', 'Lost (2020) - Temporada 3',
+      'Lost (2020) - Temporada 4', 'Fargo (2020) - Temporada 1', 'Fargo (2020) - Temporada 2',
+    ])
+    expect(texto()).toContain('5 de 6 marcadas')
+    expect(casillaPaso1('Lost (2020) - Temporada 4').checked).toBe(false)
+    expect(casillaPaso1('Lost (2020) - Temporada 4').disabled).toBe(true)
+    expect(texto()).toContain('Temporada incompleta: no todos los capítulos están Disponibles.')
+    expect(boton('Continuar (5)')).toBeDefined()
+  })
+
+  it('enseña el progreso mientras carga las temporadas, y no deja continuar', async () => {
+    const lost = diferida<{ items: LibraryItemResponse[]; total: number }>()
+    m(biblioteca.getLibrary).mockImplementation(async q => (q!.parent_id === 100
+      ? lost.promesa
+      : { items: TEMPORADAS[200], total: 2 }) as never)
+    await abrir([LOST, FARGO])
+    expect(texto()).toContain('Cargando las temporadas de las series marcadas (1 de 2)')
+    expect(boton('Continuar (0)')).toBeUndefined()
+    await act(async () => { lost.resolver({ items: TEMPORADAS[100], total: 4 }) })
+    await esperar(() => boton('Continuar (5)'))
+  })
+
+  it('una serie y una de sus temporadas marcadas a la vez no la duplican', async () => {
+    await abrir([TEMPORADAS[100][2], LOST])
+    await esperar(() => texto().includes('Continuar'))
+    expect(titulosPaso1()).toEqual([
+      'Lost (2020) - Temporada 2', 'Lost (2020) - Temporada 1', 'Lost (2020) - Temporada 3', 'Lost (2020) - Temporada 4',
+    ])
+    expect(boton('Continuar (3)')).toBeDefined()
+  })
+
+  it('una serie que no se pudo cargar lo dice, y el resto sigue', async () => {
+    m(biblioteca.getLibrary).mockRejectedValue(new Error('Sin conexión'))
+    await abrir([LOST, DUNE])
+    await esperar(() => texto().includes('Continuar'))
+    expect(texto()).toContain('No se pudieron cargar las temporadas de «Lost»: Sin conexión')
+    expect(titulosPaso1()).toEqual(['Dune (2021)'])
+  })
+
+  it('el tope de 50 cuenta después de expandir', async () => {
+    const muchas = Array.from({ length: 49 }, (_, i) => temporada(1000 + i, LOST, i + 1))
+    m(biblioteca.getLibrary).mockResolvedValue({ items: muchas, total: 49 } as never)
+    await abrir([LOST, DUNE, ALIEN])
+    await esperar(() => texto().includes('Continuar'))
+    expect(texto()).toContain('50 de 51 marcadas')
+    expect(boton('Continuar (50)')).toBeDefined()
+    // Lleno: Alien, la última, llega desmarcada y no se puede marcar sin desmarcar otra.
+    expect(casillaPaso1('Alien').checked).toBe(false)
+    expect(casillaPaso1('Alien').disabled).toBe(true)
+    await pulsar(casillaPaso1('Dune'))
+    expect(casillaPaso1('Alien').disabled).toBe(false)
+  })
+
+  it('el Resumen de una temporada da el nombre del pack que dicen sus comprobaciones', async () => {
+    await abrir([TEMPORADAS[100][1]])
+    await alResumen(1)
+    expect(fila(101).textContent).toContain(packDe(101))
+    expect(fila(101).textContent).toContain('No hay nada igual en eMuwarez.')
+    // Ni su nomenclatura ni su proveedor se miran aparte: los dice el plan del pack.
+    expect(nom.getNomenclatureFields).not.toHaveBeenCalled()
+    expect(biblioteca.suggestProvider).not.toHaveBeenCalled()
+    expect(m(biblioteca.getEmuComparison).mock.calls).toEqual([[101, undefined]])
+  })
+
+  it('un lote mixto de película y temporada manda las dos en orden, sin campos ni proveedor en la temporada', async () => {
+    m(nom.getNomenclatureFields).mockImplementation(async id => ({
+      fields: { ...CAMPOS, source: 'WEB-DL' }, torrent_name: nombreDe(id), internal_mkv_title: '', blocked: false,
+    }))
+    m(biblioteca.suggestProvider).mockResolvedValue({ suggested: 'NF', tmdb_providers: ['NF'], reason: '' })
+    m(nom.previewNomenclatureFields).mockResolvedValue({
+      torrent_name: 'Dune (2021) 1080p NF WEB-DL x264-GRP', internal_mkv_title: '', fields: {}, provider_options: [],
+    })
+    await abrir([DUNE, TEMPORADAS[200][0]])
+    await alResumen(2)
+    expect(fila(11).textContent).toContain('Dune (2021) 1080p NF WEB-DL x264-GRP')
+    expect(fila(201).textContent).toContain(packDe(201))
+    await pulsar(boton('Subir 2'))
+    await esperar(() => texto().includes('2 de 2 encoladas'))
+    const [enviados] = m(subidas.queueLote).mock.calls[0]
+    expect(enviados.map(e => e.item_id)).toEqual([11, 201])
+    expect(enviados[0].campos).toEqual({ ...CAMPOS, source: 'WEB-DL', provider: 'NF' })
+    expect(enviados[1]).toEqual({
+      item_id: 201, checks: { ready: true, checks: [...LISTO.checks, ...ENTORNO.checks] },
+    })
+  })
+
+  it('un pack que no se puede preparar se salta con el motivo de su comprobación', async () => {
+    const CONFLICTO = {
+      ready: false, nombre: null, checks: [{
+        id: 'season_pack', label: 'No se puede preparar el pack de temporada', status: 'fail' as const,
+        message: 'Los capítulos vienen de proveedores distintos (AMZN, NF): elige uno en Proveedor.',
+      }],
+    }
+    m(subidas.runUploadChecks).mockImplementation(async (id, scope) =>
+      scope === 'environment' ? ENTORNO : id === 202 ? CONFLICTO : PACK_LISTO(id))
+    await abrir([FARGO])
+    await esperar(() => texto().includes('Continuar'))
+    await alResumen(2)
+    expect(fila(202).textContent).toContain('proveedores distintos (AMZN, NF)')
+    expect(fila(202).textContent).toContain('Súbela suelta para elegirlo.')
+    expect(fila(202).textContent).toContain('Se saltará')
+    expect(incluir('Fargo - Temporada 2').disabled).toBe(true)
+    expect(boton('Subir 1')).toBeDefined()
+  })
+
+  it('dos temporadas que saldrían con el mismo nombre se saltan las dos', async () => {
+    m(subidas.runUploadChecks).mockImplementation(async (_id, scope) =>
+      scope === 'environment' ? ENTORNO : { ...LISTO, nombre: 'Fargo S01 1080p WEB-DL x264-GRP' })
+    await abrir([FARGO])
+    await esperar(() => texto().includes('Continuar'))
+    await alResumen(2)
+    expect(fila(201).textContent).toContain('Otro elemento del lote saldría con el mismo nombre.')
+    expect(incluir('Fargo - Temporada 1').disabled).toBe(true)
+    expect(incluir('Fargo - Temporada 2').disabled).toBe(true)
+    expect(botonSubir()!.disabled).toBe(true)
   })
 })

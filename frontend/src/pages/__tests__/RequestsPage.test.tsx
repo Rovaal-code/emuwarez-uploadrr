@@ -26,7 +26,7 @@ import { queueLote, runUploadChecks } from '../../api/uploads'
 import { SeccionVisible } from '../../context/SeccionVisible'
 import { SyncContext } from '../../context/SyncContext'
 import type { LibraryItemResponse, RequestDetailResponse, RequestItemResponse } from '../../types/api'
-import { boton, campo, desmontar, elegir, escribir, esperar, montar, pulsar, texto } from '../../components/__tests__/dom'
+import { boton, desmontar, elegir, escribir, esperar, montar, pulsar, texto } from '../../components/__tests__/dom'
 import { MAX_ELEMENTOS_LOTE } from '../../utils/lote'
 import { RequestsPage } from '../RequestsPage'
 
@@ -66,7 +66,6 @@ const grupos = () => [...document.querySelectorAll('tbody.pet-bloque')].map(b =>
   n: b.querySelector('.pet-grupo-n')!.textContent,
   filas: [...b.querySelectorAll('tr.clickable')].map(tr => tr.querySelector('.lib-title-link')!.textContent),
 }))
-const casillaAutor = () => campo<HTMLInputElement>('Mostrar autor')
 const ultimaLlamada = () => { const l = vi.mocked(getRequests).mock.calls; return l[l.length - 1][0] }
 
 beforeEach(() => {
@@ -105,29 +104,20 @@ describe('Peticiones', () => {
     expect(ultimaLlamada()).toMatchObject({ sort: 'points_desc' })
   })
 
-  it('la columna Autor está oculta por defecto', async () => {
+  it('la columna Autor siempre está, con su filtro, sin casilla para ocultarla', async () => {
     await pagina()
-    expect(cabeceras().some(c => c?.startsWith('Autor'))).toBe(false)
-    expect(document.body.textContent).not.toContain('pedidor')
-    expect(casillaAutor()!.checked).toBe(false)
-  })
-
-  it('la casilla muestra la columna Autor y lo recuerda', async () => {
-    await pagina()
-    await pulsar(casillaAutor())
     expect(cabeceras().some(c => c?.startsWith('Autor'))).toBe(true)
     expect(document.body.textContent).toContain('pedidor')
-    expect(localStorage.getItem('emuwarez_peticiones_mostrar_autor')).toBe('1')
-    // Las cabeceras de grupo ocupan todo el ancho, con la columna de más.
-    const th = document.querySelector('th.pet-grupo-th')!
-    expect(th.getAttribute('colspan')).toBe(String(document.querySelectorAll('thead th').length))
+    expect(document.body.textContent).not.toContain('Mostrar autor')
+    expect(localStorage.getItem('emuwarez_peticiones_mostrar_autor')).toBeNull()
   })
 
-  it('con la preferencia guardada arranca con el autor a la vista', async () => {
-    localStorage.setItem('emuwarez_peticiones_mostrar_autor', '1')
+  it('las cabeceras quedan una por columna de la fila, y las de grupo ocupan todo el ancho', async () => {
     await pagina()
-    expect(casillaAutor()!.checked).toBe(true)
-    expect(cabeceras().some(c => c?.startsWith('Autor'))).toBe(true)
+    const th = document.querySelector('th.pet-grupo-th')!
+    const nCabeceras = document.querySelectorAll('thead th').length
+    expect(th.getAttribute('colspan')).toBe(String(nCabeceras))
+    expect(document.querySelectorAll('tr.clickable')[0].querySelectorAll('td')).toHaveLength(nCabeceras)
   })
 })
 

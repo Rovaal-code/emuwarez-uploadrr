@@ -82,6 +82,7 @@ const AJUSTES: SettingsData = {
   notify_ui_events: ['upload_done'],
   notify_discord_events: [],
   notify_telegram_events: [],
+  notify_lote_modo: 'por_subida',
   series_ignore_specials: true,
   sincronizar_al_volver_instancia: true,
   recent_activity_limit: 100,
@@ -596,6 +597,53 @@ describe('Configuración: pestaña de notificaciones', () => {
     expect(texto()).toContain('Discord: Notificación de prueba enviada')
     await pulsar(boton('Guardar notificaciones'))
     expect(vi.mocked(updateSettings).mock.calls[0][0].notify_discord_webhook_url).toBe('https://hook')
+  })
+
+  it('elegir «Una por lote» se guarda y marca el aviso del lote donde se avisaba de las subidas', async () => {
+    vi.mocked(fetchSettings).mockImplementation(async () => ({
+      ...structuredClone(AJUSTES),
+      notify_event_types: [
+        { code: 'upload_completed', label: 'Subida completada' },
+        { code: 'upload_failed', label: 'Subida fallida' },
+        { code: 'upload_batch_done', label: 'Lote de subidas terminado' },
+      ],
+      notify_ui_events: ['upload_completed', 'upload_failed', 'upload_batch_done'],
+      notify_discord_events: ['upload_failed'],
+      notify_telegram_events: [],
+    }))
+    await montar()
+    await pulsar(boton('Notificaciones'))
+    const selector = document.getElementById('aviso-lote') as HTMLSelectElement
+    expect(selector.value).toBe('por_subida')
+    expect([...selector.options].map(o => o.textContent)).toEqual(['Una por subida', 'Una por lote'])
+    expect(texto()).not.toContain('Cambios sin guardar')
+
+    await escribir(selector, 'por_lote')
+    expect(texto()).toContain('Cambios sin guardar')
+    expect(texto()).toContain('El aviso del lote sale por los canales que tengan marcado «Lote de subidas terminado».')
+    await pulsar(boton('Guardar notificaciones'))
+    const payload = vi.mocked(updateSettings).mock.calls[0][0]
+    expect(payload.notify_lote_modo).toBe('por_lote')
+    // Discord avisaba de las fallidas: ahora también del lote. Telegram no avisaba de ninguna subida: sigue igual.
+    expect(payload.notify_discord_events).toEqual(['upload_failed', 'upload_batch_done'])
+    expect(payload.notify_telegram_events).toEqual([])
+    expect(payload.notify_ui_events).toEqual(['upload_completed', 'upload_failed', 'upload_batch_done'])
+    expect(texto()).toContain('✓ Notificaciones guardadas')
+    expect(texto()).not.toContain('Cambios sin guardar')
+  })
+
+  it('volver a «Una por subida» no toca los eventos', async () => {
+    vi.mocked(fetchSettings).mockImplementation(async () => ({ ...structuredClone(AJUSTES), notify_lote_modo: 'por_lote' }))
+    await montar()
+    await pulsar(boton('Notificaciones'))
+    const selector = document.getElementById('aviso-lote') as HTMLSelectElement
+    expect(selector.value).toBe('por_lote')
+    await escribir(selector, 'por_subida')
+    await pulsar(boton('Guardar notificaciones'))
+    const payload = vi.mocked(updateSettings).mock.calls[0][0]
+    expect(payload.notify_lote_modo).toBe('por_subida')
+    expect(payload.notify_ui_events).toEqual(['upload_done'])
+    expect(payload.notify_discord_events).toEqual([])
   })
 
   it('marcar un evento cambia lo que se envía', async () => {

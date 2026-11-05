@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LibraryItemResponse } from '../types/api'
 import { MAX_ELEMENTOS_LOTE } from '../utils/lote'
 
@@ -40,5 +40,12 @@ export function useSeleccionLote<T extends { id: number } = LibraryItemResponse,
 
   const tiene = useCallback((clave: K) => seleccion.has(clave), [seleccion])
 
-  return { seleccion, total: seleccion.size, lleno: seleccion.size >= maximo, alternar, limpiar, tiene }
+  // Lo marcado ahora mismo, para quien lo lee después de esperar: «Subir seleccionadas» pide fichas antes de abrir el
+  // modal y, si mientras tanto se marca, desmarca o limpia algo, vuelve a prepararlo con lo nuevo. Cada cambio crea un
+  // Map nuevo, así que basta comparar referencias.
+  const actual = useRef(seleccion)
+  useEffect(() => { actual.current = seleccion }, [seleccion])
+  const vigente = useCallback(() => actual.current, [])
+
+  return { seleccion, total: seleccion.size, lleno: seleccion.size >= maximo, alternar, limpiar, tiene, vigente }
 }

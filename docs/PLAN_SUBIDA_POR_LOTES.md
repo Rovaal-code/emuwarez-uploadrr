@@ -681,7 +681,7 @@ cancelación necesitan `subidas_reales` + `puerta`.
 
 **Respuestas de Gabriel (05/11/2026).** Las 1, 2, 3, 7, 8 y 12 se hicieron con la recomendación (PR 1-6). La 14 ya no aplica
 (los PR 1-6 salieron juntos). **6, 9, 10 y 13: sí**, hechas en el PR 8 (ver PLAN.md). **5: sí, a elegir en Ajustes** («una
-por subida» o «una por lote»). **4:** propuesta pendiente de confirmar: parar el lote tras 5 fallos seguidos con el mismo motivo.
+por subida» o «una por lote»), hecha en el PR 9. **4:** propuesta pendiente de confirmar: parar el lote tras 5 fallos seguidos con el mismo motivo.
 **11:** explicada; la recomendación es no hacerla mientras no dé problemas.
 
 1. **¿Vale un lote sin edición por elemento?** (nombres automáticos; solo se sugiere proveedor a los WEB-DL sin proveedor; las

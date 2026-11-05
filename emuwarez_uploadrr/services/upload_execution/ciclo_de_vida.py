@@ -158,6 +158,17 @@ def retry_upload_job(
 
 
 def cancel_upload_job(job_id: int, conn=None) -> dict:
+    """Cancela un trabajo como lo que sea ahora (en cola, esperando turno, preparándose o subiendo). Cancelar no
+    avisa de la subida; pero si era lo último que quedaba de un lote, con «Una por lote» sale el aviso del lote."""
+    resultado = _cancelar(job_id, conn)
+    if resultado.get("ok"):
+        from ..lotes import avisar_si_termina_su_lote
+        avisar_si_termina_su_lote(job_id)
+    return resultado
+
+
+def _cancelar(job_id: int, conn=None) -> dict:
+    """cancel_upload_job sin el aviso del lote."""
     own = conn is None
     conn = conn or _get_db_conn()
     try:
@@ -176,7 +187,7 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
             from ..upload_states import escribir_estado
             if not escribir_estado(job_id, desde={"queued"}, status="cancelled", stage="cancelled",
                                    finished_at=_now(), conn=conn):
-                return cancel_upload_job(job_id, conn=conn)
+                return _cancelar(job_id, conn=conn)
             from ..upload_queue import retirar_de_la_cola
             retirar_de_la_cola(job_id)
             append_upload_log(job_id, "info", "Subida cancelada mientras esperaba turno en la cola.", stream="system")
@@ -189,7 +200,7 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
             from ..upload_states import escribir_estado
             if not escribir_estado(job_id, desde={"ready"}, status="cancelled", stage="cancelled",
                                    finished_at=_now(), conn=conn):
-                return cancel_upload_job(job_id, conn=conn)
+                return _cancelar(job_id, conn=conn)
             _upload_concurrency_gate.retirar_si_espera(job_id)
             append_upload_log(job_id, "info", "Subida cancelada mientras esperaba turno; no se lanza.",
                               stream="system", conn=conn)

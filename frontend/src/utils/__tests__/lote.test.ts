@@ -8,7 +8,7 @@ import type { DashboardRecommendationItem } from '../../api/dashboard'
 import {
   MAX_ELEMENTOS_LOTE, PATRON_LOTE_ID, claveDelPanel, entradaDePeticion, entradaDelPanel, expandirEntradas,
   expandirSeleccion, marcadaPorDefecto, nombresRepetidos, nuevoLoteId, peticionSeleccionableEnLote, razonNoSubible,
-  seleccionableEnLote,
+  seleccionableEnLote, conAvisoDeLote, loteDeNotificacion,
 } from '../lote'
 
 afterEach(() => { vi.unstubAllGlobals() })
@@ -234,5 +234,26 @@ describe('nombresRepetidos', () => {
 
   it('sin nombre no cuenta como repetido', () => {
     expect(nombresRepetidos([{ id: 1, nombre: null }, { id: 2, nombre: '' }, { id: 3, nombre: undefined }]).size).toBe(0)
+  })
+})
+
+describe('el aviso del lote', () => {
+  it('al pasar a «Una por lote», un canal que avisaba de las subidas avisa también del lote', () => {
+    expect(conAvisoDeLote(['upload_failed'])).toEqual(['upload_failed', 'upload_batch_done'])
+    expect(conAvisoDeLote(['request_published', 'upload_completed'])).toEqual(['request_published', 'upload_completed', 'upload_batch_done'])
+    // Ya lo tenía, o no avisaba de ninguna subida: igual que estaba.
+    expect(conAvisoDeLote(['upload_completed', 'upload_batch_done'])).toEqual(['upload_completed', 'upload_batch_done'])
+    expect(conAvisoDeLote(['request_published'])).toEqual(['request_published'])
+    expect(conAvisoDeLote([])).toEqual([])
+  })
+
+  it('el lote de la notificación sale de su entity_id', () => {
+    expect(loteDeNotificacion(parseInt('0123456789ab', 16))).toBe('0123456789ab')
+    expect(loteDeNotificacion(parseInt('ffffffffffff', 16))).toBe('ffffffffffff')
+    expect(loteDeNotificacion(0)).toBe('000000000000')
+    expect(loteDeNotificacion(null)).toBeNull()
+    expect(loteDeNotificacion(-1)).toBeNull()
+    expect(loteDeNotificacion(1.5)).toBeNull()
+    expect(loteDeNotificacion(2 ** 48)).toBeNull()
   })
 })

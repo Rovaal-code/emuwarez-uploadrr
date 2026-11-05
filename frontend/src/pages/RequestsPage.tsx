@@ -654,6 +654,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [modoSeleccion, setModoSeleccion] = useState(false)
   const {
     seleccion, total: totalSeleccion, lleno: loteLleno, alternar: alternarLote, limpiar: limpiarLote,
+    vigente: seleccionVigente,
   } = useSeleccionLote<RequestItemResponse>()
   const [loteAbierto, setLoteAbierto] = useState<EntradaLote[] | null>(null)
   // Si ya se están pidiendo las fichas del lote, y por qué no se pudo abrir alguna.
@@ -851,7 +852,6 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     abriendoLote.current = true
     setErrorLote(null)
     try {
-      const peticiones = [...seleccion.values()]
       const fichas = new Map<number, Promise<LibraryItemResponse>>()
       const fichaDe = (id: number) => {
         if (!fichas.has(id)) fichas.set(id, getLibraryItem(id))
@@ -863,8 +863,19 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         return fichaDe(d.match?.library_target_id ?? d.match?.library_item_id ?? p.library_item_id!)
       }
       const salidasAntes = salidas.current
-      const resultados = await Promise.allSettled(peticiones.map(filaDe))
-      if (salidas.current !== salidasAntes) return
+      // Si lo marcado cambia mientras se piden las fichas, se prepara otra vez con lo de ahora (las fichas ya pedidas
+      // no se repiten); salir de la página lo deja.
+      let marcadas = seleccionVigente()
+      let peticiones: RequestItemResponse[]
+      let resultados: PromiseSettledResult<LibraryItemResponse>[]
+      for (;;) {
+        peticiones = [...marcadas.values()]
+        resultados = await Promise.allSettled(peticiones.map(filaDe))
+        if (salidas.current !== salidasAntes) return
+        const ahora = seleccionVigente()
+        if (ahora === marcadas) break
+        marcadas = ahora
+      }
       const entradas: EntradaLote[] = []
       const perdidas: string[] = []
       resultados.forEach((r, i) => {

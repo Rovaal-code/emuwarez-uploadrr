@@ -71,6 +71,13 @@ UPLOAD_MAX_CONCURRENT_DEFAULT = 1
 
 RECENT_ACTIVITY_CHOICES = (0, 50, 100, 150, 200, 250, 300)  # 0 = sin límite
 
+# Cómo avisan las subidas de un lote (Ajustes → Notificaciones): una notificación por subida, como una suelta, o
+# una sola con el resumen cuando termina el lote entero (services/lotes.py::avisar_si_lote_terminado). Copia
+# vigilada en frontend/src/utils/lote.ts (test_copias_frontend.py).
+AVISO_LOTE_POR_SUBIDA = "por_subida"
+AVISO_LOTE_POR_LOTE = "por_lote"
+MODOS_AVISO_LOTE = (AVISO_LOTE_POR_SUBIDA, AVISO_LOTE_POR_LOTE)
+
 
 _REGISTRO: tuple[Ajuste, ...] = (
     # Subida
@@ -114,6 +121,7 @@ _REGISTRO: tuple[Ajuste, ...] = (
     Ajuste("notify_telegram_bot_token", "notify.telegram.bot_token", SECRET,
            campo_estado="notify_telegram_bot_token", borrable=True),
     Ajuste("notify_telegram_chat_id", "notify.telegram.chat_id", STR),
+    Ajuste("notify_lote_modo", "notify.lote.modo", CHOICE, AVISO_LOTE_POR_SUBIDA, opciones=MODOS_AVISO_LOTE),
     # Otros
     Ajuste("series_ignore_specials", "series.ignore_specials", BOOL, True),
     Ajuste("sincronizar_al_volver_instancia", "biblioteca.sincronizar_al_volver", BOOL, True),

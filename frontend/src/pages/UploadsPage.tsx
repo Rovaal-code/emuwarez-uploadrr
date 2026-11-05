@@ -19,7 +19,7 @@ import { formatDateTimeSeconds } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { hayMasPorCargar } from '../utils/paginarSubidas'
-import { CLAVE_ABRIR_LOTE, PATRON_LOTE_ID } from '../utils/lote'
+import { CLAVE_ABRIR_LOTE, EVENTO_ABRIR_LOTE, PATRON_LOTE_ID } from '../utils/lote'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText,
@@ -468,6 +468,19 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     setSearch(''); setStatusFilter(''); setTypeFilter('')
     setLoteFiltro(loteId)
   }
+  // El mismo salto que CLAVE_ABRIR_LOTE, pero con Subidas ya montada: la campana, al pulsar el aviso de un lote.
+  const verLoteRef = useRef(verLote)
+  verLoteRef.current = verLote
+  useEffect(() => {
+    const onAbrirLote = (e: Event) => {
+      const lote = (e as CustomEvent<string>).detail
+      if (typeof lote !== 'string' || !PATRON_LOTE_ID.test(lote)) return
+      try { sessionStorage.removeItem(CLAVE_ABRIR_LOTE) } catch { /* ignore */ }
+      verLoteRef.current(lote)
+    }
+    window.addEventListener(EVENTO_ABRIR_LOTE, onAbrirLote)
+    return () => window.removeEventListener(EVENTO_ABRIR_LOTE, onAbrirLote)
+  }, [])
   // Las que faltan por cargar (sin total conocido, si la lista llena el límite pedido). La búsqueda por título y el
   // filtro de tipo miran solo las cargadas.
   const hayMas = hayMasPorCargar(total, jobs.length, limite, MAX_LIMITE)

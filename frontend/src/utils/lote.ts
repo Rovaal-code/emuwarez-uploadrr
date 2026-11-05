@@ -16,8 +16,51 @@ export const PATRON_LOTE_ID = /^[0-9a-f]{12}$/
 
 // Con la que Subidas recoge, al entrar, el lote recién encolado desde «Subir por lotes» (como emuwarez_open_upload).
 export const CLAVE_ABRIR_LOTE = 'emuwarez_open_lote'
+// Y el aviso para cuando Subidas ya está montada (la campana, al pulsar el aviso de un lote; como emuwarez:open-upload).
+export const EVENTO_ABRIR_LOTE = 'emuwarez:open-lote'
 
 const BYTES_LOTE_ID = 6
+
+// ── Cómo avisa un lote (Ajustes → Notificaciones) ──────────────────────────────────────────────────────────────
+
+/**
+ * Las subidas de un lote avisan una a una (como una suelta) o el lote entero una sola vez al terminar, con el
+ * resumen (`upload_batch_done`). Copia de services/ajustes_registro.py::MODOS_AVISO_LOTE: test_copias_frontend.py
+ * vigila que coincidan.
+ */
+export type ModoAvisoLote = 'por_subida' | 'por_lote'
+
+export const MODO_AVISO_LOTE_POR_DEFECTO: ModoAvisoLote = 'por_subida'
+
+/** Lo que ofrece el desplegable de Ajustes → Notificaciones, en este orden. */
+export const MODOS_AVISO_LOTE: { value: ModoAvisoLote; label: string }[] = [
+  { value: 'por_subida', label: 'Una por subida' },
+  { value: 'por_lote', label: 'Una por lote' },
+]
+
+// El tipo de notificación del aviso del lote (services/notification_center.py::EVENT_TYPES) y los que sustituye.
+export const EVENTO_LOTE_TERMINADO = 'upload_batch_done'
+const EVENTOS_DE_SUBIDA = ['upload_completed', 'upload_failed']
+
+/**
+ * Los eventos de un canal al pasar a «Una por lote»: si el canal avisaba de las subidas, también del lote. Un canal
+ * que ya guardó su selección antes de existir el aviso del lote no lo tiene marcado, y sin esto pasar a «Una por
+ * lote» lo dejaba sin ningún aviso de las subidas de un lote.
+ */
+export function conAvisoDeLote(eventos: readonly string[]): string[] {
+  if (eventos.includes(EVENTO_LOTE_TERMINADO) || !EVENTOS_DE_SUBIDA.some(e => eventos.includes(e))) return [...eventos]
+  return [...eventos, EVENTO_LOTE_TERMINADO]
+}
+
+/**
+ * El `lote_id` de una notificación del lote: el servidor lo guarda como número en `entity_id` (los 12 hexadecimales
+ * son 48 bits, que un número de JavaScript guarda sin perder nada). null si no lo es.
+ */
+export function loteDeNotificacion(entityId: number | null | undefined): string | null {
+  if (entityId == null || !Number.isSafeInteger(entityId) || entityId < 0) return null
+  const lote = entityId.toString(16).padStart(12, '0')
+  return PATRON_LOTE_ID.test(lote) ? lote : null
+}
 
 /** Un `lote_id` nuevo (12 hex). Sin `crypto.getRandomValues` (un navegador muy viejo o un test), con Math.random. */
 export function nuevoLoteId(): string {

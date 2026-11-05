@@ -29,7 +29,7 @@ _log = logging.getLogger("emuwarez.notifications")
 # (`notify_event_types` en la respuesta de ajustes), así que añadir un evento
 # aquí ya lo hace aparecer sola. Lo que SÍ hay que tocar a mano es
 # NotificationBell.tsx, que elige icono y disposición comparando el código con
-# seis literales: un evento nuevo sale sin icono.
+# literales: un evento nuevo sale sin icono.
 #
 # (Aquí ponía "Keep in sync with the frontend EVENT_TYPES list". Esa lista
 # dejó de existir cuando los tipos pasaron a venir del backend, y el
@@ -38,6 +38,8 @@ EVENT_TYPES: dict[str, str] = {
     "request_published": "Petición publicada",
     "upload_completed": "Subida completada",
     "upload_failed": "Subida fallida",
+    # Solo con «Una por lote» (Ajustes → Notificaciones): sustituye a las dos de arriba en las subidas de un lote.
+    "upload_batch_done": "Lote de subidas terminado",
     "request_match_found": "Contenido compatible",
     "request_new_ready": "Petición nueva lista para subir",
     "content_missing_new": "Contenido nuevo faltante",

@@ -91,10 +91,10 @@ describe('la casilla en la lista', () => {
     return { onSelect, onAlternar }
   }
 
-  it('va dentro de la celda del título: la fila sigue con siete celdas', async () => {
+  it('va dentro de la celda del título: la fila sigue con doce celdas', async () => {
     await fila(elemento(1))
     expect(document.querySelector('td.bib-celda-titulo input[type="checkbox"]')).not.toBeNull()
-    expect(document.querySelectorAll('tr.bib-fila > td')).toHaveLength(7)
+    expect(document.querySelectorAll('tr.bib-fila > td')).toHaveLength(12)
   })
 
   it('marcarla avisa con la película y no abre su ficha', async () => {

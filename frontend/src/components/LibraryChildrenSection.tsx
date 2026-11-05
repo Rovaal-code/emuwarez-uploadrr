@@ -77,12 +77,17 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
               <thead>
                 <tr>
                   <th className="hijos-col-titulo">Título</th>
+                  <th>Origen</th>
                   <th>Estado</th>
                   <th>Petición</th>
+                  <th>Resolución</th>
+                  <th>Proveedor</th>
+                  <th>Fuente</th>
+                  <th>Grupo</th>
                   <th>Español</th>
                   <th>EMuwarez</th>
                   <th>Tamaño</th>
-                  <th>Acciones</th>
+                  <th className="col-actions">Acciones</th>
                 </tr>
               </thead>
               <tbody>

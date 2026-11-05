@@ -35,7 +35,7 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { HeaderSort } from '../components/HeaderSort'
 import { formatBytes, timeAgo, formatDate, formatNumero } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { agruparPeticiones, guardarMostrarAutor, leerMostrarAutor, requestDisplayTitle } from '../utils/peticiones'
+import { agruparPeticiones, requestDisplayTitle } from '../utils/peticiones'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
 import { IconoBloqueado, IconoDocumental, IconoPelicula, IconoPuntos, IconoSerie } from '../components/Iconos'
@@ -623,8 +623,6 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [authorFilter, setAuthorFilter] = useState<string[]>(NINGUNO)
   const [instanceFilter, setInstanceFilter] = useState<string[]>(NINGUNO)
   const [sortBy, setSortBy] = useState(ORDEN_POR_GRUPOS)
-  // Autor oculto salvo que se active (aparece en cada captura de pantalla).
-  const [verAutor, setVerAutor] = useState(leerMostrarAutor)
   const [facets, setFacets] = useState<{
     categories: string[]; resolutions: string[]; sources: string[]; authors: string[]; statuses: string[]
     instances: { value: string; label: string }[]
@@ -929,13 +927,11 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
   const displayItems = items
   const agrupada = sortBy === ORDEN_POR_GRUPOS
-  // Con un filtro de autor puesto la columna se queda, o filtraría sin decir por qué.
-  const mostrarAutor = verAutor || authorFilter.length > 0
   // Las peticiones reales no traen votos ni comentarios: sin dato, sin columna.
   const hayVotos = displayItems.some(i => i.votes != null)
   const hayComentarios = displayItems.some(i => i.comments != null)
 
-  const columnas = 8 + Number(mostrarAutor) + Number(hayVotos) + Number(hayComentarios)
+  const columnas = 9 + Number(hayVotos) + Number(hayComentarios)
   // «Seleccionar» solo sale si hay algo que marcar (o el modo ya está puesto). Lo marcado que el filtro de ahora no
   // enseña se cuenta aparte en la barra.
   const haySeleccionables = displayItems.some(peticionSeleccionableEnLote)
@@ -973,7 +969,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       </td>
       <td className="pet-nowrap"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
       <td><CompatibilityBadge status={item.compatibility_status} reclamada={item.reclamada_por} /></td>
-      {mostrarAutor && <td className="pet-t12 pet-nowrap"><AuthorCell author={item.author} isMine={item.is_mine} /></td>}
+      <td className="pet-t12 pet-nowrap"><AuthorCell author={item.author} isMine={item.is_mine} /></td>
       <td className="pet-nowrap"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
       <td className="pet-nowrap"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
       {hayVotos && <td className="pet-centro pet-t12">{item.votes ?? '—'}</td>}
@@ -1047,15 +1043,6 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
               </button>
             </Tooltip>
           )}
-          <label className="checkbox-label pet-ver-autor">
-            <input
-              type="checkbox"
-              checked={mostrarAutor}
-              disabled={authorFilter.length > 0}
-              onChange={e => { setVerAutor(e.target.checked); guardarMostrarAutor(e.target.checked) }}
-            />
-            Mostrar autor
-          </label>
         </div>
 
         {/* Solo bloquea la PRIMERA vez, cuando todavía no hay nada que enseñar.
@@ -1092,9 +1079,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                       // "No disponible" for a column that says "Faltante".
                       { value: '', label: 'Todas' }, ...facets.statuses.map(s => ({ value: s, label: getRequestStatusInfo(s).label })),
                     ]} /></th>
-                    {mostrarAutor && <th><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
+                    <th><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.authors.map(a => ({ value: a, label: a })),
-                    ]} /></th>}
+                    ]} /></th>
                     <th><HeaderFilter label="Resolución" value={resolutionFilter} onChange={setResolutionFilter} options={[
                       { value: '', label: 'Todas' }, ...facets.resolutions.map(r => ({ value: r, label: r })),
                     ]} /></th>

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// La fila de Biblioteca: línea de especificaciones bajo el título, grupo de release y origen, sin columnas repetidas.
+// La fila de Biblioteca: cada dato filtrable en su columna y, bajo el título, solo tipo, códec e idiomas.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { InstanceSafeResponse, LibraryItemResponse } from '../../types/api'
 import { LibraryTreeRow } from '../LibraryTreeRow'
@@ -33,59 +33,79 @@ async function montarFila(item: LibraryItemResponse, instances: InstanceSafeResp
   )
 }
 
+const celdas = () => [...document.querySelectorAll<HTMLTableCellElement>('tr.bib-fila > td')]
+
 describe('especificaciones', () => {
-  it('une tipo, resolución, source, proveedor, códec e idiomas, en ese orden', () => {
-    expect(especificaciones(elemento({}))).toEqual(['Película', '1080p', 'WEB-DL', 'NF', 'HEVC', 'es,en'])
+  it('une tipo, códec e idiomas del audio, en ese orden', () => {
+    expect(especificaciones(elemento({}))).toEqual(['Película', 'HEVC', 'es,en'])
   })
 
   it('se salta lo que no se sabe', () => {
-    expect(especificaciones(elemento({ source: null, provider: null, provider_label: null, audio_languages: null })))
-      .toEqual(['Película', '1080p', 'HEVC'])
+    expect(especificaciones(elemento({ audio_languages: null }))).toEqual(['Película', 'HEVC'])
   })
 })
 
 describe('LibraryTreeRow', () => {
-  it('enseña la línea de calidad bajo el título', async () => {
+  it('bajo el título solo lleva lo que no se filtra: tipo, códec e idiomas', async () => {
     await montarFila(elemento({}))
-    expect(document.querySelector('.bib-spec-texto')!.textContent).toBe('Película · 1080p · WEB-DL · NF · HEVC · es,en')
+    const bajo = document.querySelector('.bib-titulo-caja .bib-spec-texto')!.textContent!
+    expect(bajo).toBe('Película · HEVC · es,en')
+    for (const dato of ['1080p', 'WEB-DL', 'NF', 'FLUX', 'Radarr']) expect(bajo).not.toContain(dato)
   })
 
-  it('con grupo de release lo pone en una insignia junto al título', async () => {
+  it('tiene doce celdas, una por columna, y el título no lleva grupo ni origen', async () => {
     await montarFila(elemento({}))
-    expect(document.querySelector('.bib-titulo-cab .bib-rg .value-chip')!.textContent).toBe('FLUX')
+    expect(celdas()).toHaveLength(12)
+    expect(celdas()[0].querySelector('.bib-rg-ninguno, .value-chip, a')).toBeNull()
   })
 
-  it('sin grupo de release dice «sin grupo» en vez de dejar un hueco', async () => {
-    await montarFila(elemento({ release_group: null }))
-    expect(document.querySelector('.bib-rg')!.textContent).toBe('sin grupo')
-    expect(document.querySelector('.bib-rg .value-chip')).toBeNull()
-  })
-
-  it('una serie con varios grupos los junta en «Varios»', async () => {
-    await montarFila(elemento({ item_type: 'series', release_group: null, release_groups: ['FLUX', 'NTb'] }))
-    expect(document.querySelector('.bib-rg')!.textContent).toBe('Varios (2)')
+  it('cada dato filtrable va en su propia celda, en el orden de las cabeceras', async () => {
+    await montarFila(elemento({}))
+    const c = celdas()
+    expect(c[1].textContent).toBe('Radarr 4K')           // Origen
+    expect(c[4].textContent).toBe('1080p')               // Resolución
+    expect(c[5].textContent).toBe('NF')                  // Proveedor
+    expect(c[6].textContent).toBe('WEB-DL')              // Fuente
+    expect(c[7].textContent).toBe('FLUX')                // Grupo
   })
 
   it('el origen enlaza a su instancia cuando se sabe dónde está', async () => {
     await montarFila(elemento({}))
-    const enlace = document.querySelector<HTMLAnchorElement>('a.bib-spec-origen')!
+    const enlace = celdas()[1].querySelector<HTMLAnchorElement>('a')!
     expect(enlace.getAttribute('href')).toBe('http://radarr:7878/movie/438631')
     expect(enlace.textContent).toBe('Radarr 4K')
   })
 
   it('sin enlace posible deja el origen como texto', async () => {
     await montarFila(elemento({}), [])
-    expect(document.querySelector('a.bib-spec-origen')).toBeNull()
-    expect(document.querySelector('span.bib-spec-origen')!.textContent).toBe('Radarr 4K')
+    expect(celdas()[1].querySelector('a')).toBeNull()
+    expect(celdas()[1].textContent).toBe('Radarr 4K')
   })
 
-  it('sin origen no pone nada en su sitio', async () => {
-    await montarFila(elemento({ instance_type: null, instance_name: null }))
-    expect(document.querySelector('.bib-spec-origen')).toBeNull()
+  it('sin origen, resolución, proveedor ni source pone un guion en cada celda', async () => {
+    await montarFila(elemento({ instance_type: null, instance_name: null, resolution: null, provider: null, provider_label: null, source: null }))
+    for (const i of [1, 4, 5, 6]) expect(celdas()[i].textContent).toBe('—')
   })
 
-  it('tiene siete celdas: lo que se repetía en cada fila ya no tiene columna', async () => {
+  it('con grupo de release lo pone en una insignia en la columna Grupo', async () => {
     await montarFila(elemento({}))
-    expect(document.querySelectorAll('tr.bib-fila > td')).toHaveLength(7)
+    expect(celdas()[7].querySelector('.value-chip')!.textContent).toBe('FLUX')
+  })
+
+  it('sin grupo de release dice «sin grupo» en vez de dejar un hueco', async () => {
+    await montarFila(elemento({ release_group: null }))
+    expect(celdas()[7].textContent).toBe('sin grupo')
+    expect(celdas()[7].querySelector('.value-chip')).toBeNull()
+  })
+
+  it('una serie con varios grupos los junta en «Varios»', async () => {
+    await montarFila(elemento({ item_type: 'series', release_group: null, release_groups: ['FLUX', 'NTb'] }))
+    expect(celdas()[7].textContent).toBe('Varios (2)')
+  })
+
+  it('el póster pide w154, como el del Panel', async () => {
+    await montarFila(elemento({ poster_url: 'https://image.tmdb.org/t/p/w500/abc.jpg' }))
+    expect(document.querySelector('.poster-thumb.bib-miniatura')).not.toBeNull()
+    expect(document.querySelector<HTMLImageElement>('.bib-miniatura img')!.getAttribute('src')).toContain('w154')
   })
 })

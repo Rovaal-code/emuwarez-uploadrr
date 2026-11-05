@@ -1,8 +1,10 @@
 /**
- * Un lote: varias subidas encoladas juntas (las tandas del asistente, y más adelante «Subir por lotes»). Comparten
- * un `lote_id` que genera el navegador, y Subidas las agrupa y filtra por él.
+ * Un lote: varias subidas encoladas juntas (las tandas del asistente y «Subir por lotes»). Comparten un
+ * `lote_id` (el de una tanda lo genera el navegador; el de «Subir por lotes», el servidor), y Subidas las agrupa
+ * y filtra por él.
  */
 import type { LibraryItemResponse } from '../types/api'
+import { seasonNotReadyReason } from './libraryItem'
 import type { NivelDuplicado } from './resumenSubida'
 
 // Copia de services/lotes.py::MAX_ELEMENTOS_LOTE: test_copias_frontend.py vigila que coincidan.
@@ -31,13 +33,24 @@ export function nuevoLoteId(): string {
 // ── «Subir por lotes» desde Biblioteca ──────────────────────────────────────────────────────────────────────────
 
 /**
- * Por qué una película (o un capítulo) no puede entrar en un lote, o null si puede: la misma regla que
- * `episodeNotReadyReason` (utils/libraryItem.ts: en disco y con castellano), pero con su propio texto, que
- * aquel habla de «el capítulo». Una serie o una temporada todavía no van por lotes.
+ * Lo que se puede marcar en Biblioteca para un lote: películas, series (se expanden a sus temporadas) y temporadas
+ * (como pack). Un capítulo no: desde Biblioteca solo se suben packs, y el que quiera uno suelto lo sube suelto.
+ */
+export function seleccionableEnLote(item: LibraryItemResponse): boolean {
+  return item.item_type === 'movie' || item.item_type === 'series' || item.item_type === 'season'
+}
+
+/**
+ * Por qué un elemento no puede entrar en un lote, o null si puede. Una temporada, si no se puede subir como pack
+ * (la regla de `seasonNotReadyReason`). Una película o un capítulo, la regla de `episodeNotReadyReason`
+ * (utils/libraryItem.ts: en disco y con castellano), pero con su propio texto, que aquel habla de «el capítulo».
+ * Una serie no entra tal cual: se cambia por sus temporadas (`expandirSeleccion`).
  */
 export function razonNoSubible(item: LibraryItemResponse): string | null {
+  if (item.item_type === 'series') return 'Una serie se sube por temporadas.'
+  if (item.item_type === 'season') return seasonNotReadyReason(item)
   const esCapitulo = item.item_type === 'episode'
-  if (item.item_type !== 'movie' && !esCapitulo) return 'Por ahora el lote solo admite películas.'
+  if (item.item_type !== 'movie' && !esCapitulo) return 'Esto no se sube por lotes.'
   if (item.local_status !== 'Disponible' && item.local_status !== 'Subido') {
     const estado = item.local_status || 'sin estado'
     return esCapitulo
@@ -50,6 +63,31 @@ export function razonNoSubible(item: LibraryItemResponse): string | null {
       : 'No se han podido leer sus pistas: no se puede confirmar que tenga castellano.'
   }
   return null
+}
+
+/**
+ * Lo marcado, con cada serie cambiada por sus temporadas (en orden de temporada) y en el orden en que se marcó.
+ * Una temporada que llega dos veces (marcada sola y por su serie) sale una vez, en el primer sitio donde aparece.
+ * Una serie de la que no se cargaron las temporadas (no está en `temporadasDe`) no aporta nada.
+ */
+export function expandirSeleccion(
+  seleccion: readonly LibraryItemResponse[],
+  temporadasDe: ReadonlyMap<number, readonly LibraryItemResponse[]>,
+): LibraryItemResponse[] {
+  const vistos = new Set<number>()
+  const fuera: LibraryItemResponse[] = []
+  const poner = (item: LibraryItemResponse) => {
+    if (vistos.has(item.id)) return
+    vistos.add(item.id)
+    fuera.push(item)
+  }
+  for (const item of seleccion) {
+    if (item.item_type !== 'series') { poner(item); continue }
+    const temporadas = [...(temporadasDe.get(item.id) ?? [])]
+      .sort((a, b) => (a.season_number ?? Number.MAX_SAFE_INTEGER) - (b.season_number ?? Number.MAX_SAFE_INTEGER))
+    temporadas.forEach(poner)
+  }
+  return fuera
 }
 
 /**

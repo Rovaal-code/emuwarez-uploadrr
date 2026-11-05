@@ -1,15 +1,17 @@
-// Paso 2 de «Subir por lotes»: por película, el nombre del torrent, sus avisos, su comprobación y lo que ya hay en
-// eMuwarez, con la casilla «Incluir»; debajo, las comprobaciones comunes (una sola vez) y «Subir N».
+// Paso 2 de «Subir por lotes»: por película o temporada, el nombre del torrent, sus avisos, su comprobación y lo
+// que ya hay en eMuwarez, con la casilla «Incluir»; debajo, las comprobaciones comunes (una sola vez) y «Subir N».
 import type { UploadCheck, UploadChecksResult } from '../../api/uploads'
 import type { LibraryItemResponse } from '../../types/api'
 import { CheckRow } from '../asistente/piezas'
-import type { AnalisisPelicula } from './useLote'
+import type { AnalisisElemento } from './useLote'
 
 export interface FilaResumenLote {
   item: LibraryItemResponse
-  // Las comprobaciones de contenido de la película; sin llegar todavía, undefined.
+  // Las comprobaciones de contenido del elemento; sin llegar todavía, undefined.
   contenido: UploadChecksResult | undefined
-  analisis: AnalisisPelicula | undefined
+  analisis: AnalisisElemento | undefined
+  // El nombre del torrent (el de un pack sale de `contenido`); null si no hay, undefined mientras se calcula.
+  nombre: string | null | undefined
   // Por qué se saltará seguro (comprobación fallida, nomenclatura bloqueada, nombre repetido); null si no.
   salto: string | null
   // Falta su comprobación o su análisis.
@@ -59,16 +61,18 @@ export function PasoResumenLote({
       <div className="lote-tabla-caja">
         <table className="data-table lote-tabla">
           <thead>
-            <tr><th>Película</th><th>Comprobación</th><th>En eMuwarez</th><th>Incluir</th></tr>
+            <tr><th>Contenido</th><th>Comprobación</th><th>En eMuwarez</th><th>Incluir</th></tr>
           </thead>
           <tbody>
             {filas.map(f => {
               const a = f.analisis
+              // El de una temporada ya lleva la serie: «Serie - Temporada 2».
+              const titulo = f.item.title
               return (
                 <tr key={f.item.id} data-item={f.item.id}>
                   <td className="lote-celda-titulo">
-                    <div className="lote-titulo">{f.item.title}</div>
-                    <div className="lote-nombre">{a ? a.nombre ?? '—' : 'Calculando el nombre…'}</div>
+                    <div className="lote-titulo">{titulo}</div>
+                    <div className="lote-nombre">{f.nombre === undefined ? 'Calculando el nombre…' : f.nombre ?? '—'}</div>
                     {a?.avisos.map(aviso => <div key={aviso} className="lote-aviso">⚠ {aviso}</div>)}
                     {f.salto && f.contenido?.ready !== false && <div className="lote-error">✗ {f.salto}</div>}
                   </td>
@@ -77,7 +81,7 @@ export function PasoResumenLote({
                       ? <span className="text-muted">{errorComprobando ? 'Sin comprobar' : 'Comprobando…'}</span>
                       : f.contenido.ready
                         ? <span className="asist-ok">✓ Lista</span>
-                        : <span className="asist-error">✗ {primerFallo(f.contenido)}</span>}
+                        : <span className="asist-error">✗ {f.salto ?? primerFallo(f.contenido)}</span>}
                   </td>
                   <td className={a?.nivel ? CLASE_NIVEL[a.nivel] : undefined}>{a ? a.enEmu : '…'}</td>
                   <td className="lote-celda-incluir">
@@ -87,7 +91,7 @@ export function PasoResumenLote({
                         checked={f.incluida}
                         disabled={!!f.salto || f.pendiente || enviando}
                         onChange={() => onIncluir(f.item.id, !f.incluida)}
-                        aria-label={`Incluir «${f.item.title}»`}
+                        aria-label={`Incluir «${titulo}»`}
                       />
                     </label>
                     {f.salto
@@ -103,14 +107,14 @@ export function PasoResumenLote({
 
       <div className="detail-card asist-tarjeta asist-mt-12">
         <div className="asist-fila-titulo">
-          <div className="asist-etiqueta">Comunes a todas las películas</div>
+          <div className="asist-etiqueta">Comunes a todo el lote</div>
           {(comprobando || analizando) && <span className="spinner asist-spinner-14" />}
         </div>
         {entorno
           ? entorno.checks.map(c => <CheckRow key={c.id} c={c} />)
           : !errorComprobando && <div className="asist-t12 text-muted">Comprobando…</div>}
         {comprobando && entorno && (
-          <div className="asist-t12 text-muted">Comprobando película {Math.min(comprobandoIndice + 1, total)} de {total}…</div>
+          <div className="asist-t12 text-muted">Comprobando {Math.min(comprobandoIndice + 1, total)} de {total}…</div>
         )}
         {/* La región existe siempre: así el lector anuncia el veredicto cuando llega. */}
         <div role="status">
@@ -121,7 +125,7 @@ export function PasoResumenLote({
                 : !envReady
                 ? '✗ La subida no se puede realizar'
                 : incluidas === 0
-                ? '✗ No queda ninguna película marcada para subir'
+                ? '✗ No queda nada marcado para subir'
                 : `✓ Se subirán ${incluidas} de ${total}`}
             </div>
           )}

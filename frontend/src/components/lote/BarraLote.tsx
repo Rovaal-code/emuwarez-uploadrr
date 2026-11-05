@@ -16,7 +16,7 @@ export function BarraLote({ total, ocultas, onSubir, onLimpiar }: {
     <div className="lote-barra" role="region" aria-label="Selección para subir por lotes">
       <span className="lote-barra-cuenta" role="status">
         {total === 0
-          ? 'Marca las películas que quieras subir juntas'
+          ? 'Marca las películas, series o temporadas que quieras subir juntas'
           : `${formatNumero(total)} ${total === 1 ? 'seleccionada' : 'seleccionadas'}`}
         {ocultas > 0 && <span className="text-muted"> ({formatNumero(ocultas)} {ocultas === 1 ? 'oculta' : 'ocultas'} por el filtro)</span>}
         {total >= MAX_ELEMENTOS_LOTE && <span className="lote-aviso"> · tope de {MAX_ELEMENTOS_LOTE} por lote</span>}

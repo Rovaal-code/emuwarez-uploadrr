@@ -52,6 +52,8 @@ def test_stops_at_unrenameable_when_path_missing(db_conn):
     assert r["ready"] is False
     assert len(r["checks"]) == 1
     assert r["checks"][0]["id"] == "accesible" and r["checks"][0]["status"] == "fail"
+    # El nombre del torrent solo lo dan los packs (ver test_season_pack.py).
+    assert r["nombre"] is None
 
 
 def test_output_check_falls_back_to_bundled_uploadrr_path(db_conn, tmp_path, monkeypatch):

@@ -1,14 +1,18 @@
-// Lo que el Resumen de «Subir por lotes» mira de cada película además de las comprobaciones previas: el nombre
-// del torrent que saldría, los avisos de ese nombre y lo que el catálogo local de eMuwarez ya tiene de lo mismo.
+// Lo que «Subir por lotes» mira además de las comprobaciones previas. En el paso 1, las temporadas de cada serie
+// marcada. En el Resumen, de cada película el nombre del torrent que saldría y los avisos de ese nombre, y de cada
+// película o temporada lo que el catálogo local de eMuwarez ya tiene de lo mismo (el nombre de un pack lo dan sus
+// comprobaciones, `nombre` en runUploadChecks).
 import { useEffect, useState } from 'react'
-import { getEmuComparison, suggestProvider } from '../../api/library'
+import { getEmuComparison, getLibrary, suggestProvider } from '../../api/library'
 import { getNomenclatureFields, previewNomenclatureFields, type NomenclatureFields } from '../../api/nomenclature'
 import { fetchSettings } from '../../api/settings'
+import type { LibraryItemResponse } from '../../types/api'
+import { expandirSeleccion, razonNoSubible } from '../../utils/lote'
 import { conclusionDuplicados, resumirComparaciones, type NivelDuplicado } from '../../utils/resumenSubida'
 import { PROVIDER_SOURCES } from '../asistente/constantes'
 
-export interface AnalisisPelicula {
-  // El nombre del torrent que saldría; null si no se pudo generar.
+export interface AnalisisElemento {
+  // El nombre del torrent que saldría; null si no se pudo generar (y en una temporada, que lo dan sus comprobaciones).
   nombre: string | null
   // Por qué no se puede subir así (nomenclatura bloqueada, o no se pudo calcular): se salta.
   bloqueo: string | null
@@ -32,7 +36,7 @@ function textoSinConclusion(estado: 'error' | 'sin-catalogo' | 'listo' | 'cargan
 }
 
 /** Una película, paso a paso. No lanza: lo que falla queda dicho en el resultado. */
-export async function analizarPelicula(id: number): Promise<AnalisisPelicula> {
+export async function analizarPelicula(id: number): Promise<AnalisisElemento> {
   let r: Awaited<ReturnType<typeof getNomenclatureFields>>
   try {
     r = await getNomenclatureFields(id)
@@ -65,37 +69,51 @@ export async function analizarPelicula(id: number): Promise<AnalisisPelicula> {
   }
 
   const fields = campos ?? r.fields
-  const comparacion = await getEmuComparison(id, { resolution: fields.resolution, source: fields.source }).catch(() => null)
+  const enEmu = await enEmuwarez(id, { resolution: fields.resolution, source: fields.source })
+  return { nombre, bloqueo: null, avisos, sinIdioma: !!r.audio_warning, campos, ...enEmu }
+}
+
+/** Lo que ya hay en eMuwarez de lo mismo; `tuya`, lo que irá en el nombre (como el Resumen del asistente). */
+async function enEmuwarez(
+  id: number, tuya?: { resolution?: string | null; source?: string | null },
+): Promise<Pick<AnalisisElemento, 'nivel' | 'enEmu'>> {
+  const comparacion = await getEmuComparison(id, tuya).catch(() => null)
   const yaHay = resumirComparaciones([comparacion])
   const conclusion = yaHay.estado === 'listo' ? conclusionDuplicados(yaHay.filas) : null
-  return {
-    nombre, bloqueo: null, avisos, sinIdioma: !!r.audio_warning, campos,
-    nivel: conclusion?.nivel ?? null, enEmu: conclusion?.texto ?? textoSinConclusion(yaHay.estado),
-  }
+  return { nivel: conclusion?.nivel ?? null, enEmu: conclusion?.texto ?? textoSinConclusion(yaHay.estado) }
 }
 
 /**
- * El análisis de cada película del lote, de una en una (son peticiones locales, pero cada una abre el fichero),
- * mientras `activo`. Lo ya analizado se guarda: volver al paso 1 sin cambiar nada no lo repite.
+ * Una temporada (un pack): solo lo que hay en eMuwarez, comparado con lo que tienes, como hace el asistente con una
+ * tanda de temporadas. Su nombre, su bloqueo y su proveedor salen de sus comprobaciones (el plan del pack).
  */
-export function useAnalisisLote({ activo, ids }: { activo: boolean; ids: readonly number[] }) {
-  const [analisis, setAnalisis] = useState<ReadonlyMap<number, AnalisisPelicula>>(() => new Map())
+export async function analizarTemporada(id: number): Promise<AnalisisElemento> {
+  const enEmu = await enEmuwarez(id)
+  return { nombre: null, bloqueo: null, avisos: [], sinIdioma: false, campos: null, ...enEmu }
+}
+
+/**
+ * El análisis de cada elemento del lote, de uno en uno (son peticiones locales, pero cada película abre el
+ * fichero), mientras `activo`. Lo ya analizado se guarda: volver al paso 1 sin cambiar nada no lo repite.
+ */
+export function useAnalisisLote({ activo, elementos }: { activo: boolean; elementos: readonly LibraryItemResponse[] }) {
+  const [analisis, setAnalisis] = useState<ReadonlyMap<number, AnalisisElemento>>(() => new Map())
   const [analizando, setAnalizando] = useState(false)
   const [intento, setIntento] = useState(0)
-  const clave = ids.join(',')
+  const clave = elementos.map(e => e.id).join(',')
 
   useEffect(() => {
     if (!activo) return
-    const faltan = ids.filter(id => !analisis.has(id))
+    const faltan = elementos.filter(e => !analisis.has(e.id))
     if (faltan.length === 0) return
     let vivo = true
     setAnalizando(true)
     const run = async () => {
-      for (const id of faltan) {
-        const resultado = await analizarPelicula(id)
+      for (const e of faltan) {
+        const resultado = e.item_type === 'season' ? await analizarTemporada(e.id) : await analizarPelicula(e.id)
         // Una pasada abandonada (otra selección, otro paso) no apunta lo que ya no se mira.
         if (!vivo) return
-        setAnalisis(prev => new Map(prev).set(id, resultado))
+        setAnalisis(prev => new Map(prev).set(e.id, resultado))
       }
       if (vivo) setAnalizando(false)
     }
@@ -113,7 +131,7 @@ export function useAnalisisLote({ activo, ids }: { activo: boolean; ids: readonl
   }
 
   // Mientras no estén todas, «Subir» no se habilita aunque el efecto aún no haya arrancado.
-  const completo = ids.every(id => analisis.has(id))
+  const completo = elementos.every(e => analisis.has(e.id))
   return { analisis, analizando: analizando || (activo && !completo), olvidar, repetir }
 }
 
@@ -126,4 +144,65 @@ export function useSubidasEnParalelo() {
     return () => { vivo = false }
   }, [])
   return paralelo
+}
+
+export interface ExpansionLote {
+  // Lo que entra en el paso 1, con cada serie cambiada por sus temporadas; null mientras se cargan.
+  elementos: LibraryItemResponse[] | null
+  // Las que llegan marcadas: las que se pueden subir, hasta el tope del lote (cuenta después de expandir).
+  iniciales: ReadonlySet<number>
+  // Cuántas series hay que expandir y cuántas van.
+  series: number
+  hechas: number
+  // Una serie sin temporadas o que no se pudo cargar.
+  avisos: string[]
+}
+
+/**
+ * El paso 1: cada serie marcada, cambiada por sus temporadas (como el asistente, `getLibrary` con `parent_id`), de
+ * una en una para poder decir cuántas van. `seleccion` es la copia tomada al abrir: no cambia.
+ */
+export function useExpansionLote(seleccion: readonly LibraryItemResponse[], maximo: number): ExpansionLote {
+  const series = seleccion.filter(e => e.item_type === 'series')
+  const [hechas, setHechas] = useState(0)
+  const [resultado, setResultado] = useState<Pick<ExpansionLote, 'elementos' | 'iniciales' | 'avisos'>>(() => (
+    series.length === 0 ? listo(seleccion, new Map(), [], maximo) : { elementos: null, iniciales: new Set(), avisos: [] }
+  ))
+
+  useEffect(() => {
+    if (series.length === 0) return
+    let vivo = true
+    setHechas(0)
+    const run = async () => {
+      const temporadas = new Map<number, LibraryItemResponse[]>()
+      const avisos: string[] = []
+      for (const serie of series) {
+        try {
+          const r = await getLibrary({ parent_id: serie.id, type: 'season', limit: 500 })
+          if (!vivo) return
+          temporadas.set(serie.id, r.items)
+          if (r.items.length === 0) avisos.push(`«${serie.title}» no tiene temporadas en la biblioteca.`)
+        } catch (e: unknown) {
+          if (!vivo) return
+          avisos.push(`No se pudieron cargar las temporadas de «${serie.title}»: ${mensaje(e, 'error desconocido')}`)
+        }
+        setHechas(n => n + 1)
+      }
+      if (vivo) setResultado(listo(seleccion, temporadas, avisos, maximo))
+    }
+    run()
+    return () => { vivo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- una vez: la selección es la copia tomada al abrir
+  }, [])
+
+  return { ...resultado, series: series.length, hechas }
+}
+
+function listo(
+  seleccion: readonly LibraryItemResponse[], temporadas: ReadonlyMap<number, readonly LibraryItemResponse[]>,
+  avisos: string[], maximo: number,
+): Pick<ExpansionLote, 'elementos' | 'iniciales' | 'avisos'> {
+  const elementos = expandirSeleccion(seleccion, temporadas)
+  const iniciales = new Set(elementos.filter(e => !razonNoSubible(e)).slice(0, maximo).map(e => e.id))
+  return { elementos, iniciales, avisos }
 }

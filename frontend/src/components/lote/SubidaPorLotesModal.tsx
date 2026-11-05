@@ -1,7 +1,8 @@
-// «Subir por lotes»: varias películas de Biblioteca encoladas de una vez, con el nombre que genere la nomenclatura
-// para cada una (sin editar: para eso está el asistente). Paso 1, qué entra; paso 2, el resumen de cada una y las
-// comprobaciones (las del entorno una sola vez); «Subir N» manda el lote al servidor (POST /uploads/lote), que
-// encola cada una en este orden y salta la que no pueda con su motivo.
+// «Subir por lotes»: varias películas y temporadas (packs) de Biblioteca encoladas de una vez, con el nombre que
+// genere la nomenclatura para cada una (sin editar: para eso está el asistente). Una serie marcada entra como sus
+// temporadas. Paso 1, qué entra; paso 2, el resumen de cada una y las comprobaciones (las del entorno una sola
+// vez); «Subir N» manda el lote al servidor (POST /uploads/lote), que encola cada una en este orden y salta la que
+// no pueda con su motivo.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiClientError } from '../../api/client'
 import { queueLote, type LoteEncolado } from '../../api/uploads'
@@ -12,10 +13,14 @@ import { useComprobacionesTanda } from '../asistente/useComprobaciones'
 import { Modal } from '../Modal'
 import { PasoContenidoLote } from './PasoContenidoLote'
 import { PasoResumenLote, primerFallo, type FilaResumenLote } from './PasoResumenLote'
-import { useAnalisisLote, useSubidasEnParalelo } from './useLote'
+import { useAnalisisLote, useExpansionLote, useSubidasEnParalelo } from './useLote'
 
-// Una película no lleva proveedor elegido a mano (eso es de los packs): el suyo va en `campos`.
+// Nadie elige proveedor en un lote: el de una película va en `campos`, y el de un pack lo decide su plan como en
+// el asistente sin tocar Proveedor (el nombre de los capítulos o TMDb). Con proveedores distintos el pack se salta.
 const SIN_ELECCION: ProveedoresElegidos = new Map()
+
+// El check del pack falla así cuando sus capítulos traen proveedores distintos: elegir uno es cosa del asistente.
+const CONFLICTO_PROVEEDOR = /proveedores distintos/i
 
 const PASOS = [{ paso: 'contenido', nombre: 'Contenido' }, { paso: 'resumen', nombre: 'Resumen' }] as const
 type Paso = (typeof PASOS)[number]['paso']
@@ -25,23 +30,27 @@ function motivosDelRechazo(e: ApiClientError): string[] {
   return Array.isArray(detalle) && detalle.length ? detalle.map(String) : [e.message]
 }
 
-export function SubidaPorLotesModal({ peliculas, onClose, onDone, onNavigate }: {
-  // Lo marcado en Biblioteca. Se copia al abrir: salir de Biblioteca limpia la selección de origen.
-  peliculas: readonly LibraryItemResponse[]
+export function SubidaPorLotesModal({ seleccion, onClose, onDone, onNavigate }: {
+  // Lo marcado en Biblioteca (películas, series y temporadas). Se copia al abrir: salir de Biblioteca limpia la
+  // selección de origen.
+  seleccion: readonly LibraryItemResponse[]
   onClose: () => void
   // En cuanto el servidor encola alguna: limpia la selección (también si luego se cierra con Escape).
   onDone?: () => void
   onNavigate?: (page: string) => void
 }) {
-  const [elementos] = useState(() => [...peliculas])
+  const [copia] = useState(() => [...seleccion])
+  const expansion = useExpansionLote(copia, MAX_ELEMENTOS_LOTE)
+  const elementos = useMemo(() => expansion.elementos ?? [], [expansion.elementos])
   const [paso, setPaso] = useState<Paso>('contenido')
-  const [marcadas, setMarcadas] = useState<ReadonlySet<number>>(
-    () => new Set(elementos.filter(e => !razonNoSubible(e)).slice(0, MAX_ELEMENTOS_LOTE).map(e => e.id)),
-  )
-  const cola = useMemo(
-    () => elementos.filter(e => marcadas.has(e.id) && !razonNoSubible(e)).map(e => e.id),
+  // Lo cambiado a mano en el paso 1; hasta entonces, las que llegan marcadas al expandir.
+  const [marcadasAMano, setMarcadasAMano] = useState<ReadonlySet<number> | null>(null)
+  const marcadas = marcadasAMano ?? expansion.iniciales
+  const enCola = useMemo(
+    () => elementos.filter(e => marcadas.has(e.id) && !razonNoSubible(e)),
     [elementos, marcadas],
   )
+  const cola = useMemo(() => enCola.map(e => e.id), [enCola])
   const [fase, setFase] = useState<'idle' | 'processing' | 'done'>('idle')
   // Lo que se cambió a mano en «Incluir»; lo demás va según lo que diga cada fila.
   const [elegidas, setElegidas] = useState<ReadonlyMap<number, boolean>>(() => new Map())
@@ -52,13 +61,13 @@ export function SubidaPorLotesModal({ peliculas, onClose, onDone, onNavigate }: 
   const comprobaciones = useComprobacionesTanda({
     step: paso === 'resumen' ? 2 : 1, batchQueue: cola, batchPhase: fase, proveedorElegido: SIN_ELECCION, minimo: 1,
   })
-  const analisis = useAnalisisLote({ activo: paso === 'resumen' && fase === 'idle', ids: cola })
+  const analisis = useAnalisisLote({ activo: paso === 'resumen' && fase === 'idle', elementos: enCola })
   const paralelo = useSubidasEnParalelo()
 
   // Otra selección en el paso 1: lo comprobado y lo elegido para la anterior ya no vale.
   const alternar = (id: number) => {
-    setMarcadas(prev => {
-      const sig = new Set(prev)
+    setMarcadasAMano(prev => {
+      const sig = new Set(prev ?? expansion.iniciales)
       if (sig.has(id)) sig.delete(id); else sig.add(id)
       return sig
     })
@@ -67,20 +76,31 @@ export function SubidaPorLotesModal({ peliculas, onClose, onDone, onNavigate }: 
     setElegidas(new Map())
   }
 
+  // El nombre del torrent: el de una película sale de su nomenclatura; el de un pack, de sus comprobaciones.
+  // undefined mientras no ha llegado.
+  const nombreDe = (item: LibraryItemResponse): string | null | undefined => {
+    if (item.item_type !== 'season') return analisis.analisis.get(item.id)?.nombre
+    const contenido = comprobaciones.batchContentChecks.get(item.id)
+    return contenido ? contenido.nombre ?? null : undefined
+  }
   // Solo chocan las que se podrían subir: una que ya se salta por otro motivo no puede bloquear a la otra.
-  const candidatas = cola.filter(id =>
-    comprobaciones.batchContentChecks.get(id)?.ready !== false && !analisis.analisis.get(id)?.bloqueo)
-  const repetidos = nombresRepetidos(candidatas.map(id => ({ id, nombre: analisis.analisis.get(id)?.nombre })))
-  const filas: FilaResumenLote[] = cola.map(id => {
-    const item = elementos.find(e => e.id === id)!
+  const candidatas = enCola.filter(item =>
+    comprobaciones.batchContentChecks.get(item.id)?.ready !== false && !analisis.analisis.get(item.id)?.bloqueo)
+  const repetidos = nombresRepetidos(candidatas.map(item => ({ id: item.id, nombre: nombreDe(item) })))
+  const filas: FilaResumenLote[] = enCola.map(item => {
+    const id = item.id
     const contenido = comprobaciones.batchContentChecks.get(id)
     const a = analisis.analisis.get(id)
-    const salto = contenido?.ready === false
-      ? primerFallo(contenido)
-      : a?.bloqueo ?? (repetidos.has(id) ? 'Otra película del lote saldría con el mismo nombre.' : null)
+    const fallo = contenido?.ready === false ? primerFallo(contenido) : null
+    const salto = fallo
+      ? (item.item_type === 'season' && CONFLICTO_PROVEEDOR.test(fallo) ? `${fallo} Súbela suelta para elegirlo.` : fallo)
+      : a?.bloqueo ?? (repetidos.has(id) ? 'Otro elemento del lote saldría con el mismo nombre.' : null)
     const pendiente = !contenido || !a
     const porDefecto = !!a && !a.sinIdioma && marcadaPorDefecto(a.nivel)
-    return { item, contenido, analisis: a, salto, pendiente, incluida: !pendiente && !salto && (elegidas.get(id) ?? porDefecto) }
+    return {
+      item, contenido, analisis: a, nombre: nombreDe(item), salto, pendiente,
+      incluida: !pendiente && !salto && (elegidas.get(id) ?? porDefecto),
+    }
   })
 
   const subir = async () => {
@@ -148,6 +168,8 @@ export function SubidaPorLotesModal({ peliculas, onClose, onDone, onNavigate }: 
       {paso === 'contenido' && (
         <PasoContenidoLote
           elementos={elementos} marcadas={marcadas} onAlternar={alternar} onContinuar={() => setPaso('resumen')}
+          expandiendo={expansion.elementos ? null : { hechas: expansion.hechas, series: expansion.series }}
+          avisos={expansion.avisos}
         />
       )}
 

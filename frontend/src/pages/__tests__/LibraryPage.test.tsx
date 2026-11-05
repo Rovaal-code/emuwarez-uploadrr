@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Biblioteca y «Subir por lotes»: el botón «Seleccionar» pone casillas solo en las películas, lo marcado sobrevive a
+ * Biblioteca y «Subir por lotes»: el botón «Seleccionar» pone casillas en películas y series, lo marcado sobrevive a
  * filtrar, a aplicar una vista guardada y a cambiar de vista, la barra dice cuántas esconde el filtro, «Subir por
  * lotes» abre el modal con lo marcado, y salir de la sección lo limpia todo.
  */
@@ -71,15 +71,15 @@ afterEach(async () => {
 })
 
 describe('Seleccionar en Biblioteca', () => {
-  it('sin el modo selección no hay casillas ni barra; con él, solo en las películas', async () => {
+  it('sin el modo selección no hay casillas ni barra; con él, en películas y series', async () => {
     await pagina()
     expect(casilla('Dune')).toBeNull()
     expect(barra()).toBeNull()
     await pulsar(boton('Seleccionar'))
     expect(casilla('Dune')).not.toBeNull()
     expect(casilla('Alien')).not.toBeNull()
-    expect(casilla('Serie')).toBeNull()
-    expect(barra()!.textContent).toContain('Marca las películas que quieras subir juntas')
+    expect(casilla('Serie')).not.toBeNull()
+    expect(barra()!.textContent).toContain('Marca las películas, series o temporadas que quieras subir juntas')
   })
 
   it('lo marcado sobrevive a filtrar, a una vista guardada y a cambiar de vista', async () => {
@@ -107,6 +107,42 @@ describe('Seleccionar en Biblioteca', () => {
     const dialogo = document.querySelector('[role="dialog"]')!
     expect(dialogo.textContent).toContain('Subir por lotes')
     expect([...dialogo.querySelectorAll('.lote-fila-titulo')].map(e => e.textContent)).toEqual(['Dune (2021)', 'Alien (2021)'])
+  })
+
+  it('una serie marcada entra en el modal como sus temporadas', async () => {
+    vi.mocked(getLibrary).mockImplementation(async q => {
+      if (q?.parent_id === 3) {
+        const temporadas = [1, 2].map(n => item(30 + n, `Serie - Temporada ${n}`, {
+          item_type: 'season', parent_id: 3, season_number: n, resolution: '1080p', video_codec: 'x264',
+        }))
+        return { items: temporadas, total: 2 } as never
+      }
+      return { items: [DUNE, ALIEN, SERIE], total: 3, archivos: 2 } as never
+    })
+    await pagina()
+    await pulsar(boton('Seleccionar'))
+    await pulsar(casilla('Serie')!)
+    await pulsar(casilla('Dune')!)
+    await pulsar(boton('Subir por lotes'))
+    const dialogo = document.querySelector('[role="dialog"]')!
+    await esperar(() => dialogo.querySelectorAll('.lote-fila-titulo').length === 3)
+    expect([...dialogo.querySelectorAll('.lote-fila-titulo')].map(e => e.textContent))
+      .toEqual(['Serie (2021) - Temporada 1', 'Serie (2021) - Temporada 2', 'Dune (2021)'])
+    expect(getLibrary).toHaveBeenCalledWith({ parent_id: 3, type: 'season', limit: 500 })
+  })
+
+  it('una temporada se marca desde su serie desplegada, y no cuenta como oculta por el filtro', async () => {
+    vi.mocked(getLibrary).mockImplementation(async q => (q?.parent_id === 3
+      ? { items: [item(31, 'Serie - Temporada 1', { item_type: 'season', parent_id: 3, season_number: 1 })], total: 1 }
+      : { items: [DUNE, ALIEN, SERIE], total: 3, archivos: 2 }) as never)
+    await pagina()
+    await pulsar(boton('Seleccionar'))
+    const filaSerie = [...document.querySelectorAll('tr.bib-fila')].find(tr => tr.textContent?.includes('Serie'))!
+    await pulsar(filaSerie)
+    await pulsar(await esperar(() => casilla('Serie - Temporada 1')))
+    expect(casilla('Serie - Temporada 1')!.checked).toBe(true)
+    expect(barra()!.textContent).toContain('1 seleccionada')
+    expect(barra()!.textContent).not.toContain('oculta')
   })
 
   it('«Limpiar» desmarca todo y apagar «Seleccionar» también', async () => {

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, memo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, memo } from 'react'
 import { getLibrary } from '../api/library'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
@@ -11,6 +11,7 @@ import { ValueChip, ValueIcon, SizeValueIcon, DetailTitleText } from './DetailCa
 import { estadoCastellano, CASTELLANO_INFO } from '../utils/castellano'
 import { IconoDesplegar, IconoTipo } from './Iconos'
 import { CasillaLote } from './lote/CasillaLote'
+import { seleccionableEnLote } from '../utils/lote'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
@@ -38,12 +39,16 @@ interface LibraryTreeRowProps {
   // que se ven (FilasVirtuales), y así mantiene montada una serie desplegada
   // aunque salga de la pantalla: dentro guarda sus temporadas y su página.
   onExpandedChange?: (id: number, expanded: boolean) => void
-  // «Subir por lotes»: con `onAlternar`, una película lleva su casilla dentro de la celda del título (sin columna
-  // nueva). Va un booleano y una función estable, nunca la selección entera: rompería el memo de cada fila. No se
-  // pasa a las hijas (solo las películas se marcan) ni desde la ficha (LibraryChildrenSection).
+  // «Subir por lotes»: con `onAlternar`, una película, una serie o una temporada lleva su casilla dentro de la
+  // celda del título (sin columna nueva); un capítulo no. Va un booleano y una función estable, nunca la selección
+  // entera: rompería el memo de cada fila. Una serie se lo pasa a sus temporadas, no una temporada a sus
+  // capítulos; la ficha (LibraryChildrenSection) no lo pasa.
   seleccionado?: boolean
   loteLleno?: boolean
   onAlternar?: (item: LibraryItemResponse) => void
+  // Solo en una serie: los ids de sus temporadas marcadas, separados por comas («» si ninguna). Un texto y no un
+  // Set, para que el memo compare por valor: marcar algo de otra serie no repinta esta.
+  temporadasMarcadas?: string
 }
 
 // Series -> Season -> Episode collapsible tree, one row per level, reused
@@ -85,7 +90,7 @@ export function SpanishAudioCell({ item }: { item: LibraryItemResponse }) {
 // of them on every keystroke even though their own props hadn't changed —
 // this (plus onSelect/onAction/onReload staying referentially stable at the
 // call site) is what makes that skip actually happen.
-export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false, onExpandedChange, seleccionado = false, loteLleno = false, onAlternar }: LibraryTreeRowProps) {
+export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false, onExpandedChange, seleccionado = false, loteLleno = false, onAlternar, temporadasMarcadas = '' }: LibraryTreeRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<LibraryItemResponse[]>([])
   const [childTotal, setChildTotal] = useState(0)
@@ -116,6 +121,8 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   // card, which is where you consult their data.
   const canExpand = expandable
   const childType = isSeries ? 'season' : 'episode'
+  const marcadasHijas = useMemo(
+    () => new Set(temporadasMarcadas.split(',').filter(Boolean).map(Number)), [temporadasMarcadas])
 
   // `porDetras`: refresca lo que ya se ve sin cambiarlo por «Cargando…»; si falla se queda lo de antes.
   const loadChildren = useCallback(async (off: number, porDetras = false) => {
@@ -179,7 +186,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         <td className="bib-celda-titulo">
           {/* La sangría depende de la profundidad: se queda en línea. */}
           <div className="bib-titulo-fila" style={{ paddingLeft: indent }}>
-            {onAlternar && item.item_type === 'movie' && (
+            {onAlternar && seleccionableEnLote(item) && (
               <CasillaLote item={item} seleccionado={seleccionado} bloqueada={loteLleno} onAlternar={onAlternar} />
             )}
             {canExpand ? (
@@ -293,6 +300,9 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
           onAction={onAction}
           onReload={onReload}
           compact={compact}
+          {...(isSeries && onAlternar
+            ? { onAlternar, loteLleno, seleccionado: marcadasHijas.has(child.id) }
+            : {})}
         />
       ))}
       {expanded && !loadingChildren && !isSeries && childTotal > NESTED_PAGE_SIZE && (

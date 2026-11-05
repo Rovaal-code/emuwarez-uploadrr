@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getDashboardSummary, getDashboardRecommendations, type DashboardRecommendationItem } from '../api/dashboard'
-import { getUploads } from '../api/uploads'
+import { getUploadJob, getUploads } from '../api/uploads'
+import { ACTIVE_JOB_STATUSES } from '../utils/uploadStatus'
 import { fetchSettings } from '../api/settings'
 import { getVersionInfo } from '../api/maintenance'
 import { getLibraryItem } from '../api/library'
@@ -142,7 +143,24 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const loadActiveUploads = useCallback(async () => {
     const seq = ++subidasSeq.current
     try {
-      const todas = await getUploads({ hide_preparatory: true, limit: 100 })
+      // Las 100 más nuevas no bastan con lotes grandes: con más de 100 vivas, la que sube (la más vieja) se caía de
+      // «En curso», y al fallar no salía en «Necesita atención». Las vivas y las fallidas se piden aparte y se juntan
+      // con las recientes.
+      const [recientes, vivas, fallidas] = await Promise.all([
+        getUploads({ hide_preparatory: true, limit: 100 }),
+        getUploads({ status: [...ACTIVE_JOB_STATUSES].join(','), limit: 500 }),
+        getUploads({ status: 'failed', hide_preparatory: true, limit: 50 }),
+      ])
+      const todas: UploadJob[] = []
+      const enLista = new Set<number | undefined>()
+      for (const j of [...recientes, ...vivas, ...fallidas]) {
+        if (!enLista.has(j.id)) { enLista.add(j.id); todas.push(j) }
+      }
+      // Una viva vieja que acaba de completarse o cancelarse no sale en ninguna: se pide sola, para que se despida
+      // con su estado final. Una borrada da 404 y se deja ir.
+      const perdidas = [...vivasAntes.current].filter(id => !enLista.has(id)).slice(0, MAX_ELEMENTOS_LOTE)
+      const finales = await Promise.allSettled(perdidas.map(id => getUploadJob(id)))
+      for (const r of finales) if (r.status === 'fulfilled') todas.push(r.value)
       if (seq === subidasSeq.current) registrarSubidas(todas)
     } catch { /* ignore — next tick retries */ }
   }, [registrarSubidas])

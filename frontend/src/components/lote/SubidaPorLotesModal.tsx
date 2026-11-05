@@ -96,7 +96,11 @@ export function SubidaPorLotesModal({ entradas, onClose, onDone, onNavigate }: {
   const filas: FilaResumenLote[] = enCola.map(item => {
     const id = item.id
     const contenido = comprobaciones.batchContentChecks.get(id)
-    const a = analisis.analisis.get(id)
+    const analizado = analisis.analisis.get(id)
+    // Los avisos de un pack los da su plan (las comprobaciones), no la nomenclatura.
+    const a = analizado && item.item_type === 'season' && contenido
+      ? { ...analizado, avisos: contenido.avisos ?? [], sinIdioma: !!contenido.sin_idioma }
+      : analizado
     const fallo = contenido?.ready === false ? primerFallo(contenido) : null
     const salto = fallo
       ? (item.item_type === 'season' && CONFLICTO_PROVEEDOR.test(fallo) ? `${fallo} Súbela suelta para elegirlo.` : fallo)

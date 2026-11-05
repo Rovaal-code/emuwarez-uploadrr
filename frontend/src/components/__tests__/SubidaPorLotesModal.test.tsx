@@ -457,6 +457,18 @@ describe('series y temporadas', () => {
     expect(m(biblioteca.getEmuComparison).mock.calls).toEqual([[101, undefined]])
   })
 
+  it('una temporada enseña los avisos de su plan, y con audio sin idioma llega desmarcada', async () => {
+    m(subidas.runUploadChecks).mockImplementation(async (id, scope) => scope === 'environment' ? ENTORNO : {
+      ...PACK_LISTO(id), avisos: ['Capítulo 2: el source no cuadra.', 'La pista 2 no tiene idioma.'], sin_idioma: true,
+    })
+    await abrir([TEMPORADAS[100][1]])
+    await alResumen(1)
+    expect(fila(101).textContent).toContain('Capítulo 2: el source no cuadra.')
+    expect(fila(101).textContent).toContain('La pista 2 no tiene idioma.')
+    expect(fila(101).querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(false)
+    expect(fila(101).textContent).toContain('Súbela suelta para elegir el idioma')
+  })
+
   it('un lote mixto de película y temporada manda las dos en orden, sin campos ni proveedor en la temporada', async () => {
     m(nom.getNomenclatureFields).mockImplementation(async id => ({
       fields: { ...CAMPOS, source: 'WEB-DL' }, torrent_name: nombreDe(id), internal_mkv_title: '', blocked: false,

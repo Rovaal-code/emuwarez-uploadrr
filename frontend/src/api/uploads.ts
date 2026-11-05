@@ -221,6 +221,9 @@ export interface UploadChecksResult {
   // Temporada: el nombre del torrent del pack (su `season_pack_title`) si el pack está listo; null si no, y en
   // lo demás. Lo usa «Subir por lotes», que no abre el asistente para cada pack.
   nombre?: string | null
+  // Temporada con el pack listo: los avisos del plan (proveedor, fuente, audio sin idioma) y si uno es el del audio.
+  avisos?: string[]
+  sin_idioma?: boolean
 }
 
 // `scope` parte la pasada para una selección de varias temporadas o

@@ -303,7 +303,7 @@ function IdField({ label, id, href }: { label: string; id: string | null; href: 
 function CreatedAtCell({ createdAt }: { createdAt: string | null | undefined }) {
   const { triggerProps, tooltipNode } = useTooltip(createdAt ? formatDate(createdAt) : null)
   return (
-    <td className="pet-creada pet-sec" {...triggerProps}>
+    <td className="pet-creada pet-sec pet-meta" {...triggerProps}>
       {timeAgo(createdAt)}
       {tooltipNode}
     </td>
@@ -998,7 +998,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       onClick={() => handleRowClick(item.id)}
       className={selectedId === item.id ? 'clickable row-selected' : 'clickable'}
     >
-      <td>
+      {/* Por debajo de 760 px la fila es una tarjeta (peticiones.css): las clases pet-col-* y pet-meta dicen qué va
+          en cada línea. */}
+      <td className="pet-col-titulo">
         <div className="pet-titulo-fila">
           {/* La casilla va dentro de la celda Título, no en una columna nueva: `columnas` cuenta las de la tabla. */}
           {modoSeleccion && (peticionSeleccionableEnLote(item) ? (
@@ -1022,19 +1024,19 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           </div>
         </div>
       </td>
-      <td className="pet-nowrap pet-tipo">
+      <td className="pet-nowrap pet-tipo pet-meta">
         <PlainValue icon={<TypeValueIcon />}>{tipoOf(item.category).label}</PlainValue>
       </td>
-      <td className="pet-nowrap pet-sec"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
-      <td>
+      <td className="pet-nowrap pet-sec pet-col-origen"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
+      <td className="pet-col-compat">
         <CompatibilityBadge status={item.compatibility_status} reclamada={item.reclamada_por} />
         {motivoDeLaPreparacion(item) && <div className="pet-motivo">{motivoDeLaPreparacion(item)}</div>}
       </td>
-      <td className="pet-t12 pet-nowrap pet-sec"><AuthorCell author={item.author} isMine={item.is_mine} /></td>
-      <td className="pet-nowrap pet-sec"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
-      <td className="pet-nowrap pet-sec"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
-      {hayVotos && <td className="pet-centro pet-t12 pet-sec">{item.votes ?? '—'}</td>}
-      {hayComentarios && <td className="pet-centro pet-t12 pet-sec">{item.comments ?? '—'}</td>}
+      <td className={`pet-t12 pet-nowrap pet-sec pet-col-autor${item.is_mine && item.author ? ' pet-meta pet-col-autor-mio' : ''}`}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
+      <td className="pet-nowrap pet-sec pet-meta"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
+      <td className="pet-nowrap pet-sec pet-meta"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
+      {hayVotos && <td className="pet-centro pet-t12 pet-sec pet-col-votos">{item.votes ?? '—'}</td>}
+      {hayComentarios && <td className="pet-centro pet-t12 pet-sec pet-col-votos">{item.comments ?? '—'}</td>}
       <td className="pet-puntos">{item.points != null ? <><IconoPuntos />{fmtNum(item.points)}</> : <span className="pet-muted">—</span>}</td>
       <CreatedAtCell createdAt={item.created_at} />
     </tr>

@@ -145,7 +145,7 @@ function FechaDeFila({ job }: { job: UploadJob }) {
   const { triggerProps, tooltipNode } = useTooltip(exactas || null)
   const valor = job.finished_at ?? job.created_at
   return (
-    <td className="sub-nowrap sub-sec sub-fecha" {...triggerProps}>
+    <td className="sub-nowrap sub-sec sub-fecha sub-meta" {...triggerProps}>
       {valor ? timeAgo(valor) : <span className="sub-muted">—</span>}
       {tooltipNode}
     </td>
@@ -190,12 +190,12 @@ function EstadoDeFila({ job }: { job: UploadJob }) {
 }
 
 // Un botón de la fila: solo el icono, con su nombre para el lector de pantalla y el tooltip.
-function AccionDeFila({ etiqueta, tono, onClick, children }: {
-  etiqueta: string; tono?: 'peligro'; onClick: () => void; children: React.ReactNode
+function AccionDeFila({ etiqueta, tono, clase, onClick, children }: {
+  etiqueta: string; tono?: 'peligro'; clase?: string; onClick: () => void; children: React.ReactNode
 }) {
   const { triggerProps, tooltipNode } = useTooltip(etiqueta)
   return (
-    <button type="button" className={`sub-accion${tono ? ` sub-accion-${tono}` : ''}`} aria-label={etiqueta} onClick={onClick} {...triggerProps}>
+    <button type="button" className={`sub-accion${tono ? ` sub-accion-${tono}` : ''}${clase ? ` ${clase}` : ''}`} aria-label={etiqueta} onClick={onClick} {...triggerProps}>
       {children}
       {tooltipNode}
     </button>
@@ -231,7 +231,9 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
   const loteId = !indent && job.lote_id && (job.lote_total ?? 0) > 1 ? job.lote_id : null
   const loteTip = useTooltip(loteId ? 'Ver solo las subidas de este lote' : null)
   return (
-    <tr className={indent ? 'sub-fila-antigua' : undefined}>
+    // Por debajo de 760 px la fila es una tarjeta (subidas.css): título y la acción que toca, el estado, y en gris
+    // tipo · origen · fecha y los chips. Las clases sub-col-* y sub-meta dicen qué va en cada línea.
+    <tr className={indent ? 'sub-tarjeta sub-fila-antigua' : 'sub-tarjeta'}>
       <td className="sub-celda-titulo">
         <div className={`sub-titulo-fila${indent ? ' sub-titulo-fila-antigua' : ''}`}>
           <div className="poster-thumb sub-poster">
@@ -254,7 +256,10 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
             <HoverTitle as="span" className="lib-title-link sub-titulo" onClick={onOpen} tip="Ver progreso / detalle">
               {job.title || '—'}
             </HoverTitle>
-            {job.year ? <span className="sub-muted sub-t11 sub-no-encoge">({job.year})</span> : null}
+            {job.year ? <span className="sub-muted sub-t11 sub-no-encoge sub-anio">({job.year})</span> : null}
+          </div>
+          {/* Aparte del título: en la tarjeta de móvil bajan a la última línea. */}
+          <div className="sub-chips">
             {loteId && onFiltrarLote && (
               <button
                 type="button"
@@ -295,12 +300,12 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
           </div>
         </div>
       </td>
-      <td className="sub-nowrap sub-sec">
+      <td className="sub-nowrap sub-sec sub-meta sub-col-tipo">
         {job.media_type
           ? <PlainValue icon={<TypeValueIcon />}>{UPLOAD_TYPE_LABEL[job.media_type] ?? job.media_type}</PlainValue>
           : <span className="sub-muted">—</span>}
       </td>
-      <td className="sub-nowrap sub-sec">
+      <td className="sub-nowrap sub-sec sub-meta">
         {job.instance_type
           ? (
             deepLink
@@ -318,7 +323,7 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
       <td className="sub-celda-estado">
         <EstadoDeFila job={job} />
       </td>
-      <td className="sub-nowrap sub-sec"><SeedingCelda job={job} seeding={seeding} /></td>
+      <td className="sub-nowrap sub-sec sub-col-seeding"><SeedingCelda job={job} seeding={seeding} /></td>
       <FechaDeFila job={job} />
       <td className="col-actions">
         <div className="sub-acciones-fila">
@@ -333,6 +338,7 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
             <AccionDeFila
               etiqueta={(job.retry_count ?? 0) > 0 ? 'Borrar, con todos sus intentos' : 'Borrar'}
               tono="peligro"
+              clase="sub-accion-borrar"
               onClick={() => onDelete(job)}
             ><DeleteButtonIcon /></AccionDeFila>
           )}

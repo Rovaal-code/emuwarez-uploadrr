@@ -1381,7 +1381,6 @@ optgroup {
 .detail-hero .btn-secondary {
   background: color-mix(in srgb, var(--bg-base) 70%, transparent);
   backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
 .detail-hero .btn-ghost:hover:not(:disabled, [aria-disabled="true"]),
 .detail-hero .btn-secondary:hover:not(:disabled, [aria-disabled="true"]) {
@@ -1399,7 +1398,6 @@ optgroup {
     linear-gradient(180deg, color-mix(in srgb, var(--hud-cyan) 28%, transparent), color-mix(in srgb, var(--hud-azure) 42%, transparent)),
     color-mix(in srgb, var(--hud-panel-solid) 92%, transparent);
   backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
 .hud-app .detail-hero .btn-primary:hover:not(:disabled, [aria-disabled="true"]) {
   background:
@@ -1409,7 +1407,6 @@ optgroup {
 .detail-hero .btn-danger {
   background: color-mix(in srgb, var(--bg-danger-deep) 75%, transparent);
   backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
 .detail-hero .btn-danger:hover:not(:disabled, [aria-disabled="true"]) {
   background: color-mix(in srgb, var(--bg-danger-deep) 90%, transparent);

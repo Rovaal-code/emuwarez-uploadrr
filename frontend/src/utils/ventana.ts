@@ -92,6 +92,24 @@ export function altoMedio(medidas: Iterable<number>, porDefecto: number): number
   return n ? Math.round(suma / n) : porDefecto
 }
 
+/**
+ * El alto de cada fila de la lista: el medido si lo hay y, si no, la media de las filas ordinarias medidas que siguen
+ * en la lista (`altoMedio`). Un número fijo se desviaría con el tamaño de la interfaz, y la primera fila sola también,
+ * cuando no todas miden lo mismo (en Subidas, de 63 a 100 px según lleven motivo de error). Las filas que ya no están
+ * (otro filtro) no cuentan, ni las que no son ordinarias (una cadena desplegada): esas valen solo para su sitio.
+ */
+export function alturasDeLaLista(
+  claves: readonly number[], medidas: ReadonlyMap<number, number>, ordinarias: ReadonlySet<number>, porDefecto: number,
+): number[] {
+  const deLaMedia: number[] = []
+  for (const k of claves) {
+    const m = medidas.get(k)
+    if (m != null && ordinarias.has(k)) deLaMedia.push(m)
+  }
+  const estimada = altoMedio(deLaMedia, porDefecto)
+  return claves.map(k => medidas.get(k) ?? estimada)
+}
+
 /** Las columnas que pone `repeat(auto-fill, minmax(minimo, 1fr))` en `ancho`. */
 export function columnasAutoFill(ancho: number, minimo: number, hueco: number): number {
   return Math.max(1, Math.floor((ancho + hueco) / (minimo + hueco)))

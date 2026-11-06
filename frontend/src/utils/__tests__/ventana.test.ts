@@ -7,7 +7,7 @@
  * la barra de scroll mentiría sobre el largo de la lista.
  */
 import { describe, it, expect } from 'vitest'
-import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo, medidaCorregida, cuentaTrasMedir, topeRecienAlcanzado, AJUSTES_SEGUIDOS_MAX, altoMedio } from '../ventana'
+import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo, medidaCorregida, cuentaTrasMedir, topeRecienAlcanzado, AJUSTES_SEGUIDOS_MAX, altoMedio, alturasDeLaLista } from '../ventana'
 
 const filas = (tramos: Tramo[]) => tramos.flatMap(t => (t.tipo === 'fila' ? [t.indice] : []))
 const altoTotal = (tramos: Tramo[], alturas: number[]) =>
@@ -215,5 +215,19 @@ describe('altoMedio: lo que se supone que mide una fila sin medir', () => {
 
   it('sin medidas, la estimación de la página', () => {
     expect(altoMedio([], 65)).toBe(65)
+  })
+})
+
+describe('alturasDeLaLista', () => {
+  const medidas = new Map([[1, 60], [2, 300], [3, 120]])
+  it('la medida si la hay; si no, la media de las ordinarias medidas', () => {
+    expect(alturasDeLaLista([1, 3, 9], medidas, new Set([1, 3]), 50)).toEqual([60, 120, 90])
+  })
+  it('una fila que no es ordinaria (cadena desplegada) conserva su alto pero no cuenta para la media', () => {
+    expect(alturasDeLaLista([1, 2, 9], medidas, new Set([1]), 50)).toEqual([60, 300, 60])
+  })
+  it('las medidas de filas que ya no están en la lista no cuentan', () => {
+    expect(alturasDeLaLista([1, 9], medidas, new Set([1, 3]), 50)).toEqual([60, 60])
+    expect(alturasDeLaLista([9], medidas, new Set([1, 3]), 50)).toEqual([50])
   })
 })

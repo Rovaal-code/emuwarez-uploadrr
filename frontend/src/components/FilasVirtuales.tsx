@@ -1,5 +1,5 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { planVentana, altoMedio, columnasAutoFill, filasDeRejilla, medidaCorregida, cuentaTrasMedir, topeRecienAlcanzado, AJUSTES_SEGUIDOS_MAX } from '../utils/ventana'
+import { planVentana, alturasDeLaLista, columnasAutoFill, filasDeRejilla, medidaCorregida, cuentaTrasMedir, topeRecienAlcanzado, AJUSTES_SEGUIDOS_MAX } from '../utils/ventana'
 import { medir } from '../utils/uiScale'
 
 // Lo que se pinta de más por arriba y por abajo de lo visible: unas diez filas
@@ -35,42 +35,55 @@ interface Props<T> {
 export function FilasVirtuales<T>({ items, clave, alturaEstimada, columnas, contenedor, cabecera, fijas, pintar }: Props<T>) {
   const vista = useVista(contenedor, cabecera)
   const medidas = useRef(new Map<number, number>())
-  // Las medidas de las filas sin desplegar (las que no son `fijas`): de ellas sale la estimación.
-  const sueltas = useRef(new Map<number, number>())
-  const estimada = useRef(alturaEstimada)
+  // Las claves de las filas ordinarias (una sola <tr>, sin desplegar ni `fijas`): de ellas sale la estimación.
+  const ordinarias = useRef(new Set<number>())
   const [version, setVersion] = useState(0)
+
+  // Lo que mide una fila y si cuenta para la media. Una cadena desplegada de Subidas o una serie abierta de
+  // Biblioteca son varias <tr>: su alto vale para su sitio, pero inflaría la media de las demás.
+  const apuntar = (el: HTMLElement): boolean => {
+    const k = Number(el.dataset.clave)
+    const alto = el.offsetHeight
+    if (!alto || medidas.current.get(k) === alto) return false
+    if (el.dataset.fija !== '1' && (el as HTMLTableSectionElement).rows?.length === 1) ordinarias.current.add(k)
+    else ordinarias.current.delete(k)
+    medidas.current.set(k, alto)
+    return true
+  }
 
   // Un solo observador para todas las filas pintadas: cuando una cambia de
   // alto (se despliega, carga sus capítulos) se apunta y se recalcula.
   const observador = useMemo(() => typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entradas => {
     let cambia = false
-    for (const e of entradas) {
-      const el = e.target as HTMLElement
-      const k = Number(el.dataset.clave)
-      const alto = el.offsetHeight
-      if (!alto || medidas.current.get(k) === alto) continue
-      if (el.dataset.fija !== '1') sueltas.current.set(k, alto)
-      medidas.current.set(k, alto)
-      cambia = true
-    }
-    // La estimación es la media de las filas sin desplegar medidas hasta ahora: un número fijo en el código se
-    // desviaría con el tamaño de la interfaz, y la primera fila sola, también, cuando no todas miden lo mismo (en
-    // Subidas, de 63 a 100 px según lleven motivo de error): la altura total cambiaba un 18 % al desplazarse.
-    if (cambia) {
-      estimada.current = altoMedio(sueltas.current.values(), alturaEstimada)
-      setVersion(v => v + 1)
-    }
-  }), [alturaEstimada])
+    for (const e of entradas) if (apuntar(e.target as HTMLElement)) cambia = true
+    if (cambia) setVersion(v => v + 1)
+  }), [])
   useEffect(() => () => observador?.disconnect(), [observador])
 
+  // Con otro ancho las filas miden otra cosa (en Subidas y Peticiones, al cruzar el corte de la tarjeta por fila,
+  // de 65 a 120 px): lo medido antes ya no vale para las que no están pintadas. Se olvida todo y se vuelven a medir
+  // las pintadas, una vez por cambio de ancho (no depende de lo que mide, así que no puede repintar sin fin).
+  const anchoMedido = useRef(0)
+  useLayoutEffect(() => {
+    const antes = anchoMedido.current
+    anchoMedido.current = vista.ancho
+    if (!antes || !vista.ancho || antes === vista.ancho) return
+    medidas.current.clear()
+    ordinarias.current.clear()
+    contenedor.current?.querySelectorAll<HTMLElement>('tbody[data-clave]').forEach(apuntar)
+    setVersion(v => v + 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar el ancho; apuntar solo toca refs
+  }, [vista.ancho])
+
   const tramos = useMemo(() => {
-    const alturas = items.map(it => medidas.current.get(clave(it)) ?? estimada.current)
+    // Las que no se han medido, con la media de las ordinarias que siguen en la lista (ver alturasDeLaLista).
+    const alturas = alturasDeLaLista(items.map(clave), medidas.current, ordinarias.current, alturaEstimada)
     const indicesFijos = new Set<number>()
     if (fijas?.size) items.forEach((it, i) => { if (fijas.has(clave(it))) indicesFijos.add(i) })
     return planVentana({ alturas, desde: vista.desde, alto: vista.alto, margen: MARGEN_PX, fijas: indicesFijos })
     // `version` cuenta como dependencia: es lo que avisa de que hay medidas nuevas.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- version avisa de medidas nuevas (ver arriba)
-  }, [items, clave, fijas, vista, version])
+  }, [items, clave, fijas, vista, version, alturaEstimada])
 
   // Con table-layout automático el ancho de cada columna sale de las filas
   // pintadas, y al desplazarte cambian: medido, «Tipo» pasaba de 109 a 115 px

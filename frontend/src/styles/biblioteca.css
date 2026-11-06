@@ -9,6 +9,9 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* Las columnas fijas de la tabla necesitan un fondo opaco; el del panel es un degradado translúcido, así que
+     esto es el color que sale de componerlo sobre el fondo de la página (a ojo, para que no se note el corte). */
+  --bib-fijo: #050f1e;
 }
 .bib-acciones {
   display: flex;
@@ -21,7 +24,7 @@
   height: 12px;
   border-width: 2px;
 }
-.filters-bar .form-input.bib-buscar { width: 140px; }
+.filters-bar .form-input.bib-buscar { width: 220px; max-width: 100%; }
 .filters-bar .form-select.bib-orden {
   width: max-content;
   padding-right: 26px;
@@ -34,12 +37,37 @@
   font-size: 13px;
   color: var(--text-secondary);
 }
+/* Selector de vista: un solo control con tres botones; el encendido lleva el acento y los demás se quedan quietos. */
 .bib-vistas {
-  display: flex;
-  gap: 4px;
+  display: inline-flex;
   margin-left: auto;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-small);
+  overflow: hidden;
 }
-.btn.btn-primary.bib-vista-apagada { opacity: 0.55; }
+.bib-vista-boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  border: none;
+  border-left: 1px solid var(--border-input);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.bib-vista-boton:first-child { border-left: none; }
+.bib-vista-boton:hover { color: var(--text-primary); background: color-mix(in srgb, var(--overlay-light) 6%, transparent); }
+.bib-vista-boton.activa {
+  color: var(--text-accent);
+  background: color-mix(in srgb, var(--text-accent) 14%, transparent);
+}
+.bib-vista-boton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
 
 /* Vistas guardadas: una insignia por vista (nombre + quitar) y el formulario para guardar la de ahora. */
 .bib-vista {
@@ -123,14 +151,16 @@
   padding-right: 8px;
 }
 .data-table.bib-tabla th > .hf-trigger {
-  padding-left: 8px;
-  padding-right: 8px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
+/* Un nombre de instancia largo se corta con puntos suspensivos en vez de ensanchar la columna. */
+.data-table.bib-tabla td .value-chip a { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Con menos ancho la tabla se desplaza en horizontal en vez de aplastar el título. */
-.data-table th.hijos-col-titulo { min-width: 340px; }
+.data-table th.hijos-col-titulo { min-width: 300px; }
 .data-table th.bib-col-titulo {
   width: 100%;
-  min-width: 340px;
+  min-width: 300px;
   padding-top: 3px;
   padding-bottom: 3px;
 }
@@ -233,6 +263,39 @@
   padding-top: 5px;
   padding-bottom: 5px;
 }
+/* Los datos de las columnas se leen como texto: un tono más apagado que el título y sin caja. Lo que abre algo
+   (el origen y el proveedor, que son enlaces) conserva su ficha, un poco más ligera. */
+.data-table.bib-tabla td { font-size: 12.5px; }
+.data-table.bib-tabla td .detcard-plano { color: var(--text-secondary); }
+.data-table.bib-tabla td .value-chip { padding: 3px 8px; font-size: 12.5px; gap: 5px; }
+/* Con doce columnas la tabla no cabe en un ancho normal y se desplaza: el título se queda fijo a la izquierda (como
+   las acciones a la derecha) para no perder de qué fila se está leyendo. Fondo opaco, o lo que pasa por detrás se
+   transparenta; cada estado de la fila mezcla su tinte sobre ese fondo. */
+.data-table.bib-tabla td.bib-celda-titulo,
+.data-table.bib-tabla th.bib-col-titulo {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bib-fijo);
+}
+.data-table.bib-tabla td.col-actions,
+.data-table.bib-tabla th.col-actions,
+.data-table.bib-tabla tr:hover td.col-actions { background: var(--bib-fijo); }
+.data-table.bib-tabla thead th.bib-col-titulo { z-index: 3; }
+.data-table.bib-tabla tr:hover > td.bib-celda-titulo { background: color-mix(in srgb, var(--overlay-light) 3%, var(--bib-fijo)); }
+/* Filas hijas (temporadas y capítulos de una serie abierta): un nivel más adentro, con una línea de acento. */
+.data-table tr.bib-fila-hija > td { background: color-mix(in srgb, var(--text-accent) 3%, transparent); }
+.data-table tr.bib-fila-hija > td.bib-celda-titulo { background: color-mix(in srgb, var(--text-accent) 3%, var(--bib-fijo)); }
+.data-table tr.bib-fila-hija > td:first-child { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--text-accent) 40%, transparent); }
+.data-table tr.bib-fila-hija > td.col-actions { background: color-mix(in srgb, var(--text-accent) 3%, var(--bib-fijo)); }
+.data-table tr.bib-fila-abierta > td { background: color-mix(in srgb, var(--text-accent) 5%, transparent); }
+.data-table tr.bib-fila-abierta > td.bib-celda-titulo { background: color-mix(in srgb, var(--text-accent) 5%, var(--bib-fijo)); }
+.data-table tr.bib-fila-abierta > td.col-actions { background: color-mix(in srgb, var(--text-accent) 5%, var(--bib-fijo)); }
+/* Marcada para el lote: más fuerte que la abierta, con la barra de acento a la izquierda. */
+.data-table tr.bib-fila-marcada > td { background: color-mix(in srgb, var(--text-accent) 11%, transparent); }
+.data-table tr.bib-fila-marcada > td:first-child { box-shadow: inset 3px 0 0 var(--text-accent); }
+.data-table tr.bib-fila-marcada > td.bib-celda-titulo { background: color-mix(in srgb, var(--text-accent) 11%, var(--bib-fijo)); }
+.data-table tr.bib-fila-marcada > td.col-actions { background: color-mix(in srgb, var(--text-accent) 11%, var(--bib-fijo)); }
 .data-table td.bib-nowrap { white-space: nowrap; }
 .bib-titulo-fila {
   display: flex;
@@ -326,4 +389,15 @@
   font-size: 11px;
   color: var(--text-muted);
   align-self: center;
+}
+
+/* Con el ancho de un móvil caben tres columnas: título, estado y acciones. El resto de datos sigue en la ficha. */
+@media (max-width: 760px) {
+  .data-table.bib-tabla :is(th, td):not(:nth-child(1), :nth-child(3), :last-child) { display: none; }
+  .data-table th.bib-col-titulo,
+  .data-table th.hijos-col-titulo { min-width: 0; }
+  /* Sin la carátula y con el título en dos líneas: con ella, el nombre se quedaba en «Agent…». */
+  .poster-thumb.bib-miniatura { display: none; }
+  .lib-title-link.bib-titulo-enlace { white-space: normal; overflow-wrap: anywhere; }
+  .data-table.bib-tabla td { padding-left: 6px; padding-right: 6px; }
 }

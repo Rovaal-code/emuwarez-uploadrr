@@ -87,9 +87,27 @@ describe('LibraryTreeRow', () => {
     for (const i of [1, 4, 5, 6]) expect(celdas()[i].textContent).toBe('—')
   })
 
-  it('con grupo de release lo pone en una insignia en la columna Grupo', async () => {
+  it('con grupo de release lo pone como texto, sin ficha, en la columna Grupo', async () => {
     await montarFila(elemento({}))
-    expect(celdas()[7].querySelector('.value-chip')!.textContent).toBe('FLUX')
+    expect(celdas()[7].querySelector('.detcard-plano')!.textContent).toBe('FLUX')
+    expect(celdas()[7].querySelector('.value-chip')).toBeNull()
+  })
+
+  it('una petición «Sin petición» se queda en un guion y una real sale como insignia', async () => {
+    await montarFila(elemento({ request_status: 'Sin petición' }))
+    expect(celdas()[3].querySelector('.badge')).toBeNull()
+    expect(celdas()[3].querySelector('[aria-label="Sin petición"]')).not.toBeNull()
+    await desmontar()
+    await montarFila(elemento({ request_status: 'Compatible' }))
+    expect(celdas()[3].querySelector('.badge')!.textContent).toBe('Compatible')
+  })
+
+  it('un capítulo sin póster no reserva el hueco de la carátula', async () => {
+    await montarFila(elemento({ item_type: 'episode', title: 'Serie S01E02 - X', season_number: 1, episode_number: 2, poster_url: null }))
+    expect(document.querySelector('.bib-miniatura')).toBeNull()
+    await desmontar()
+    await montarFila(elemento({ poster_url: null }))
+    expect(document.querySelector('.bib-miniatura')).not.toBeNull()
   })
 
   it('sin grupo de release dice «sin grupo» en vez de dejar un hueco', async () => {

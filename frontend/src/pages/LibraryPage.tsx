@@ -30,6 +30,7 @@ import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { IconoLibros, IconoTipo } from '../components/Iconos'
 import { formatNumero } from '../utils/format'
 import { VistasGuardadas } from '../components/VistasGuardadas'
+import { SelectorDeVista, type ModoDeVista } from '../components/SelectorDeVista'
 import { BarraLote } from '../components/lote/BarraLote'
 import { CasillaLote } from '../components/lote/CasillaLote'
 import { SubidaPorLotesModal } from '../components/lote/SubidaPorLotesModal'
@@ -51,7 +52,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
 
-type ViewMode = 'grid' | 'grid-lg' | 'list'
+type ViewMode = ModoDeVista
 
 function loadViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
@@ -754,13 +755,17 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       {/* Search by title + filters + view modes, all on one line */}
       <div className="filters-bar">
         <input
+          type="search"
+          name="buscar"
+          autoComplete="off"
+          aria-label="Buscar título"
           className="form-input bib-buscar"
           placeholder="Buscar título…"
           value={search}
           onChange={e => { setSearch(e.target.value); if (!e.target.value) { setOffset(0) } }}
           onKeyDown={e => e.key === 'Enter' && applyFilters()}
         />
-        <select className="form-input form-select bib-orden" value={sortBy} onChange={e => { setSortBy(e.target.value); setOffset(0) }}>
+        <select className="form-input form-select bib-orden" aria-label="Orden" value={sortBy} onChange={e => { setSortBy(e.target.value); setOffset(0) }}>
           <option value="title_asc">Orden: Título (A-Z)</option>
           <option value="title_desc">Orden: Título (Z-A)</option>
           <option value="updated_desc">Orden: RR (Reciente)</option>
@@ -793,35 +798,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </button>
         )}
         {fallaMas && <span className="text-muted">No se pudieron cargar más filas</span>}
-        <div className="bib-vistas">
-          <Tooltip content="Vista de pósters">
-            <button
-              className={`btn btn-primary btn-sm${viewMode === 'grid' ? '' : ' bib-vista-apagada'}`}
-              onClick={() => setViewMode('grid')}
-              aria-label="Vista de pósters"
-            >
-              ▦
-            </button>
-          </Tooltip>
-          <Tooltip content="Vista de pósters grandes">
-            <button
-              className={`btn btn-primary btn-sm${viewMode === 'grid-lg' ? '' : ' bib-vista-apagada'}`}
-              onClick={() => setViewMode('grid-lg')}
-              aria-label="Vista de pósters grandes"
-            >
-              ▦▦
-            </button>
-          </Tooltip>
-          <Tooltip content="Vista de lista">
-            <button
-              className={`btn btn-primary btn-sm${viewMode === 'list' ? '' : ' bib-vista-apagada'}`}
-              onClick={() => setViewMode('list')}
-              aria-label="Vista de lista"
-            >
-              ☰
-            </button>
-          </Tooltip>
-        </div>
+        <SelectorDeVista modo={viewMode} onCambiar={setViewMode} />
       </div>
 
       {(loading || isPending) && !items.length ? (

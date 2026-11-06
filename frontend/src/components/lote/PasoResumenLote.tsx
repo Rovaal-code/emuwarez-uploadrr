@@ -56,8 +56,16 @@ export function PasoResumenLote({
   const resumen = !comprobando && (completas || !!errorComprobando)
   const fallidas = filas.filter(f => f.contenido?.ready === false || f.analisis?.bloqueo).length
   const puedeSubir = !comprobando && !errorComprobando && completas && envReady && !analizando && incluidas > 0 && !enviando
+  const salta = filas.filter(f => f.salto).length
+  const porComprobar = filas.filter(f => !f.salto && f.pendiente).length
   return (
     <div className="modal-body">
+      {/* Lo que va a pasar con el lote, de un vistazo y sin tener que leer la tabla fila a fila. */}
+      <div className="lote-cifras">
+        <span className="lote-cifra lote-cifra-bien"><strong>{incluidas}</strong> {incluidas === 1 ? 'se subirá' : 'se subirán'}</span>
+        {salta > 0 && <span className="lote-cifra lote-cifra-mal"><strong>{salta}</strong> {salta === 1 ? 'se saltará' : 'se saltarán'}</span>}
+        {porComprobar > 0 && <span className="lote-cifra"><strong>{porComprobar}</strong> por comprobar</span>}
+      </div>
       <div className="lote-tabla-caja">
         <table className="data-table lote-tabla">
           <thead>

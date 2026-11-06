@@ -367,6 +367,20 @@ describe('las acciones de la lista que fallan', () => {
     expect(aviso()!.textContent).toContain('No se pudo cancelar')
     expect(aviso()!.textContent).not.toContain('Ya hay una subida activa')
   })
+
+  it('un reintento que acaba bien tarde, después de una cancelación fallida, no abre su ficha ni borra el aviso', async () => {
+    let resolverReintento: (r: unknown) => void = () => {}
+    vi.mocked(retryUploadJobQueued).mockReturnValue(new Promise(res => { resolverReintento = res }) as never)
+    vi.mocked(cancelUploadJob).mockRejectedValue(new Error('El trabajo ya terminó'))
+    await pagina()
+    await pulsar(filaDe('Rota').querySelector('button[aria-label="Reintentar"]')!)
+    await pulsar(filaDe('Viva').querySelector('button[aria-label="Cancelar"]')!)
+    await esperar(() => aviso()?.textContent?.includes('No se pudo cancelar') ?? false)
+    await act(async () => { resolverReintento({ job: { id: 999 } }) })
+    await esperar(() => true)
+    expect(getUploadJob).not.toHaveBeenCalledWith(999)
+    expect(aviso()!.textContent).toContain('No se pudo cancelar')
+  })
 })
 
 describe('las columnas', () => {

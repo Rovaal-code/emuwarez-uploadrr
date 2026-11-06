@@ -612,7 +612,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try {
       const r = await retryUploadJobQueued(job.id!, desdeElPrincipio)
       await load()
-      if (r.job?.id != null) openUpload(r.job.id)
+      // Si mientras tanto se pulsó otra acción, abrir esta ficha taparía lo que pasó con aquella.
+      if (r.job?.id != null && mia === ultimaAccion.current) openUpload(r.job.id)
     } catch (e: unknown) {
       if (mia !== ultimaAccion.current) return
       setRetryError(e instanceof Error ? e.message : 'No se pudo reintentar la subida.')

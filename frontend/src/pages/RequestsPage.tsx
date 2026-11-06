@@ -23,22 +23,23 @@ import { ExternalIdLink } from '../components/ExternalIdLink'
 import { InfoIcon } from '../components/InfoIcon'
 import { GruposDeRelease } from '../components/GruposDeRelease'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, PlainValue, TechChip, CheckStatusIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle, DetailTitleText,
+  Card, FieldRow, ValueChip, ValueIcon, PlainValue, TechChip, CheckStatusIcon, DetailHero, DetailTitle, DetailTitleText,
   StatusCardIcon, RequestCardIcon, ExternalIdsCardIcon,
   UploadButtonIcon, ExternalLinkButtonIcon, LibraryButtonIcon,
   TypeValueIcon, AuthorValueIcon, CalendarValueIcon,
   SeasonValueIcon, EpisodeValueIcon, ResolutionValueIcon, SourceValueIcon, AnyValueIcon,
   VideoCodecValueIcon, LanguageValueIcon, SizeValueIcon,
-  PointsValueIcon, ThumbsUpValueIcon, CommentValueIcon,
+  ThumbsUpValueIcon, CommentValueIcon,
 } from '../components/DetailCard'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { HeaderSort } from '../components/HeaderSort'
 import { formatBytes, timeAgo, formatDate, formatNumero } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { agruparPeticiones, requestDisplayTitle } from '../utils/peticiones'
+import { agruparPeticiones, requestDisplayTitle, motivoDeLaPreparacion, grupoDePeticion, GRUPOS_PETICION, type GrupoPeticion } from '../utils/peticiones'
+import { FichaPoster } from '../components/FichaPoster'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
-import { IconoBloqueado, IconoDocumental, IconoPelicula, IconoPuntos, IconoSerie } from '../components/Iconos'
+import { IconoBloqueado, IconoDesplegar, IconoDocumental, IconoPelicula, IconoPuntos, IconoSerie } from '../components/Iconos'
 import { Modal } from '../components/Modal'
 import { BarraLote } from '../components/lote/BarraLote'
 import { CasillaLote } from '../components/lote/CasillaLote'
@@ -81,7 +82,7 @@ function tipoOf(category: string | null): { icon: React.ReactNode; label: string
 function RequestPoster({ url, category, size = 'sm' }: { url: string | null; category: string | null; size?: 'sm' | 'lg' }) {
   const dims = size === 'lg'
     ? { width: 120, height: 180, radius: 8, font: 44 }
-    : { width: 30, height: 45, radius: 4, font: 15 }
+    : { width: 36, height: 54, radius: 5, font: 17 }
   const t = tipoOf(category)
   return (
     <div className="poster-thumb pet-poster" style={{ width: dims.width, height: dims.height, borderRadius: dims.radius }}>
@@ -309,6 +310,44 @@ function CreatedAtCell({ createdAt }: { createdAt: string | null | undefined }) 
   )
 }
 
+// Lo primero de la ficha: qué se puede hacer con esta petición y por qué, con la recompensa al lado. El tono es el
+// único color del recuadro y siempre va con símbolo y texto (el mismo patrón que el resultado de una subida).
+const VEREDICTO_SIMBOLO: Record<GrupoPeticion, string> = { lista: '✓', parcial: '!', sin_copia: '○', cerrada: '■' }
+
+function VeredictoPeticion({ item, estado, preparacion }: {
+  item: RequestDetailResponse
+  estado: string | null
+  preparacion: RequestReadinessResponse | null
+}) {
+  const grupo = grupoDePeticion({ readiness_status: preparacion?.status ?? item.readiness_status ?? null, compatibility_status: estado })
+  const info = GRUPOS_PETICION.find(g => g.id === grupo)!
+  const motivo = motivoDeLaPreparacion({ readiness_status: preparacion?.status ?? item.readiness_status ?? null })
+  const quien = getReclamadaInfo(item.reclamada_por)
+  return (
+    <section className={`detail-card pet-veredicto pet-tono-${grupo}`} aria-label="Qué se puede hacer con esta petición">
+      <span className="pet-veredicto-simbolo" aria-hidden="true">{VEREDICTO_SIMBOLO[grupo]}</span>
+      <div className="pet-veredicto-texto">
+        <p className="pet-veredicto-titulo">
+          {info.titulo}
+          <InfoIcon text="Aunque salga «Compatible», revisa la petición: el audio y el códec no se pueden comparar del todo (suelen indicarse en la descripción del torrent), y si pide la serie completa puede que no quiera la temporada especial." />
+        </p>
+        <p className="pet-veredicto-ayuda">{info.ayuda}</p>
+        <div className="pet-veredicto-estado">
+          <CompatibilityBadge status={estado} reclamada={item.reclamada_por} />
+          {motivo && <span className="pet-motivo">{motivo}</span>}
+          {item.reclamada_por === 'ti' && quien && <span className="pet-motivo">{quien.label}</span>}
+        </div>
+      </div>
+      <div className="pet-veredicto-premio">
+        <span className="pet-veredicto-premio-etiqueta">Recompensa</span>
+        <span className="pet-veredicto-premio-valor">
+          {item.points != null ? <><IconoPuntos />{fmtNum(item.points)}</> : <span className="pet-muted">Sin puntos</span>}
+        </span>
+      </div>
+    </section>
+  )
+}
+
 // Full dedicated request page — same visual format as the library item detail
 // page (back button, big poster left, title + fields grid right).
 function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidates, onUpload, onOpenLibraryItem }: {
@@ -411,12 +450,12 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
       </div>
 
       <div className="pet-ficha">
-        <DetailPoster url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null} alt={item.title} fallbackIcon={t.icon} />
+        <FichaPoster url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null} alt={item.title} fallbackIcon={t.icon} />
 
         <div className="pet-ficha-col">
-          <div className="pet-ficha-grid" style={{ minHeight: DETAIL_CARD_HEIGHT }}>
-            <Card title="Estado de la petición" icon={<StatusCardIcon />}>
-              <FieldRow label="Estado" help="Aunque salga «Compatible», revisa la petición: el audio y el códec no se pueden comparar del todo (suelen indicarse en la descripción del torrent), y si pide la serie completa puede que no quiera la temporada especial."><CompatibilityBadge status={effectiveStatus} reclamada={item.reclamada_por} /></FieldRow>
+          <VeredictoPeticion item={item} estado={effectiveStatus} preparacion={readiness} />
+          <div className="pet-ficha-grid">
+            <Card title="La petición" icon={<StatusCardIcon />}>
               <FieldRow label="Tipo">
                 <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{t.label}</span></ValueChip>
               </FieldRow>
@@ -433,7 +472,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
               )}
             </Card>
 
-            <Card title="Detalle pedido" icon={<RequestCardIcon />}>
+            <Card title="Lo que piden" icon={<RequestCardIcon />}>
               {isSeriesLike && (
                 <FieldRow label="Temporada">
                   <ValueChip><ValueIcon><SeasonValueIcon /></ValueIcon><span className="txt">{temporadaLabel}</span></ValueChip>
@@ -449,9 +488,6 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
               </FieldRow>
               <FieldRow label="Source pedido">
                 <SpecValueChip value={item.requested_source} icon={SourceValueIcon} />
-              </FieldRow>
-              <FieldRow label="Puntos">
-                <ValueChip><ValueIcon><PointsValueIcon /></ValueIcon><span className="txt">{fmtNum(item.points)}</span></ValueChip>
               </FieldRow>
               {/* eMuwarez no da votos ni comentarios: sin dato, sin fila. */}
               {item.votes != null && (
@@ -574,7 +610,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
             <div className="detail-row"><span>Readiness score</span><span>{readiness.upload_readiness_score?.toFixed(0) ?? '—'}/100</span></div>
             {readiness.blockers.length > 0 && (
               <div className="pet-mt-8">
-                <div className="pet-bloq-titulo">BLOQUEADORES</div>
+                <div className="pet-bloq-titulo">Bloqueadores</div>
                 {readiness.blockers.map((b, i) => (
                   <div key={i} className="pet-bloq"><IconoBloqueado /> {b}</div>
                 ))}
@@ -590,6 +626,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
   )
 }
 
+const CLAVE_GRUPOS_PLEGADOS = 'emuwarez_pet_grupos_plegados'
 const PAGE_SIZE = 2000  // show everything in one scrollable container (like Biblioteca)
 const NINGUNO: string[] = []
 
@@ -664,6 +701,24 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     if (modoSeleccion) limpiarLote()
     setErrorLote(null)
     setModoSeleccion(m => !m)
+  }
+  // Los grupos plegados se recuerdan en este navegador: es una comodidad de quien mira, no un dato.
+  const [plegados, setPlegados] = useState<Set<GrupoPeticion>>(() => {
+    try {
+      const guardado = JSON.parse(localStorage.getItem(CLAVE_GRUPOS_PLEGADOS) ?? '[]')
+      return new Set(Array.isArray(guardado) ? guardado.filter((g): g is GrupoPeticion => typeof g === 'string') : [])
+    } catch { return new Set() }
+  })
+  const alternarGrupo = (id: GrupoPeticion, plegar?: boolean) => setPlegados(prev => {
+    const sig = new Set(prev)
+    if (plegar ?? !sig.has(id)) sig.add(id); else sig.delete(id)
+    try { localStorage.setItem(CLAVE_GRUPOS_PLEGADOS, JSON.stringify([...sig])) } catch { /* ignore */ }
+    return sig
+  })
+  // «Ir a»: despliega el grupo y lleva la vista a su cabecera.
+  const irAlGrupo = (id: GrupoPeticion) => {
+    alternarGrupo(id, false)
+    requestAnimationFrame(() => document.getElementById(`pet-grupo-${id}`)?.scrollIntoView({ block: 'start', behavior: 'auto' }))
   }
   const votesHeaderTip = useTooltip('Votos (otros usuarios que la quieren)')
   const commentsHeaderTip = useTooltip('Comentarios')
@@ -927,6 +982,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
   const displayItems = items
   const agrupada = sortBy === ORDEN_POR_GRUPOS
+  const gruposVisibles = agrupada ? agruparPeticiones(displayItems) : []
   // Las peticiones reales no traen votos ni comentarios: sin dato, sin columna.
   const hayVotos = displayItems.some(i => i.votes != null)
   const hayComentarios = displayItems.some(i => i.comments != null)
@@ -968,13 +1024,16 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         <PlainValue icon={<TypeValueIcon />}>{tipoOf(item.category).label}</PlainValue>
       </td>
       <td className="pet-nowrap"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
-      <td><CompatibilityBadge status={item.compatibility_status} reclamada={item.reclamada_por} /></td>
+      <td>
+        <CompatibilityBadge status={item.compatibility_status} reclamada={item.reclamada_por} />
+        {motivoDeLaPreparacion(item) && <div className="pet-motivo">{motivoDeLaPreparacion(item)}</div>}
+      </td>
       <td className="pet-t12 pet-nowrap"><AuthorCell author={item.author} isMine={item.is_mine} /></td>
       <td className="pet-nowrap"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
       <td className="pet-nowrap"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
       {hayVotos && <td className="pet-centro pet-t12">{item.votes ?? '—'}</td>}
       {hayComentarios && <td className="pet-centro pet-t12">{item.comments ?? '—'}</td>}
-      <td className="pet-centro pet-t12 pet-nowrap">{fmtNum(item.points)}</td>
+      <td className="pet-puntos">{item.points != null ? <><IconoPuntos />{fmtNum(item.points)}</> : <span className="pet-muted">—</span>}</td>
       <CreatedAtCell createdAt={item.created_at} />
     </tr>
   )
@@ -1060,6 +1119,19 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
             action={<button className="btn btn-primary btn-sm" onClick={() => startRequestsSync(false)} disabled={isAnySyncing}>Sincronizar peticiones</button>}
           />
         ) : (
+          <>
+          {agrupada && gruposVisibles.length > 0 && (
+          <nav className="pet-resumen" aria-label="Grupos de peticiones">
+            {gruposVisibles.map(g => (
+              <button key={g.id} type="button" className={`pet-resumen-chip pet-resumen-${g.id}`} onClick={() => irAlGrupo(g.id)}>
+                <span className="pet-punto" aria-hidden="true" />
+                {g.titulo}
+                <span className="pet-resumen-n">{g.items.length}</span>
+              </button>
+            ))}
+          </nav>
+        )}
+
           <div className="activity-section pet-seccion">
             <div className="pet-scroll">
               <table className="data-table">
@@ -1102,18 +1174,24 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     action={<button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>}
                   />
                 )}
-                {agrupada ? agruparPeticiones(displayItems).map(g => (
-                  <tbody key={g.id} className={`pet-bloque pet-bloque-${g.id}`}>
-                    <tr className="pet-grupo-cab">
-                      <th scope="rowgroup" colSpan={columnas} className="pet-grupo-th">
-                        <span className="pet-grupo-titulo">{g.titulo}</span>
-                        <span className="pet-grupo-n">{g.items.length}</span>
-                        <span className="pet-grupo-ayuda">{g.ayuda}</span>
-                      </th>
-                    </tr>
-                    {g.items.map(fila)}
-                  </tbody>
-                )) : (
+                {agrupada ? gruposVisibles.map(g => {
+                  const plegado = plegados.has(g.id)
+                  return (
+                    <tbody key={g.id} className={`pet-bloque pet-bloque-${g.id}`}>
+                      <tr className="pet-grupo-cab" id={`pet-grupo-${g.id}`}>
+                        <th scope="rowgroup" colSpan={columnas} className="pet-grupo-th">
+                          <button type="button" className="pet-grupo-boton" aria-expanded={!plegado} onClick={() => alternarGrupo(g.id)}>
+                            <IconoDesplegar abierto={!plegado} size={12} />
+                            <span className="pet-grupo-titulo">{g.titulo}</span>
+                            <span className="pet-grupo-n">{g.items.length}</span>
+                            <span className="pet-grupo-ayuda">{g.ayuda}</span>
+                          </button>
+                        </th>
+                      </tr>
+                      {!plegado && g.items.map(fila)}
+                    </tbody>
+                  )
+                }) : (
                   <tbody>
                     {displayItems.map(fila)}
                   </tbody>
@@ -1129,6 +1207,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
               </div>
             )}
           </div>
+          </>
         )}
 
         {modoSeleccion && (

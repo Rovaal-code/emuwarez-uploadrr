@@ -3,15 +3,16 @@ import { tapar, usePerfilEmu } from '../context/PerfilEmuContext'
 import { useCooldown } from '../hooks/useCooldown'
 import { decimalEs, enlacesCuentaEmu, ratioBajo } from '../utils/cuentaEmu'
 import { formatNumero, timeAgo } from '../utils/format'
-import { IconoAviso, IconoCampana, IconoCorreo, IconoSubida } from './Iconos'
+import { IconoAviso, IconoSubida } from './Iconos'
 import { ServiceIcon } from './ServiceIcon'
 import { Tooltip } from './Tooltip'
 
 const AVISO_RATIO = 'Con ratio por debajo de 1, eMuwarez desactiva la API key: la app deja de poder sincronizar y subir.'
 const OTRA_PESTANA = <span className="solo-lector"> (se abre en otra pestaña)</span>
 
-// Tu cuenta de eMuwarez en la cabecera del Panel: quién eres, tus cifras y los
-// enlaces a lo que la API no da (mensajes, notificaciones).
+// Tu cuenta de eMuwarez en la cabecera del Panel: quién eres, tus cifras y el
+// enlace a «Mis subidas», que la API no da. Mensajes y notificaciones no se
+// repiten aquí: ya están en la barra superior (y en el cajón del móvil).
 export function CuentaEmu() {
   const { perfil, actualizar, ocultarNombre } = usePerfilEmu()
   const espera = useCooldown()
@@ -66,9 +67,7 @@ export function CuentaEmu() {
       )}
 
       {enlaces && (
-        <nav className="cuenta-emu-enlaces" aria-label="Enlaces de tu cuenta en eMuwarez">
-          <a className="hover-link" href={enlaces.mensajes} target="_blank" rel="noreferrer"><IconoCorreo /> Mensajes{OTRA_PESTANA}</a>
-          <a className="hover-link" href={enlaces.notificaciones} target="_blank" rel="noreferrer"><IconoCampana /> Notificaciones{OTRA_PESTANA}</a>
+        <nav className="cuenta-emu-enlaces" aria-label="Tus subidas en eMuwarez">
           <a className="hover-link" href={enlaces.subidas} target="_blank" rel="noreferrer"><IconoSubida /> Mis subidas{OTRA_PESTANA}</a>
         </nav>
       )}

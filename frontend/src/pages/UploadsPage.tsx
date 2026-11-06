@@ -350,6 +350,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [loteFiltro, setLoteFiltro] = useState<string | null>(null)
   // El resumen de ese lote (contadores y qué se puede hacer): se pide con la lista, en el mismo load().
   const [loteResumen, setLoteResumen] = useState<LoteResumen | null>(null)
+  // El lote que el servidor ya no conoce (404): se borraron todas sus subidas, por ejemplo con «Borrar lote».
+  const [loteSinSubidas, setLoteSinSubidas] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
   // Cuántas se piden (las más recientes), cuántas hay en total con el filtro de estado, y si ya llegó la primera
   // respuesta (hasta entonces «no está en la lista» no quiere decir nada).
@@ -404,7 +406,10 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       if (seq === loadSeqRef.current) {
         setJobs(data)
         setTotal(cuantas)
-        if (resumen !== undefined) setLoteResumen(resumen)
+        if (resumen !== undefined) {
+          setLoteResumen(resumen)
+          setLoteSinSubidas(resumen === null ? loteFiltro : null)
+        }
         setCargado(true)
         setError(null)
       }
@@ -459,6 +464,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const loteTotal = loteFiltro ? jobs.find(j => j.lote_id === loteFiltro)?.lote_total ?? null : null
   // Solo el del lote que se mira: al cambiar de lote, el anterior no vale hasta que llegue el nuevo.
   const resumenDelLote = loteResumen?.lote_id === loteFiltro ? loteResumen : null
+  // El lote filtrado ya no tiene ninguna subida: la tabla vacía no es «sin resultados» sino «lote vacío».
+  const loteVacio = loteFiltro !== null && loteSinSubidas === loteFiltro
   // «Ver el lote» desde el detalle de una de sus subidas: de vuelta a la tabla, con el lote entero (sin otros filtros).
   const verLote = (loteId: string) => {
     closeUpload()
@@ -761,6 +768,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           loteId={loteFiltro}
           resumen={resumenDelLote}
           totalConocido={loteTotal}
+          sinSubidas={loteVacio}
           onQuitar={() => setLoteFiltro(null)}
           onHecho={() => load()}
         />
@@ -791,7 +799,16 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   <th className="col-actions sub-th-acciones">Acciones</th>
                 </tr>
               </thead>
-              {visibleJobs.length === 0 && filtrando && (
+              {visibleJobs.length === 0 && loteVacio && (
+                <FilaVacia
+                  columnas={10}
+                  icon={<IconoSubida />}
+                  title="Este lote ya no tiene subidas"
+                  body="Se borraron todas las que lo formaban."
+                  action={<button className="btn btn-primary btn-sm" onClick={() => setLoteFiltro(null)}>Quitar filtro del lote</button>}
+                />
+              )}
+              {visibleJobs.length === 0 && filtrando && !loteVacio && (
                 <FilaVacia
                   columnas={10}
                   icon={<IconoSubida />}

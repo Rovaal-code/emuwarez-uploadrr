@@ -192,9 +192,31 @@ describe('película', () => {
     await pulsar(boton('Subir a eMuwarez'))
     await esperar(() => onClose.mock.calls.length > 0)
     expect(subidas.queueUpload).toHaveBeenCalledWith(
-      10, {}, LISTO, { ordered_tracks: PISTAS.ordered_tracks }, undefined, undefined)
+      10, {}, LISTO, { ordered_tracks: PISTAS.ordered_tracks }, undefined, undefined, undefined,
+      { anonimo: null, personalRelease: null })
     expect(onDone).toHaveBeenCalled()
     expect(onNavigate).toHaveBeenCalledWith('uploads')
+  })
+
+  it('las casillas Anónimo y Personal release salen con lo del grupo y lo cambiado viaja al encolar', async () => {
+    m(fetchSettings).mockResolvedValue({
+      upload_tags: ['GRP', 'OTRO'], upload_tags_personal_release: ['grp'], upload_tags_anonimos: [],
+    } as unknown as Awaited<ReturnType<typeof fetchSettings>>)
+    await abrir(PELICULA)
+    await esperar(() => texto().includes('Dune WEB-DL AMZN [GRP]'))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ Todo listo para subir'))
+    const casilla = (nombre: string) => [...document.querySelectorAll<HTMLLabelElement>('.asist-marcas label')]
+      .find(l => l.textContent?.includes(nombre))!.querySelector('input')!
+    expect(casilla('Personal release').checked).toBe(true)
+    expect(casilla('Anónimo').checked).toBe(false)
+    await pulsar(casilla('Anónimo'))
+    expect(casilla('Anónimo').checked).toBe(true)
+    await pulsar(boton('Subir a eMuwarez'))
+    await esperar(() => onClose.mock.calls.length > 0)
+    expect(subidas.queueUpload).toHaveBeenCalledWith(
+      10, {}, LISTO, { ordered_tracks: PISTAS.ordered_tracks }, undefined, undefined, undefined,
+      { anonimo: true, personalRelease: null })
   })
 
   it('un source que no es WEB-DL quita el proveedor', async () => {
@@ -326,7 +348,7 @@ describe('pack de temporada', () => {
     expect(subidas.queueUpload).toHaveBeenCalledWith(
       20, {}, LISTO, null,
       { source: 'WEB-DL', tag: 'GRP', title: 'Serie', provider: undefined, idiomas: { 1: 'spa' } },
-      undefined)
+      undefined, undefined, { anonimo: null, personalRelease: null })
   })
 
   it('«Ver nombre de todos los capítulos» pide los nombres con lo elegido', async () => {

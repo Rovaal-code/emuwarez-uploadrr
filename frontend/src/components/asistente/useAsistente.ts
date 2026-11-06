@@ -11,7 +11,7 @@ import {
   previewTrackRemux,
   applyTrackRemux,
 } from '../../api/nomenclature'
-import { queueUpload, getExistingJobForItem, runUploadChecks } from '../../api/uploads'
+import { queueUpload, getExistingJobForItem, runUploadChecks, type OpcionesTracker } from '../../api/uploads'
 import { nuevoLoteId } from '../../utils/lote'
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../../api/library'
 import type { MediaInfoReport } from '../../api/library'
@@ -152,10 +152,19 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   const [gruposDeSubida, setGruposDeSubida] = useState<string[]>([])
   // El ajuste de pistas de Configuración: el Resumen lo dice en un pack y en una tanda, que no cargan las pistas.
   const [modoPistasAjuste, setModoPistasAjuste] = useState<string | undefined>()
+  // Los grupos marcados en Configuración como Personal release / anónimos: dan el valor de las casillas del Resumen.
+  const [gruposPersonalRelease, setGruposPersonalRelease] = useState<string[]>([])
+  const [gruposAnonimos, setGruposAnonimos] = useState<string[]>([])
+  // Anónimo / Personal release: lo cambiado a mano en el Resumen (null mientras no se toque: entonces manda el grupo,
+  // aquí para enseñarlo y en el servidor para cada subida, también las de una tanda con grupos distintos). Otra
+  // selección lo vuelve a null (elegirSeleccion).
+  const [opcionesTracker, setOpcionesTracker] = useState<OpcionesTracker>({ anonimo: null, personalRelease: null })
   useEffect(() => {
     fetchSettings().then(s => {
       setGruposDeSubida(s.upload_tags ?? [])
       setModoPistasAjuste(s.remux_track_mode)
+      setGruposPersonalRelease(s.upload_tags_personal_release ?? [])
+      setGruposAnonimos(s.upload_tags_anonimos ?? [])
     }).catch(() => { /* quedan los de siempre */ })
   }, [])
   const opcionesTag = Array.from(new Set([fields.tag, initialTag, ...(gruposDeSubida.length ? gruposDeSubida : ['EMUWAREZ'])].filter(Boolean))) as string[]
@@ -341,6 +350,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     setSelError(null)
     if (!mismaSeleccion(seleccion, nueva)) {
       setSeleccion(nueva)
+      setOpcionesTracker({ anonimo: null, personalRelease: null })
       setAjustesPorId(new Map())
       setProveedorElegido(new Map())
       setEpisodeFieldsById(new Map())
@@ -913,6 +923,13 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     if (!esTanda(seleccion)) runChecks()
   }
 
+  const tagActual = (fields.tag ?? '').trim().toLowerCase()
+  const enGrupo = (lista: string[]) => !!tagActual && lista.some(g => g.trim().toLowerCase() === tagActual)
+  const anonimoMarcado = opcionesTracker.anonimo ?? enGrupo(gruposAnonimos)
+  const personalReleaseMarcado = opcionesTracker.personalRelease ?? enGrupo(gruposPersonalRelease)
+  const elegirAnonimo = (v: boolean) => setOpcionesTracker(o => ({ ...o, anonimo: v }))
+  const elegirPersonalRelease = (v: boolean) => setOpcionesTracker(o => ({ ...o, personalRelease: v }))
+
   const canUpload = !!checks?.ready
   // Queues the upload and hands off to Subidas immediately — nomenclature
   // rename, track remux, and the actual Uploadrr start all run server-side
@@ -934,6 +951,8 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
               idiomasPorTemporada.get(targetId))
           : undefined,
         requestId,
+        undefined,
+        opcionesTracker,
       )
       if (r.status !== 'queued' || !r.job?.id) {
         setUploadMsg(`✗ No se pudo encolar la subida (estado: ${r.status}). ${(r.errors || []).join(' ')}`)
@@ -988,7 +1007,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
           results.push({ seasonId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(seasonId, undefined, checksResult, null, ajustesDeTemporada(overridesMap.get(seasonId), proveedorElegido, seasonId, idiomasPorTemporada.get(seasonId)), s && peticionCubre(preselect, s) ? requestId : undefined, loteId)
+        const r = await queueUpload(seasonId, undefined, checksResult, null, ajustesDeTemporada(overridesMap.get(seasonId), proveedorElegido, seasonId, idiomasPorTemporada.get(seasonId)), s && peticionCubre(preselect, s) ? requestId : undefined, loteId, opcionesTracker)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {
@@ -1058,7 +1077,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
           results.push({ seasonId: episodeId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(episodeId, undefined, checksResult, null, undefined, ep && peticionCubre(preselect, ep) ? requestId : undefined, loteId)
+        const r = await queueUpload(episodeId, undefined, checksResult, null, undefined, ep && peticionCubre(preselect, ep) ? requestId : undefined, loteId, opcionesTracker)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId: episodeId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {
@@ -1096,6 +1115,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     goToUpload, preparing,
     // Paso 2
     checks, checksLoading, checksError, liveChecks, runChecks, canUpload, uploading, uploadMsg, doUpload,
+    anonimoMarcado, personalReleaseMarcado, elegirAnonimo, elegirPersonalRelease, opcionesTracker,
     batchQueue, batchIsEpisodes, batchItemTitle, batchPhase, batchIndex, batchResults,
     batchViewId, setBatchViewId, batchEnvChecks, batchContentChecks, batchChecksLoading, batchChecksIndex,
     batchChecksError, repetirComprobacionesTanda, uploadAllSeasons, uploadAllEpisodes, nombresTanda,

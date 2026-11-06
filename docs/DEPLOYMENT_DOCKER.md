@@ -147,7 +147,7 @@ Abre `http://<IP-del-servidor>:9494`. El asistente de configuración se abre sol
    WEB-DL y la necesita Uploadrr-EMU para la ficha.
 6. **qBittorrent**: URL del WebUI, tag, usuario y contraseña. Se puede omitir.
 7. **Proveedores de vídeo**: el orden de preferencia cuando el contenido está en varias plataformas.
-8. **Imágenes**: dónde se suben las capturas. imgbox va por defecto y no necesita key.
+8. **Imágenes**: dónde se suben las capturas. De entrada va Pixhost, que no necesita key; se puede quitar o cambiar por otro.
 9. **Completar.**
 
 Todo se puede cambiar después en Configuración. Luego, en el Panel, sincroniza la biblioteca (↻ Biblioteca) y las

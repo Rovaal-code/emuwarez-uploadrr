@@ -24,6 +24,7 @@ from ...services.uploadrr_contract import DEFAULT_ALLOWED_ROOTS
 from ...services.source_assistant import EMU_PROVIDERS
 from ...services.notification_center import EVENT_TYPES, channel_events
 from ...services.mkv_remux import modo_pistas, reordena
+from ...services.opciones_tracker import grupos_anonimos, grupos_personal_release, guardar_grupos
 from ...services.integration_tests import test_tmdb_connection, test_emuwarez_connection
 from ...database import get_setting_canonical
 
@@ -37,7 +38,7 @@ router = APIRouter(tags=["settings"])
 # partir de otros ajustes y las órdenes de un PUT. Lo comprueba
 # tests/test_ajustes_registro.py.
 FUERA_DEL_REGISTRO: frozenset[str] = frozenset({
-    "upload_tags", "provider_priority_order", "uploadrr_allowed_roots", "path_mappings",
+    "upload_tags", "upload_tags_personal_release", "upload_tags_anonimos", "provider_priority_order", "uploadrr_allowed_roots", "path_mappings",
     "image_hosts_available", "image_hosts_enabled", "image_host_keys_configured", "image_host_keys",
     "notify_event_types", "notify_ui_events", "notify_discord_events", "notify_telegram_events",
     # Calculado: hay host de qBittorrent o proxy de qui.
@@ -58,6 +59,9 @@ class SettingsResponse(BaseModel):
     default_release_tag: str
     # Todos los grupos de subida, el de por defecto el primero.
     upload_tags: list[str] = []
+    # Los grupos cuyas subidas van como Personal release / anónimas (services/opciones_tracker.py).
+    upload_tags_personal_release: list[str] = []
+    upload_tags_anonimos: list[str] = []
     provider_priority_order: list[str]
     tmdb_watch_region: str
     tmdb_localize_series_titles: bool = True
@@ -132,6 +136,8 @@ class SettingsUpdateRequest(BaseModel):
     clear: Optional[list[str]] = None
     default_release_tag: Optional[str] = None
     upload_tags: Optional[list[str]] = None
+    upload_tags_personal_release: Optional[list[str]] = None
+    upload_tags_anonimos: Optional[list[str]] = None
     provider_priority_order: Optional[list[str]] = None
     tmdb_watch_region: Optional[str] = None
     tmdb_localize_series_titles: Optional[bool] = None
@@ -308,6 +314,8 @@ def _build_response(conn) -> SettingsResponse:
     return SettingsResponse(
         **simples,
         upload_tags=_read_upload_tags(conn),
+        upload_tags_personal_release=grupos_personal_release(conn),
+        upload_tags_anonimos=grupos_anonimos(conn),
         provider_priority_order=priority,
         uploadrr_allowed_roots=allowed_roots,
         qbit_configured=qbit_configured,
@@ -443,6 +451,10 @@ def update_settings(
         if body.upload_tags is not None:
             tags = list(dict.fromkeys(t.strip() for t in body.upload_tags))
             set_setting(conn, "upload_tags", json.dumps(tags, ensure_ascii=False))
+
+        if body.upload_tags_personal_release is not None or body.upload_tags_anonimos is not None:
+            guardar_grupos(conn, personal_release=body.upload_tags_personal_release,
+                           anonimos=body.upload_tags_anonimos)
 
         if body.provider_priority_order is not None:
             codes = [c.strip() for c in body.provider_priority_order]

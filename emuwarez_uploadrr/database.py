@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 52
+SCHEMA_VERSION = 53
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1309,6 +1309,41 @@ def _migrate_upload_jobs_lote(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_upload_jobs_lote ON upload_jobs(lote_id)")
 
 
+def _migrate_upload_jobs_opciones_tracker(conn: sqlite3.Connection) -> None:
+    """Esquema 53: `anonimo` / `personal_release`, lo elegido a mano en el asistente para esa subida (NULL: lo que
+    digan los grupos de Configuración, services/opciones_tracker.py)."""
+    columnas = {fila[1] for fila in conn.execute("PRAGMA table_info(upload_jobs)")}
+    for nombre in ("anonimo", "personal_release"):
+        if nombre in columnas:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {nombre} INTEGER")
+        except sqlite3.OperationalError:
+            if nombre not in {fila[1] for fila in conn.execute("PRAGMA table_info(upload_jobs)")}:
+                raise
+
+
+def _migrate_imgbox_a_pixhost(conn: sqlite3.Connection) -> None:
+    """Esquema 53: imgbox deja de ir siempre el último (lleva meses caído) y pasa a ser un proveedor más, que se puede
+    quitar. Quien ya tenía la lista guardada lo tenía de último sin verlo en ella: se cambia por Pixhost, que tampoco
+    pide clave, para que su orden siga terminando en un proveedor sin clave. Sin lista guardada no se toca nada:
+    image_hosts.get_enabled_hosts ya da Pixhost de primeras. Solo pasa una vez (va con el salto de esquema), así
+    que lo que el usuario quite después se queda quitado."""
+    fila = conn.execute("SELECT value FROM settings WHERE key = 'imghost.enabled'").fetchone()
+    if fila is None:
+        return
+    try:
+        ids = json.loads(fila[0]) if fila[0] else []
+    except (TypeError, ValueError):
+        ids = []
+    if not isinstance(ids, list):
+        ids = []
+    ids = [i for i in ids if i != "imgbox"]
+    if "pixhost" not in ids:
+        ids.append("pixhost")
+    conn.execute("UPDATE settings SET value = ? WHERE key = 'imghost.enabled'", (json.dumps(ids),))
+
+
 def _migrate_quitar_registro_arr(conn: sqlite3.Connection) -> None:
     """Esquema 48: el registro entero de la cola y el historial de Radarr/Sonarr ya no se guarda (nadie lo leía, y
     trae el enlace del indexador con su clave, como el ?apikey= de Prowlarr). Se borra el que había."""
@@ -1894,6 +1929,8 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_perfil_historial(conn)
         _migrate_upload_jobs_pasos_uploadrr(conn)
         _migrate_upload_jobs_lote(conn)
+        _migrate_upload_jobs_opciones_tracker(conn)
+        _migrate_imgbox_a_pixhost(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

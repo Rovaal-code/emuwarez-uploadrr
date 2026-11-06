@@ -18,6 +18,7 @@ export function ResumenSubida({ a }: { a: Asistente }) {
     item, seasons, episodes, targetId, targetIsSeason, batchQueue, batchIsEpisodes, batchItemTitle,
     preview, seasonDisplayTitle, seasonPlan, fields, remuxPreview, remuxEdits, modoPistasAjuste,
     checks, batchContentChecks, nombresTanda, requestId, preselect,
+    anonimoMarcado, personalReleaseMarcado, elegirAnonimo, elegirPersonalRelease, opcionesTracker, uploading,
   } = a
   const esTanda = batchQueue.length > 1
   const ids = esTanda ? batchQueue : targetId != null ? [targetId] : []
@@ -89,6 +90,28 @@ export function ResumenSubida({ a }: { a: Asistente }) {
           <dd>
             {copia.texto}
             {copia.nota && <span className="asist-dato-nota">{copia.nota}</span>}
+          </dd>
+          <dt>Marcas</dt>
+          <dd>
+            <span className="asist-marcas">
+              <label className="asist-casilla">
+                <input type="checkbox" checked={anonimoMarcado} disabled={uploading}
+                  onChange={e => elegirAnonimo(e.target.checked)} />
+                Anónimo
+              </label>
+              <label className="asist-casilla">
+                <input type="checkbox" checked={personalReleaseMarcado} disabled={uploading}
+                  onChange={e => elegirPersonalRelease(e.target.checked)} />
+                Personal release
+              </label>
+            </span>
+            <span className="asist-dato-nota">
+              {!esTanda
+                ? 'De entrada, lo que tenga marcado el grupo en Configuración; aquí cambia solo esta subida.'
+                : opcionesTracker.anonimo === null && opcionesTracker.personalRelease === null
+                ? 'Sin tocarlas, cada subida lleva lo que tenga marcado su grupo en Configuración.'
+                : 'Lo que cambies aquí vale para todas las subidas de la tanda; lo que no toques sigue al grupo de cada una.'}
+            </span>
           </dd>
         </dl>
       </section>

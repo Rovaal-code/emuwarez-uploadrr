@@ -226,7 +226,8 @@ class SetupQbitRequest(BaseModel):
 
 
 class SetupImghostsRequest(BaseModel):
-    enabled: list[str] = []
+    # None: el paso se salta y se queda la lista que hay (en una instalación nueva, Pixhost).
+    enabled: Optional[list[str]] = None
     keys: dict = {}  # {host_id: api_key}
 
 
@@ -1338,6 +1339,10 @@ class UploadQueueBody(BaseModel):
     # La tanda del asistente a la que pertenece esta subida (12 hex que genera el
     # navegador); Subidas la agrupa como lote. None en una subida suelta.
     lote_id: Optional[str] = Field(None, pattern=PATRON_LOTE_ID)
+    # Las casillas Anónimo / Personal release del Resumen, si el usuario las cambió. None: lo que digan los grupos
+    # de Configuración para el tag de esta subida (services/opciones_tracker.py).
+    anonimo: Optional[bool] = None
+    personal_release: Optional[bool] = None
 
 
 class LoteResumen(BaseModel):

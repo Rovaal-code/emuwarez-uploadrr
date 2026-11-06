@@ -15,23 +15,58 @@ def db_conn(isolated_db):
     return conn
 
 
-def test_default_fallback_is_imgbox(db_conn):
-    assert ih.get_enabled_hosts(db_conn) == []
-    assert ih.fallback_order(db_conn) == ["imgbox"]
+def test_a_fresh_install_starts_with_pixhost(db_conn):
+    """imgbox lleva meses caído: una instalación nueva empieza con Pixhost, que tampoco pide clave."""
+    assert ih.get_enabled_hosts(db_conn) == ["pixhost"]
+    assert ih.fallback_order(db_conn) == ["pixhost"]
 
 
 def test_set_config_and_fallback_order(db_conn):
     ih.set_config(db_conn, ["imgbb", "lensdump"], {"imgbb": "KEY123"})
     assert ih.get_enabled_hosts(db_conn) == ["imgbb", "lensdump"]
-    # imgbox always appended last
-    assert ih.fallback_order(db_conn) == ["imgbb", "lensdump", "imgbox"]
+    # Nada se cuela por detrás: el orden es exactamente el guardado.
+    assert ih.fallback_order(db_conn) == ["imgbb", "lensdump"]
     assert ih.get_host_key(db_conn, "imgbb") == "KEY123"
 
 
-def test_set_config_dedupes_imgbox_last(db_conn):
-    ih.set_config(db_conn, ["imgbox", "imgbb"], {})
-    # imgbox not duplicated; still last
-    assert ih.fallback_order(db_conn) == ["imgbb", "imgbox"]
+def test_any_host_can_be_removed_even_the_default(db_conn):
+    """Pixhost es solo el de entrada: quitarlo (o quitarlos todos) se respeta."""
+    ih.set_config(db_conn, ["fastpic"], {})
+    assert ih.fallback_order(db_conn) == ["fastpic"]
+    ih.set_config(db_conn, [], {})
+    assert ih.get_enabled_hosts(db_conn) == []
+    assert ih.fallback_order(db_conn) == []
+
+
+def test_imgbox_is_an_ordinary_host_now(db_conn):
+    ih.set_config(db_conn, ["imgbox", "imgbb", "imgbox"], {})
+    assert ih.fallback_order(db_conn) == ["imgbox", "imgbb"]
+
+
+def test_migration_swaps_the_hidden_imgbox_for_pixhost(db_conn):
+    """Quien ya tenía lista guardada tenía imgbox de último sin verlo: pasa a terminar en Pixhost."""
+    import json
+    from emuwarez_uploadrr.database import _migrate_imgbox_a_pixhost
+    from emuwarez_uploadrr.services.settings import set_setting
+    set_setting(db_conn, "imghost.enabled", json.dumps(["imgbb", "imgbox"]))
+    _migrate_imgbox_a_pixhost(db_conn)
+    assert ih.get_enabled_hosts(db_conn) == ["imgbb", "pixhost"]
+    set_setting(db_conn, "imghost.enabled", "[]")
+    _migrate_imgbox_a_pixhost(db_conn)
+    assert ih.get_enabled_hosts(db_conn) == ["pixhost"]
+
+
+def test_migration_leaves_a_fresh_install_alone(db_conn):
+    from emuwarez_uploadrr.database import _migrate_imgbox_a_pixhost
+    from emuwarez_uploadrr.services.settings import setting_exists
+    _migrate_imgbox_a_pixhost(db_conn)
+    assert not setting_exists(db_conn, "imghost.enabled")
+
+
+def test_setup_skipped_keeps_pixhost(db_conn):
+    from emuwarez_uploadrr.web.services.setup_service import setup_imghosts
+    setup_imghosts(db_conn, None, {})
+    assert ih.get_enabled_hosts(db_conn) == ["pixhost"]
 
 
 def test_test_image_host_needs_key(db_conn):
@@ -68,7 +103,7 @@ def test_a_retired_host_left_in_the_settings_is_ignored(db_conn):
     from emuwarez_uploadrr.services.settings import set_setting
     set_setting(db_conn, "imghost.enabled", json.dumps(["ptpimg", "imgbb", "hamster"]))
     assert ih.get_enabled_hosts(db_conn) == ["imgbb"]
-    assert ih.fallback_order(db_conn) == ["imgbb", "imgbox"]
+    assert ih.fallback_order(db_conn) == ["imgbb"]
     assert ih.host_meta("ptpimg") is None
 
 

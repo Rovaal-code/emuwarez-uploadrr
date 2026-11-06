@@ -34,7 +34,8 @@ con [Uploadrr-EMU](https://github.com/Kisnov/Uploadrr-EMU), que va dentro de la 
   mejor, igual o peor, antes de pulsar «Subir». Opcionalmente renombra y reordena las pistas (cuatro modos, apagado
   por defecto). El detalle de una subida terminada abre por el resultado (enlace a eMuwarez, estado de siembra en
   qBittorrent y dónde se fue el tiempo); si falla, se reintenta desde el paso que falló. Progreso en
-  directo, límite de subidas en paralelo y varios grupos de subida guardados para el tag. «Seleccionar» en
+  directo, límite de subidas en paralelo y varios grupos de subida guardados para el tag; cada grupo se puede marcar
+  como Personal release o anónimo, y el Resumen de la subida deja cambiarlo para esa subida. «Seleccionar» en
   Biblioteca marca varias películas, series o temporadas y «Subir por lotes» las encola de una vez (una serie se
   abre en sus temporadas y solo entran como pack las que están listas; las demás se listan con su motivo), con su
   nombre, sus comprobaciones y lo que ya hay en eMuwarez de cada una; en el Panel, «Seleccionar» en «Listo para subir» hace lo mismo con las peticiones (cada subida, enlazada a su petición)

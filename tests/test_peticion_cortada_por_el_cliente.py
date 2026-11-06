@@ -67,3 +67,41 @@ def test_una_app_que_falla_de_verdad_sigue_siendo_error(client, caplog):
             pass
     errores = [r for r in caplog.records if r.name == "emuwarez.request" and r.levelno == logging.ERROR]
     assert errores and "EXCEPCIÓN" in errores[0].getMessage()
+
+
+def test_no_response_returned_con_el_cliente_conectado_sigue_siendo_error(client, caplog):
+    # El mismo mensaje sin corte del navegador es un fallo de la app: ERROR y se propaga, nunca un 204 callado.
+    async def sin_respuesta(scope, receive, send):
+        raise RuntimeError("No response returned.")
+
+    async def _llamar_conectado(app, path):
+        enviados = []
+
+        async def receive():
+            await asyncio.sleep(3600)  # el cliente sigue ahí: nunca llega http.disconnect
+            return {"type": "http.disconnect"}
+
+        async def send(m):
+            enviados.append(m)
+
+        scope = {
+            "type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"}, "http_version": "1.1",
+            "method": "GET", "scheme": "http", "path": path, "raw_path": path.encode(), "root_path": "",
+            "query_string": b"", "headers": [(b"host", b"testserver")], "client": ("127.0.0.1", 1),
+            "server": ("testserver", 80),
+        }
+        await asyncio.wait_for(app(scope, receive, send), timeout=5)
+        return enviados
+
+    app = _app_con_ruta(client, "/__sin", sin_respuesta)
+    propagada = False
+    with caplog.at_level(logging.DEBUG, logger="emuwarez.request"):
+        try:
+            enviados = asyncio.run(_llamar_conectado(app, "/__sin/x"))
+        except RuntimeError:
+            propagada = True
+            enviados = []
+    errores = [r for r in caplog.records if r.name == "emuwarez.request" and r.levelno == logging.ERROR]
+    assert errores and "EXCEPCIÓN" in errores[0].getMessage()
+    assert not any(m.get("status") == 204 for m in enviados if m.get("type") == "http.response.start")
+    assert propagada or any(m.get("status") == 500 for m in enviados if m.get("type") == "http.response.start")

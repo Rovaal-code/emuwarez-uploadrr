@@ -258,9 +258,9 @@
   .placeholder-card.tareas-tarjeta { padding: 16px 16px 16px 18px; }
   .tareas-cabecera { flex-direction: column; gap: 8px; }
   .tareas-datos { grid-template-columns: 1fr; gap: 8px; }
-  /* El historial en el móvil: sin la duración, el resumen tiene sitio para leerse en líneas de verdad. */
+  /* El historial en el móvil: la duración se queda (sirve para ver qué tarea va lenta), pero estrecha. */
   .tareas-modal-logs .data-table th:nth-child(3),
-  .tareas-modal-logs .data-table td:nth-child(3) { display: none; }
+  .tareas-modal-logs .data-table td:nth-child(3) { white-space: nowrap; padding-left: 4px; padding-right: 4px; }
   .tareas-modal-logs .data-table td.tareas-log-resumen { min-width: 14ch; }
   .tareas-modal-logs .data-table td.tareas-log-fecha { white-space: normal; }
 }

@@ -175,6 +175,8 @@ def build_uploadrr_emu_command(
     episode: Optional[int | str] = None,
     release_format: Optional[str] = None,
     reanudar: bool = False,
+    anonimo: bool = False,
+    personal_release: bool = False,
 ) -> list[str]:
     """Build the real Uploadrr-EMU argv. Always a list[str], never a shell string.
 
@@ -182,6 +184,8 @@ def build_uploadrr_emu_command(
 
     `reanudar` añade `--resume`: Uploadrr-EMU conserva y reutiliza lo que dejó hecho en su `tmp/<nombre>` (capturas,
     torrent). Sin él lo borra al empezar, para no mezclar un torrent o unas capturas de otra versión del fichero.
+
+    `anonimo` / `personal_release` añaden `-a` / `-pr` (services/opciones_tracker.py decide cuándo).
 
     Only accepts prepared_path (or applied_path passed as prepared_path by
     the caller) — there is intentionally no source_path parameter, so the
@@ -212,6 +216,10 @@ def build_uploadrr_emu_command(
     # solo vídeo por ese fichero y el torrent se llama como él, no como el release.
     if season is not None and season != "" and (episode is None or episode == ""):
         cmd.append("-fd")
+    if anonimo:
+        cmd.append("-a")
+    if personal_release:
+        cmd.append("-pr")
     if reanudar:
         cmd.append("--resume")
     return cmd

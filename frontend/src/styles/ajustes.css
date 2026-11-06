@@ -885,6 +885,22 @@
   font-weight: 500;
 }
 
+/* Personal release / Anónimo de un grupo. */
+.aj-grupos__marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (max-width: 560px) {
+  .aj-grupos__fila { flex-wrap: wrap; }
+  .aj-grupos__nombre { flex-basis: 100%; }
+}
+
 /* Estado de una clave o secreto guardado, y resultado de una prueba de conexión. */
 .aj-estado-secreto {
   display: inline-flex;

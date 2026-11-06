@@ -89,8 +89,8 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         lines, _msg = stage_blu_api_off(lines)
         changed = True
         if img_hosts:
-            # Always staged (imgbox is always in fallback_order()'s result,
-            # even with nothing else enabled) — this is what makes the
+            # Staged whenever the user has at least one host (the pre-upload
+            # checks stop an upload with none) — this is what makes the
             # configured preference (e.g. Pixhost) actually reach Uploadrr-EMU
             # instead of it silently defaulting to its own img_hosts order.
             lines, _msg = stage_image_hosts(lines, img_hosts=img_hosts, api_keys=img_api_keys)

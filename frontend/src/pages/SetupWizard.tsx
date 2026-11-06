@@ -264,7 +264,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   useEffect(() => {
     if (step === 'imagehosts' && imgAvailable.length === 0) {
-      fetchSettings().then(s => setImgAvailable(s.image_hosts_available)).catch(() => { /* ignore */ })
+      // Con la lista que ya hay (en una instalación nueva, Pixhost): el usuario la cambia o la deja.
+      fetchSettings().then(s => {
+        setImgAvailable(s.image_hosts_available)
+        setImgEnabled(s.image_hosts_enabled ?? [])
+      }).catch(() => { /* ignore */ })
     }
   }, [step, imgAvailable.length])
 
@@ -928,14 +932,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
           {/* Image hosts step */}
           {step === 'imagehosts' && (() => {
-            // imgbox no se ordena: la subida siempre lo prueba el último (fallback_order).
-            const activos = imgEnabled.filter(id => id !== 'imgbox' && imgAvailable.some(h => h.id === id))
+            const activos = imgEnabled.filter(id => imgAvailable.some(h => h.id === id))
             const resto = imgAvailable.filter(h => !activos.includes(h.id))
-              .sort((a, b) => Number(b.id === 'imgbox') - Number(a.id === 'imgbox'))
             const fila = (id: string, asa?: DragHandleProps) => {
               const h = imgAvailable.find(x => x.id === id); if (!h) return null
               const enabled = imgEnabled.includes(h.id)
-              const isDefault = h.id === 'imgbox'
               const t = imgTest[h.id]
               return (
                 <div className="setup-host">
@@ -949,13 +950,12 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                         style={asa.style}
                       ><DragHandleIcon /></HoverTitle>
                     ) : <span className="setup-hueco" />}
-                    <input type="checkbox" aria-label={`Usar ${h.label}`} checked={enabled || isDefault} disabled={isDefault}
+                    <input type="checkbox" aria-label={`Usar ${h.label}`} checked={enabled}
                       onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [h.id, ...p])} />
                     <Favicon domain={domainOf(h.url)} size={14} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={14} />} />
                     <span className="setup-t13">{h.label}</span>
-                    {isDefault && <span className="badge status-available">por defecto</span>}
                     {h.needs_key && <span className="badge nom-na">API key</span>}
-                    {(enabled || isDefault) && (
+                    {enabled && (
                       <button className="btn btn-secondary btn-sm setup-probar"
                         onClick={() => handleTestImghost(h.id)} disabled={imgTesting === h.id} type="button">
                         {imgTesting === h.id ? 'Probando…' : 'Probar'}
@@ -974,7 +974,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
             return (
             <>
               <div className="wizard-step-desc">
-                Dónde suben las capturas que acompañan al torrent. Se prueban en este orden: arrastra los activos para reordenarlos, o usa las flechas desde su asa. <strong>imgbox</strong>, sin key, va siempre el último.
+                Dónde suben las capturas que acompañan al torrent. Se prueban en este orden: arrastra los activos para reordenarlos, o usa las flechas desde su asa. De entrada va <strong>Pixhost</strong>, que no pide key; puedes quitarlo o añadir otros.
               </div>
               <div className="wizard-fields setup-gap-8">
                 <SortableList etiqueta={id => imgAvailable.find(h => h.id === id)?.label ?? id} ids={activos} onChange={setImgEnabled} gap={8}

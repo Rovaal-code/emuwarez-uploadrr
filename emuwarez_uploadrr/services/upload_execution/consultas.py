@@ -242,6 +242,9 @@ def build_uploadrr_execution_command(job: dict, conn=None) -> dict:
                 episode=episode,
                 release_format=cmd_data.get("release_format"),
                 reanudar=bool(job.get("reanuda_uploadrr")),
+                # Los decidió el paso que dejó el trabajo en 'ready' (upload_queue._marcar_lista).
+                anonimo=bool(cmd_data.get("anon")),
+                personal_release=bool(cmd_data.get("personal_release")),
             )
             executable = full_argv[0]
             args = full_argv[1:]

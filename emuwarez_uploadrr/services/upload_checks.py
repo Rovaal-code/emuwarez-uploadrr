@@ -343,16 +343,19 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
                    bool(r.get("ok")), r.get("message", "")):
             return done()
 
-    # 4. Image hosts — at least one reachable (imgbox tried last).
+    # 4. Image hosts — at least one reachable, in the user's order.
     reachable = None
-    for host in fallback_order(conn):
+    hosts = fallback_order(conn)
+    for host in hosts:
         if test_image_host(host, get_host_key(conn, host)).get("ok"):
             reachable = host
             break
     label = host_meta(reachable)["label"] if reachable else None
     if not add("imghosts", "Repo de imágenes disponible", "Repo de imágenes no disponible",
                reachable is not None,
-               f"Responde: {label}" if reachable else "Ningún host de imágenes responde"):
+               f"Responde: {label}" if reachable
+               else "Ningún host de imágenes responde" if hosts
+               else "No hay ningún proveedor de imágenes: añade uno en Configuración"):
         return done()
 
     # 5. eMuwarez — last, so we don't hit it unless everything else passed.

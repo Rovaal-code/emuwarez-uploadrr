@@ -1,7 +1,9 @@
 """Image-host configuration for the screenshots Uploadrr uploads with the
-torrent. imgbox is the always-available default (no API key). The user can
-enable others (some need an API key) as an ordered fallback list; imgbox is
-always tried last.
+torrent. The user picks the hosts (some need an API key) as an ordered
+fallback list. On a fresh install the list is just Pixhost (no API key);
+after that it is exactly what the user saved: any host can be removed or
+replaced, Pixhost included, and none is tried behind the user's back.
+(Imgbox used to be the forced last fallback; it has been down for months.)
 
 Config is stored in the app settings:
 - imghost.enabled : JSON ordered list of host ids the user enabled.
@@ -47,7 +49,9 @@ IMAGE_HOSTS: list[dict[str, Any]] = [
 # base pero son inertes: get_enabled_hosts y set_config filtran por _BY_ID,
 # así que un id que ya no existe se cae solo.
 _BY_ID = {h["id"]: h for h in IMAGE_HOSTS}
-DEFAULT_HOST = "imgbox"
+# La lista de una instalación nueva, hasta que el usuario guarde la suya.
+DEFAULT_HOST = "pixhost"
+DEFAULT_ENABLED: tuple[str, ...] = (DEFAULT_HOST,)
 
 
 def host_meta(host_id: str) -> Optional[dict]:
@@ -55,9 +59,14 @@ def host_meta(host_id: str) -> Optional[dict]:
 
 
 def get_enabled_hosts(conn: sqlite3.Connection) -> list[str]:
-    """The user's enabled hosts, in fallback order. Never raises."""
+    """The user's enabled hosts, in fallback order. Never raises.
+
+    Sin ajuste guardado (instalación nueva): DEFAULT_ENABLED. Una lista guardada vacía se respeta: el usuario las
+    quitó todas."""
     from ..database import get_setting_canonical
     raw = get_setting_canonical(conn, "imghost.enabled")
+    if raw is None:
+        return list(DEFAULT_ENABLED)
     try:
         ids = json.loads(raw) if raw else []
     except (ValueError, TypeError):
@@ -71,11 +80,10 @@ def get_host_key(conn: sqlite3.Connection, host_id: str) -> Optional[str]:
 
 
 def fallback_order(conn: sqlite3.Connection) -> list[str]:
-    """Hosts to try when uploading images: the enabled ones in order, then
-    imgbox last as the no-key fallback (deduplicated)."""
-    order = [h for h in get_enabled_hosts(conn) if h != DEFAULT_HOST]
-    order.append(DEFAULT_HOST)
-    return order
+    """Hosts to try when uploading images: the enabled ones, in order and
+    deduplicated. Empty if the user removed them all (the pre-upload check
+    then says so instead of uploading without screenshots)."""
+    return list(dict.fromkeys(get_enabled_hosts(conn)))
 
 
 def set_config(conn: sqlite3.Connection, enabled: list[str], keys: Optional[dict[str, str]] = None) -> None:

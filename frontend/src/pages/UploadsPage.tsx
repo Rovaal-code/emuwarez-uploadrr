@@ -383,16 +383,20 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [cargado, setCargado] = useState(false)
   // Por qué no se pudo reintentar: se enseña en el detalle y, si se pulsó en la lista, sobre la tabla.
   const [retryError, setRetryError] = useState<string | null>(null)
+  // Si cancelar falla se dice sobre la tabla o en el detalle: antes se tragaba el error y el botón parecía no hacer nada.
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
   // Keeps /uploads/:id in sync with whichever job's detail page is open.
   function openUpload(id: number) {
     pushDetailPath('uploads', id)
     setRetryError(null)
+    setCancelError(null)
     setSelectedJobId(id)
   }
   function closeUpload() {
     closeDetailPath('uploads')
     setRetryError(null)
+    setCancelError(null)
     setSelectedJobId(null)
   }
   const [startJob, setStartJob] = useState<UploadJob | null>(null)
@@ -577,8 +581,6 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     if (job?.status === 'preparing') { setConfirmCancel(job); return }
     await doCancel(jobId)
   }
-  // Si cancelar falla se dice sobre la tabla: antes se tragaba el error y el botón parecía no hacer nada.
-  const [cancelError, setCancelError] = useState<string | null>(null)
   const doCancel = async (jobId: number) => {
     setConfirmCancel(null)
     setCancelError(null)
@@ -782,7 +784,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           onOpenLibraryItem={goToLibraryItem}
           onVerLote={verLote}
           seeding={seeding}
-          retryError={retryError}
+          retryError={retryError ?? cancelError}
         />
         {modals}
       </div>

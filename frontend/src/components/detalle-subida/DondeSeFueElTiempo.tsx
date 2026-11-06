@@ -2,9 +2,8 @@ import type { UploadJob } from '../../types/api'
 import { lineaDeTiempo } from '../../utils/lineaDeTiempo'
 import { formatSecondsHM } from '../../utils/uploadStatus'
 
-// Cuánto tardó cada fase de una subida terminada. La barra es proporcional al total y el tiempo va siempre en
-// texto, así que no depende del color. Una fase sin marcas de tiempo enseña solo su estado. Sin fases no sale: el
-// recuadro quedaba vacío con solo el total, que ya da la tarjeta del resultado.
+// Cuánto tardó cada fase de una subida terminada: barra proporcional al total y el tiempo en texto (no depende del color).
+// Una fase sin marcas de tiempo enseña solo su estado; sin fases no sale (el total ya está en la tarjeta del resultado).
 export function DondeSeFueElTiempo({ job }: { job: UploadJob }) {
   const { tramos, totalSegundos } = lineaDeTiempo(job)
   if (tramos.length === 0) return null

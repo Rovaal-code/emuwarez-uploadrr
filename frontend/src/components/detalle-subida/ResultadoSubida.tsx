@@ -35,7 +35,7 @@ function Espera() {
 }
 
 // Una consulta (nomenclatura, pistas, verificación): con datos abre su detalle. Sin datos, mientras la subida sigue
-// viva está «Pendiente»; terminada ya no lo estará nunca, así que dice «Sin datos» (o «No se llegó» si falló antes) y
+// viva está «Pendiente»; terminada ya no lo estará nunca, así que dice «Sin datos» (falle o no: no consta si la consulta llegó a hacerse) y
 // no es un botón que abre un recuadro vacío.
 function ConsultaDato({ hayDatos, texto, sinDatos, titulo, espera, alerta = false, onAbrir }: {
   hayDatos: boolean
@@ -81,7 +81,7 @@ export function ResultadoSubida({ job, seeding, retryError, pasos, onStart, onRe
   const checksListos = job.checks_snapshot?.ready
   const checksFallan = job.checks_snapshot != null && checksListos === false
   const terminada = ['completed', 'failed', 'cancelled'].includes(job.status)
-  const sinDatos = !terminada ? null : job.status === 'failed' ? 'No se llegó' : 'Sin datos'
+  const sinDatos = terminada ? 'Sin datos' : null
   const globalPct = job.progress?.global_pct ?? 0
   const reintentos = job.retry_count ?? 0
 

@@ -555,14 +555,7 @@ input.sub-confirmar.sub-confirmar-ok:not([type="checkbox"]):not([type="radio"]):
   border-radius: 6px;
 }
 
-/* Con poca anchura (móvil) cada subida es una tarjeta, con el mismo DOM de la fila:
-     1. título (dos líneas como mucho) y el año … la única acción que toca (Reintentar o Cancelar, de 44 px);
-     2. el estado y su pie (barra y fase, la duración o el motivo del fallo);
-     3. en gris: tipo · origen · «hace 2 h», el chip del lote, los intentos anteriores y el enlace a eMuwarez.
-   Grupo, petición, seeding, las fechas exactas, Borrar y Rellenar petición están en el detalle. La celda del título
-   y sus envoltorios pasan a `display: contents` para que sus piezas se repartan por las líneas de la tarjeta, y el
-   título cubre la tarjeta entera (::after) para que toda ella abra el detalle. La cabecera se queda como una tira con
-   los filtros de Tipo y Estado. */
+/* Móvil: cada subida es una tarjeta de tres líneas (título y acción; estado; tipo · origen · fecha y chips); el resto, en el detalle. */
 @media (max-width: 760px) {
   .sub-scroll .data-table,
   .sub-scroll .data-table tbody,

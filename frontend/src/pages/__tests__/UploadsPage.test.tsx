@@ -399,6 +399,27 @@ describe('lista virtualizada pasadas las 50', () => {
   })
 })
 
+describe('cancelar desde el detalle de una subida', () => {
+  it('si falla, lo dice en el detalle y al volver a la lista no queda un aviso viejo', async () => {
+    const VIVA = trabajo({ id: 22, status: 'running', title: 'Viva', media_type: 'movie' })
+    vi.mocked(getUploads).mockResolvedValue([VIVA])
+    vi.mocked(countUploads).mockResolvedValue(1)
+    vi.mocked(getUploadJob).mockResolvedValue({ ...VIVA, display_title: 'Viva' })
+    vi.mocked(cancelUploadJob).mockRejectedValue(new Error('El trabajo ya terminó'))
+    await pagina()
+    await pulsar(filaDe('Viva').querySelector('.sub-titulo')!)
+    await esperar(() => document.querySelector('.dsub-resultado, .dsub-cabecera, [class*="dsub"]') !== null)
+    const cancelar = [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === 'Cancelar')!
+    await pulsar(cancelar)
+    const confirmar = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(b => /Cancelar subida|Sí, cancelar|Cancelar la subida/.test(b.textContent ?? ''))
+    if (confirmar) await pulsar(confirmar)
+    await esperar(() => texto().includes('No se pudo cancelar'))
+    await pulsar(boton('Volver') ?? [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => /Volver|Subidas/.test(b.getAttribute('aria-label') ?? b.textContent ?? ''))!)
+    await esperar(() => document.querySelectorAll('tbody tr').length > 0)
+    expect(document.querySelector('.sub-seccion [role="alert"]')).toBeNull()
+  })
+})
+
 describe('«Ver el lote» desde el detalle de una subida', () => {
   it('cierra el detalle y filtra la tabla por su lote', async () => {
     vi.mocked(getUploadJob).mockResolvedValue({ ...TANDA, display_title: 'Serie (2024) - S01E01' })

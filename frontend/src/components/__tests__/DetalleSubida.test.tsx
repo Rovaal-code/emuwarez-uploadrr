@@ -107,7 +107,7 @@ describe('detalle de una subida completada', () => {
     expect(consultas.querySelector('dd button')).toBeNull()
     await desmontar()
     await montar(pagina({ ...fallida, remux_snapshot: null, nomenclature_snapshot: null, checks_snapshot: null }))
-    expect([...document.querySelectorAll('.dsub-consultas dd')].map(dd => dd.textContent)).toEqual(['No se llegó', 'No se llegó', 'No se llegó'])
+    expect([...document.querySelectorAll('.dsub-consultas dd')].map(dd => dd.textContent)).toEqual(['Sin datos', 'Sin datos', 'Sin datos'])
   })
 
   it('con el total pero sin fases, «Dónde se fue el tiempo» no sale vacío', async () => {

@@ -2,7 +2,7 @@
 // tanda, las comprobaciones de cada uno, las comunes a todos, y «Subir todas/todos»
 // con su resultado. Mismo aspecto que el de uno solo, con un desplegable arriba a
 // la derecha para recorrer las comprobaciones de los elementos.
-import { CheckRow } from './piezas'
+import { CheckRow, MarcoPaso } from './piezas'
 import { ResumenSubida } from './ResumenSubida'
 import type { Asistente } from './useAsistente'
 
@@ -13,23 +13,50 @@ export function PasoSubidaTanda({ a }: { a: Asistente }) {
     batchChecksError, repetirComprobacionesTanda,
     recalculandoIdioma, setStep, uploadAllEpisodes, uploadAllSeasons, onDone, onNavigate, onClose,
   } = a
+  // El pie, según la fase: antes de subir, Volver y «Subir todos»; al terminar, ir a Subidas; mientras sube, ninguno.
+  const viewId = batchViewId ?? batchQueue[0]
+  const blocked = batchQueue.filter(id => batchContentChecks.get(id)?.ready === false)
+  const completas = !!batchEnvChecks && batchQueue.every(id => batchContentChecks.has(id))
+  const envReady = batchEnvChecks?.ready === true
+  const resumen = !batchChecksLoading && (completas || !!batchChecksError)
+  const todoBien = !batchChecksError && blocked.length === 0 && envReady
+  // El veredicto va en el pie, junto al botón que lo obedece; la región existe siempre para que el lector lo anuncie.
+  const veredicto = !resumen ? ''
+    : batchChecksError ? `✗ No se pudieron completar las comprobaciones: ${batchChecksError}`
+    : !envReady ? '✗ La subida no se puede realizar'
+    : blocked.length === 0 ? `✓ Todo listo: ${batchQueue.length} ${batchIsEpisodes ? 'capítulos' : 'temporadas'}`
+    : `✗ ${blocked.length} de ${batchQueue.length} no se ${blocked.length === 1 ? 'puede' : 'pueden'} subir`
+  const pie = batchPhase === 'idle' ? (
+    <>
+      <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">← Volver</button>
+      <div role="status" className={`asist-pie-estado ${resumen ? (todoBien ? 'asist-ok' : 'asist-error') : ''}`}>{veredicto}</div>
+      <button
+        className="btn btn-primary"
+        onClick={batchIsEpisodes ? uploadAllEpisodes : uploadAllSeasons}
+        disabled={batchChecksLoading || recalculandoIdioma || !!batchChecksError || !completas || !envReady || blocked.length === batchQueue.length}
+        type="button"
+      >
+        {batchIsEpisodes ? 'Subir todos' : 'Subir todas'}
+      </button>
+    </>
+  ) : batchPhase === 'done' ? (
+    <button className="btn btn-primary" onClick={() => { onDone?.(); onNavigate?.('uploads'); onClose() }} type="button">
+      Ir a Subidas
+    </button>
+  ) : undefined
   return (
-    <div className="modal-body">
+    <MarcoPaso pie={pie} finPie={batchPhase === 'done'}>
       {batchPhase === 'idle' && (() => {
-        const viewId = batchViewId ?? batchQueue[0]
         const contentChecks = batchContentChecks.get(viewId)
-        const blocked = batchQueue.filter(id => batchContentChecks.get(id)?.ready === false)
-        // Sin resultado no hay nada que dé por bueno: mientras falte alguno no se sube.
-        const completas = !!batchEnvChecks && batchQueue.every(id => batchContentChecks.has(id))
-        const envReady = batchEnvChecks?.ready === true
-        const resumen = !batchChecksLoading && (completas || !!batchChecksError)
         return (
           <>
             <ResumenSubida a={a} />
 
             <div className="asist-selector-fila asist-mt-14">
+              <span className="asist-etiqueta-selector" id="asist-comprobaciones-de">Comprobaciones de</span>
               <select
                 className="form-input form-select asist-select-auto"
+                aria-labelledby="asist-comprobaciones-de"
                 value={viewId} onChange={e => setBatchViewId(Number(e.target.value))}
               >
                 {batchQueue.map(id => {
@@ -62,20 +89,6 @@ export function PasoSubidaTanda({ a }: { a: Asistente }) {
                 </>
               )}
 
-              {/* La región existe siempre: así el lector anuncia el veredicto cuando llega. */}
-              <div role="status">
-                {resumen && (
-                  <div className={!batchChecksError && blocked.length === 0 && envReady ? 'asist-mt-14 asist-negrita asist-ok' : 'asist-mt-14 asist-negrita asist-error'}>
-                    {batchChecksError
-                      ? `✗ No se pudieron completar las comprobaciones: ${batchChecksError}`
-                      : !envReady
-                      ? '✗ La subida no se puede realizar'
-                      : blocked.length === 0
-                      ? `✓ Todo listo: ${batchQueue.length} ${batchIsEpisodes ? 'capítulos' : 'temporadas'}`
-                      : `✗ ${blocked.length} de ${batchQueue.length} no se ${blocked.length === 1 ? 'puede' : 'pueden'} subir`}
-                  </div>
-                )}
-              </div>
               {/* Repite solo lo que falló o no llegó; lo elegido y editado se queda. */}
               {resumen && (!!batchChecksError || !envReady || blocked.length > 0) && (
                 <button className="btn btn-secondary btn-sm asist-mt-12 asist-t12" onClick={repetirComprobacionesTanda} type="button">
@@ -98,17 +111,6 @@ export function PasoSubidaTanda({ a }: { a: Asistente }) {
               </div>
             )}
 
-            <div className="asist-pie">
-              <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">← Volver</button>
-              <button
-                className="btn btn-primary"
-                onClick={batchIsEpisodes ? uploadAllEpisodes : uploadAllSeasons}
-                disabled={batchChecksLoading || recalculandoIdioma || !!batchChecksError || !completas || !envReady || blocked.length === batchQueue.length}
-                type="button"
-              >
-                {batchIsEpisodes ? 'Subir todos' : 'Subir todas'}
-              </button>
-            </div>
           </>
         )
       })()}
@@ -135,13 +137,8 @@ export function PasoSubidaTanda({ a }: { a: Asistente }) {
               ))}
             </div>
           )}
-          <div className="asist-fila-centro">
-            <button className="btn btn-primary" onClick={() => { onDone?.(); onNavigate?.('uploads'); onClose() }} type="button">
-              Ir a Subidas
-            </button>
-          </div>
         </>
       )}
-    </div>
+    </MarcoPaso>
   )
 }

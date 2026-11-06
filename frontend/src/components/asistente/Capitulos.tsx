@@ -27,6 +27,7 @@ export function EpisodePicker<T extends { episode_id: number; display_title?: st
     <div className="asist-selector-fila">
       <select
         className="form-input form-select asist-select-auto"
+        aria-label="Capítulo"
         value={currentId} onChange={e => onChange(Number(e.target.value))}
       >
         {episodes.map(ep => (

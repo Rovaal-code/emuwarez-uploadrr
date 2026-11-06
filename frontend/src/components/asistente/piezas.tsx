@@ -8,6 +8,23 @@ import { InfoIcon } from '../InfoIcon'
 import { Tooltip } from '../Tooltip'
 import { FIELD_INFO } from './constantes'
 
+// El marco de cada paso: el cuerpo hace scroll y el pie (Volver, Continuar, Subir) queda siempre a la vista, a
+// cualquier alto de ventana. El pie va fuera del cuerpo, no pegado a él con sticky: así nunca tapa lo que se
+// está leyendo.
+export function MarcoPaso({ pie, finPie, children }: {
+  pie?: React.ReactNode
+  // El pie lleva solo acciones a la derecha (paso 0, o el final de una tanda).
+  finPie?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="asist-seccion">
+      <div className="modal-body asist-cuerpo">{children}</div>
+      {pie && <div className={finPie ? 'asist-pie asist-pie-fin' : 'asist-pie'}>{pie}</div>}
+    </div>
+  )
+}
+
 // Shown in place of a table whose data isn't loaded yet, so a slow fetch (e.g.
 // mkvmerge/MediaInfo reading a real file over a remote mount) never looks like
 // the UI has frozen — always show a spinner instead of a blank area.
@@ -70,6 +87,7 @@ export function BotonComparacionSource({ comparison, representativo, onClick }: 
       <button
         type="button"
         onClick={onClick}
+        aria-label="Comparar el source: nombre del archivo, Radarr/Sonarr y MediaInfo"
         className="asist-boton-source"
       >
         <span

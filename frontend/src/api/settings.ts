@@ -7,6 +7,9 @@ export type UploadrrRuntimeType = 'uploadrr_emu' | 'uploadrr_generic'
 export interface SettingsData {
   default_release_tag: string
   upload_tags?: string[]
+  // Los grupos cuyas subidas van como Personal release / anónimas.
+  upload_tags_personal_release?: string[]
+  upload_tags_anonimos?: string[]
   provider_priority_order: string[]
   tmdb_watch_region: string
   tmdb_localize_series_titles: boolean
@@ -61,6 +64,8 @@ export interface SettingsUpdatePayload {
   clear?: string[]
   default_release_tag?: string
   upload_tags?: string[]
+  upload_tags_personal_release?: string[]
+  upload_tags_anonimos?: string[]
   provider_priority_order?: string[]
   tmdb_watch_region?: string
   tmdb_localize_series_titles?: boolean

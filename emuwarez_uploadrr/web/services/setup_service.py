@@ -149,10 +149,10 @@ def setup_imghosts(
     enabled: Optional[list] = None,
     keys: Optional[dict] = None,
 ) -> None:
-    """Store the image-host selection. Skippable — imgbox is always the default
-    fallback, so an empty selection is fine."""
-    from ...services.image_hosts import set_config
-    set_config(conn, enabled or [], keys or {})
+    """Store the image-host selection. Skippable: saltarse el paso (enabled None) deja la lista de una instalación
+    nueva (Pixhost); una lista vacía enviada a propósito se guarda tal cual."""
+    from ...services.image_hosts import get_enabled_hosts, set_config
+    set_config(conn, get_enabled_hosts(conn) if enabled is None else enabled, keys or {})
     _avanzar_paso(conn, "complete")
 
 

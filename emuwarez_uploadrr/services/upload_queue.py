@@ -106,6 +106,8 @@ def _insert_and_start_queued_job(
     season_overrides: dict | None = None,
     reutiliza_preparacion: bool = False,
     lote_id: str | None = None,
+    anonimo: bool | None = None,
+    personal_release: bool | None = None,
 ) -> dict:
     """Shared by queue_upload_for_item() and queue_retry_for_job(): insert a
     fresh 'queued' row for `item` and start its pipeline right away.
@@ -144,6 +146,9 @@ def _insert_and_start_queued_job(
     tal cual estaba al encolar (ver _foto_de_la_peticion).
 
     `lote_id` — la etiqueta del lote o tanda a la que pertenece (ver services/lotes.py); None si es suelta.
+
+    `anonimo`/`personal_release` — lo elegido a mano en el Resumen del asistente; None deja que lo decidan los
+    grupos de Configuración cuando el trabajo quede listo (_marcar_lista).
     """
     now_iso = _now_iso()
 
@@ -181,8 +186,8 @@ def _insert_and_start_queued_job(
                 retry_of_job_id, retry_count, checks_snapshot_json,
                 nomenclature_proposal_id, nomenclature_snapshot_json,
                 remux_overrides_json, remux_snapshot_json, season_overrides_json,
-                reutiliza_preparacion, lote_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                reutiliza_preparacion, lote_id, anonimo, personal_release, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item["id"], request_item_id, request_title, request_url,
@@ -198,6 +203,8 @@ def _insert_and_start_queued_job(
                 json.dumps(season_overrides, ensure_ascii=False) if season_overrides else None,
                 1 if reutiliza_preparacion else 0,
                 lote_id,
+                None if anonimo is None else int(bool(anonimo)),
+                None if personal_release is None else int(bool(personal_release)),
                 now_iso, now_iso,
             ),
         )
@@ -278,6 +285,8 @@ def queue_upload_for_item(
     title_override: str | None = None,
     idiomas_audio: dict | None = None,
     lote_id: str | None = None,
+    anonimo: bool | None = None,
+    personal_release: bool | None = None,
     conn=None,
 ) -> dict:
     """Encola la subida de un elemento. `lote_id`: la etiqueta de la tanda o lote al que pertenece (no se hereda
@@ -328,6 +337,7 @@ def queue_upload_for_item(
             retry_of_job_id=retry_of_job_id, retry_count=retry_count,
             season_overrides=season_overrides,
             lote_id=lote_id,
+            anonimo=anonimo, personal_release=personal_release,
         )
     finally:
         if own:
@@ -402,6 +412,9 @@ def queue_retry_for_job(original_job_id: int, conn=None, *, desde_el_principio: 
             # El reintento sigue en el mismo lote (el camino heredado retry_upload_job no lo hereda a propósito:
             # crea filas 'ready' que no cuentan como activas).
             lote_id=original.get("lote_id"),
+            # Lo elegido a mano para la subida original sigue valiendo para su reintento.
+            anonimo=None if original.get("anonimo") is None else bool(original.get("anonimo")),
+            personal_release=None if original.get("personal_release") is None else bool(original.get("personal_release")),
         )
     finally:
         if own:
@@ -712,7 +725,7 @@ def _populate_ready(job_id: int, item_id: int, conn, season_overrides: dict | No
             "release_format": plan.get("source"),
         }
         command_preview = build_uploadrr_command_preview(synthetic_item, None, None, conn=conn)
-        return _marcar_lista(job_id, command_preview, conn)
+        return _marcar_lista(job_id, command_preview, conn, grupo=plan.get("release_tag"))
 
     proposal_row = conn.execute(
         "SELECT * FROM nomenclature_proposals WHERE library_item_id = ? AND status != 'expired' "
@@ -727,10 +740,19 @@ def _populate_ready(job_id: int, item_id: int, conn, season_overrides: dict | No
         return False
 
     command_preview = build_uploadrr_command_preview(item, proposal, None, conn=conn)
-    return _marcar_lista(job_id, command_preview, conn)
+    return _marcar_lista(job_id, command_preview, conn, grupo=(proposal or {}).get("release_tag"))
 
 
-def _marcar_lista(job_id: int, command_preview: dict, conn) -> bool:
+def _opciones_elegidas(job_id: int, conn) -> dict:
+    """Anónimo / Personal release elegidos a mano en el asistente para este trabajo (None: lo que diga el grupo)."""
+    fila = conn.execute("SELECT anonimo, personal_release FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+    if not fila:
+        return {}
+    return {"anonimo": None if fila[0] is None else bool(fila[0]),
+            "personal_release": None if fila[1] is None else bool(fila[1])}
+
+
+def _marcar_lista(job_id: int, command_preview: dict, conn, *, grupo: str | None = None) -> bool:
     """Deja el trabajo en 'ready' para arrancar Uploadrr.
 
     No toca prepared_path: el paso anterior ya dejó ahí el enlace de la
@@ -739,7 +761,20 @@ def _marcar_lista(job_id: int, command_preview: dict, conn) -> bool:
     de Sonarr ("Season 1") en vez de la del release.
 
     Devuelve False si el usuario canceló mientras tanto: no se resucita.
+
+    Aquí se decide también si va anónima y si es Personal release (`grupo`: el tag del nombre ya aplicado), y se
+    guarda con el resto del comando: es lo que lee la ejecución (upload_execution.consultas).
     """
+    from .opciones_tracker import opciones_de_subida
+    from .uploadrr_contract import RUNTIME_EMU, render_command_preview
+    opciones = opciones_de_subida(conn, grupo, **_opciones_elegidas(job_id, conn))
+    command_preview = {**command_preview, **opciones}
+    if command_preview.get("runtime_type") == RUNTIME_EMU and isinstance(command_preview.get("command_args"), list):
+        # La vista previa del comando (detalle de la subida) enseña las mismas banderas que se lanzarán.
+        extra = (["-a"] if opciones["anon"] else []) + (["-pr"] if opciones["personal_release"] else [])
+        if extra:
+            command_preview["command_args"] = [*command_preview["command_args"], *extra]
+            command_preview["command_preview"] = render_command_preview(command_preview["command_args"])
     return escribir_estado(
         job_id, salvo=("cancelled", "failed"), status="ready", stage="preflight",
         uploadrr_command_json=json.dumps(command_preview, ensure_ascii=False),

@@ -25,6 +25,12 @@ export interface UploadQueueResult {
 // showed the user before they confirmed, persisted on the new job so its
 // detail page's "Verificación pre-subida" section can show exactly that,
 // without re-running anything server-side.
+// null: lo que digan los grupos de Configuración.
+export interface OpcionesTracker {
+  anonimo: boolean | null
+  personalRelease: boolean | null
+}
+
 export async function queueUpload(
   itemId: number,
   remuxOverrides?: Record<number, TrackRemuxOverride>,
@@ -47,10 +53,15 @@ export async function queueUpload(
   requestItemId?: number | null,
   // El lote al que pertenece (las tandas del asistente): solo viaja si se da, una subida suelta no lo manda.
   loteId?: string,
+  // Anónimo / Personal release cambiados a mano en el Resumen. Sin ellos (null), lo que digan los grupos de
+  // Configuración para el tag de la subida.
+  opciones?: OpcionesTracker,
 ): Promise<UploadQueueResult> {
   return api.post<UploadQueueResult>(`/library/${itemId}/upload/queue`, {
     request_item_id: requestItemId ?? null,
     ...(loteId ? { lote_id: loteId } : {}),
+    anonimo: opciones?.anonimo ?? null,
+    personal_release: opciones?.personalRelease ?? null,
     remux_overrides: remuxOverrides ?? null,
     checks: checks ?? null,
     remux_snapshot: remuxSnapshot ?? null,

@@ -73,6 +73,13 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
     finally:
         conn.close()
 
+    if not img_hosts:
+        # La comprobación previa ya lo para, pero la lista puede cambiar entre ella y el lanzamiento: sin esto,
+        # Uploadrr tiraría de los proveedores de su config.yaml, que el usuario quitó.
+        raise ConfigNoPreparada(
+            "No hay ningún proveedor de imágenes en Configuración. No se lanza la subida: añade uno y reinténtala."
+        )
+
     try:
         # Del config de verdad (.bak), no del config.yaml de ahora: puede ser el
         # que dejó stageado una subida que murió, o el de otra que sigue en curso.
@@ -88,13 +95,11 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         lines, _msg = stage_per_episode_screens(lines, per_episode_screens)
         lines, _msg = stage_blu_api_off(lines)
         changed = True
-        if img_hosts:
-            # Always staged (imgbox is always in fallback_order()'s result,
-            # even with nothing else enabled) — this is what makes the
-            # configured preference (e.g. Pixhost) actually reach Uploadrr-EMU
-            # instead of it silently defaulting to its own img_hosts order.
-            lines, _msg = stage_image_hosts(lines, img_hosts=img_hosts, api_keys=img_api_keys)
-            changed = True
+        # Siempre hay al menos uno (ver arriba): esto es lo que hace que la
+        # preferencia del usuario (p. ej. Pixhost) llegue de verdad a Uploadrr-EMU
+        # en vez de que use el orden de img_hosts de su propio config.yaml.
+        lines, _msg = stage_image_hosts(lines, img_hosts=img_hosts, api_keys=img_api_keys)
+        changed = True
         if (qbit_url and qbit_username and qbit_password) or qbit_qui:
             # Without this, Uploadrr-EMU falls back to whatever
             # DEFAULT.default_torrent_client its own config.yaml ships with

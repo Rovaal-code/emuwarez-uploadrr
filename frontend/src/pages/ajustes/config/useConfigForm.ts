@@ -13,14 +13,14 @@ import { enfocarPrimerError } from '../Campo'
 
 // Los valores del formulario, uno por campo, serializados para comparar el estado actual con el cargado.
 function configSignature(v: {
-  tags: string[]; providerOrder: string[]; region: string
+  tags: string[]; gruposPR: string[]; gruposAnon: string[]; providerOrder: string[]; region: string
   emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; capturasPorCapitulo: boolean; modoDePistas: ModoPistas; sinCopiasReflink: boolean; sincronizarAlVolver: boolean
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitPublicUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string; qbitQui?: string; quitarQui?: boolean; quitarQbitPass?: boolean
 }): Record<string, string> {
   const campos: Record<string, unknown> = {
-    tags: v.tags, providerOrder: v.providerOrder, region: v.region, emuUsername: v.emuUsername,
+    tags: v.tags, gruposPR: v.gruposPR, gruposAnon: v.gruposAnon, providerOrder: v.providerOrder, region: v.region, emuUsername: v.emuUsername,
     ignoreSpecials: v.ignoreSpecials, sourceEngine: v.sourceEngine, addLogo: v.addLogo, capturasPorCapitulo: v.capturasPorCapitulo, modoDePistas: v.modoDePistas, sinCopiasReflink: v.sinCopiasReflink, sincronizarAlVolver: v.sincronizarAlVolver, recentLimit: v.recentLimit, uploadMaxConcurrent: v.uploadMaxConcurrent, qbitUrl: v.qbitUrl, qbitPublicUrl: v.qbitPublicUrl, qbitTag: v.qbitTag, qbitUser: v.qbitUser, imgEnabled: v.imgEnabled, allowedRoots: v.allowedRoots,
     newKey: v.newKey ?? '', newEmuKey: v.newEmuKey ?? '', qbitPass: v.qbitPass ?? '', qbitQui: v.qbitQui ?? '', quitarQui: v.quitarQui ?? false, quitarQbitPass: v.quitarQbitPass ?? false,
   }
@@ -30,6 +30,13 @@ function configSignature(v: {
 const ERROR_URL_QBIT = 'La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido'
 const ERROR_URL_PUBLICA = 'La URL pública debe empezar por http:// o https://, incluir un host válido y no llevar usuario ni contraseña'
 const ERROR_URL_QUI = 'La URL del proxy de qui debe empezar por http:// o https:// e incluir un host válido'
+
+// Las marcas guardadas de los grupos que existen, igual que las compara el formulario (ver prAGuardar).
+function marcasDe(s: SettingsData, cual: 'pr' | 'anon'): string[] {
+  const tags = s.upload_tags?.length ? s.upload_tags : [s.default_release_tag]
+  const marcados = (cual === 'pr' ? s.upload_tags_personal_release : s.upload_tags_anonimos) ?? []
+  return marcados.filter(g => tags.includes(g))
+}
 
 // Cuántos campos difieren de lo cargado.
 function contarCambios(base: Record<string, string>, actual: Record<string, string>): number {
@@ -50,6 +57,9 @@ export function useConfigForm() {
   // Grupos de subida: el primero es el que sale por defecto al subir.
   const [tags, setTags] = useState<string[]>([])
   const [nuevoTag, setNuevoTag] = useState('')
+  // Los grupos cuyas subidas van como Personal release / anónimas.
+  const [gruposPR, setGruposPR] = useState<string[]>([])
+  const [gruposAnon, setGruposAnon] = useState<string[]>([])
   const [providerOrder, setProviderOrder] = useState<string[]>([])
   const [region, setRegion] = useState('')
   const [newKey, setNewKey] = useState('')
@@ -91,8 +101,11 @@ export function useConfigForm() {
   // Un grupo escrito sin pulsar «Añadir» también se guarda.
   const borrador = nuevoTag.trim()
   const tagsAGuardar = borrador && !tags.includes(borrador) ? [...tags, borrador] : tags
+  // Solo los de grupos que siguen en la lista: quitar un grupo quita también sus marcas.
+  const prAGuardar = gruposPR.filter(g => tags.includes(g))
+  const anonAGuardar = gruposAnon.filter(g => tags.includes(g))
   const currentSig = configSignature({
-    tags: tagsAGuardar, providerOrder, region, emuUsername,
+    tags: tagsAGuardar, gruposPR: prAGuardar, gruposAnon: anonAGuardar, providerOrder, region, emuUsername,
     ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, sinCopiasReflink, sincronizarAlVolver, recentLimit, uploadMaxConcurrent, qbitUrl, qbitPublicUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass, qbitQui, quitarQui, quitarQbitPass,
   })
@@ -115,6 +128,8 @@ export function useConfigForm() {
         if (!activo) return
         setSettings(s)
         setTags(s.upload_tags?.length ? s.upload_tags : [s.default_release_tag])
+        setGruposPR(s.upload_tags_personal_release ?? [])
+        setGruposAnon(s.upload_tags_anonimos ?? [])
         setProviderOrder(s.provider_priority_order)
         setRegion(s.tmdb_watch_region)
         setEmuUsername(s.emu_username ?? '')
@@ -134,7 +149,8 @@ export function useConfigForm() {
         setImgEnabled(s.image_hosts_enabled ?? [])
         setAllowedRoots((s.uploadrr_allowed_roots ?? []).join(', '))
         setBaseline(configSignature({
-          tags: s.upload_tags?.length ? s.upload_tags : [s.default_release_tag], providerOrder: s.provider_priority_order,
+          tags: s.upload_tags?.length ? s.upload_tags : [s.default_release_tag],
+          gruposPR: marcasDe(s, 'pr'), gruposAnon: marcasDe(s, 'anon'), providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region,
           emuUsername: s.emu_username ?? '',
           ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, capturasPorCapitulo: s.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(s.remux_track_mode), sinCopiasReflink: s.remux_no_reflink_copies ?? false, sincronizarAlVolver: s.sincronizar_al_volver_instancia ?? true,
@@ -193,6 +209,8 @@ export function useConfigForm() {
       const payload: Parameters<typeof updateSettings>[0] = {
         default_release_tag: tags[0],
         upload_tags: tagsAGuardar,
+        upload_tags_personal_release: prAGuardar,
+        upload_tags_anonimos: anonAGuardar,
         provider_priority_order: providerOrder,
         tmdb_watch_region: region.trim(),
         // No longer a user-facing toggle — always on.
@@ -227,6 +245,8 @@ export function useConfigForm() {
       if (payload.emu_api_key) actualizarPerfilEmu().catch(() => { /* lo intenta la próxima lectura */ })
       setSettings(updated)
       setTags(updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag])
+      setGruposPR(updated.upload_tags_personal_release ?? [])
+      setGruposAnon(updated.upload_tags_anonimos ?? [])
       // Solo el borrador que se envió: lo escrito mientras guardaba se queda.
       setNuevoTag(n => (n.trim() === enviado ? '' : n))
       setProviderOrder(updated.provider_priority_order)
@@ -248,7 +268,8 @@ export function useConfigForm() {
       setNewEmuKey('')
       setAllowedRoots((updated.uploadrr_allowed_roots ?? []).join(', '))
       setBaseline(configSignature({
-        tags: updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag], providerOrder: updated.provider_priority_order,
+        tags: updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag],
+        gruposPR: marcasDe(updated, 'pr'), gruposAnon: marcasDe(updated, 'anon'), providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region,
         emuUsername: updated.emu_username ?? '',
         ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, capturasPorCapitulo: updated.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(updated.remux_track_mode), sinCopiasReflink: updated.remux_no_reflink_copies ?? false, sincronizarAlVolver: updated.sincronizar_al_volver_instancia ?? true,
@@ -267,7 +288,7 @@ export function useConfigForm() {
   }
   return {
     settings, setSettings, loading, errorCarga, reintentar, descartar, saving, handleSave, cambios, errores, marcarTocado,
-    tags, setTags, nuevoTag, setNuevoTag, borrador,
+    tags, setTags, nuevoTag, setNuevoTag, borrador, gruposPR, setGruposPR, gruposAnon, setGruposAnon,
     providerOrder, setProviderOrder, region, setRegion,
     newKey, setNewKey, newEmuKey, setNewEmuKey, emuUsername, setEmuUsername,
     ignoreSpecials, setIgnoreSpecials, sourceEngine, setSourceEngine, addLogo, setAddLogo,

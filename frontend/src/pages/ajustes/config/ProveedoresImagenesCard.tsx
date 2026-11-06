@@ -63,18 +63,16 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
       <CabeceraTarjeta
         icono={<ServiceIcon type="imghost" size={18} />}
         titulo="Proveedores de imágenes"
-        descripcion={<>Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; <PistaReordenar raton="arrastra para reordenar, o usa las flechas desde el asa de cada fila." dedo="reordénalos con las flechas de cada fila." /> <strong>imgbox</strong>, sin API key, va siempre el último.</>}
+        descripcion={<>Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; <PistaReordenar raton="arrastra para reordenar, o usa las flechas desde el asa de cada fila." dedo="reordénalos con las flechas de cada fila." /> Cualquiera se puede quitar; sin ninguno, la subida no arranca.</>}
       />
       <span className="form-label">Prioridad de proveedores</span>
       {(() => {
         const avail = settings?.image_hosts_available ?? []
-        // imgbox no se ordena: la subida siempre lo prueba el último (fallback_order).
-        const configuredIds = imgEnabled.filter(id => id !== 'imgbox')
-        const notConfigured = avail.filter(h => h.id !== 'imgbox' && !configuredIds.includes(h.id))
+        const configuredIds = imgEnabled.filter(id => avail.some(h => h.id === id))
+        const notConfigured = avail.filter(h => !configuredIds.includes(h.id))
         const metaOf = (id: string) => avail.find(h => h.id === id)
         const fila = (id: string, idx: number, asa?: { dragging: boolean; handleProps: DragHandleProps; botones: React.ReactNode }) => {
           const h = metaOf(id); if (!h) return null
-          const isDefault = id === 'imgbox'
           const dragging = !!asa?.dragging
           const t = imgTest[id]
           return (
@@ -96,7 +94,6 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                   <Favicon domain={domainOf(h.url)} size={15} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={15} />} />
                 </a>
                 <span className="aj-ellipsis-nowrap-13">{h.label}</span>
-                {isDefault && <span className="badge status-available">por defecto</span>}
                 {h.needs_key && (() => {
                   // Verde cuando hay clave guardada; gris parpadeando
                   // mientras no la haya, para que un proveedor recién
@@ -129,9 +126,7 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                       {imgTesting === id ? 'Probando…' : 'Probar'}
                     </button>
                   )}
-                  {!isDefault && (
-                    <RemoveImgHostButton onClick={() => toggleImgHost(id)} nombre={h.label} />
-                  )}
+                  <RemoveImgHostButton onClick={() => toggleImgHost(id)} nombre={h.label} />
                 </div>
               </div>
               {/* Solo para los que no tienen tarjeta: los demás ya lo
@@ -146,7 +141,9 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
             <div className="provider-card__list">
               <div className="aj-col-8">
                 <SortableList etiqueta={id => metaOf(id)?.label ?? id} ids={configuredIds} onChange={setImgEnabled} gap={8} renderRow={fila} />
-                {fila('imgbox', configuredIds.length)}
+                {configuredIds.length === 0 && (
+                  <p className="aj-muted-13" role="status">Sin proveedores: añade al menos uno o las subidas no podrán arrancar.</p>
+                )}
               </div>
             </div>
             {notConfigured.length > 0 && (

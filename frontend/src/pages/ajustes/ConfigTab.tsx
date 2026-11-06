@@ -37,7 +37,7 @@ const IDS = ENTRADAS.map(e => e.id)
 const normalizar = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
 
 // Lo que el buscador lee de cada tarjeta: título, etiquetas, la línea que dice para qué sirve, las ayudas y los botones
-// (con su nombre accesible, así «Quitar imgbox» cuenta aunque solo enseñe una ✕).
+// (con su nombre accesible, así «Quitar Pixhost» cuenta aunque solo enseñe una ✕).
 const BUSCABLE = 'h3, label, .form-label, .aj-cab__desc, .form-hint, button'
 
 export function ConfigTab() {

@@ -10,7 +10,10 @@ import { CabeceraTarjeta } from '../CabeceraTarjeta'
 import type { ConfigForm } from './useConfigForm'
 
 export function EmuwarezCard({ form }: { form: ConfigForm }) {
-  const { settings, newEmuKey, setNewEmuKey, emuUsername, setEmuUsername, tags, setTags, nuevoTag, setNuevoTag, borrador } = form
+  const {
+    settings, newEmuKey, setNewEmuKey, emuUsername, setEmuUsername, tags, setTags, nuevoTag, setNuevoTag, borrador,
+    gruposPR, setGruposPR, gruposAnon, setGruposAnon,
+  } = form
   const [testingEmu, setTestingEmu] = useState(false)
   const [emuTestResult, setEmuTestResult] = useState<IntegrationTestResult | null>(null)
   const emuCooldown = useCooldown()
@@ -32,6 +35,9 @@ export function EmuwarezCard({ form }: { form: ConfigForm }) {
       setTestingEmu(false)
     }
   }
+
+  // Marca o desmarca un grupo en una de las dos listas.
+  const alternar = (lista: string[], tag: string, si: boolean) => (si ? [...lista.filter(g => g !== tag), tag] : lista.filter(g => g !== tag))
 
   function anadirTag() {
     const t = nuevoTag.trim()
@@ -90,7 +96,7 @@ export function EmuwarezCard({ form }: { form: ConfigForm }) {
       </Campo>
       <Campo
         etiqueta="Grupos de subida"
-        info={<InfoIcon text="El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario). El primero es el que sale por defecto al subir; los demás se eligen en el asistente." />}
+        info={<InfoIcon text="El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario). El primero es el que sale por defecto al subir; los demás se eligen en el asistente. Marca «Personal release» o «Anónimo» en un grupo y sus subidas irán así a eMuwarez; en el Resumen de cada subida se puede cambiar solo para ella." />}
       >
         {c => (
           <>
@@ -98,6 +104,16 @@ export function EmuwarezCard({ form }: { form: ConfigForm }) {
               {tags.map((t, i) => (
                 <li key={t} className="aj-grupos__fila">
                   <span className="aj-grupos__nombre">{t}</span>
+                  <label className="aj-grupos__marca">
+                    <input type="checkbox" checked={gruposPR.includes(t)}
+                      onChange={e => setGruposPR(alternar(gruposPR, t, e.target.checked))} />
+                    Personal release
+                  </label>
+                  <label className="aj-grupos__marca">
+                    <input type="checkbox" checked={gruposAnon.includes(t)}
+                      onChange={e => setGruposAnon(alternar(gruposAnon, t, e.target.checked))} />
+                    Anónimo
+                  </label>
                   {i === 0
                     ? <span className="badge status-available">por defecto</span>
                     : <button type="button" className="btn-icon" title="Usar por defecto" aria-label={`Usar ${t} por defecto`}

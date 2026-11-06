@@ -83,6 +83,15 @@ export function planVentana({ alturas, desde, alto, margen, fijas }: PlanVentana
   return tramos
 }
 
+/** Lo que se supone que mide una fila sin medir: la media de las medidas, redondeada, o `porDefecto` si aún no hay
+ *  ninguna. */
+export function altoMedio(medidas: Iterable<number>, porDefecto: number): number {
+  let suma = 0
+  let n = 0
+  for (const m of medidas) { suma += m; n++ }
+  return n ? Math.round(suma / n) : porDefecto
+}
+
 /** Las columnas que pone `repeat(auto-fill, minmax(minimo, 1fr))` en `ancho`. */
 export function columnasAutoFill(ancho: number, minimo: number, hueco: number): number {
   return Math.max(1, Math.floor((ancho + hueco) / (minimo + hueco)))

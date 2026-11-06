@@ -27,13 +27,45 @@
   min-width: 220px;
 }
 
-/* `.activity-section` trae margin-bottom: 20px; aquí la tabla llena el alto. */
+/* Buscador, orden y «Seleccionar» a la misma altura: el <select> nativo sumaba 2 px y el botón pequeño se quedaba en 25.
+   Con el dedo, a la del objetivo táctil. */
+.filters-bar .form-input.pet-buscar,
+.filters-bar .form-select.pet-orden,
+.filters-bar .btn.pet-seleccionar {
+  height: 36px;
+}
+
+@media (pointer: coarse) {
+  .filters-bar .form-input.pet-buscar,
+  .filters-bar .form-select.pet-orden,
+  .filters-bar .btn.pet-seleccionar {
+    height: var(--tap-min);
+  }
+}
+
+/* Móvil: el buscador y «Seleccionar» en una línea, y el orden debajo a lo ancho; los bordes derechos, alineados. */
+@media (max-width: 760px) {
+  .filters-bar .form-input.pet-buscar {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .filters-bar .form-select.pet-orden {
+    order: 1;
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+
+/* `.activity-section` trae margin-bottom: 20px; aquí la tabla llena el alto. Es el contenedor de las consultas de la
+   tabla (abajo): con la barra lateral, una tableta deja menos sitio que la ventana dice. */
 .activity-section.pet-seccion {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   margin-bottom: 0;
+  container-type: inline-size;
 }
 
 .pet-scroll {
@@ -115,6 +147,18 @@
 .pet-resumen-chip:hover {
   background: var(--bg-card-hover);
   border-color: var(--border-hover);
+}
+
+/* Con el dedo, los chips de grupo y los filtros de cabecera miden lo del objetivo táctil (components.css): la cabecera
+   del grupo se pega bajo esa fila, que ya no mide 34 px. */
+@media (pointer: coarse) {
+  .pet-resumen-chip {
+    min-height: var(--tap-min);
+  }
+
+  .pet-scroll {
+    --pet-cabecera: var(--tap-min);
+  }
 }
 
 .pet-resumen-n {
@@ -218,14 +262,29 @@
   padding-inline: 12px;
 }
 
+/* Con poco ancho (tableta apaisada, ventana estrecha) se van Origen, Autor, votos y comentarios, que también están en
+   la ficha, y el título conserva sitio para dos o tres líneas: así se ven la recompensa y la fecha sin desplazar. */
+@container (max-width: 1000px) {
+  .data-table.pet-tabla .pet-col-origen,
+  .data-table.pet-tabla .pet-col-autor,
+  .data-table.pet-tabla .pet-col-votos {
+    display: none;
+  }
+
+  .data-table.pet-tabla .pet-col-titulo {
+    min-width: 220px;
+  }
+}
+
 /* Con poca anchura (móvil) cada petición es una tarjeta, con el mismo DOM de la fila:
      1. [casilla] título (dos líneas como mucho) … moneda y puntos;
      2. compatibilidad y el motivo por el que aún no está lista;
      3. en gris: tipo · resolución · source · «hace 3 días» (y tu nombre en verde si es tuya).
    Origen, el autor, votos y comentarios están en la ficha. La cabecera de columnas se queda como una tira de
    filtros y órdenes, y la de cada grupo, pegada arriba como separador. Toda la tarjeta abre la ficha (la fila ya
-   tiene el clic; el título es el enlace de teclado). */
-@media (max-width: 760px) {
+   tiene el clic; el título es el enlace de teclado). Mira el ancho de la sección, no el de la ventana: una tableta
+   vertical, con la barra lateral, también usa la tarjeta. */
+@container (max-width: 760px) {
   .data-table.pet-tabla,
   .data-table.pet-tabla tbody {
     display: block;
@@ -447,6 +506,14 @@
   vertical-align: middle;
 }
 
+.pet-icono-votos {
+  color: var(--text-accent);
+}
+
+.pet-icono-comentarios {
+  color: var(--text-secondary);
+}
+
 /* Valores sueltos */
 .pet-mio {
   color: var(--color-available);
@@ -543,6 +610,16 @@
 
 .pet-no-encoge {
   flex-shrink: 0;
+  /* Sin encoger, pero sin pasar del ancho: con el motivo de «Subir» al lado, en una tableta los botones bajan de línea. */
+  max-width: 100%;
+  justify-content: flex-end;
+}
+
+/* Por qué la acción principal de la ficha no se puede usar, escrito a su lado (un tooltip no llega al dedo). */
+.pet-motivo-apagado {
+  align-self: center;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* `a:hover { text-decoration: underline }` */
@@ -560,6 +637,7 @@
   gap: 24px;
   flex-wrap: wrap;
   align-items: flex-start;
+  container-type: inline-size;
 }
 
 .pet-ficha-col {
@@ -594,7 +672,7 @@
   width: 230px;
   max-width: 100%;
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   overflow: hidden;
 }
 
@@ -614,16 +692,20 @@
   opacity: 0.35;
 }
 
-@media (max-width: 640px) {
+/* Cuando el póster y la columna no caben uno al lado de otra (móvil, y tableta vertical con la barra lateral): el póster
+   baja a 132 px y, sin imagen, el marcador vacío se quita, que dejaba el veredicto o el resultado bajo el pliegue. Mira
+   el ancho de la ficha (.pet-ficha, .dsub-cuerpo), no el de la ventana. */
+@container (max-width: 560px) {
   .ficha-poster {
     width: 132px;
   }
 
-  /* Sin imagen, el marcador vacío dejaba el veredicto por debajo del pliegue (en la ficha de petición y de subida). */
   .ficha-poster:has(.ficha-poster-vacio) {
     display: none;
   }
+}
 
+@media (max-width: 640px) {
   .detail-card.pet-veredicto {
     flex-wrap: wrap;
   }

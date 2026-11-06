@@ -1,5 +1,6 @@
 import type { RequestSyncStatusResponse } from '../types/api'
 import { Tooltip } from './Tooltip'
+import { RetryButtonIcon } from './DetailCard'
 
 // Shared by RequestsPage and the Dashboard's "Peticiones eMuwarez" sync
 // button — both surface the same 1h eMuwarez request-sync throttle
@@ -33,7 +34,7 @@ export function SyncInfo({ syncStatus, onSync, syncing, blocked = false, label =
       )}
       <Tooltip content={!can_sync ? `Disponible en ${mins} min` : blocked ? 'Otra sincronización en curso' : (title ?? 'Sincronizar')}>
         <button className="btn btn-primary btn-sm" onClick={() => onSync(false)} disabled={syncing || blocked || !can_sync}>
-          {syncing ? <><span className="spinner emusync-spinner" /> Sincronizando…</> : `↻ ${label}`}
+          {syncing ? <><span className="spinner emusync-spinner" /> Sincronizando…</> : <><RetryButtonIcon /> {label}</>}
         </button>
       </Tooltip>
       {!can_sync && allowForce && (

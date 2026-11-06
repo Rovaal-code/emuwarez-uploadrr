@@ -56,7 +56,7 @@ const DELETABLE_STATUSES = new Set(['failed', 'cancelled', 'completed'])
 const CONFIRMATION_TOKEN = 'INICIAR_UPLOADRR'
 // Las columnas de la tabla (para las filas que ocupan el ancho entero).
 const COLUMNAS = 9
-// Lo que mide una fila antes de pintarla (FilasVirtuales la corrige con la primera que mide de verdad).
+// Lo que mide una fila antes de pintarla (FilasVirtuales la corrige con la media de las que va midiendo).
 const ALTO_FILA = 65
 const claveDeSubida = (job: UploadJob) => job.id!
 
@@ -729,7 +729,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         onCancel={handleCancel}
         onDelete={setDeleteJob}
         onRetry={handleRetryQueued}
-        onFiltrarLote={setLoteFiltro}
+        // Con la lista ya filtrada por ese lote, el banner lo dice: la chapa en cada fila sobra.
+        onFiltrarLote={job.lote_id === loteFiltro ? undefined : setLoteFiltro}
       />,
       ...(expanded ? ancestors.map(a => (
         <JobRow key={a.id} job={a} instances={instances} seeding={seeding} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} onDelete={setDeleteJob} />
@@ -827,7 +828,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <select className="form-input form-select" aria-label="Ordenar subidas" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+        <select className="form-input form-select sub-orden" aria-label="Ordenar subidas" value={sortBy} onChange={e => setSortBy(e.target.value)}>
           <option value="created_desc">Orden: Reciente primero</option>
           <option value="created_asc">Orden: Antiguo primero</option>
           <option value="title">Orden: Título (A-Z)</option>
@@ -879,7 +880,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   <th><HeaderFilter label="Estado" value={statusFilter} onChange={setStatusFilter} options={[
                     { value: '', label: 'Todos' }, ...STATUS_OPTIONS.filter(Boolean).map(s => ({ value: s, label: statusLabel(s) })),
                   ]} /></th>
-                  <th className="sub-sec">Seeding</th>
+                  <th className="sub-sec sub-col-seeding">Seeding</th>
                   <th className="sub-sec">Fecha</th>
                   <th className="col-actions sub-th-acciones">Acciones</th>
                 </tr>

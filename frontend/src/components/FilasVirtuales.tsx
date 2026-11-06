@@ -1,5 +1,5 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { planVentana, columnasAutoFill, filasDeRejilla, medidaCorregida, cuentaTrasMedir, topeRecienAlcanzado, AJUSTES_SEGUIDOS_MAX } from '../utils/ventana'
+import { planVentana, altoMedio, columnasAutoFill, filasDeRejilla, medidaCorregida, cuentaTrasMedir, topeRecienAlcanzado, AJUSTES_SEGUIDOS_MAX } from '../utils/ventana'
 import { medir } from '../utils/uiScale'
 
 // Lo que se pinta de más por arriba y por abajo de lo visible: unas diez filas
@@ -35,6 +35,8 @@ interface Props<T> {
 export function FilasVirtuales<T>({ items, clave, alturaEstimada, columnas, contenedor, cabecera, fijas, pintar }: Props<T>) {
   const vista = useVista(contenedor, cabecera)
   const medidas = useRef(new Map<number, number>())
+  // Las medidas de las filas sin desplegar (las que no son `fijas`): de ellas sale la estimación.
+  const sueltas = useRef(new Map<number, number>())
   const estimada = useRef(alturaEstimada)
   const [version, setVersion] = useState(0)
 
@@ -47,13 +49,17 @@ export function FilasVirtuales<T>({ items, clave, alturaEstimada, columnas, cont
       const k = Number(el.dataset.clave)
       const alto = el.offsetHeight
       if (!alto || medidas.current.get(k) === alto) continue
-      // La estimación sale de la primera fila sin desplegar que se mide: un
-      // número fijo en el código se desviaría con el tamaño de la interfaz.
-      if (estimada.current === alturaEstimada && el.dataset.fija !== '1') estimada.current = alto
+      if (el.dataset.fija !== '1') sueltas.current.set(k, alto)
       medidas.current.set(k, alto)
       cambia = true
     }
-    if (cambia) setVersion(v => v + 1)
+    // La estimación es la media de las filas sin desplegar medidas hasta ahora: un número fijo en el código se
+    // desviaría con el tamaño de la interfaz, y la primera fila sola, también, cuando no todas miden lo mismo (en
+    // Subidas, de 63 a 100 px según lleven motivo de error): la altura total cambiaba un 18 % al desplazarse.
+    if (cambia) {
+      estimada.current = altoMedio(sueltas.current.values(), alturaEstimada)
+      setVersion(v => v + 1)
+    }
   }), [alturaEstimada])
   useEffect(() => () => observador?.disconnect(), [observador])
 
@@ -79,7 +85,9 @@ export function FilasVirtuales<T>({ items, clave, alturaEstimada, columnas, cont
   useLayoutEffect(() => {
     celdasDeCabecera(cabecera.current).forEach((th, i) => {
       if (th.style.width === '100%') return
-      const w = th.offsetWidth
+      // Por abajo, no redondeado: offsetWidth redondea, y la suma de los mínimos pasaba 1 px del ancho y dejaba la
+      // tabla con un píxel de scroll de lado (Peticiones, en escritorio).
+      const w = Math.floor(medir(th).width)
       if (w > (anchos.current[i] ?? 0)) {
         anchos.current[i] = w
         th.style.minWidth = `${w}px`

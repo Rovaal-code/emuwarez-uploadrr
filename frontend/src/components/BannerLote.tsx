@@ -142,18 +142,19 @@ export function BannerLote({ loteId, resumen, totalConocido, sinSubidas = false,
           </ul>
         )}
         <div className="sub-lote-banner-acciones">
-          <button type="button" className="btn btn-danger btn-sm" disabled={!puedeCancelar} onClick={abrirCancelar}
-            {...cancelarTip.triggerProps}>
+          {/* aria-disabled y no disabled: apagados siguen recibiendo el ratón y el foco, y su tooltip dice por qué. */}
+          <button type="button" className="btn btn-danger btn-sm" aria-disabled={!puedeCancelar}
+            onClick={() => { if (puedeCancelar) abrirCancelar() }} {...cancelarTip.triggerProps}>
             Cancelar pendientes
             {cancelarTip.tooltipNode}
           </button>
-          <button type="button" className="btn btn-primary btn-sm" disabled={!puedeReintentar} onClick={hacerReintentar}
-            {...reintentarTip.triggerProps}>
+          <button type="button" className="btn btn-primary btn-sm" aria-disabled={!puedeReintentar}
+            onClick={() => { if (puedeReintentar) hacerReintentar() }} {...reintentarTip.triggerProps}>
             Reintentar fallidas
             {reintentarTip.tooltipNode}
           </button>
-          <button type="button" className="btn btn-danger btn-sm" disabled={!puedeBorrar}
-            onClick={() => setConfirmarBorrar(true)} {...borrarTip.triggerProps}>
+          <button type="button" className="btn btn-danger btn-sm" aria-disabled={!puedeBorrar}
+            onClick={() => { if (puedeBorrar) setConfirmarBorrar(true) }} {...borrarTip.triggerProps}>
             Borrar lote
             {borrarTip.tooltipNode}
           </button>

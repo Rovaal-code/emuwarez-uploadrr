@@ -50,11 +50,14 @@
   white-space: nowrap;
 }
 
-.btn:active:not(:disabled) {
+.btn:active:not(:disabled, [aria-disabled="true"]) {
   transform: translateY(1px);
 }
 
-.btn:disabled {
+/* aria-disabled: apagado igual, pero se puede enfocar y recibe el ratón, así que su tooltip dice por qué. Quien lo usa
+   no hace nada en el onClick mientras lo esté. */
+.btn:disabled,
+.btn[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -65,7 +68,7 @@
   border-color: var(--color-primary);
 }
 
-.btn-primary:hover:not(:disabled) {
+.btn-primary:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
 }
@@ -76,7 +79,7 @@
   border-color: var(--border-input);
 }
 
-.btn-secondary:hover:not(:disabled) {
+.btn-secondary:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--bg-card-hover);
   border-color: var(--border-hover);
 }
@@ -87,7 +90,7 @@
   border-color: color-mix(in srgb, var(--color-error) 25%, transparent);
 }
 
-.btn-danger:hover:not(:disabled) {
+.btn-danger:hover:not(:disabled, [aria-disabled="true"]) {
   background: color-mix(in srgb, var(--color-error) 20%, transparent);
 }
 
@@ -97,7 +100,7 @@
   border-color: transparent;
 }
 
-.btn-ghost:hover:not(:disabled) {
+.btn-ghost:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--bg-card);
   color: var(--text-primary);
 }
@@ -105,6 +108,11 @@
 .btn-sm {
   padding: 4px 10px;
   font-size: 12px;
+}
+
+/* «Volver a…» de una ficha: el texto, y no la caja transparente del botón, alineado con el borde del contenido. */
+.btn.btn-ghost.btn-volver {
+  margin-inline-start: calc(-10px - 1px);
 }
 
 .btn-icon {
@@ -455,9 +463,10 @@ optgroup {
 }
 /* Mismo motivo que `.data-table tr.sticky-footer-row:hover td`: sin esto, el
    tinte de :hover (translúcido) dejaría ver las filas de detrás al pasar el
-   ratón mientras la tabla está desplazada. */
+   ratón mientras la tabla está desplazada. Opaco, pero con el mismo tinte que
+   el resto de la fila, para que no se corte. */
 .data-table tr:hover td.col-actions {
-  background: var(--bg-surface);
+  background: color-mix(in srgb, var(--overlay-light) 2.5%, var(--bg-surface));
 }
 
 /* Columnas de prioridad baja (Subidas): con poco ancho se esconden, no se
@@ -1063,6 +1072,13 @@ optgroup {
   outline: 2px solid var(--color-focus);
   outline-offset: -2px;
 }
+/* Con el dedo, los filtros de cabecera y las opciones de su menú al objetivo táctil (28-34 px se quedaban cortos). */
+@media (pointer: coarse) {
+  .data-table th > .hf-trigger,
+  .menores-filtro-panel .hf-option {
+    min-height: var(--tap-min);
+  }
+}
 .hf-caret {
   font-size: 9px;
   color: var(--text-muted);
@@ -1333,8 +1349,8 @@ optgroup {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
-.detail-hero .btn-ghost:hover:not(:disabled),
-.detail-hero .btn-secondary:hover:not(:disabled) {
+.detail-hero .btn-ghost:hover:not(:disabled, [aria-disabled="true"]),
+.detail-hero .btn-secondary:hover:not(:disabled, [aria-disabled="true"]) {
   background: color-mix(in srgb, var(--bg-base) 88%, transparent);
 }
 /* .btn-primary looks solid in the plain theme (components.css) but the HUD
@@ -1351,7 +1367,7 @@ optgroup {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
-.hud-app .detail-hero .btn-primary:hover:not(:disabled) {
+.hud-app .detail-hero .btn-primary:hover:not(:disabled, [aria-disabled="true"]) {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--hud-cyan) 38%, transparent), color-mix(in srgb, var(--hud-azure) 52%, transparent)),
     color-mix(in srgb, var(--hud-panel-solid) 92%, transparent);
@@ -1361,7 +1377,7 @@ optgroup {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
-.detail-hero .btn-danger:hover:not(:disabled) {
+.detail-hero .btn-danger:hover:not(:disabled, [aria-disabled="true"]) {
   background: color-mix(in srgb, var(--bg-danger-deep) 90%, transparent);
 }
 

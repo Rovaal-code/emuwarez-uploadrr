@@ -197,7 +197,7 @@
   border-color: var(--hud-cyan);
   box-shadow: 0 0 12px -4px color-mix(in srgb, var(--hud-cyan) 70%, transparent), inset 0 1px 0 color-mix(in srgb, var(--overlay-light) 12%, transparent);
 }
-.hud-app .btn-primary:hover:not(:disabled) {
+.hud-app .btn-primary:hover:not(:disabled, [aria-disabled="true"]) {
   background: linear-gradient(180deg, color-mix(in srgb, var(--hud-cyan) 32%, transparent), color-mix(in srgb, var(--hud-azure) 45%, transparent));
   box-shadow: 0 0 18px -4px color-mix(in srgb, var(--hud-cyan) 90%, transparent);
 }
@@ -205,7 +205,7 @@
   background: color-mix(in srgb, var(--hud-deep) 60%, transparent);
   border-color: color-mix(in srgb, var(--hud-blue) 50%, transparent);
 }
-.hud-app .btn-secondary:hover:not(:disabled) {
+.hud-app .btn-secondary:hover:not(:disabled, [aria-disabled="true"]) {
   border-color: var(--hud-cyan);
   box-shadow: 0 0 10px -4px color-mix(in srgb, var(--hud-cyan) 60%, transparent);
 }
@@ -244,7 +244,7 @@
   color: var(--hud-ice);
   border-color: transparent;
 }
-.hud-app .btn-ghost:hover:not(:disabled) {
+.hud-app .btn-ghost:hover:not(:disabled, [aria-disabled="true"]) {
   background: color-mix(in srgb, var(--hud-deep) 60%, transparent);
   border-color: color-mix(in srgb, var(--hud-blue) 50%, transparent);
   box-shadow: 0 0 10px -4px color-mix(in srgb, var(--hud-cyan) 50%, transparent);
@@ -355,9 +355,10 @@
   background: color-mix(in srgb, var(--hud-cyan) 6%, transparent);
 }
 /* La columna de acciones fija (Subidas) necesita fondo opaco incluso en
-   :hover — ver components.css, mismo motivo que el pie de tabla fijo. */
+   :hover — ver components.css, mismo motivo que el pie de tabla fijo —, con el
+   tinte de la fila mezclado para que no se corte. */
 .hud-app .data-table tr:hover td.col-actions {
-  background: var(--bg-surface);
+  background: color-mix(in srgb, var(--hud-cyan) 6%, var(--bg-surface));
 }
 .hud-app .badge {
   font-family: var(--hud-font);

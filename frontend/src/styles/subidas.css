@@ -26,13 +26,38 @@
   width: 160px;
 }
 
-/* `.activity-section` trae margin-bottom: 20px; aquí la tabla llena el alto. */
+/* El buscador y el orden a la misma altura: el <select> nativo sumaba 2 px. Con el dedo, a la del objetivo táctil. */
+.filters-bar .form-input.sub-buscar,
+.filters-bar .form-select.sub-orden {
+  height: 36px;
+}
+
+@media (pointer: coarse) {
+  .filters-bar .form-input.sub-buscar,
+  .filters-bar .form-select.sub-orden {
+    height: var(--tap-min);
+  }
+}
+
+/* Móvil: los dos a lo ancho, con el mismo borde derecho. */
+@media (max-width: 760px) {
+  .filters-bar .form-input.sub-buscar,
+  .filters-bar .form-select.sub-orden {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* `.activity-section` trae margin-bottom: 20px; aquí la tabla llena el alto. Es el contenedor de la consulta de la
+   tarjeta por fila (abajo): con la barra lateral, una tableta deja menos sitio que la ventana dice. */
 .activity-section.sub-seccion {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   margin-bottom: 0;
+  container-type: inline-size;
 }
 
 .sub-scroll {
@@ -49,6 +74,14 @@
 
 .sub-th-acciones {
   width: 1%;
+}
+
+/* Con poco ancho (tableta apaisada, ventana estrecha) se va Seeding, que está en el detalle: así cabe el resto sin
+   desplazar de lado y el título conserva sus 260 px. */
+@container (max-width: 1000px) {
+  .sub-scroll .sub-col-seeding {
+    display: none;
+  }
 }
 
 .sub-vacio-acciones {
@@ -199,8 +232,17 @@
 
 .sub-lote-banner-acciones {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-left: auto;
+}
+
+/* Móvil: los cuatro botones bajan a su propia línea, alineados a la izquierda; «Quitar filtro» siempre a la vista. */
+@media (max-width: 760px) {
+  .sub-lote-banner-acciones {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 .sub-lote-aviso {
@@ -441,6 +483,38 @@ button.sub-reintentos-chip:hover {
   color: var(--color-error-pale);
 }
 
+/* Con el dedo: las acciones de la fila al objetivo táctil y algo más separadas; la chapa del lote, el enlace a eMuwarez
+   y el del origen crecen en zona de toque sin cambiar lo que se ve (como `.menores-info`). */
+@media (pointer: coarse) {
+  .sub-acciones-fila {
+    gap: 8px;
+  }
+
+  .sub-accion {
+    width: var(--tap-min);
+    height: var(--tap-min);
+  }
+
+  .sub-lote-chip,
+  .sub-enlace-emu,
+  .sub-scroll td.sub-meta a {
+    position: relative;
+  }
+
+  .sub-lote-chip::after,
+  .sub-scroll td.sub-meta a::after {
+    content: "";
+    position: absolute;
+    inset: -12px -2px;
+  }
+
+  .sub-enlace-emu::after {
+    content: "";
+    position: absolute;
+    inset: -15px -6px;
+  }
+}
+
 /* Modal de cancelar y de iniciar: `.modal-panel { max-width: 600px }` */
 .modal-panel.sub-modal-520 {
   max-width: 520px;
@@ -496,7 +570,7 @@ button.sub-reintentos-chip:hover {
   white-space: pre-wrap;
   background: color-mix(in srgb, var(--overlay-dark) 20%, transparent);
   padding: 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-input);
 }
 
 /* Campo de confirmación. `.hud-app input:not(...)x5 { background; border-color }`
@@ -505,7 +579,7 @@ button.sub-reintentos-chip:hover {
   width: 100%;
   padding: 6px 10px;
   border: 1px solid color-mix(in srgb, var(--overlay-light) 15%, transparent);
-  border-radius: 4px;
+  border-radius: var(--radius-input);
   color: inherit;
   font-family: var(--font-mono);
   font-size: 0.9rem;
@@ -555,8 +629,9 @@ input.sub-confirmar.sub-confirmar-ok:not([type="checkbox"]):not([type="radio"]):
   border-radius: 6px;
 }
 
-/* Móvil: cada subida es una tarjeta de tres líneas (título y acción; estado; tipo · origen · fecha y chips); el resto, en el detalle. */
-@media (max-width: 760px) {
+/* Poco ancho (móvil, y tableta con la barra lateral): cada subida es una tarjeta de tres líneas (título y acción;
+   estado; tipo · origen · fecha y chips); el resto, en el detalle. Mira el ancho de la sección, no el de la ventana. */
+@container (max-width: 760px) {
   .sub-scroll .data-table,
   .sub-scroll .data-table tbody,
   .sub-scroll .data-table thead {

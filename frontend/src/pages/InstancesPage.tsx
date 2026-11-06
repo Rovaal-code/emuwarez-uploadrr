@@ -148,6 +148,24 @@ export function InstancesPage() {
   })
   useEffect(() => { void cargarSalud() }, [cargarSalud])
 
+  // Tras pintar: el foco entra al primer campo del formulario que se abre, o vuelve al botón que lo abrió al cerrarlo.
+  function enfocar(selector: string) {
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(selector)?.focus())
+  }
+
+  function abrirAlta() {
+    setShowAdd(true)
+    enfocar('#inst-nueva select, #inst-nueva input')
+  }
+
+  function cerrarAlta() {
+    setShowAdd(false)
+    setAddError(null)
+    setAddErrores({})
+    setAddTestResult(null)
+    requestAnimationFrame(() => botonAnadir.current?.focus())
+  }
+
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     setAddError(null)
@@ -162,8 +180,7 @@ export function InstancesPage() {
         is_anime: form.is_anime,
       })
       setForm(defaultForm())
-      setShowAdd(false)
-      setAddTestResult(null)
+      cerrarAlta()
       await load(true)
       void cargarSalud()
     } catch (err) {
@@ -242,9 +259,13 @@ export function InstancesPage() {
     setEditError(null)
     setEditErrores({})
     setEditTestResult(null)
+    // El botón «Editar» desaparece con la tarjeta: sin esto el foco caía en el body.
+    enfocar(`#inst-edicion-${inst.id} input`)
   }
 
   function cancelEdit() {
+    // Al cerrar la edición (cancelar o guardar), el foco vuelve a su «Editar».
+    if (editingId !== null) enfocar(`[data-editar="${editingId}"]`)
     setEditingId(null)
     setEditForm(null)
     setEditError(null)
@@ -320,14 +341,16 @@ export function InstancesPage() {
               {sinResponder === 1 ? '1 sin responder' : `${sinResponder} sin responder`}
             </span>
           )}
+          {/* Siempre dice lo mismo: con el formulario abierto se desactiva, y «Cancelar» está junto a «Añadir». */}
           <button
             ref={botonAnadir}
             className="btn btn-primary btn-sm"
             aria-expanded={showAdd}
             aria-controls="inst-nueva"
-            onClick={() => setShowAdd(!showAdd)}
+            onClick={abrirAlta}
+            disabled={showAdd}
           >
-            {showAdd ? 'Cancelar' : '+ Añadir instancia'}
+            + Añadir instancia
           </button>
         </div>
       </div>
@@ -346,7 +369,7 @@ export function InstancesPage() {
                   </select>
                 )}
               </Campo>
-              <Campo etiqueta="Nombre" error={addErrores.name}>
+              <Campo etiqueta="Nombre" nota="máx. 15" error={addErrores.name}>
                 {c => <input {...c} className="form-input" placeholder={form.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} maxLength={15} autoComplete="off" />}
               </Campo>
               <Campo etiqueta="URL" error={addErrores.url}>
@@ -368,6 +391,7 @@ export function InstancesPage() {
               <button type="button" className="btn btn-secondary btn-sm" onClick={handleAddTest} disabled={addTesting}>
                 {addTesting ? 'Probando…' : 'Probar conexión'}
               </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={cerrarAlta} disabled={adding}>Cancelar</button>
               <ResultadoPrueba resultado={addTestResult} />
             </div>
           </form>
@@ -384,7 +408,7 @@ export function InstancesPage() {
           icon={<IconoEnchufe />}
           title="Sin instancias configuradas"
           body="Añade una instancia Radarr o Sonarr para empezar."
-          action={<button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Añadir instancia</button>}
+          action={<button className="btn btn-primary btn-sm" onClick={abrirAlta}>+ Añadir instancia</button>}
         />
       ) : (
         <ul className="inst-lista">
@@ -395,9 +419,14 @@ export function InstancesPage() {
             return (
               <li key={inst.id} className={`instance-card inst-tarjeta inst-tarjeta--${estado.tono}`}>
                 {editingId === inst.id && editForm ? (
-                  <div className="inst-edicion">
+                  <div className="inst-edicion" id={`inst-edicion-${inst.id}`}>
+                    {/* Qué instancia se edita: los campos solos no lo decían. */}
+                    <h3 className="inst-titulo inst-titulo-edicion">
+                      <ServiceIcon type={inst.type as 'radarr' | 'sonarr'} size={20} />
+                      Editar «{inst.name}»
+                    </h3>
                     <div className="inst-rejilla-180">
-                      <Campo etiqueta="Nombre" error={editErrores.name}>
+                      <Campo etiqueta="Nombre" nota="máx. 15" error={editErrores.name}>
                         {c => <input {...c} className="form-input" value={editForm.name} onChange={e => setEditForm(p => p && ({ ...p, name: e.target.value }))} maxLength={15} autoComplete="off" />}
                       </Campo>
                       <Campo etiqueta="URL" error={editErrores.url}>
@@ -468,7 +497,7 @@ export function InstancesPage() {
                       >
                         {syncingId === inst.id ? 'Sincronizando…' : 'Sincronizar'}
                       </button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => startEdit(inst)} aria-label={`Editar ${inst.name}`}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => startEdit(inst)} aria-label={`Editar ${inst.name}`} data-editar={inst.id}>
                         Editar
                       </button>
                       <button className="btn btn-danger btn-sm" onClick={() => setAEliminar(inst)} aria-label={`Eliminar ${inst.name}`}>

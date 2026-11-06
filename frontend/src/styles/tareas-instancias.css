@@ -420,6 +420,12 @@
 .inst-resultado--neutro { color: var(--text-secondary); }
 
 .inst-edicion { width: 100%; }
+.inst-titulo.inst-titulo-edicion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 
 /* Diálogo de eliminar. */
 .modal-panel.inst-modal-borrar { max-width: 460px; }

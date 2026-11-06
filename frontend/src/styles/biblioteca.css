@@ -159,9 +159,7 @@
 }
 /* Un nombre de instancia largo se corta con puntos suspensivos en vez de ensanchar la columna. */
 .data-table.bib-tabla td .value-chip a { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Con menos ancho la tabla se desplaza en horizontal en vez de aplastar el título. En la ficha el título es corto
-   («Temporada 1», «S01E02 · …»): con 300 px la tabla de capítulos medía 10 px más que su caja a 1440 y la columna fija
-   de Acciones tapaba el Tamaño. */
+/* Con menos ancho la tabla se desplaza; en la ficha el título es corto y 240 px evita que Acciones tape el Tamaño. */
 .data-table th.hijos-col-titulo { min-width: 240px; }
 .data-table th.bib-col-titulo {
   width: 100%;
@@ -465,10 +463,7 @@
   align-self: center;
 }
 
-/* Escritorio de 1280-1440 px: con doce columnas la tabla medía 1315 px y dejaba eMuwarez y Tamaño detrás del scroll.
-   Título más estrecho, carátula más pequeña, márgenes de 6 px, sin el icono de adorno delante de cada valor (la
-   cabecera ya dice qué es) y Origen solo con el icono (el nombre sigue para el lector de pantalla y en el tooltip del
-   enlace). */
+/* 1280-1440 px: título y carátula más estrechos, márgenes de 6 px, sin icono de adorno y Origen solo con icono, para que quepan las doce columnas. */
 @media (max-width: 1500px) {
   .data-table th.bib-col-titulo { min-width: 190px; }
   .data-table.bib-tabla td,

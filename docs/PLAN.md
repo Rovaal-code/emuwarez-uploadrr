@@ -536,10 +536,11 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     botón de verdad; su medida sigue fijada solo por `aspect-ratio` (medido con scroll rápido, sin el aviso de `RejillaVirtual`). El título
     de la lista es un enlace real `/library/:id`. La ficha mide 420 px (`DetailPoster` admite `alto`; las otras fichas siguen en 480), pone
     las acciones en la línea del título y pasa las tarjetas a dos columnas por debajo de 1000 px. «Subir por lotes» alinea el paso 1,
-    abre el paso 2 con el recuento (se subirán, se saltarán, por comprobar) y en móvil enseña «Incluir» en cada bloque. **Aplazado, la
-    «petición heredada» en la lista:** el filtro es SQL (`listado._build_library_filter`), una serie pedida entera marcaría todos sus
-    capítulos «Compatible» y mostrarla solo en la celda desajusta columna y filtro; si se quiere, una etiqueta «de la serie» solo en la
-    celda, con una consulta por lote de antepasados reutilizando `_cubre`. **Sin ver:** `EmuComparisonSection` y `SourceComparisonModal`, el
+    abre el paso 2 con el recuento (se subirán, se saltarán, por comprobar) y en móvil enseña «Incluir» en cada bloque. **La «petición
+    heredada» en la lista (#240):** una temporada o capítulo sin petición propia que cubre la de su serie o temporada dice «de la serie» /
+    «de la temporada» en la celda (texto atenuado, sin insignia); el estado guardado y el filtro (SQL, `listado._build_library_filter`) no
+    cambian, porque una serie pedida entera marcaría todos sus capítulos «Compatible». `requests.peticiones_heredadas` lo resuelve con una
+    consulta por página y `_cubre`. **Sin ver:** `EmuComparisonSection` y `SourceComparisonModal`, el
     paso 2 del lote con comprobaciones en verde, el contraste AA medido y el lector de pantalla.
   - Asistente de subida, P5 completo (#232): el panel es una columna y solo el cuerpo del paso hace scroll; el pie (Volver, Continuar,
     Subir) queda fijo a 1280×800, 1440×900 y 390×844 (cerrado el detalle del pie cortado de «Siguiente») y el veredicto de las
@@ -580,17 +581,55 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   subidas, salud de *Arr, pruebas de conexión, seeding, manifiesto de versión). Además, una fábrica de `LogRecord` global
   (`web/logging_setup.py`) tapa mensaje, traceback y stack de cualquier registro (app.log, consola, `/api/logs`). `tests/test_errores_sin_claves.py`.
   **Limitaciones:** la fábrica es global al proceso; un secreto sin forma reconocible (ni `clave=valor`, ni cabecera, ni URL) solo se tapa si el
-  sitio le pasa la clave configurada; **no hay un test de arquitectura que obligue a usar `texto_de_error` en sitios nuevos**, el siguiente
-  paso si se quiere cerrar la puerta. Suite completa sobre la rama: 4248 pasan, 69 omitidas.
+  sitio le pasa la clave configurada; el test de arquitectura que obliga a usar `texto_de_error` llegó en #240. Suite completa sobre la rama: 4248 pasan, 69 omitidas.
 - **Oleada 4, limpieza tras el rediseño (#236):** fuera `NomenclatureModal`, `NomenclatureFieldsModal` y `UploadPreflightModal` (nada los abría; los
   sustituyó el asistente) con `styles/nomenclatura.css`, las funciones y tipos de `api/` que solo ellos usaban y el CSS huérfano (`.settings-tab`,
   `.fields-grid`, `.preview-*`, fondos de `.login-card`/`.wizard-card` que el HUD pisaba); `test_copias_frontend` ya no exige los tokens de
   nomenclatura y título MKV en el frontend (siguen en backend y CLI). `theme-color` y `site.webmanifest` pasan a `#0a0d14`. `HeaderFilter` cierra con
   `pointerdown` (iOS). `formatBytes` usa espacio duro. Tras «Borrar lote» con todo borrado, Subidas dice «Este lote ya no tiene subidas» y ofrece
   «Quitar filtro del lote». La franja de cuenta del Panel pierde Mensajes y Notificaciones (están en la barra superior y el cajón) y queda «Mis
-  subidas», solo con icono entre 769 y 1400 px para ir en una fila. Los modales ya eran opacos tras #229. **Pendiente:** `--color-tab-active`
-  (globals.css) y los endpoints de nomenclatura y preflight del backend, sin uso desde la interfaz; `pages/ajustes/formatBytes.ts` sigue con espacio
-  normal y otra precisión; `viewport-fit=cover` espera a que el marco trate las safe areas; tablet táctil a 769–1400 px sin probar.
+  subidas», solo con icono entre 769 y 1400 px para ir en una fila. Los modales ya eran opacos tras #229. **Después (#240-#243):** fuera
+  `--color-tab-active` y los endpoints sin uso; `formatBytes` es uno solo (`utils/format.ts`); `viewport-fit=cover` se descartó (ver la entrada
+  de la revisión con `impeccable`). Sigue sin probar la tablet táctil a 769–1400 px.
+
+- **Oleada 4, revisión con `impeccable` de verdad (06/11, #239-#244, #246):** la del 06/11 (#227-#232) fue solo detector y crítica inline,
+  hecha por quien diseñaba. Esta vez:
+  - `PRODUCT.md` (`/impeccable init`, entrevista de dos rondas con Gabriel: lo usan él y unos pocos, escritorio manda, voz directa y técnica,
+    buenas prácticas de accesibilidad y cuatro restricciones firmes) y `DESIGN.md` (`/impeccable document`, tokens extraídos de `styles/`;
+    North Star «La sala de control»; profundidad por capas tonales y **el brillo cian solo en lo vivo**: activo, foco, acción principal y
+    progreso), en #239.
+  - Critique + audit por grupos de pantallas con **cuatro revisores independientes** (método de `critique.md`/`audit.md` y las guías de
+    Vercel, sin el detector: su binario no se ejecuta en la nube; la evidencia son capturas y medidas con Playwright a 1440×900, 1280×800 y
+    390×844 sobre `demo seed` más filas sembradas) y **otros cuatro agentes que implementan** lo marcado «claramente mejora» que encaja con el
+    criterio de Gabriel. Las skills no se instalaron (el clasificador lo bloquea): se leyeron como referencia.
+  - Panel, Estadísticas y marco (#241): fuera el brillo de títulos, cifras, logo y botones de la barra superior en reposo; un solo `h1` por
+    pantalla (la barra superior pasa a miga de pan, `aria-hidden`); `HoverTitle` es un `<a href>` real (clic normal por la SPA,
+    Ctrl/⌘/Mayús/central a otra pestaña sin abrir también la fila) o un `<button>`; fuera `--color-tab-active`; cajón móvil opaco; la
+    burbuja del tour se mide (también al cambiar la ventana) y no tapa lo que explica; un solo principal en el Panel; Estadísticas usa los
+    nombres del Panel para las mismas cifras. **Descartado `viewport-fit=cover`:** exigiría tratar las safe areas en barra superior (y
+    `--topbar-height`), cajón, barra lateral en horizontal, paleta, modales y tour, y sin `cover` el navegador ya deja todo fuera de la muesca.
+  - Biblioteca, ficha, «Subir por lotes» y asistente (#242): la tabla cabe a 1280 y 1440 px (de 1315 a 991 px en 990); la ficha distingue
+    sus temporadas (`tituloEnFicha`, del número y no del título); las acciones repetidas por fila son secundarias; el asistente dice por qué
+    no se puede elegir algo y no deja continuar sin nada elegido; el error de MediaInfo va en una alerta con qué revisar; el resumen del lote
+    dice qué comprobación falló.
+  - Configuración, Tareas, Instancias, Logs, Guía, Login y primera configuración (#243): eMuwarez y TMDb primero; el buscador lee
+    descripciones, ayudas y botones; el `window.confirm` del widget pasa a `Modal`; un solo `formatBytes` (`utils/format.ts`, espacio duro);
+    la primera configuración no enseña un error antes de probar la key y deja volver atrás; Tareas confirma lo guardado y enlaza a donde se
+    arregla un fallo; Logs con una sola parada de Tab (flechas, Inicio, Fin, C) y sin perder el foco si un refresco se lleva la línea; una
+    conexión que corta el navegador ya no sale como ERROR con traza (DEBUG y un 204 que nadie recibe).
+  - Peticiones, Subidas y detalle (#244): Subidas avisa si Reintentar o Cancelar fallan (también desde el detalle) y cabe a 1280 px (Creado y
+    Finalizado en una columna «Fecha» relativa); una sola acción principal en la ficha de petición; **una tarjeta por fila en móvil**
+    (<760 px, solo CSS sobre el mismo DOM; la cabecera queda como tira de filtros); **virtualizadas con `FilasVirtuales` pasadas las 50
+    filas** (`UMBRAL_VIRTUAL`, `utils/ventana.ts`; en Peticiones las cabeceras de grupo son elementos fijos de la lista y «ir al grupo» las
+    encuentra). `CuerpoMedido` va memorizado (afecta también a Biblioteca). Medido con rueda continua (141 peticiones, 80 subidas): nodos de
+    la tabla de 6220 a 942 y de 5182 a 995; con CPU ×4, tareas largas de 267 a 16 y de 82 a 7; sin avisos de «Maximum update depth».
+    Tras la revisión (#246): el botón de borrar sigue en la tarjeta móvil y un fallo tardío de Reintentar no tapa el de un Cancelar posterior.
+  - Backend (#240): `tests/test_errores_por_texto_de_error.py` obliga a pasar por `texto_de_error` el texto de una excepción en `web/` y
+    `services/` (33 usos corregidos, 4 permitidos con su motivo); fuera los endpoints de nomenclatura, preflight y comprobación sin uso
+    desde la interfaz; «de la serie» en la celda Petición (ver Biblioteca, #230).
+  - Verificado en local (la CI no tiene minutos): suite completa del backend sobre master y la del frontend en cada PR; cada arreglo de
+    comportamiento lleva su test. **Sin ver:** lector de pantalla, iOS y tablet reales, el asistente con mediainfo y mkvmerge de verdad,
+    `EmuComparisonSection` con datos reales, contraste AA medido con herramienta.
 
 ## Siguiente
 
@@ -611,22 +650,24 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).
 - Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): P1 Panel, P4 detalle de subida, P5 asistente con Resumen,
   P2 Biblioteca, P3 Peticiones, P6 Configuración y P7 móvil (todos hechos; el 06/11 pasaron también por `frontend-design`, `impeccable` y
-  las guías de Vercel, ver «Hecho»). Queda, de P7, una tarjeta por fila en móvil para las listas largas. Las funciones que
+  las guías de Vercel, ver «Hecho»). La tarjeta por fila en móvil para las listas largas llegó en #244. Las funciones que
   tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: le gusta el diseño original y solo quiere mejoras para ver mejor el contenido nuevo;
   esquinas redondeadas (la esquina cortada, demasiado contrastada, no); algo compacto pero solo un poco y sin regla fija
   (si dar aire mejora la lectura, se da; Tracearr era solo una inspiración); y pasar cada pantalla por la skill `frontend-design`.
 
 ## Aplazado / ideas
 
-- Que la columna «Petición» de la lista de Biblioteca (y su filtro) cuente la petición heredada: hoy la temporada de
-  una serie pedida entera dice «Sin petición» en la lista aunque su ficha enseñe la de la serie. `request_id` guarda
-  una petición por fila, la que se escribe donde la petición pide. Propuesta y razones en la entrada de Biblioteca (#230).
-- `window.confirm` del widget de Homepage (`WidgetCard.tsx`) → `Modal`; virtualizar las listas de Peticiones y Subidas de más de 50 filas;
-  una tarjeta por fila en móvil para esas listas; `HoverTitle` es un `div role="link"`; `h1` en el resto de pantallas; `/impeccable init`
-  (`PRODUCT.md`/`DESIGN.md`).
+- Que el filtro «Petición» de Biblioteca cuente la petición heredada (la celda ya dice «de la serie», #240): `request_id` guarda una
+  petición por fila, la que se escribe donde la petición pide.
+- De la revisión con `impeccable` (#241-#244), encajan con el criterio pero no tenían evidencia clara: punto gris de «Sonarr no responde» en
+  la banda, «Job #»/«dashboard» en inglés, carriles del Panel con `70vh` en móvil, paso del tour para Estadísticas, opción activa de la
+  paleta en cian, aviso cuando falla el resumen de Estadísticas y el salto al cambiar de rango; filtro «Parcial» en Estado de Biblioteca
+  (lo calcula la columna, no está en `local_status`: habría que repetirlo en el SQL del listado); marcar como bloqueado en «Seleccionar» lo
+  que no se puede subir; en la Guía móvil, que la fila de secciones se desplace hasta la elegida.
+- Objetivos táctiles con `(any-pointer: coarse)` en vez de `(pointer: coarse)` para portátiles táctiles con ratón como puntero principal: es
+  un cambio de toda la app (`--tap-min` en `globals.css` y sus usos), no de una pantalla (#242).
+- `nomenclature_check.check_item`/`count_pending` ya solo los llaman los tests (#240): borrarlos o volver a usarlos.
 - Recuperar solo el añadido a qBittorrent de una subida que ya estaba en eMuwarez (necesita un cambio en Uploadrr-EMU, otro repo).
-- Una prueba de arquitectura que obligue a pasar por `integrations.base.texto_de_error` el texto de una excepción antes de devolverlo, guardarlo o
-  notificarlo (hoy lo cubren la fábrica de logs y los arreglos de #237, pero un sitio nuevo puede olvidarlo).
 - Probar en el NAS (`:edge`): el límite compartido entre CLI y servidor (`flock` sobre el volumen de `CONFIG_DIR`), el campo y el enlace de
   qBittorrent, y la subida por lotes (ver «Siguiente»).
 

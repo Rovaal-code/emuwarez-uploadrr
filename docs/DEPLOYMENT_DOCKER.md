@@ -98,6 +98,12 @@ no compila nada. Lo que hay que mirar:
 Si Radarr, Sonarr y qBittorrent corren en Docker, descomenta `networks` y pon el contenedor en su misma red: así
 los alcanzas por el nombre del servicio (`http://radarr:7878`).
 
+Ese nombre solo lo entiende el contenedor, no tu navegador. Para que el detalle de una subida completada enseñe
+«Abrir en qBittorrent», rellena en Configuración → qBittorrent la *URL pública del WebUI* (la que escribes tú en el
+navegador, p. ej. `https://qbittorrent.midominio.es`): es opcional, solo se usa para ese enlace, y no admite usuario ni
+contraseña en la URL. La WebUI no tiene enlace directo a un torrent, así que junto al enlace hay «Copiar nombre», para
+pegarlo en su filtro.
+
 Para no editar el compose, copia [`.env.example`](../.env.example) a `.env` al lado y ajusta `PUID`, `PGID`, `TZ`,
 `EMUWAREZ_UPLOADRR_PORT` y `EMUWAREZ_UPLOADRR_TAG`. Luego:
 

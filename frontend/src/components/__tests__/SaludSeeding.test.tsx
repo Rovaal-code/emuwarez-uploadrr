@@ -9,7 +9,7 @@ vi.mock('../../api/seeding', () => ({ getSeeding: vi.fn() }))
 import { getSeeding, type SeedingItem, type SeedingResponse } from '../../api/seeding'
 import { useSeeding } from '../../hooks/useSeeding'
 import type { UploadJob } from '../../types/api'
-import { SeedingBloque, SeedingCelda } from '../SaludSeeding'
+import { SeedingBloque, SeedingCelda, nombreDelTorrent } from '../SaludSeeding'
 import { boton, desmontar, esperar, montar, pulsar, texto } from './dom'
 
 const m = vi.mocked(getSeeding)
@@ -49,6 +49,65 @@ describe('SaludSeeding', () => {
     expect(bloque).toContain('100,0 %')
     expect(bloque).toContain('12 / 3')
     expect(bloque).toContain('Leído')
+  })
+
+  describe('Abrir en qBittorrent', () => {
+    const enlace = () => [...document.querySelectorAll('a')].find(a => a.textContent?.includes('Abrir en qBittorrent'))
+
+    it('sin URL pública no hay enlace ni «Copiar nombre»', async () => {
+      m.mockResolvedValue(respuesta({}, { url_publica: null }))
+      await montar(<Pagina job={subida({ prepared_path: '/data/uploads/Peli.2020.1080p' })} />)
+      await esperar(() => texto().includes('Ratio'))
+      expect(enlace()).toBeUndefined()
+      expect(boton('Copiar nombre')).toBeUndefined()
+    })
+
+    it('con URL pública enseña el enlace a esa URL, en pestaña nueva y sin opener', async () => {
+      m.mockResolvedValue(respuesta({}, { url_publica: 'https://qbit.midominio.es/' }))
+      await montar(<Pagina job={subida({ prepared_path: '/data/uploads/Peli.2020.1080p' })} />)
+      await esperar(() => enlace() !== undefined)
+      const a = enlace()!
+      expect(a.getAttribute('href')).toBe('https://qbit.midominio.es/')
+      expect(a.getAttribute('target')).toBe('_blank')
+      expect(a.getAttribute('rel')).toBe('noopener noreferrer')
+    })
+
+    it('el enlace sigue ahí aunque qBittorrent no responda (la URL no depende de la consulta)', async () => {
+      m.mockResolvedValue(respuesta(null, { disponible: false, mensaje: 'No se pudo conectar con qBittorrent',
+        url_publica: 'http://192.168.1.5:8080' }))
+      await montar(<Pagina job={subida()} />)
+      await esperar(() => enlace() !== undefined)
+      expect(enlace()!.getAttribute('href')).toBe('http://192.168.1.5:8080')
+    })
+
+    it('«Copiar nombre» copia el último trozo de la ruta preparada', async () => {
+      const escribirPortapapeles = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('isSecureContext', true)
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: escribirPortapapeles }, configurable: true })
+      try {
+        m.mockResolvedValue(respuesta({}, { url_publica: 'https://qbit.midominio.es' }))
+        await montar(<Pagina job={subida({ prepared_path: '/data/uploads/Peli.2020.1080p-EMUWAREZ/' })} />)
+        await esperar(() => boton('Copiar nombre') !== undefined)
+        await pulsar(boton('Copiar nombre'))
+        expect(escribirPortapapeles).toHaveBeenCalledWith('Peli.2020.1080p-EMUWAREZ')
+        expect(boton('Nombre copiado')).toBeDefined()
+      } finally {
+        vi.unstubAllGlobals()
+        Reflect.deleteProperty(navigator, 'clipboard')
+      }
+    })
+
+    it('sin ruta preparada no se ofrece copiar el nombre, pero el enlace sí', async () => {
+      m.mockResolvedValue(respuesta({}, { url_publica: 'https://qbit.midominio.es' }))
+      await montar(<Pagina job={subida({ prepared_path: undefined })} />)
+      await esperar(() => enlace() !== undefined)
+      expect(boton('Copiar nombre')).toBeUndefined()
+    })
+
+    it('nombreDelTorrent acepta barras de las dos clases y una ruta vacía', () => {
+      expect(nombreDelTorrent(subida({ prepared_path: 'C:\\uploads\\Peli 2020' }))).toBe('Peli 2020')
+      expect(nombreDelTorrent(subida({ prepared_path: undefined }))).toBe('')
+    })
   })
 
   it('el estado va siempre con texto, no solo con color', async () => {

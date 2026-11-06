@@ -12,3 +12,16 @@ export function isValidHttpUrl(value: string): boolean {
     return false
   }
 }
+
+// Una URL que se enseña o se enlaza tal cual (la pública de qBittorrent): http(s) con host y sin usuario ni
+// contraseña dentro. El servidor aplica la misma regla (ajustes_registro.error_de_url_publica).
+export function isValidPublicUrl(value: string): boolean {
+  const v = value.trim()
+  if (!isValidHttpUrl(v) || /\s/.test(v)) return false
+  try {
+    const u = new URL(v)
+    return !!u.hostname && !u.username && !u.password
+  } catch {
+    return false
+  }
+}

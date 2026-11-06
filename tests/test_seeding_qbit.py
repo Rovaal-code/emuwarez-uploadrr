@@ -239,7 +239,7 @@ def test_cambiar_la_configuracion_no_sirve_la_cache_de_otra(http_falso):
 def test_sin_qbittorrent_configurado_no_se_sale_a_la_red(http_falso):
     r = _salud()
     assert r == {"configurado": False, "disponible": False, "mensaje": sq.MENSAJE_SIN_CONFIGURAR,
-                 "actualizado": None, "items": []}
+                 "actualizado": None, "items": [], "url_publica": None}
     assert http_falso.peticiones == []
 
 
@@ -337,3 +337,46 @@ def test_endpoint_devuelve_el_estado_de_cada_subida(client, auth_headers, http_f
     assert datos["disponible"] and datos["actualizado"]
     assert datos["items"][0]["job_id"] == sid and datos["items"][0]["etiqueta"] == "Sembrando"
     assert "password" not in r.text
+
+
+# --- URL pública de qBittorrent (el enlace «Abrir en qBittorrent») ------------------------------------------------
+
+def _guardar_publica(valor):
+    with db() as conn:
+        set_setting(conn, "qbit.public_url", valor)
+
+
+def test_la_respuesta_lleva_la_url_publica_en_los_tres_casos(http_falso):
+    _guardar_publica("https://qbit.midominio.es/")
+    # Sin qBittorrent configurado.
+    assert _salud()["url_publica"] == "https://qbit.midominio.es/"
+    # Configurado y caído.
+    _config()
+    http_falso.responde(falla_conexion("sin red"))
+    caido = _salud(refrescar=True)
+    assert not caido["disponible"] and caido["url_publica"] == "https://qbit.midominio.es/"
+    # Configurado y en marcha.
+    _servidor(http_falso, [])
+    assert _salud(refrescar=True)["url_publica"] == "https://qbit.midominio.es/"
+
+
+def test_sin_url_publica_es_none(http_falso):
+    assert _salud()["url_publica"] is None
+    _guardar_publica("   ")
+    assert _salud()["url_publica"] is None
+
+
+@pytest.mark.parametrize("mala", ["http://admin:clave@qbit.lan:8080", "ftp://qbit.lan", "qbit.lan:8080", "http://"])
+def test_una_url_publica_con_credenciales_o_mal_formada_no_sale_nunca(http_falso, mala):
+    """Una copia restaurada no pasó por la validación del PUT: se vuelve a comprobar al leerla."""
+    _guardar_publica(mala)
+    assert _salud()["url_publica"] is None
+
+
+def test_la_url_publica_no_se_confunde_con_la_del_servidor(client, auth_headers, http_falso):
+    _config()
+    _guardar_publica("https://qbit.midominio.es")
+    _servidor(http_falso, [])
+    datos = client.get("/api/uploads/seeding", headers=auth_headers).json()
+    assert datos["url_publica"] == "https://qbit.midominio.es"
+    assert "qbit.lan" not in client.get("/api/uploads/seeding", headers=auth_headers).text

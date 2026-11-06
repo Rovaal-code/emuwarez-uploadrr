@@ -19,7 +19,7 @@ from pydantic import BaseModel, field_validator
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from ...services.settings import escribir_ajuste, estado_secreto, leer_ajuste, set_setting
-from ...services.ajustes_registro import AJUSTES, SECRET, error_de
+from ...services.ajustes_registro import AJUSTES, SECRET, error_de, error_de_url_publica
 from ...services.uploadrr_contract import DEFAULT_ALLOWED_ROOTS
 from ...services.source_assistant import EMU_PROVIDERS
 from ...services.notification_center import EVENT_TYPES, channel_events
@@ -69,6 +69,8 @@ class SettingsResponse(BaseModel):
     # qBittorrent (torrent client used by Uploadrr)
     qbit_url: Optional[str] = None
     qbit_tag: Optional[str] = None
+    # Dónde abre el usuario la WebUI en su navegador (opcional): solo para el enlace «Abrir en qBittorrent».
+    qbit_public_url: Optional[str] = None
     qbit_username: Optional[str] = None
     qbit_password_configured: bool = False
     # El proxy de qui no se devuelve: lleva su clave dentro.
@@ -139,6 +141,7 @@ class SettingsUpdateRequest(BaseModel):
     # qBittorrent
     qbit_url: Optional[str] = None
     qbit_tag: Optional[str] = None
+    qbit_public_url: Optional[str] = None
     qbit_username: Optional[str] = None
     qbit_password: Optional[str] = None
     # Vacío deja el que haya, como la contraseña; quitarlo es qbit_qui_proxy_clear.
@@ -361,6 +364,13 @@ def update_settings(
             error = error_de(ajuste, valor)
             if error:
                 errors.append(error)
+
+    # Aquí y no en un validador de pydantic: su 422 devuelve el valor recibido (`input`) y esta URL no debe volver
+    # con una clave dentro.
+    if body.qbit_public_url is not None:
+        error = error_de_url_publica(body.qbit_public_url)
+        if error:
+            errors.append(error)
 
     # TMDb y eMuwarez son integraciones obligatorias: si se manda el campo,
     # no puede quedar vacío (borrar la key sin poner una nueva no está permitido).

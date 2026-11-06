@@ -45,6 +45,7 @@ const AJUSTES: SettingsData = {
   tmdb_localize_series_titles: true,
   qbit_url: 'http://qbit:8080',
   qbit_tag: 'Subidas',
+  qbit_public_url: null,
   source_engine_enabled: false,
   emu_add_logo: true,
   emu_per_episode_screens: false,
@@ -222,6 +223,7 @@ describe('Configuración: pestaña de ajustes', () => {
       tmdb_watch_region: 'ES',
       tmdb_localize_series_titles: true,
       qbit_url: 'http://qbit:8080',
+      qbit_public_url: '',
       qbit_tag: 'Nuevo',
       qbit_username: 'admin',
       image_hosts_enabled: ['imgbb'],
@@ -271,6 +273,27 @@ describe('Configuración: pestaña de ajustes', () => {
     expect(updateSettings).not.toHaveBeenCalled()
     expect(texto()).toContain('La URL de qBittorrent debe empezar por http:// o https://')
   })
+
+  it('la URL pública de qBittorrent viaja al guardar, sin espacios', async () => {
+    await montar()
+    expect(campo('URL pública del WebUI').value).toBe('')
+    await escribir(campo('URL pública del WebUI'), '  https://qbit.midominio.es  ')
+    expect(hayCambios()).toBe(true)
+    await pulsar(boton('Guardar'))
+    expect(vi.mocked(updateSettings).mock.calls[0][0]).toMatchObject({
+      qbit_url: 'http://qbit:8080', qbit_public_url: 'https://qbit.midominio.es',
+    })
+  })
+
+  it.each(['qbit.local', 'ftp://qbit.local', 'http://admin:clave@qbit.local:8080'])(
+    'la URL pública «%s» no se guarda: sin http(s) o con usuario y contraseña', async (mala) => {
+      await montar()
+      await escribir(campo('URL pública del WebUI'), mala)
+      await pulsar(boton('Guardar'))
+      expect(updateSettings).not.toHaveBeenCalled()
+      expect(texto()).toContain('La URL pública debe empezar por http:// o https://')
+      expect(campo('URL pública del WebUI').getAttribute('aria-invalid')).toBe('true')
+    })
 
   it('un grupo escrito sin pulsar «Añadir» también se guarda', async () => {
     await montar()
@@ -516,7 +539,7 @@ describe('Configuración: índice, buscador, barra de guardado y Avanzado', () =
 
   it('las etiquetas de los campos están ligadas a su control', async () => {
     await montar()
-    for (const texto of ['URL del WebUI', 'Tag', 'Rutas permitidas']) {
+    for (const texto of ['URL del WebUI', 'URL pública del WebUI', 'Tag', 'Rutas permitidas']) {
       const etiqueta = [...document.querySelectorAll('label')].find(l => l.textContent?.trim().startsWith(texto))!
       expect(document.getElementById(etiqueta.htmlFor)).toBe(campo(texto))
     }

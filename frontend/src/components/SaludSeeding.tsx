@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { UploadJob } from '../types/api'
 import type { SeedingEstado } from '../hooks/useSeeding'
 import { formatDateTimeSeconds, formatNumero } from '../utils/format'
+import { copiarTexto } from '../utils/portapapeles'
+import { ExternalLinkButtonIcon } from './DetailCard'
 import { SIN_DATOS_QBIT, claseSeeding, resumenSeeding, seedingDe, textoSubido } from '../utils/seeding'
 
 // Solo la subida completada tiene ya su torrent sembrando; las demás no llegaron a subir o están en ello.
@@ -15,6 +17,29 @@ export function SeedingCelda({ job, seeding }: { job: UploadJob; seeding: Seedin
   const i = seedingDe(seeding.datos, job.id)
   if (!i) return <span className="sub-muted">—</span>
   return <span className={claseSeeding(i.estado)}>{resumenSeeding(i)}</span>
+}
+
+// El nombre del torrent en qBittorrent: lo último de la ruta preparada, que es la que se le entregó como ruta de guardado.
+export const nombreDelTorrent = (job: UploadJob): string => (job.prepared_path ?? '').split(/[\\/]/).filter(Boolean).pop() ?? ''
+
+// «Abrir en qBittorrent» (solo con la URL pública configurada) y «Copiar nombre». La WebUI no tiene enlace directo a
+// un torrent: se abre la WebUI y el nombre copiado sirve para pegarlo en su filtro.
+function AccionesQbit({ job, url }: { job: UploadJob; url: string }) {
+  const [copia, setCopia] = useState<'ok' | 'error' | null>(null)
+  const nombre = nombreDelTorrent(job)
+  return (
+    <>
+      <a className="btn btn-secondary btn-sm dsub-sin-subrayado" href={url} target="_blank" rel="noopener noreferrer">
+        <ExternalLinkButtonIcon /> Abrir en qBittorrent
+      </a>
+      {nombre && (
+        <button type="button" className="btn btn-secondary btn-sm" aria-live="polite" title="Copia el nombre del torrent para buscarlo en qBittorrent"
+          onClick={async () => setCopia((await copiarTexto(nombre)) ? 'ok' : 'error')}>
+          {copia === 'ok' ? 'Nombre copiado' : copia === 'error' ? 'No se pudo copiar' : 'Copiar nombre'}
+        </button>
+      )}
+    </>
+  )
 }
 
 // El bloque completo del detalle de una subida. Pide los datos al entrar (la caché del servidor evita machacar
@@ -67,9 +92,12 @@ export function SeedingBloque({ job, seeding }: { job: UploadJob; seeding: Seedi
           <span className="sub-muted sub-t11">
             {datos?.actualizado ? `Leído ${formatDateTimeSeconds(datos.actualizado)}` : ''}
           </span>
-          <button type="button" className="btn btn-secondary btn-sm" disabled={cargando} onClick={() => cargar(true)}>
-            Actualizar
-          </button>
+          <div className="seeding-acciones">
+            {datos?.url_publica && <AccionesQbit job={job} url={datos.url_publica} />}
+            <button type="button" className="btn btn-secondary btn-sm" disabled={cargando} onClick={() => cargar(true)}>
+              Actualizar
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -162,7 +162,9 @@ Abre `http://localhost:9494`: el asistente de configuración inicial se abre sol
   mkdir -p /srv/data/uploads/emu
   chown 1000:1000 /srv/data/uploads/emu   # tu PUID:PGID
   ```
-- **qBittorrent** tiene que ver la carpeta de subidas en la misma ruta que este contenedor.
+- **qBittorrent** tiene que ver la carpeta de subidas en la misma ruta que este contenedor. Si quieres «Abrir en
+  qBittorrent» en el detalle de una subida completada, pon en Configuración → qBittorrent la *URL pública del WebUI*
+  (la de tu navegador, sin usuario ni contraseña; opcional).
 - **Si Radarr/Sonarr ven la media en otra ruta** que este contenedor, añade una regla en Configuración →
   Diagnóstico → *Mapeo de rutas (biblioteca remota)*.
 - **Rutas permitidas** (Configuración → *Acceso a la biblioteca*) es `/data` por defecto. Si montas la raíz de

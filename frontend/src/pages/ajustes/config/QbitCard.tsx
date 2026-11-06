@@ -7,7 +7,7 @@ import { CabeceraTarjeta } from '../CabeceraTarjeta'
 import type { ConfigForm } from './useConfigForm'
 
 export function QbitCard({ form }: { form: ConfigForm }) {
-  const { settings, qbitUrl, setQbitUrl, qbitTag, setQbitTag, qbitUser, setQbitUser, qbitPass, setQbitPass, quitarQbitPass, setQuitarQbitPass, qbitQui, setQbitQui, quitarQui, setQuitarQui, errores, marcarTocado } = form
+  const { settings, qbitUrl, setQbitUrl, qbitPublicUrl, setQbitPublicUrl, qbitTag, setQbitTag, qbitUser, setQbitUser, qbitPass, setQbitPass, quitarQbitPass, setQuitarQbitPass, qbitQui, setQbitQui, quitarQui, setQuitarQui, errores, marcarTocado } = form
   const [testingQbit, setTestingQbit] = useState(false)
   const [qbitTestResult, setQbitTestResult] = useState<IntegrationTestResult | null>(null)
   const [showQbitUser, setShowQbitUser] = useState(false)
@@ -39,6 +39,14 @@ export function QbitCard({ form }: { form: ConfigForm }) {
       />
       <Campo etiqueta="URL del WebUI" error={errores.qbitUrl}>
         {c => <input {...c} className="form-input" value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} onBlur={() => marcarTocado('qbitUrl')} placeholder="http://127.0.0.1" inputMode="url" autoComplete="off" spellCheck={false} />}
+      </Campo>
+      <Campo
+        etiqueta="URL pública del WebUI"
+        nota="opcional"
+        ayuda="Cómo abres qBittorrent en tu navegador, si no es la URL de arriba (puede ser el nombre de un contenedor). Activa «Abrir en qBittorrent» en las subidas completadas."
+        error={errores.qbitPublicUrl}
+      >
+        {c => <input {...c} className="form-input" value={qbitPublicUrl} onChange={e => setQbitPublicUrl(e.target.value)} onBlur={() => marcarTocado('qbitPublicUrl')} placeholder="https://qbittorrent.midominio.es" inputMode="url" autoComplete="off" spellCheck={false} />}
       </Campo>
       <Campo etiqueta="Tag">
         {c => <input {...c} className="form-input" value={qbitTag} onChange={e => setQbitTag(e.target.value)} placeholder="Subidas" autoComplete="off" />}

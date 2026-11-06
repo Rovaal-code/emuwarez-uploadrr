@@ -12,6 +12,7 @@ export interface SettingsData {
   tmdb_localize_series_titles: boolean
   qbit_url: string | null
   qbit_tag: string | null
+  qbit_public_url: string | null
   source_engine_enabled: boolean
   emu_add_logo: boolean
   emu_per_episode_screens: boolean
@@ -65,6 +66,7 @@ export interface SettingsUpdatePayload {
   tmdb_localize_series_titles?: boolean
   qbit_url?: string
   qbit_tag?: string
+  qbit_public_url?: string
   source_engine_enabled?: boolean
   emu_add_logo?: boolean
   emu_per_episode_screens?: boolean

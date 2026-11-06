@@ -34,6 +34,8 @@ export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, p
           <img
             src={posterUrl(item.poster_url, 'w342')}
             alt=""
+            width={342}
+            height={513}
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
             className="poster-grande-img"

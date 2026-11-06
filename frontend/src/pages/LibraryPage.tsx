@@ -102,6 +102,8 @@ const PosterCard = memo(function PosterCard({ item, onSelect, priority, seleccio
           <img
             src={posterUrl(item.poster_url, 'w342')}
             alt=""
+            width={342}
+            height={513}
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
             className="bib-tarjeta-img"

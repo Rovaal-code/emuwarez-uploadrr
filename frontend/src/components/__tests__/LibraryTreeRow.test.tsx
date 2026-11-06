@@ -35,6 +35,27 @@ async function montarFila(item: LibraryItemResponse, instances: InstanceSafeResp
 
 const celdas = () => [...document.querySelectorAll<HTMLTableCellElement>('tr.bib-fila > td')]
 
+describe('el título', () => {
+  it('es un enlace a la ficha: el clic normal la abre dentro de la aplicación y el de otra pestaña lo deja al navegador', async () => {
+    const abrir = vi.fn()
+    await montar(
+      <table><tbody>
+        <LibraryTreeRow item={elemento({ id: 42 })} depth={0} instances={INSTANCIAS} onSelect={abrir} onAction={() => {}} />
+      </tbody></table>,
+    )
+    const enlace = document.querySelector<HTMLAnchorElement>('a.bib-titulo-enlace')!
+    expect(enlace.getAttribute('href')).toBe('/library/42')
+    const normal = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
+    enlace.dispatchEvent(normal)
+    expect(normal.defaultPrevented).toBe(true)
+    expect(abrir).toHaveBeenCalledTimes(1)
+    const conControl = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ctrlKey: true })
+    enlace.dispatchEvent(conControl)
+    expect(conControl.defaultPrevented).toBe(false)
+    expect(abrir).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('especificaciones', () => {
   it('une tipo, códec e idiomas del audio, en ese orden', () => {
     expect(especificaciones(elemento({}))).toEqual(['Película', 'HEVC', 'es,en'])
@@ -56,7 +77,7 @@ describe('LibraryTreeRow', () => {
   it('tiene doce celdas, una por columna, y el título no lleva grupo ni origen', async () => {
     await montarFila(elemento({}))
     expect(celdas()).toHaveLength(12)
-    expect(celdas()[0].querySelector('.bib-rg-ninguno, .value-chip, a')).toBeNull()
+    expect(celdas()[0].querySelector('.bib-rg-ninguno, .value-chip, a:not(.bib-titulo-enlace)')).toBeNull()
   })
 
   it('cada dato filtrable va en su propia celda, en el orden de las cabeceras', async () => {

@@ -228,6 +228,8 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                 <img
                   src={posterUrl(item.poster_url, 'w154')}
                   alt=""
+                  width={44}
+                  height={66}
                   loading={priority ? 'eager' : 'lazy'}
                   fetchPriority={priority ? 'high' : 'auto'}
                   className="bib-tarjeta-img"
@@ -240,14 +242,22 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
               )}
             </div>}
             <div className="bib-titulo-caja">
-              <div
+              {/* Un enlace de verdad (a /library/:id, la misma ruta que abre la ficha): se llega con el teclado y
+                  se puede abrir en otra pestaña. El clic normal sigue por la ficha de la aplicación. */}
+              <a
+                href={`/library/${item.id}`}
                 className="lib-title-link bib-titulo-enlace"
-                onClick={e => { e.stopPropagation(); onSelect(item) }}
+                onClick={e => {
+                  e.stopPropagation()
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+                  e.preventDefault()
+                  onSelect(item)
+                }}
                 {...titleTip}
               >
                 <DetailTitleText title={listDisplayTitle(item)} />
                 {titleTooltip}
-              </div>
+              </a>
               <LineaDeCalidad item={item} />
             </div>
           </div>

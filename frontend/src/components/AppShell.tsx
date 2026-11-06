@@ -58,7 +58,7 @@ function unaPagina(page: string, onNavigate: (p: string) => void) {
     case 'uploads':    return <UploadsPage onNavigate={onNavigate} />
     case 'stats':      return <EstadisticasPage />
     case 'guide':      return <GuidePage />
-    case 'tasks':      return <TasksPage />
+    case 'tasks':      return <TasksPage onNavigate={onNavigate} />
     case 'instances':  return <InstancesPage />
     case 'logs':       return <LogsPage />
     case 'settings':   return <SettingsPage />

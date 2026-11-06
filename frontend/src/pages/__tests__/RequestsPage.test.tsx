@@ -227,10 +227,10 @@ describe('Peticiones: la ficha y el subtítulo', () => {
   it('el título de la ficha se abre con el teclado: es un enlace a la biblioteca', async () => {
     const navegar = vi.fn()
     await abrirFicha(navegar)
-    const titulo = document.querySelector('.pet-mb-20 .lib-title-link')!
-    expect(titulo.getAttribute('role')).toBe('link')
-    expect(titulo.getAttribute('tabindex')).toBe('0')
-    await act(async () => { titulo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    // Un <a href> de verdad: Tab lo alcanza e Intro lo activa (el navegador dispara el clic).
+    const titulo = document.querySelector<HTMLAnchorElement>('.pet-mb-20 a.lib-title-link')!
+    expect(titulo.getAttribute('href')).toBe('/library/41')
+    await act(async () => { titulo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })) })
     expect(navegar).toHaveBeenCalledWith('library')
     expect(sessionStorage.getItem('emuwarez_open_library_item')).toBe('41')
   })

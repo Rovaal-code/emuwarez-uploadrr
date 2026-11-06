@@ -275,7 +275,7 @@
 }
 .panel-franja .stat-card { align-items: center; gap: 10px; padding: 8px 12px; }
 .panel-franja .stat-card-icon { width: 32px; height: 32px; }
-.panel-franja .stat-card-value { font-size: 20px; text-shadow: none; }
+.panel-franja .stat-card-value { font-size: 20px; }
 .panel-franja .stat-card-label { overflow-wrap: anywhere; }
 
 /* Subidas en curso y recientes */
@@ -363,10 +363,11 @@
   border-width: 2px;
   flex-shrink: 0;
 }
-/* Por qué falló una subida reciente: una línea, recortada (el texto entero, en el detalle y en el title). */
+/* Por qué falló una subida reciente: una línea, recortada (el texto entero, en el detalle y en el title). El rojo lo
+   lleva la chapa «Fallido»; el motivo en rojo, fila tras fila, era una pared roja. */
 .panel-fila-motivo {
   font-size: 12px;
-  color: var(--color-error);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -103,4 +103,9 @@ describe('el botón', () => {
     terminar()
     await esperar(() => llamadas.length === 3)
   })
+
+  it('es secundario: se lanza sola cada hora, y el principal del Panel es «Subir»', async () => {
+    await montarBoton()
+    expect(boton(TODO)!.className).toBe('btn btn-secondary btn-sm')
+  })
 })

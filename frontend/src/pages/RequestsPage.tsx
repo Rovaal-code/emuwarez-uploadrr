@@ -439,14 +439,21 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
             shares the series' tmdb_id), so linking that opened the whole
             series instead of the season you clicked. */}
         <DetailTitle>
-          {libraryTargetId ? (
-            // HoverTitle con onClick es un enlace de teclado (Tab e Intro), como el título de cada fila de la lista.
-            <HoverTitle as="span" className="lib-title-link" onClick={() => onOpenLibraryItem?.(libraryTargetId)} tip="Ver en la biblioteca">
+          <h1 className="detcard-h1">
+            {libraryTargetId && onOpenLibraryItem ? (
+              <HoverTitle
+                as="span"
+                className="lib-title-link"
+                href={`/library/${libraryTargetId}`}
+                onClick={() => onOpenLibraryItem(libraryTargetId)}
+                tip="Ver en la biblioteca"
+              >
+                <DetailTitleText title={item.display_title || requestDisplayTitle(item)} />
+              </HoverTitle>
+            ) : (
               <DetailTitleText title={item.display_title || requestDisplayTitle(item)} />
-            </HoverTitle>
-          ) : (
-            <DetailTitleText title={item.display_title || requestDisplayTitle(item)} />
-          )}
+            )}
+          </h1>
         </DetailTitle>
       </div>
 
@@ -1040,6 +1047,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <div className="pet-min-0">
             <HoverTitle
               className="lib-title-link"
+              href={`/requests/${item.id}`}
               onClick={e => { e.stopPropagation(); handleRowClick(item.id) }}
               tip="Abrir ficha"
             >
@@ -1106,7 +1114,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       <>
         <div className="page-header">
           <div>
-            <div className="page-title">Peticiones</div>
+            <h1 className="page-title">Peticiones</h1>
             <div className="page-subtitle">
               {!isUnfiltered && totalSinFiltro != null
                 ? `${total} de ${totalSinFiltro} peticiones`

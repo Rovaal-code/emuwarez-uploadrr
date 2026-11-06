@@ -103,7 +103,6 @@
   --color-alert-strong: #dc2626;
   --color-req-pending:  #eab308;
   --color-indigo:       #6366f1;
-  --color-tab-active:   #7c6af7;
 
   /* Tonos claros de los colores de estado, para texto sobre fondos teñidos. */
   --color-error-soft:     #f87171;
@@ -230,6 +229,21 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+/* HoverTitle: un título que lleva a otra pantalla es un enlace o un botón de verdad, pero con el aspecto del texto que
+   lo rodea. Va aquí, al principio de la cascada, para que la clase de cada sitio (color, display) mande sobre esto. */
+.enlace-titulo { color: inherit; }
+.enlace-titulo:hover { text-decoration: none; }
+.boton-titulo {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+}
+.titulo-bloque { display: block; }
+.boton-titulo.titulo-bloque { width: 100%; }
 
 button {
   font-family: inherit;

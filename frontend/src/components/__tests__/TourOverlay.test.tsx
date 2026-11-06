@@ -106,6 +106,51 @@ describe('TourOverlay como diálogo', () => {
   })
 })
 
+describe('TourOverlay: dónde va la burbuja', () => {
+  it('encima de un objetivo pegado abajo, con su alto real: no lo tapa', async () => {
+    // El objetivo, abajo de la ventana (jsdom: 768 px de alto); la burbuja mide 250 px, no los 180 que se suponían.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const mide = this.dataset?.tour === 'uno'
+      return { top: 680, left: 100, right: 300, bottom: 740, width: mide ? 200 : 0, height: mide ? 60 : 0, x: 100, y: 680, toJSON: () => ({}) }
+    })
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('tour-bubble') ? 250 : 0
+    })
+    await abrir()
+    await esperar(() => document.querySelector('.tour-cutout'))
+    const top = parseFloat(burbuja()!.style.top)
+    expect(top + 250).toBeLessThanOrEqual(680)
+  })
+
+  it('si la ventana cambia de tamaño sin cambiar de paso, la burbuja se vuelve a medir y no tapa el objetivo', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const mide = this.dataset?.tour === 'uno'
+      return { top: 680, left: 100, right: 300, bottom: 740, width: mide ? 200 : 0, height: mide ? 60 : 0, x: 100, y: 680, toJSON: () => ({}) }
+    })
+    let altoBurbuja = 200
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('tour-bubble') ? altoBurbuja : 0
+    })
+    await abrir()
+    await esperar(() => document.querySelector('.tour-cutout'))
+    // Más estrecha: el texto ocupa más líneas y la burbuja crece.
+    altoBurbuja = 300
+    await act(async () => { window.dispatchEvent(new Event('resize')) })
+    const top = parseFloat(burbuja()!.style.top)
+    expect(top + 300).toBeLessThanOrEqual(680)
+  })
+
+  it('los botones: «Cerrar» fantasma (no destruye nada), «Atrás» secundario y solo «Siguiente» principal', async () => {
+    await abrir()
+    await pulsarBoton('Siguiente')
+    expect([...document.querySelectorAll('.tour-bubble button')].map(b => [b.textContent, b.className])).toEqual([
+      ['Cerrar', 'btn btn-ghost btn-sm'],
+      ['Atrás', 'btn btn-secondary btn-sm'],
+      ['Siguiente', 'btn btn-primary btn-sm'],
+    ])
+  })
+})
+
 describe('pasos del tour según la pantalla', () => {
   it('en el móvil no están los pasos de la barra lateral; en escritorio, todos', () => {
     expect(TOUR_STEPS.some(s => s.id === 'sidebar-gauges')).toBe(true)

@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .carpeta_subida import en_carpeta_de_subidas
+from ..integrations.base import texto_de_error
 
 SOLO_EN_SUBIDAS = ("Los archivos de la biblioteca no se renombran: conservan el nombre de "
                    "Radarr/Sonarr y el de eMuwarez lo lleva el enlace de la carpeta de subidas.")
@@ -112,7 +113,7 @@ def _destino_seguro(src: str | None, dst: str | None) -> str | None:
         if destino.parent.resolve() != origen.parent.resolve():
             return "El destino debe estar en la misma carpeta que el origen."
     except OSError as exc:
-        return f"No se pudo resolver la ruta: {exc}"
+        return f"No se pudo resolver la ruta: {texto_de_error(exc)}"
     return None
 
 
@@ -161,7 +162,7 @@ def apply_rename_plan(plan: dict[str, Any], *, dry_run: bool = True) -> dict[str
         result["message"] = f"Archivo renombrado correctamente: '{dst}'."
     except OSError as exc:
         result["status"] = "failed"
-        result["errors"] = list(plan.get("errors", [])) + [f"Error de sistema: {exc}"]
-        result["message"] = f"Falló el renombrado: {exc}"
+        result["errors"] = list(plan.get("errors", [])) + [f"Error de sistema: {texto_de_error(exc)}"]
+        result["message"] = f"Falló el renombrado: {texto_de_error(exc)}"
 
     return result

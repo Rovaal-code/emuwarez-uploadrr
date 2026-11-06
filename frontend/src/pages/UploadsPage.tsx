@@ -258,7 +258,7 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
           </div>
           <div className="sub-titulo-texto">
             {indent && <span className="sub-muted sub-no-encoge">↳</span>}
-            <HoverTitle as="span" className="lib-title-link sub-titulo" onClick={onOpen} tip="Ver progreso / detalle">
+            <HoverTitle as="span" className="lib-title-link sub-titulo" href={`/uploads/${job.id}`} onClick={onOpen} tip="Ver progreso / detalle">
               {job.title || '—'}
             </HoverTitle>
             {job.year ? <span className="sub-muted sub-t11 sub-no-encoge sub-anio">({job.year})</span> : null}
@@ -795,7 +795,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
       <div className="page-header sub-no-encoge">
         <div>
-          <div className="page-title">Subidas</div>
+          <h1 className="page-title">Subidas</h1>
           <div className="page-subtitle">
             {visibleJobs.length} subidas{total != null && jobs.length < total ? ` · ${jobs.length} de ${total} cargadas` : ''}
           </div>

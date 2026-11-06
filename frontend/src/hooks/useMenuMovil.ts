@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-// Mismo corte que el @media de la barra lateral en layout.css.
-const CONSULTA_MOVIL = '(max-width: 768px)'
+// Mismo corte que el @media de la barra lateral en layout.css: ventana estrecha, o un móvil apaisado (poco alto y con
+// el dedo), donde la barra lateral fija no cabía en alto y se comía un tercio del ancho.
+export const CONSULTA_MOVIL = '(max-width: 768px), (max-height: 500px) and (pointer: coarse)'
 
 /** En ventanas estrechas la barra lateral es un cajón: abrir, cerrar con Escape y devolver el foco al botón. */
 export function useMenuMovil() {

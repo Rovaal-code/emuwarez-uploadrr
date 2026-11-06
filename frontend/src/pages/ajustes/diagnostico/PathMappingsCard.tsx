@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useUnsavedGuard } from '../../../utils/unsavedGuard'
 import { fetchSettings, updateSettings } from '../../../api/settings'
 import { useTooltip } from '../../../components/Tooltip'
+import { IconoCerrar } from '../../../components/Iconos'
 import { useSettingsMessageAdapter } from '../mensajes'
 import { CabeceraTarjeta } from '../CabeceraTarjeta'
 import { ErrorDeCarga } from '../ErrorDeCarga'
@@ -9,7 +10,7 @@ import { ErrorDeCarga } from '../ErrorDeCarga'
 function RemoveMappingRuleButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
   const { triggerProps, tooltipNode } = useTooltip('Quitar regla')
   return (
-    <button className="btn btn-ghost btn-sm" type="button" onClick={onClick} disabled={disabled} {...triggerProps}>✕{tooltipNode}</button>
+    <button className="btn btn-ghost btn-sm" type="button" onClick={onClick} disabled={disabled} aria-label="Quitar regla" {...triggerProps}><IconoCerrar size={14} />{tooltipNode}</button>
   )
 }
 

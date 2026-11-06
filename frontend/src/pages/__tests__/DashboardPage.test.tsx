@@ -152,6 +152,29 @@ describe('Panel', () => {
     expect(carril('En curso').textContent).toContain('Papillon (1973)')
   })
 
+  it('el aviso de progreso pide solo las vivas, no el trío entero, y mueve la fila', async () => {
+    let fase = 'hash_torrent'
+    const viva = () => trabajo({ id: 8, status: 'running', title: 'Ran (1985)', progress_phase: fase, started_at: new Date().toISOString() })
+    const acabada = trabajo({ id: 3, status: 'completed', title: 'Kill Bill (2011)', finished_at: new Date().toISOString() })
+    vi.mocked(getUploads).mockImplementation(async q => (q?.status === 'failed' ? [] : q?.status ? [viva()] : [viva(), acabada]))
+    await pagina()
+    await esperar(() => carril('En curso').textContent?.includes('Ran (1985)'))
+    vi.mocked(getUploads).mockClear()
+
+    expect(carril('En curso').textContent).toContain('Calculando el hash del torrent')
+    fase = 'uploading_emu'
+    vi.useFakeTimers()
+    try {
+      await act(async () => {
+        for (const [tipo, cb] of vi.mocked(suscribirse).mock.calls) if (tipo === 'subida-progreso') (cb as (a: unknown) => void)({ tipo })
+        await vi.advanceTimersByTimeAsync(500)
+      })
+    } finally { vi.useRealTimers() }
+    expect(vi.mocked(getUploads).mock.calls.map(([q]) => q?.status)).toEqual(['queued,staging,preparing,running'])
+    await esperar(() => carril('En curso').textContent?.includes('Subiendo a eMuwarez'))
+    expect(carril('En curso').textContent).not.toContain('Calculando el hash del torrent')
+  })
+
   it('con datos: los dos carriles en su orden y la franja de cinco números', async () => {
     vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
       rec({ id: 1, content_name: 'La bola negra (2026)', rec_request_id: 11, rec_points: 120000, resolution: '1080p', source: 'WEB-DL', has_spanish_audio: 1, has_spanish_subs: 0, size_bytes: 6 * 1024 ** 3 }),
@@ -769,8 +792,8 @@ describe('«Subir seleccionadas» en «Listo para subir»', () => {
     expect(peticionesLote()).toEqual(['Petición #77', 'Petición #78'])
 
     await pulsar(boton('Continuar (3)'))
-    await esperar(() => boton('Subir 3') && !boton('Subir 3')!.disabled)
-    await pulsar(boton('Subir 3'))
+    await esperar(() => boton('Subir (3)') && !boton('Subir (3)')!.disabled)
+    await pulsar(boton('Subir (3)'))
     await esperar(() => texto().includes('3 de 3 encoladas'))
     expect(vi.mocked(queueLote).mock.calls[0][0].map(e => [e.item_id, e.request_item_id])).toEqual([
       [55, 77], [66, 78], [20, undefined],
@@ -805,8 +828,8 @@ describe('«Subir seleccionadas» en «Listo para subir»', () => {
     await elegir(select, '81')
 
     await pulsar(boton('Continuar (3)'))
-    await esperar(() => boton('Subir 3') && !boton('Subir 3')!.disabled)
-    await pulsar(boton('Subir 3'))
+    await esperar(() => boton('Subir (3)') && !boton('Subir (3)')!.disabled)
+    await pulsar(boton('Subir (3)'))
     await esperar(() => texto().includes('3 de 3 encoladas'))
     expect(vi.mocked(queueLote).mock.calls[0][0].map(e => [e.item_id, e.request_item_id])).toEqual([
       [51, 90], [55, 90], [77, 81],

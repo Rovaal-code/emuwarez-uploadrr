@@ -3,8 +3,9 @@ import { useUnsavedGuard } from '../../../utils/unsavedGuard'
 import { updateSettings } from '../../../api/settings'
 import { testImghostConnection, type IntegrationTestResult } from '../../../api/integrationTests'
 import { ServiceIcon } from '../../../components/ServiceIcon'
+import { IconoCerrar } from '../../../components/Iconos'
 import { Favicon, domainOf } from '../../../components/Favicon'
-import { SortableList, DragHandleIcon, type DragHandleProps } from '../../../components/SortableList'
+import { SortableList, DragHandleIcon, PistaReordenar, type DragHandleProps } from '../../../components/SortableList'
 import { useTooltip, HoverTitle } from '../../../components/Tooltip'
 import { Modal } from '../../../components/Modal'
 import { ResultadoPrueba } from '../Campo'
@@ -15,7 +16,7 @@ function RemoveImgHostButton({ onClick, nombre }: { onClick: () => void; nombre:
   const { triggerProps, tooltipNode } = useTooltip('Quitar')
   return (
     <button className="btn btn-ghost btn-sm aj-ghost-muted" aria-label={`Quitar ${nombre}`}
-      onClick={onClick} type="button" {...triggerProps}><span aria-hidden>✕</span>{tooltipNode}</button>
+      onClick={onClick} type="button" {...triggerProps}><IconoCerrar size={14} />{tooltipNode}</button>
   )
 }
 
@@ -62,7 +63,7 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
       <CabeceraTarjeta
         icono={<ServiceIcon type="imghost" size={18} />}
         titulo="Proveedores de imágenes"
-        descripcion={<>Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; arrastra para reordenar, o usa las flechas desde el asa de cada fila. Cualquiera se puede quitar; sin ninguno, la subida no arranca.</>}
+        descripcion={<>Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; <PistaReordenar raton="arrastra para reordenar, o usa las flechas desde el asa de cada fila." dedo="reordénalos con las flechas de cada fila." /> Cualquiera se puede quitar; sin ninguno, la subida no arranca.</>}
       />
       <span className="form-label">Prioridad de proveedores</span>
       {(() => {
@@ -70,7 +71,7 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
         const configuredIds = imgEnabled.filter(id => avail.some(h => h.id === id))
         const notConfigured = avail.filter(h => !configuredIds.includes(h.id))
         const metaOf = (id: string) => avail.find(h => h.id === id)
-        const fila = (id: string, idx: number, asa?: { dragging: boolean; handleProps: DragHandleProps }) => {
+        const fila = (id: string, idx: number, asa?: { dragging: boolean; handleProps: DragHandleProps; botones: React.ReactNode }) => {
           const h = metaOf(id); if (!h) return null
           const dragging = !!asa?.dragging
           const t = imgTest[id]
@@ -86,6 +87,7 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                     className="drag-handle aj-asa-handle"
                   ><DragHandleIcon /></HoverTitle>
                 ) : <span className="aj-asa-hueco" />}
+                {asa?.botones}
                 <a href={h.url} target="_blank" rel="noreferrer" title={`Abrir ${h.label}`}
                   onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}
                   className="aj-inline-flex">

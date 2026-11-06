@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react'
 import type { IntegrationTestResult } from '../../api/integrationTests'
 import { testResultLabel } from '../../utils/integrationResult'
+import { IconoAviso } from '../../components/Iconos'
 
 // Lo que el control de dentro tiene que llevar para quedar ligado a su etiqueta, su ayuda y su error.
 export interface PropsDeControl {
@@ -88,7 +89,13 @@ export function EstadoSecreto({ configurado, enmascarado, genero = 'f' }: {
 export function ResultadoPrueba({ resultado }: { resultado: IntegrationTestResult | null }) {
   if (!resultado) return null
   const tono = resultado.ok ? 'ok' : resultado.status === 'not_configured' ? 'aviso' : 'error'
-  return <span role="status" className={`aj-resultado aj-resultado--${tono}`}>{testResultLabel(resultado)}</span>
+  const texto = testResultLabel(resultado)
+  // El aviso lleva el icono del sistema en vez del glifo ⚠, que se pinta con el grosor de la fuente.
+  return (
+    <span role="status" className={`aj-resultado aj-resultado--${tono}`}>
+      {texto.startsWith('⚠ ') ? <><IconoAviso /> {texto.slice(2)}</> : texto}
+    </span>
+  )
 }
 
 // Tras un intento de guardar con errores, el foco va al primer campo inválido de `raiz` (cuando React ya lo ha marcado).

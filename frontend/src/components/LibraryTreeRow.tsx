@@ -234,6 +234,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                   height={66}
                   loading={priority ? 'eager' : 'lazy'}
                   fetchPriority={priority ? 'high' : 'auto'}
+                  decoding="async"
                   className="bib-tarjeta-img"
                   onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                 />

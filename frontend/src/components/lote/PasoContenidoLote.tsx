@@ -4,7 +4,7 @@
 // peticiones sobre el mismo elemento), deja elegir cuál se enlaza: el servidor solo enlaza una por subida.
 import type { LibraryItemResponse } from '../../types/api'
 import { formatNumero } from '../../utils/format'
-import { listDisplayTitle } from '../../utils/libraryItem'
+import { listDisplayTitle, tituloEnFicha } from '../../utils/libraryItem'
 import { MAX_ELEMENTOS_LOTE, razonNoSubible } from '../../utils/lote'
 import { IconoAviso } from '../Iconos'
 
@@ -13,6 +13,17 @@ const calidad = (item: LibraryItemResponse) => [item.resolution, item.source].fi
 const TIPO: Record<string, string> = { movie: 'Película', season: 'Temporada', episode: 'Capítulo' }
 
 const NINGUNA: readonly number[] = []
+
+/** El título de la fila en dos partes: el nombre de la serie y lo que distingue a la temporada («Temporada 1»), para
+ *  que en un móvil se recorte solo el nombre y la parte siga a la vista. Una película no tiene parte. */
+function partesDelTitulo(item: LibraryItemResponse): { nombre: string; parte: string | null } {
+  const entero = listDisplayTitle(item)
+  if (item.item_type !== 'season') return { nombre: entero, parte: null }
+  const parte = tituloEnFicha(item)
+  return entero.endsWith(` - ${parte}`)
+    ? { nombre: entero.slice(0, -(parte.length + 3)), parte }
+    : { nombre: entero, parte: null }
+}
 
 export function PasoContenidoLote({
   elementos, marcadas, onAlternar, onContinuar, expandiendo = null, avisos = [], peticiones, peticionDe,
@@ -67,7 +78,7 @@ export function PasoContenidoLote({
                   disabled={!!razon || (!marcada && lleno)}
                   onChange={() => onAlternar(item.id)}
                 />
-                <span className="lote-fila-titulo">{listDisplayTitle(item)}</span>
+                <TituloDeFila item={item} />
               </label>
               <span className="lote-fila-tipo">{TIPO[item.item_type] ?? item.item_type}</span>
               <span className="lote-fila-calidad">{calidad(item)}</span>
@@ -96,5 +107,15 @@ export function PasoContenidoLote({
         </button>
       </div>
     </div>
+  )
+}
+
+function TituloDeFila({ item }: { item: LibraryItemResponse }) {
+  const { nombre, parte } = partesDelTitulo(item)
+  return (
+    <span className="lote-fila-titulo">
+      <span className="lote-fila-nombre">{nombre}</span>
+      {parte && <><span className="lote-fila-separador"> - </span><span className="lote-fila-parte">{parte}</span></>}
+    </span>
   )
 }

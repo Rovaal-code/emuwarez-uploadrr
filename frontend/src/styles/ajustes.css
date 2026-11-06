@@ -222,9 +222,6 @@
 
 .aj-campo-ancho {
   width: 100%;
-  padding: 6px 10px;
-  font-size: 13px;
-  box-sizing: border-box;
 }
 
 .aj-th {
@@ -251,11 +248,8 @@
   color: var(--text-secondary);
   width: 150px;
 }
-
-.aj-td-etq-130 {
-  padding: 6px 8px;
-  color: var(--text-secondary);
-  width: 130px;
+@media (max-width: 520px) {
+  .aj-td-etq-150 { width: 112px; }
 }
 
 .aj-marco {
@@ -586,6 +580,16 @@
   outline-offset: 2px;
 }
 
+/* El primer campo que coincide con la búsqueda, mientras dure: es el foco de la búsqueda, lo vivo. */
+.aj-coincide {
+  /* El fondo y el filete crecen hacia fuera, así el campo no se mueve de su sitio. */
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--hud-cyan, var(--text-accent)) 6%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--hud-cyan, var(--text-accent)) 6%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--hud-cyan, var(--text-accent)) 45%, transparent);
+  outline-offset: 6px;
+}
+
 .aj-avanzado__cabecera {
   width: 100%;
   display: flex;
@@ -846,7 +850,8 @@
 
 .aj-fila-campo {
   display: flex;
-  align-items: center;
+  /* El botón de al lado toma la altura del campo («Añadir», «Ver máximo»). */
+  align-items: stretch;
   gap: 8px;
 }
 
@@ -1146,9 +1151,15 @@ fieldset.aj-grupo-eventos {
   vertical-align: top;
 }
 
-.aj-td-etq-150,
-.aj-td-etq-130 {
+.aj-td-etq-150 {
   padding-left: 0;
+}
+
+/* Rutas y nombres de fichero en las tablas: en mono y partidos donde haga falta. */
+.aj-ruta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .aj-fila-borde:last-child {
@@ -1253,6 +1264,20 @@ fieldset.aj-grupo-eventos {
   overflow-x: auto;
 }
 
+/* Backups existentes: en una caja estrecha Tipo, Tamaño y Fecha bajan a una
+   segunda línea bajo el nombre, que se parte, y «Descargar» queda a la vista. */
+.aj-backups { container-type: inline-size; }
+.aj-backups__meta { display: none; }
+@container (max-width: 760px) {
+  .aj-backups .aj-backups__col { display: none; }
+  .aj-backups__meta {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+}
+
 .aj-cuerpo .sesiones-lista:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
@@ -1275,14 +1300,24 @@ fieldset.aj-grupo-eventos {
   }
 }
 
-/* En táctil, los enlaces del índice y la ✕ de los proveedores llegan al tamaño mínimo de toque. */
+/* En táctil, los enlaces del índice, la ✕ de los proveedores (aquí y en el asistente) y el ojo de las claves llegan
+   al tamaño mínimo de toque; el campo de la clave deja sitio al ojo más grande. */
 @media (pointer: coarse) {
   .aj-indice__enlace {
     min-height: var(--tap-min);
   }
   .hud-app .aj-ghost-muted,
-  .aj-cuerpo .provprio-quitar {
+  .provprio-quitar,
+  .aj-ojo {
     min-width: var(--tap-min);
     min-height: var(--tap-min);
+  }
+  .aj-ojo {
+    right: 0;
+    align-items: center;
+    justify-content: center;
+  }
+  .form-input.aj-pr-38 {
+    padding-right: var(--tap-min);
   }
 }

@@ -201,7 +201,7 @@ describe('película', () => {
   it('las casillas Anónimo y Personal release salen con lo del grupo y lo cambiado viaja al encolar', async () => {
     m(fetchSettings).mockResolvedValue({
       upload_tags: ['GRP', 'OTRO'], upload_tags_personal_release: ['grp'], upload_tags_anonimos: [],
-    } as Awaited<ReturnType<typeof fetchSettings>>)
+    } as unknown as Awaited<ReturnType<typeof fetchSettings>>)
     await abrir(PELICULA)
     await esperar(() => texto().includes('Dune WEB-DL AMZN [GRP]'))
     await pulsar(boton('Continuar'))

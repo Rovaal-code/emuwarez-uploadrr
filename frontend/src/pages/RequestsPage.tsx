@@ -93,9 +93,10 @@ function RequestPoster({ url, category, size = 'sm' }: { url: string | null; cat
     <div className="poster-thumb pet-poster" style={{ width: dims.width, height: dims.height, borderRadius: dims.radius }}>
       {url ? (
         <img
-          src={posterUrl(url, size === 'lg' ? 'w342' : 'w154')}
+          src={posterUrl(url, size === 'lg' ? 'w342' : 'w92')}
           alt=""
           loading="lazy"
+          decoding="async"
           className="pet-poster-img"
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
         />
@@ -124,18 +125,19 @@ const fmtNum = (n: number | null | undefined) => formatNumero(n)
 // Inline SVG icons for the votes/comments/points columns — emoji (👍💬🪙)
 // render as bare white outlines on some systems, so use real vector icons.
 // La moneda de los puntos es IconoPuntos (Iconos.tsx): la comparte el Panel.
-function Svg({ children, color }: { children: React.ReactNode; color: string }) {
+// El color, de los tokens (pet-icono-*).
+function Svg({ children, clase }: { children: React.ReactNode; clase: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={15} height={15} fill={color} className="pet-svg-medio" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={15} height={15} fill="currentColor" className={`pet-svg-medio ${clase}`} aria-hidden="true">
       {children}
     </svg>
   )
 }
 const VotesIcon = () => (
-  <Svg color="#60a5fa"><path d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></Svg>
+  <Svg clase="pet-icono-votos"><path d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></Svg>
 )
 const CommentsIcon = () => (
-  <Svg color="#9ca3af"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></Svg>
+  <Svg clase="pet-icono-comentarios"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></Svg>
 )
 
 // Author cell — your own requests (author === emu.username) show in green + "(Yo)".
@@ -387,9 +389,11 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
   const consultarTip = useTooltip(item.url
     ? 'Abrir la petición en eMuwarez (reclamarla, marcarla como llena, ver el ID del torrent…)'
     : 'Todavía no tenemos la URL exacta de esta petición: abre el listado general de peticiones en eMuwarez')
-  const subirTip = useTooltip(libId
+  // Sin el contenido en la biblioteca el botón no hace nada, y el motivo va escrito a su lado: en un tooltip no llegaba
+  // ni al dedo ni a un botón deshabilitado, que no recibe el ratón.
+  const subirTip = useTooltip(libraryTargetId
     ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
-    : 'No tienes este contenido en tu biblioteca')
+    : null)
   const reqNameTip = useTooltip(m?.content_name || null)
   const libNameTip = useTooltip(m?.content_name || baseName(m?.local_path ?? null) || m?.library_title || null)
   return (
@@ -397,9 +401,10 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
       <DetailHero backdropUrl={item.backdrop_url}>
       <div className="pet-barra">
         <div className="pet-grupo">
-          <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a peticiones</button>
+          <button className="btn btn-ghost btn-sm btn-volver" onClick={onBack}>Volver a Peticiones</button>
         </div>
         <div className="pet-grupo pet-no-encoge">
+          {!libraryTargetId && <span className="pet-motivo-apagado" id="pet-motivo-subir">No tienes este contenido en tu biblioteca</span>}
           {/* Secundario: la acción principal de la ficha es «Subir a eMuwarez», y solo ella brilla. */}
           <a
             className="btn btn-secondary btn-sm pet-sin-subrayado"
@@ -413,7 +418,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
           </a>
           <button
             className="btn btn-primary btn-sm"
-            disabled={!libraryTargetId}
+            aria-disabled={!libraryTargetId || undefined}
             // libraryTargetId, no libId: el asistente tiene que abrirse sobre
             // la fila a la que se refiere la petición (la temporada, o el
             // capítulo), no sobre la que cruzó el emparejador, que para una
@@ -426,6 +431,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
               episode: item.req_scope === 'episode' ? item.req_episode : null,
             }, item.id)}
             {...subirTip.triggerProps}
+            aria-describedby={libraryTargetId ? subirTip.triggerProps['aria-describedby'] : 'pet-motivo-subir'}
           >
             <UploadButtonIcon /> Subir a eMuwarez
             {subirTip.tooltipNode}
@@ -635,7 +641,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
 }
 
 const CLAVE_GRUPOS_PLEGADOS = 'emuwarez_pet_grupos_plegados'
-// Lo que mide una fila antes de pintarla (FilasVirtuales la corrige con la primera que mide de verdad).
+// Lo que mide una fila antes de pintarla (FilasVirtuales la corrige con la media de las que va midiendo).
 const ALTO_FILA = 63
 // Las claves de las cabeceras de grupo, que se pintan siempre (ver elementosDeLista).
 const CABECERAS_FIJAS: ReadonlySet<number> = new Set(GRUPOS_PETICION.map(g => claveDeGrupo(g.id)))
@@ -1144,14 +1150,14 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
             onChange={e => setSearch(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && loadItems(0)}
           />
-          <select className="form-input form-select" aria-label="Ordenar peticiones" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <select className="form-input form-select pet-orden" aria-label="Ordenar peticiones" value={sortBy} onChange={e => setSortBy(e.target.value)}>
             {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
           {(haySeleccionables || modoSeleccion) && (
             <Tooltip content="Marca varias peticiones listas para subirlas de una vez">
               <button
                 type="button"
-                className={`btn btn-secondary btn-sm${modoSeleccion ? ' lote-boton-activo' : ''}`}
+                className={`btn btn-secondary btn-sm pet-seleccionar${modoSeleccion ? ' lote-boton-activo' : ''}`}
                 onClick={alternarModoSeleccion}
                 aria-pressed={modoSeleccion}
               >
@@ -1194,13 +1200,13 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
               <table className="data-table pet-tabla">
                 <thead ref={theadRef}>
                   <tr>
-                    <th>Título</th>
+                    <th className="pet-col-titulo">Título</th>
                     <th className="pet-tipo"><HeaderFilter label="Tipo" value={categoryFilter} onChange={setCategoryFilter} options={[
                       // Same label the Tipo column shows, or the filter would
                       // offer "TV" for a column that says "Serie".
                       { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: tipoOf(c).label })),
                     ]} /></th>
-                    <th className="pet-sec"><HeaderFilter label="Origen" value={instanceFilter} onChange={setInstanceFilter} options={[
+                    <th className="pet-sec pet-col-origen"><HeaderFilter label="Origen" value={instanceFilter} onChange={setInstanceFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.instances,
                     ]} /></th>
                     <th><HeaderFilter label="Compatibilidad" value={statusFilter} onChange={setStatusFilter} options={[
@@ -1208,7 +1214,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                       // "No disponible" for a column that says "Faltante".
                       { value: '', label: 'Todas' }, ...facets.statuses.map(s => ({ value: s, label: getRequestStatusInfo(s).label })),
                     ]} /></th>
-                    <th className="pet-sec"><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
+                    <th className="pet-sec pet-col-autor"><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.authors.map(a => ({ value: a, label: a })),
                     ]} /></th>
                     <th className="pet-sec"><HeaderFilter label="Resolución" value={resolutionFilter} onChange={setResolutionFilter} options={[
@@ -1217,8 +1223,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <th className="pet-sec"><HeaderFilter label="Source" value={sourceFilter} onChange={setSourceFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.sources.map(s => ({ value: s, label: s })),
                     ]} /></th>
-                    {hayVotos && <th className="pet-centro pet-sec" {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>}
-                    {hayComentarios && <th className="pet-centro pet-sec" {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>}
+                    {/* Solo un icono: el nombre, para el lector de pantalla. */}
+                    {hayVotos && <th className="pet-centro pet-sec pet-col-votos" {...votesHeaderTip.triggerProps}><VotesIcon /><span className="solo-lector">Votos</span>{votesHeaderTip.tooltipNode}</th>}
+                    {hayComentarios && <th className="pet-centro pet-sec pet-col-votos" {...commentsHeaderTip.triggerProps}><CommentsIcon /><span className="solo-lector">Comentarios</span>{commentsHeaderTip.tooltipNode}</th>}
                     <HeaderSort label={<IconoPuntos />} nombre="Puntos / recompensa" desc="points_desc" asc="points_asc" sortBy={sortBy} onSort={setSortBy} align="center" />
                     <HeaderSort label="Creada" desc="created_desc" asc="created_asc" sortBy={sortBy} onSort={setSortBy} />
                   </tr>

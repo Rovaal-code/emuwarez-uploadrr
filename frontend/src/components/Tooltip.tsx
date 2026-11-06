@@ -118,6 +118,41 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const closeOnEscape = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') ocultar()
   }, [ocultar])
+  // Con el dedo (sin hover) un toque abre y cierra la explicación, anclada bajo el disparador como con el teclado, y se
+  // cierra al tocar fuera o con Escape. Solo cuando el toque no es la acción de un control: si lo tocado es un enlace o
+  // un botón (también una asa de arrastre, que es role="button"), o va dentro de una fila que se abre al tocarla
+  // (`.clickable`), el toque hace lo suyo. Una ayuda que es un botón (el «?» de InfoIcon) lo dice con `data-ayuda`.
+  // Un disparador informativo (un HoverTitle sin onClick, una tarjeta de cifra) sí se abre. Se usa pointerup y no click para no pisar el onClick de quien reparte
+  // triggerProps; un desplazamiento termina en pointercancel, así que deslizar el dedo no lo abre.
+  const disparador = useRef<Element | null>(null)
+  const porToque = useRef(false)
+  const alToque = useCallback((e: React.PointerEvent) => {
+    if (e.pointerType === 'mouse' || !window.matchMedia?.('(hover: none)').matches) return
+    const control = (e.target as Element).closest?.('a[href], button, input, select, textarea, summary, label, [role="button"], [role="link"], .clickable')
+    if (control && !control.hasAttribute('data-ayuda') && !(control as HTMLButtonElement).disabled) return
+    if (show) { ocultar(); return }
+    disparador.current = e.currentTarget
+    porToque.current = true
+    const r = medir(e.currentTarget)
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
+    setPt({ x: r.left + r.width / 2, y: r.bottom - 8 })
+    setShow(true)
+  }, [show, ocultar])
+  useEffect(() => {
+    if (!show || !porToque.current) return
+    const fuera = (e: PointerEvent) => {
+      if (disparador.current && e.target instanceof Node && disparador.current.contains(e.target)) return
+      ocultar()
+    }
+    const escape = (e: KeyboardEvent) => { if (e.key === 'Escape') ocultar() }
+    document.addEventListener('pointerdown', fuera, true)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', fuera, true)
+      document.removeEventListener('keydown', escape)
+      porToque.current = false
+    }
+  }, [show, ocultar])
 
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current) }, [])
 
@@ -151,6 +186,7 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
     onFocus: openOnFocus,
     onBlur: closeOnBlur,
     onKeyDown: closeOnEscape,
+    onPointerUp: alToque,
     'aria-describedby': content != null ? id : undefined,
   }
 
@@ -262,6 +298,8 @@ export function HoverTitle({ as = 'div', href, className, style, onClick, onMous
     triggerProps.onKeyDown(e)
     onKeyDown?.(e)
   }
+  // El toque que abre el tooltip va también aquí: como enlace o botón (con onClick) no hace nada, porque el toque es
+  // su acción, y dentro de una fila `.clickable` tampoco; solo abre el de un HoverTitle informativo.
   const comunes = { style, onMouseDown, onMouseUp, ...resto, ...triggerProps, onKeyDown: teclas }
   // Con as="div" el enlace ocupa su línea, como el div de antes.
   const bloque = as === 'div' ? ' titulo-bloque' : ''

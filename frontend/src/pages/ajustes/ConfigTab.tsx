@@ -77,6 +77,20 @@ function ConfigFormulario({ form }: { form: ConfigForm }) {
     if (ids.has(AVANZADO.id)) setAvanzadoAbierto(true)
   }, [consulta])
 
+  // La tarjeta entera puede ser más alta que la pantalla: con la búsqueda activa, el primer campo que coincide se marca
+  // y se trae a la vista si no lo está. Va tras pintar el filtro, con las tarjetas que no coinciden ya ocultas.
+  useEffect(() => {
+    const q = normalizar(consulta)
+    if (!q || !coinciden?.size) return
+    const nodo = [...(raiz.current?.querySelectorAll<HTMLElement>('[data-seccion]:not([hidden]) :is(label, .form-label, .form-hint)') ?? [])]
+      .find(n => !n.closest('[hidden]') && normalizar(n.textContent ?? '').includes(q))
+    const campo = nodo?.closest<HTMLElement>('.form-group') ?? nodo
+    if (!campo) return
+    campo.classList.add('aj-coincide')
+    campo.scrollIntoView?.({ block: 'nearest' })
+    return () => campo.classList.remove('aj-coincide')
+  }, [consulta, coinciden])
+
   useEffect(() => {
     if (!resaltada) return
     const t = window.setTimeout(() => setResaltada(null), 1600)

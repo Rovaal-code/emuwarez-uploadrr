@@ -47,7 +47,8 @@ function ConsultaDato({ hayDatos, texto, sinDatos, titulo, espera, alerta = fals
   onAbrir: () => void
 }) {
   if (!hayDatos && sinDatos) {
-    return <ValueChip><span className="txt dsub-sin-datos">{sinDatos}</span></ValueChip>
+    // Texto suelto: en un chip con borde se leía como un botón más, junto a los que sí abren algo.
+    return <span className="dsub-sin-datos">{sinDatos}</span>
   }
   return (
     <ValueChip as="button" linkable onClick={onAbrir} title={titulo}>

@@ -461,6 +461,19 @@ describe('Configuración: índice, buscador, barra de guardado y Avanzado', () =
     expect(visibles()).toContain('emuwarez')
   })
 
+  it('el buscador marca el primer campo que coincide, y lo desmarca al cambiar o vaciar la búsqueda', async () => {
+    await montar()
+    await buscar('interfaz')
+    const marcados = () => [...document.querySelectorAll('.aj-coincide')]
+    expect(marcados()).toHaveLength(1)
+    expect(marcados()[0].textContent).toContain('Tamaño de interfaz')
+    await buscar('REGION')
+    expect(marcados()).toHaveLength(1)
+    expect(marcados()[0].closest('[data-seccion]')?.getAttribute('data-seccion')).toBe('tmdb')
+    await buscar('')
+    expect(marcados()).toHaveLength(0)
+  })
+
   it('el filtrado no desmonta las tarjetas: lo escrito en una oculta se conserva', async () => {
     await montar()
     await escribir(campo('Tag'), 'Nuevo')
@@ -620,7 +633,7 @@ describe('Configuración: widget para Homepage', () => {
   it('genera la clave, la enseña entera y no la vuelve a mostrar al recargar', async () => {
     vi.mocked(generateWidgetKey).mockResolvedValue({ clave: 'emuw_clave-de-prueba' })
     await montar()
-    expect(texto()).toContain('Sin clave: el widget está desactivado.')
+    expect(document.querySelector('[data-seccion="widget"] .aj-estado--falta')?.textContent).toBe('Sin clave')
     await pulsar(boton('Generar clave'))
     expect(generateWidgetKey).toHaveBeenCalledTimes(1)
     expect((document.querySelector('input[aria-label="Clave del widget"]') as HTMLInputElement).value).toBe('emuw_clave-de-prueba')
@@ -674,7 +687,7 @@ describe('Configuración: widget para Homepage', () => {
     expect(dialogo()?.textContent).toContain('El widget dejará de responder')
     await pulsar(enDialogo('Quitar clave'))
     expect(removeWidgetKey).toHaveBeenCalledTimes(1)
-    expect(texto()).toContain('Sin clave: el widget está desactivado.')
+    expect(document.querySelector('[data-seccion="widget"] .aj-estado--falta')?.textContent).toBe('Sin clave')
     expect(document.querySelector('input[aria-label="Clave del widget"]')).toBeNull()
     expect(confirmarNativo).not.toHaveBeenCalled()
     confirmarNativo.mockRestore()
@@ -961,7 +974,7 @@ describe('Configuración: no guardar sin haber cargado ni pisar lo editado duran
       expect(porPlaceholder('Ruta de Radarr/Sonarr').disabled).toBe(true)
       expect(porPlaceholder('Ruta local').disabled).toBe(true)
       expect(boton('+ Añadir regla').disabled).toBe(true)
-      expect(boton('✕').disabled).toBe(true)
+      expect(document.querySelector<HTMLButtonElement>('button[aria-label="Quitar regla"]')!.disabled).toBe(true)
 
       await act(async () => { terminar({ ...structuredClone(AJUSTES), path_mappings: [{ from: '/data/otra', to: '/mnt/media' }] }) })
       await esperar()

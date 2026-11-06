@@ -113,6 +113,13 @@ describe('Peticiones', () => {
     expect(localStorage.getItem('emuwarez_peticiones_mostrar_autor')).toBeNull()
   })
 
+  it('las cabeceras de votos y comentarios, que son solo un icono, llevan su nombre para el lector', async () => {
+    vi.mocked(getRequests).mockResolvedValue({ items: DATOS.map(d => ({ ...d, votes: 3, comments: 1 })), total: DATOS.length } as never)
+    await pagina()
+    expect(cabeceras()).toContain('Votos')
+    expect(cabeceras()).toContain('Comentarios')
+  })
+
   it('las cabeceras quedan una por columna de la fila, y las de grupo ocupan todo el ancho', async () => {
     await pagina()
     const th = document.querySelector('th.pet-grupo-th')!
@@ -205,11 +212,11 @@ describe('Peticiones: lista virtualizada pasadas las 50', () => {
 })
 
 describe('Peticiones: la ficha y el subtítulo', () => {
-  async function abrirFicha(navegar = vi.fn()) {
+  async function abrirFicha(navegar = vi.fn(), detalle: Partial<RequestDetailResponse> = {
+    match: { status: 'Compatible', library_item_id: 40, library_target_id: 41 },
+  } as never) {
     vi.mocked(getReadiness).mockResolvedValue(null as never)
-    vi.mocked(getRequestDetail).mockResolvedValue({
-      ...DATOS[1], match: { status: 'Compatible', library_item_id: 40, library_target_id: 41 },
-    } as unknown as RequestDetailResponse)
+    vi.mocked(getRequestDetail).mockResolvedValue({ ...DATOS[1], ...detalle } as unknown as RequestDetailResponse)
     await montar(
       <SyncContext.Provider value={{
         requestsSyncing: false, requestsStatus: null, startRequestsSync: vi.fn(), lastInvalidatedAt: 0, isAnySyncing: false,
@@ -241,6 +248,20 @@ describe('Peticiones: la ficha y el subtítulo', () => {
     expect(primarios).toEqual(['Subir a eMuwarez'])
     const consultar = [...document.querySelectorAll('.pet-barra a.btn')].find(a => a.textContent?.includes('Consultar en eMuwarez'))!
     expect(consultar.classList.contains('btn-secondary')).toBe(true)
+  })
+
+  it('sin el contenido en la biblioteca, «Subir a eMuwarez» dice por qué a su lado y no hace nada', async () => {
+    vi.mocked(getLibraryItem).mockClear()
+    await abrirFicha(vi.fn(), { match: null, library_item_id: null } as never)
+    const subir = boton('Subir a eMuwarez')!
+    // aria-disabled y no disabled: sigue enfocable, y el motivo está escrito, no en un tooltip que no sale.
+    expect(subir.getAttribute('aria-disabled')).toBe('true')
+    expect(subir.disabled).toBe(false)
+    const motivo = document.querySelector('.pet-barra .pet-motivo-apagado')!
+    expect(motivo.textContent).toBe('No tienes este contenido en tu biblioteca')
+    expect(subir.getAttribute('aria-describedby')).toBe(motivo.id)
+    await pulsar(subir)
+    expect(getLibraryItem).not.toHaveBeenCalled()
   })
 
   it('con un filtro puesto el subtítulo dice cuántas de cuántas, también con cero', async () => {
@@ -383,8 +404,8 @@ describe('«Subir seleccionadas» en Peticiones', () => {
     expect(peticionesLote()).toEqual(['Petición #70', 'Petición #71', 'Petición #72'])
 
     await pulsar(boton('Continuar (3)'))
-    await esperar(() => boton('Subir 3') && !boton('Subir 3')!.disabled)
-    await pulsar(boton('Subir 3'))
+    await esperar(() => boton('Subir (3)') && !boton('Subir (3)')!.disabled)
+    await pulsar(boton('Subir (3)'))
     await esperar(() => texto().includes('3 de 3 encoladas'))
     expect(vi.mocked(queueLote).mock.calls[0][0].map(e => [e.item_id, e.request_item_id])).toEqual([
       [20, 70], [55, 71], [66, 72],

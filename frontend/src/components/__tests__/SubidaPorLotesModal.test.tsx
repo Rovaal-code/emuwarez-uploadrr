@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * «Subir por lotes» con el servidor simulado: qué se comprueba y cuándo (nada en el paso 1; el entorno una vez y el
- * contenido por elemento en el paso 2), qué llega desmarcado o se salta y por qué, cuándo se habilita «Subir N»,
+ * contenido por elemento en el paso 2), qué llega desmarcado o se salta y por qué, cuándo se habilita «Subir (N)»,
  * qué se manda a POST /uploads/lote y cómo se enseña lo que respondió. Y las series: cada una se cambia por sus
  * temporadas (packs) en el paso 1, y el Resumen de una temporada sale de sus comprobaciones.
  */
@@ -63,7 +63,7 @@ const fila = (id: number) => document.querySelector<HTMLTableRowElement>(`tr[dat
 const incluir = (titulo: string) => document.querySelector<HTMLInputElement>(`input[aria-label="Incluir «${titulo}»"]`)!
 const casillaPaso1 = (titulo: string) =>
   [...document.querySelectorAll<HTMLLabelElement>('.lote-fila label')].find(l => l.textContent?.startsWith(titulo))!.querySelector('input')!
-const botonSubir = () => [...document.querySelectorAll('button')].find(b => /^Subir \d+$/.test(b.textContent ?? ''))
+const botonSubir = () => [...document.querySelectorAll('button')].find(b => /^Subir \(\d+\)$/.test(b.textContent ?? ''))
 const escape = () => act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
 
 async function alResumen(n: number) {
@@ -148,9 +148,14 @@ describe('qué llega desmarcado o se salta', () => {
     await alResumen(2)
     expect(fila(12).textContent).toContain('MediaInfo no puede leer el fichero.')
     expect(fila(12).textContent).toContain('Se saltará')
+    // Sin nombre, su «—» lleva una clase para que la tarjeta del móvil (sin cabecera) lo quite; el de la que sí lo
+    // tiene, no. La celda de eMuwarez lleva la suya para su etiqueta.
+    expect(fila(12).querySelector('.lote-nombre')!.classList.contains('lote-nombre-vacio')).toBe(true)
+    expect(fila(11).querySelector('.lote-nombre')!.classList.contains('lote-nombre-vacio')).toBe(false)
+    expect(fila(11).querySelector('td.lote-celda-emu')).not.toBeNull()
     expect(incluir('Alien').checked).toBe(false)
     expect(incluir('Alien').disabled).toBe(true)
-    await pulsar(boton('Subir 1'))
+    await pulsar(boton('Subir (1)'))
     await esperar(() => m(subidas.queueLote).mock.calls.length)
     expect(m(subidas.queueLote).mock.calls[0][0].map(e => e.item_id)).toEqual([11])
   })
@@ -166,9 +171,9 @@ describe('qué llega desmarcado o se salta', () => {
     expect(incluir('Dune').checked).toBe(false)
     expect(incluir('Dune').disabled).toBe(false)
     expect(fila(11).textContent).toContain('Súbela suelta para elegir el idioma')
-    expect(boton('Subir 1')).toBeDefined()
+    expect(boton('Subir (1)')).toBeDefined()
     await pulsar(incluir('Dune'))
-    expect(boton('Subir 2')).toBeDefined()
+    expect(boton('Subir (2)')).toBeDefined()
   })
 
   it('un duplicado en eMuwarez llega desmarcado con su veredicto', async () => {
@@ -265,7 +270,7 @@ describe('lo que se manda y lo que vuelve', () => {
     // Solo a la WEB-DL sin proveedor se le sugiere.
     expect(biblioteca.suggestProvider).toHaveBeenCalledTimes(1)
     expect(biblioteca.suggestProvider).toHaveBeenCalledWith(12)
-    await pulsar(boton('Subir 2'))
+    await pulsar(boton('Subir (2)'))
     await esperar(() => texto().includes('2 de 2 encoladas'))
     const merged = { ready: true, checks: [...LISTO.checks, ...ENTORNO.checks] }
     expect(subidas.queueLote).toHaveBeenCalledWith([
@@ -279,13 +284,15 @@ describe('lo que se manda y lo que vuelve', () => {
     await abrir([DUNE, ALIEN])
     await alResumen(2)
     expect(texto()).toContain('Sin límite: se lanzarán las 2 a la vez contra eMuwarez')
+    // El nombre real de la sección y del campo, con las comillas del resto de la interfaz.
+    expect(texto()).toContain('Configuración → Otros, «Máximo de subidas en paralelo»')
   })
 
   it('dice de cuántas en cuántas irán según el ajuste', async () => {
     m(fetchSettings).mockResolvedValue({ upload_max_concurrent: 2 } as never)
     await abrir([DUNE])
     await alResumen(1)
-    expect(texto()).toContain('Se subirán de 2 en 2 según “Subidas en paralelo” (ahora: 2)')
+    expect(texto()).toContain('Se subirán de 2 en 2 según «Máximo de subidas en paralelo» (ahora: 2)')
   })
 
   it('un resultado parcial lista las saltadas con su motivo', async () => {
@@ -298,7 +305,7 @@ describe('lo que se manda y lo que vuelve', () => {
     })
     await abrir([DUNE, ALIEN])
     await alResumen(2)
-    await pulsar(boton('Subir 2'))
+    await pulsar(boton('Subir (2)'))
     await esperar(() => texto().includes('1 de 2 encoladas'))
     expect(texto()).toContain('✗ Alien: Ya hay una subida en curso para este contenido.')
     expect(onDone).toHaveBeenCalledTimes(1)
@@ -310,18 +317,18 @@ describe('lo que se manda y lo que vuelve', () => {
     }))
     await abrir([DUNE])
     await alResumen(1)
-    await pulsar(boton('Subir 1'))
+    await pulsar(boton('Subir (1)'))
     await esperar(() => texto().includes('Falta la clave de TMDb.'))
     expect(texto()).toContain('Falta la clave de la API de eMuwarez.')
     expect(texto()).toContain('No se ha encolado nada')
     expect(onDone).not.toHaveBeenCalled()
-    expect(boton('Subir 1')).toBeDefined()
+    expect(boton('Subir (1)')).toBeDefined()
   })
 
   it('«Ver el lote en Subidas» lo deja apuntado y va a Subidas', async () => {
     await abrir([DUNE])
     await alResumen(1)
-    await pulsar(boton('Subir 1'))
+    await pulsar(boton('Subir (1)'))
     await pulsar(await esperar(() => boton('Ver el lote en Subidas')))
     expect(sessionStorage.getItem('emuwarez_open_lote')).toBe('0123456789ab')
     expect(onNavigate).toHaveBeenCalledWith('uploads')
@@ -331,7 +338,7 @@ describe('lo que se manda y lo que vuelve', () => {
   it('Escape tras encolar cierra, y la selección ya se limpió', async () => {
     await abrir([DUNE])
     await alResumen(1)
-    await pulsar(boton('Subir 1'))
+    await pulsar(boton('Subir (1)'))
     await esperar(() => boton('Ver el lote en Subidas'))
     expect(onDone).toHaveBeenCalledTimes(1)
     await escape()
@@ -344,7 +351,7 @@ describe('lo que se manda y lo que vuelve', () => {
     m(subidas.queueLote).mockReturnValue(respuesta.promesa)
     await abrir([DUNE])
     await alResumen(1)
-    await pulsar(boton('Subir 1'))
+    await pulsar(boton('Subir (1)'))
     expect(texto()).toContain('Encolando…')
     await escape()
     expect(onClose).not.toHaveBeenCalled()
@@ -400,6 +407,11 @@ describe('series y temporadas', () => {
       'Lost (2020) - Temporada 1', 'Lost (2020) - Temporada 2', 'Lost (2020) - Temporada 3',
       'Lost (2020) - Temporada 4', 'Fargo (2020) - Temporada 1', 'Fargo (2020) - Temporada 2',
     ])
+    // La temporada va en su propio elemento, fuera del nombre que el móvil recorta a dos líneas: siempre se ve.
+    const fila1 = document.querySelector('.lote-fila-titulo')!
+    expect(fila1.querySelector('.lote-fila-nombre')!.textContent).toBe('Lost (2020)')
+    expect(fila1.querySelector('.lote-fila-parte')!.textContent).toBe('Temporada 1')
+    expect(fila1.querySelector('.lote-fila-nombre .lote-fila-parte')).toBeNull()
     expect(texto()).toContain('5 de 6 marcadas')
     expect(casillaPaso1('Lost (2020) - Temporada 4').checked).toBe(false)
     expect(casillaPaso1('Lost (2020) - Temporada 4').disabled).toBe(true)
@@ -485,7 +497,7 @@ describe('series y temporadas', () => {
     await alResumen(2)
     expect(fila(11).textContent).toContain('Dune (2021) 1080p NF WEB-DL x264-GRP')
     expect(fila(201).textContent).toContain(packDe(201))
-    await pulsar(boton('Subir 2'))
+    await pulsar(boton('Subir (2)'))
     await esperar(() => texto().includes('2 de 2 encoladas'))
     const [enviados] = m(subidas.queueLote).mock.calls[0]
     expect(enviados.map(e => e.item_id)).toEqual([11, 201])
@@ -511,7 +523,7 @@ describe('series y temporadas', () => {
     expect(fila(202).textContent).toContain('Súbela suelta para elegirlo.')
     expect(fila(202).textContent).toContain('Se saltará')
     expect(incluir('Fargo - Temporada 2').disabled).toBe(true)
-    expect(boton('Subir 1')).toBeDefined()
+    expect(boton('Subir (1)')).toBeDefined()
   })
 
   it('dos temporadas que saldrían con el mismo nombre se saltan las dos', async () => {
@@ -557,7 +569,7 @@ describe('desde el Panel', () => {
     expect(titulosPaso1()).toEqual(['Dune (2021)', 'Lost (2020) - S01E12', 'Alien (2021)'])
     expect(peticionesPaso1()).toEqual(['Petición #77', 'Petición #78'])
     await alResumen(3)
-    await pulsar(boton('Subir 3'))
+    await pulsar(boton('Subir (3)'))
     await esperar(() => texto().includes('3 de 3 encoladas'))
     expect(enviados()).toEqual([
       { item_id: 11, request_item_id: 77 }, { item_id: 66, request_item_id: 78 }, { item_id: 12, request_item_id: undefined },
@@ -578,7 +590,7 @@ describe('desde el Panel', () => {
     ])
     expect(titulosPaso1()).toEqual(['Fargo (2020) - Temporada 1', 'Fargo (2020) - Temporada 2', 'Lost (2020) - Temporada 2'])
     await alResumen(3)
-    await pulsar(boton('Subir 3'))
+    await pulsar(boton('Subir (3)'))
     await esperar(() => texto().includes('3 de 3 encoladas'))
     expect(enviados()).toEqual([
       { item_id: 201, request_item_id: 90 }, { item_id: 202, request_item_id: 90 }, { item_id: 102, request_item_id: 91 },
@@ -597,7 +609,7 @@ describe('desde el Panel', () => {
     expect(select.value).toBe('80')
     await elegir(select, '81')
     await alResumen(1)
-    await pulsar(boton('Subir 1'))
+    await pulsar(boton('Subir (1)'))
     await esperar(() => texto().includes('1 de 1 encolada'))
     expect(enviados()).toEqual([{ item_id: 201, request_item_id: 81 }])
   })

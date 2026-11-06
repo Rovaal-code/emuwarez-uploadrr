@@ -12,6 +12,7 @@ export function Cartel({ url, serie }: { url: string | null | undefined; serie: 
           width={44}
           height={66}
           loading="lazy"
+          decoding="async"
           className="panel-poster-img"
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
         />

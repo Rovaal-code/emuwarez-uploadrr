@@ -50,11 +50,14 @@
   white-space: nowrap;
 }
 
-.btn:active:not(:disabled) {
+.btn:active:not(:disabled, [aria-disabled="true"]) {
   transform: translateY(1px);
 }
 
-.btn:disabled {
+/* aria-disabled: apagado igual, pero se puede enfocar y recibe el ratón, así que su tooltip dice por qué. Quien lo usa
+   no hace nada en el onClick mientras lo esté. */
+.btn:disabled,
+.btn[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -65,7 +68,7 @@
   border-color: var(--color-primary);
 }
 
-.btn-primary:hover:not(:disabled) {
+.btn-primary:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
 }
@@ -76,7 +79,7 @@
   border-color: var(--border-input);
 }
 
-.btn-secondary:hover:not(:disabled) {
+.btn-secondary:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--bg-card-hover);
   border-color: var(--border-hover);
 }
@@ -87,7 +90,7 @@
   border-color: color-mix(in srgb, var(--color-error) 25%, transparent);
 }
 
-.btn-danger:hover:not(:disabled) {
+.btn-danger:hover:not(:disabled, [aria-disabled="true"]) {
   background: color-mix(in srgb, var(--color-error) 20%, transparent);
 }
 
@@ -97,7 +100,7 @@
   border-color: transparent;
 }
 
-.btn-ghost:hover:not(:disabled) {
+.btn-ghost:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--bg-card);
   color: var(--text-primary);
 }
@@ -105,6 +108,11 @@
 .btn-sm {
   padding: 4px 10px;
   font-size: 12px;
+}
+
+/* «Volver a…» de una ficha: el texto, y no la caja transparente del botón, alineado con el borde del contenido. */
+.btn.btn-ghost.btn-volver {
+  margin-inline-start: calc(-10px - 1px);
 }
 
 .btn-icon {
@@ -455,9 +463,10 @@ optgroup {
 }
 /* Mismo motivo que `.data-table tr.sticky-footer-row:hover td`: sin esto, el
    tinte de :hover (translúcido) dejaría ver las filas de detrás al pasar el
-   ratón mientras la tabla está desplazada. */
+   ratón mientras la tabla está desplazada. Opaco, pero con el mismo tinte que
+   el resto de la fila, para que no se corte. */
 .data-table tr:hover td.col-actions {
-  background: var(--bg-surface);
+  background: color-mix(in srgb, var(--overlay-light) 2.5%, var(--bg-surface));
 }
 
 /* Columnas de prioridad baja (Subidas): con poco ancho se esconden, no se
@@ -598,6 +607,12 @@ optgroup {
   width: 15px;
   height: 15px;
   accent-color: var(--text-accent);
+}
+/* Deshabilitada, la etiqueta entera al 45 %: con el texto en su color normal parecía que se podía marcar. */
+.checkbox-label:has(input:disabled),
+.asist-casilla:has(input:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* Phase 5B — Requests page */
@@ -1054,6 +1069,8 @@ optgroup {
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
+  /* Para que el anillo de foco siga una esquina redonda, como el resto de controles. */
+  border-radius: var(--radius-badge);
 }
 .hf-trigger:hover {
   background: var(--bg-card-hover);
@@ -1062,6 +1079,13 @@ optgroup {
 .hf-trigger:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: -2px;
+}
+/* Con el dedo, los filtros de cabecera y las opciones de su menú al objetivo táctil (28-34 px se quedaban cortos). */
+@media (pointer: coarse) {
+  .data-table th > .hf-trigger,
+  .menores-filtro-panel .hf-option {
+    min-height: var(--tap-min);
+  }
 }
 .hf-caret {
   font-size: 9px;
@@ -1166,6 +1190,12 @@ optgroup {
 .hf-option.selected:hover {
   background: color-mix(in srgb, var(--text-accent) 26%, transparent);
 }
+/* Con el dedo, cada opción del filtro (31 px), «Desmarcar todo» (27) y el botón de ocultar se quedaban cortos. */
+@media (pointer: coarse) {
+  .menores-filtro-panel .hf-option,
+  .menores-filtro-panel .hf-ocultar { min-height: var(--tap-min); }
+  .menores-filtro-panel .hf-ocultar { min-width: var(--tap-min); }
+}
 
 /* Clickable text (dashboard recent-activity title, radarr/sonarr origin link):
    lights up on hover so it's clearly interactive. */
@@ -1174,6 +1204,7 @@ optgroup {
   color: inherit;
   text-decoration: none;
   transition: color 0.12s;
+  border-radius: var(--radius-badge);
 }
 .hover-link:hover {
   color: var(--text-accent);
@@ -1212,6 +1243,7 @@ optgroup {
   white-space: nowrap;
 }
 .value-chip.linkable {
+  position: relative;
   cursor: pointer;
   /* Subtle blue border even before hovering, so a field with a link is
      recognizable at a glance. */
@@ -1246,6 +1278,21 @@ optgroup {
    link's own snug hitbox (no chip padding) would react. */
 .value-chip.linkable:hover .hover-link {
   color: var(--text-accent);
+}
+/* Y el enlace ocupa toda la ficha: con el borde de un botón, un clic en su relleno no hacía nada (el enlace era
+   solo el icono). Con el dedo, la zona llega a --tap-min sin que la ficha crezca. */
+.value-chip.linkable > a.hover-link:only-of-type::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+@media (pointer: coarse) {
+  .value-chip.linkable > a.hover-link:only-of-type::after {
+    /* En las filas de una tarjeta de ficha, sin pasar de la mitad del espacio hasta la fila de al lado
+       (--row-gap, más medio píxel del separador): con la interfaz reducida invadía la ficha de arriba o de abajo. */
+    inset-block: max(calc(-0.5px - var(--row-gap, 999px)), min(0px, calc((100% - var(--tap-min)) / 2)));
+    inset-inline: min(0px, calc((100% - var(--tap-min)) / 2));
+  }
 }
 
 /* Plain muted placeholder ("—") for a field with no value — not a chip,
@@ -1286,6 +1333,40 @@ optgroup {
    list): lights up accent-blue on hover so it reads as grabbable. */
 .drag-handle:hover {
   color: var(--text-accent) !important;
+}
+
+/* Subir y bajar de cada fila de SortableList: el camino con el dedo, donde el
+   arrastre nativo no llega a empezar. Solo con (pointer: coarse); ahí la asa
+   se esconde y estos dos ocupan su sitio. */
+.sortable-mover { display: none; }
+.sortable-pista-dedo { display: none; }
+@media (pointer: coarse) {
+  .sortable-pista-raton { display: none; }
+  .sortable-pista-dedo { display: inline; }
+  span.drag-handle[data-asa] { display: none; }
+  .sortable-mover {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .sortable-mover__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-accent);
+    cursor: pointer;
+  }
+  .sortable-mover__btn:disabled {
+    color: var(--text-muted);
+    opacity: 0.4;
+    cursor: default;
+  }
 }
 
 /* Hero banner behind a dedicated page's header + poster/cards row, using the
@@ -1331,10 +1412,9 @@ optgroup {
 .detail-hero .btn-secondary {
   background: color-mix(in srgb, var(--bg-base) 70%, transparent);
   backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
-.detail-hero .btn-ghost:hover:not(:disabled),
-.detail-hero .btn-secondary:hover:not(:disabled) {
+.detail-hero .btn-ghost:hover:not(:disabled, [aria-disabled="true"]),
+.detail-hero .btn-secondary:hover:not(:disabled, [aria-disabled="true"]) {
   background: color-mix(in srgb, var(--bg-base) 88%, transparent);
 }
 /* .btn-primary looks solid in the plain theme (components.css) but the HUD
@@ -1349,9 +1429,8 @@ optgroup {
     linear-gradient(180deg, color-mix(in srgb, var(--hud-cyan) 28%, transparent), color-mix(in srgb, var(--hud-azure) 42%, transparent)),
     color-mix(in srgb, var(--hud-panel-solid) 92%, transparent);
   backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
-.hud-app .detail-hero .btn-primary:hover:not(:disabled) {
+.hud-app .detail-hero .btn-primary:hover:not(:disabled, [aria-disabled="true"]) {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--hud-cyan) 38%, transparent), color-mix(in srgb, var(--hud-azure) 52%, transparent)),
     color-mix(in srgb, var(--hud-panel-solid) 92%, transparent);
@@ -1359,9 +1438,8 @@ optgroup {
 .detail-hero .btn-danger {
   background: color-mix(in srgb, var(--bg-danger-deep) 75%, transparent);
   backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
-.detail-hero .btn-danger:hover:not(:disabled) {
+.detail-hero .btn-danger:hover:not(:disabled, [aria-disabled="true"]) {
   background: color-mix(in srgb, var(--bg-danger-deep) 90%, transparent);
 }
 
@@ -1377,6 +1455,7 @@ optgroup {
   font-size: 10px;
   background: none;
   border: none;
+  border-radius: var(--radius-badge);
   cursor: pointer;
   color: var(--text-muted);
   transition: color 0.12s ease;

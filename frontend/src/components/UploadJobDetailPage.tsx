@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import type { PasoSubida, UploadJob, UploadJobLog, UploadProgressPhase } from '../types/api'
 import { getUploadJobLogs } from '../api/uploads'
 import { aplicarLineas, ultimaSecuenciaDe } from '../utils/registroSubida'
-import { estadoDePaso } from '../utils/pasosSubida'
+import { estadoDePaso, minusculaInicial, pasoDondeSeParo } from '../utils/pasosSubida'
 import { posterUrl } from '../utils/libraryItem'
 import { formatDate, parseServerDate } from '../utils/format'
 import { segundosDeFase } from '../utils/lineaDeTiempo'
@@ -352,7 +352,12 @@ function ProgressCell({ pct, bold }: { pct: number; bold?: boolean }) {
 
 // Los pasos con nombre de la subida y cuál se paró (los manda el servidor: services/subida_pasos.py). Es un recorrido de
 // verdad (cada paso sigue al anterior), así que lleva su número; los subpasos de Uploadrr-EMU cuelgan del paso que los hace.
-function PasosDeSubida({ pasos }: { pasos: PasoSubida[] }) {
+function PasosDeSubida({ pasos, parada }: { pasos: PasoSubida[]; parada: boolean }) {
+  // Parada (fallida o cancelada) sin ningún paso marcado: el servidor no sabe dónde se paró, y cuatro «Pendiente»
+  // parecían una subida que no había empezado.
+  if (parada && pasoDondeSeParo(pasos) == null) {
+    return <p className="dsub-pasos-sin-dato">No consta en qué paso se paró.</p>
+  }
   return (
     <ol aria-label="Pasos de la subida" className="dsub-pasos">
       {pasos.map((p, i) => {
@@ -365,7 +370,7 @@ function PasosDeSubida({ pasos }: { pasos: PasoSubida[] }) {
               <span className="dsub-subpasos">
                 {p.subpasos.map(sp => (
                   <span key={sp.clave} className={sp.hecho ? 'dsub-subpaso dsub-subpaso-hecho' : 'dsub-subpaso'}>
-                    <span aria-hidden="true">{sp.hecho ? '✓' : '○'}</span> {sp.nombre.toLowerCase()}
+                    <span aria-hidden="true">{sp.hecho ? '✓' : '○'}</span> {minusculaInicial(sp.nombre)}
                   </span>
                 ))}
               </span>
@@ -390,7 +395,7 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
           <col className="dsub-col-34" />
           <col className="dsub-col-200" />
           <col className="dsub-col-90" />
-          <col className="dsub-col-360" />
+          <col />
           <col className="dsub-col-143" />
           <col className="dsub-col-143" />
           <col className="dsub-col-75" />
@@ -403,7 +408,10 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
         </thead>
         <tbody>
           {phases.map((p, i) => {
-            const status = (p.status === 'running' && overrideStatus) ? overrideStatus : p.status
+            // Solo la fase que iba en curso se para con el trabajo: esa toma su hora de fin. Las pendientes nunca
+            // empezaron, así que ni fin ni duración.
+            const paradaConElTrabajo = p.status === 'running' && overrideStatus
+            const status = paradaConElTrabajo ? overrideStatus : p.status
             return (
             <tr key={p.key}>
               <td className="dsub-muted dsub-num">{i + 1}</td>
@@ -417,8 +425,8 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
               </td>
               <td><ProgressCell pct={p.pct} /></td>
               <td className="dsub-fecha">{p.started_at ? formatDate(p.started_at) : '—'}</td>
-              <td className="dsub-fecha">{p.finished_at ? formatDate(p.finished_at) : (overrideStatus ? formatDate(job.finished_at) : '—')}</td>
-              <td className="dsub-num">{formatPhaseDuration(p.started_at, p.finished_at, overrideStatus ? job.finished_at : null)}</td>
+              <td className="dsub-fecha">{p.finished_at ? formatDate(p.finished_at) : (paradaConElTrabajo ? formatDate(job.finished_at) : '—')}</td>
+              <td className="dsub-num">{formatPhaseDuration(p.started_at, p.finished_at, paradaConElTrabajo ? job.finished_at : null)}</td>
             </tr>
             )
           })}
@@ -545,7 +553,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   const loteId = job.lote_id && (job.lote_total ?? 0) > 1 ? job.lote_id : null
   const mediaIcon = <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
 
-  const pasosDeSubida = !isStaging && job.pasos && job.pasos.length > 0 ? <PasosDeSubida pasos={job.pasos} /> : null
+  const pasosDeSubida = !isStaging && job.pasos && job.pasos.length > 0 ? <PasosDeSubida pasos={job.pasos} parada={job.status === 'failed' || job.status === 'cancelled'} /> : null
   const fases = <PhasesSection phases={progress?.phases?.length ? progress.phases : DEFAULT_PHASES} globalPct={progress?.global_pct ?? 0} job={job} />
 
   return (
@@ -553,7 +561,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       <div className="dsub-cabecera">
       <DetailHero backdropUrl={job.backdrop_url}>
       <div className="dsub-barra-sup">
-        <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a Subidas</button>
+        <button className="btn btn-ghost btn-sm btn-volver" onClick={onBack}>Volver a Subidas</button>
         {loteId && (
           <span className="dsub-lote">
             Parte de un lote de {job.lote_total}
@@ -640,7 +648,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       )}
 
       {showActividad && (
-        <Modal titulo={<>Actividad{isRunning ? ' (en directo)' : ''}</>} onClose={() => setShowActividad(false)} className="modal-wide dsub-modal-680">
+        <Modal titulo={<>Registro{isRunning ? ' (en directo)' : ''}</>} onClose={() => setShowActividad(false)} className="modal-wide dsub-modal-680">
           <div className="modal-body">
             {logsTotal > logs.length && (
               <p className="dsub-log-resumen">
@@ -648,7 +656,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
               </p>
             )}
             <pre ref={logsBoxRef} className="dsub-log">
-              {loadingLogs ? 'Cargando…' : logs.length === 0 ? 'Sin actividad registrada todavía.' : logs.map(log => {
+              {loadingLogs ? 'Cargando…' : logs.length === 0 ? 'Sin actividad registrada todavía.' : logs.map((log, i) => {
                 // created_at is stored/sent in UTC — naively slicing the raw
                 // string (the old approach) showed the UTC hour verbatim,
                 // disagreeing with Creado/Finalizado above (which DO convert
@@ -656,7 +664,10 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                 const ts = parseServerDate(log.created_at).toLocaleTimeString('es-ES', {
                   hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
                 })
-                return `[${ts}] ${log.message}\n`
+                const linea = `[${ts}] ${log.message}\n`
+                return log.level === 'error'
+                  ? <span key={log.sequence ?? log.id ?? i} className="dsub-log-error">{linea}</span>
+                  : linea
               })}
             </pre>
           </div>

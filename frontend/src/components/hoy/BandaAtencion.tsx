@@ -47,7 +47,7 @@ export function BandaAtencion({ avisos, onVerSubida, onVerSubidas, onVerVersion 
           <li key={a.clave} className={`panel-aviso${i === vistos.length - 1 && vistos.length % 2 === 1 ? ' panel-aviso-ancho' : ''}`}>
             <span className={`panel-punto ${PUNTO[a.tipo]}`} aria-hidden="true" />
             <div className="panel-item-texto">
-              <div className="panel-aviso-titulo">{a.titulo}</div>
+              <div className="panel-aviso-titulo" title={a.titulo}>{a.titulo}</div>
               {a.detalle && <div className="panel-aviso-detalle" title={a.detalle}>{a.detalle}</div>}
             </div>
             {a.tipo === 'subida' && (

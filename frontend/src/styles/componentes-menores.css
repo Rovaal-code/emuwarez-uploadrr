@@ -47,9 +47,10 @@
   overflow-y: auto;
   padding: 4px;
   background: var(--bg-surface);
-  border: 1px solid var(--border);
+  /* El borde y la sombra «Panel» del HUD, como el resto de paneles. */
+  border: 1px solid var(--hud-line);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-modal);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px color-mix(in srgb, var(--overlay-dark) 70%, transparent);
 }
 
 /* PosterStatusIcon (el color de fondo va en línea) */
@@ -83,10 +84,10 @@
   line-height: 1;
 }
 
-/* En táctil el «?» mide 13 px: la zona que se puede tocar crece sin que cambie lo que se ve. */
+/* En táctil el «?» mide 13 px: la zona que se puede tocar crece hasta unos 44 px sin que cambie lo que se ve. */
 @media (pointer: coarse) {
   .menores-info { position: relative; }
-  .menores-info::after { content: ""; position: absolute; inset: -12px; }
+  .menores-info::after { content: ""; position: absolute; inset: -16px; }
 }
 
 /* Favicon / ProviderIcon */

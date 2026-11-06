@@ -38,3 +38,17 @@ export function opcionesDeReintento(
     { etiqueta: 'Reintentar desde el principio', desdeElPrincipio: true },
   ]
 }
+
+/** El paso donde se paró una subida (el último hecho, fallido o cancelado, o el que iba en curso), o null si no
+ *  consta ninguno: entonces todos siguen «Pendiente» aunque la subida ya no siga. */
+export function pasoDondeSeParo(pasos: readonly Pick<PasoSubida, 'estado'>[]): number | null {
+  for (let i = pasos.length - 1; i >= 0; i--) {
+    if (['hecho', 'en_curso', 'fallido', 'cancelado'].includes(pasos[i].estado)) return i
+  }
+  return null
+}
+
+/** «Subida a eMuwarez» → «subida a eMuwarez»: baja solo la primera letra, para no estropear un nombre propio. */
+export function minusculaInicial(texto: string): string {
+  return texto ? texto[0].toLowerCase() + texto.slice(1) : texto
+}

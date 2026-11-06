@@ -95,6 +95,10 @@
   gap: 6px;
   margin-top: 6px;
 }
+/* Con el dedo, la zona táctil del «?» (InfoIcon) sobresale 16 px: el hueco crece hasta ella para que no tape el enlace. */
+@media (pointer: coarse) {
+  .setup-enlace-fila { gap: 16px; }
+}
 
 /* Fila "Probar conexión" + resultado */
 .setup-fila-prueba {
@@ -129,6 +133,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+.setup-dos-col .aj-campo { margin-bottom: 0; }
 .setup-tipo {
   display: flex;
   align-items: center;
@@ -187,6 +192,20 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  /* El mismo alto lleve o no chapa o «Probar». */
+  min-height: 36px;
+}
+.setup-host-etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: inherit;
+  cursor: pointer;
+}
+.setup-host-etiqueta:has(input:disabled) { cursor: default; }
+@media (pointer: coarse) {
+  .setup-host-fila { min-height: var(--tap-min); }
 }
 .drag-handle.setup-asa {
   color: var(--text-accent);

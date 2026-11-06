@@ -35,6 +35,8 @@ a.btn.dsub-sin-subrayado { text-decoration: none; }
 }
 .dsub-lote-ver:hover { text-decoration: underline; }
 .dsub-cuerpo { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+/* El ancho de la ficha decide el tamaño del póster (peticiones.css, `.ficha-poster`), no el de la ventana. */
+.dsub-cuerpo { container-type: inline-size; }
 .dsub-h1 { font: inherit; letter-spacing: inherit; }
 .dsub-columna { flex: 1; min-width: 300px; }
 .dsub-columna > .dsub-panel { margin-top: 16px; }
@@ -166,6 +168,17 @@ a.btn.dsub-sin-subrayado { text-decoration: none; }
 }
 /* Con el resultado delante, la tabla de fases conserva unas filas a la vista y la página baja si no caben. */
 .dsub-panel.dsub-panel-llena { min-height: 300px; }
+/* Móvil y tableta: la tabla de fases crece y desplaza la página. Con una caja de 236 px que hacía scroll por dentro,
+   arrastrar con el dedo sobre ella movía la caja y no la página; el pie fijo no hace falta con tan pocas filas. */
+@media (max-width: 768px), (pointer: coarse) {
+  .dsub-panel-llena,
+  .dsub-panel.dsub-panel-llena { flex: none; min-height: auto; }
+  .dsub-fases-scroll { flex: none; overflow-y: hidden; }
+  .dsub-fases-scroll .data-table tr.sticky-footer-row td { position: static; }
+  /* La página crece con la tabla: con el alto fijo de la ventana, la tabla se salía por debajo sin el margen de abajo. */
+  .sub-pagina:has(> .dsub-pagina),
+  .dsub-pagina { height: auto; }
+}
 /* Mismo tamaño que los títulos de Temporadas/Capítulos de Biblioteca. */
 .dsub-panel-titulo {
   font-size: 12px;
@@ -194,14 +207,15 @@ a.btn.dsub-sin-subrayado { text-decoration: none; }
 /* Tablas (las reglas de `td`/`th` de .data-table pesan (0,1,1): por eso `.data-table td.dsub-…`) */
 .dsub-scroll-x { overflow-x: auto; }
 .data-table.dsub-tabla { font-size: 12.5px; }
-.data-table.dsub-tabla-fija { table-layout: fixed; }
+/* La columna Progreso no lleva ancho: reparte lo que sobra, con 140 px como poco (el mínimo de la tabla); así la tabla
+   cabe desde 1280 y por debajo hace scroll de lado. */
+.data-table.dsub-tabla-fija { table-layout: fixed; min-width: 830px; }
 .dsub-fases-scroll { overflow: auto; flex: 1; min-height: 0; }
 .dsub-col-34 { width: 34px; }
 .dsub-col-90 { width: 90px; }
 .dsub-col-143 { width: 143px; }
 .dsub-col-75 { width: 75px; }
 .dsub-col-200 { width: 200px; }
-.dsub-col-360 { width: 360px; }
 .data-table td.dsub-b600 { font-weight: 600; }
 .data-table td.dsub-b700 { font-weight: 700; }
 .data-table td.dsub-mono { font-family: var(--font-mono); }
@@ -328,11 +342,17 @@ pre.dsub-log {
   margin: 0;
   max-height: 420px;
   overflow-y: auto;
-  font-size: 0.76rem;
+  font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-/* Una consulta sin datos en una subida terminada: texto atenuado, sin aspecto de botón. */
-.value-chip .txt.dsub-sin-datos { color: var(--text-muted); }
+/* Las líneas de error del registro. */
+.dsub-log-error { color: var(--color-error-soft); }
+
+/* Una consulta sin datos en una subida terminada: texto atenuado, sin aspecto de botón (ni chip). */
+.dsub-sin-datos { font-size: 13px; color: var(--text-muted); }
+
+/* Una subida parada sin que conste en qué paso: en vez de cuatro pasos «Pendiente», se dice. */
+.dsub-pasos-sin-dato { margin: 0; font-size: 12.5px; color: var(--text-muted); }

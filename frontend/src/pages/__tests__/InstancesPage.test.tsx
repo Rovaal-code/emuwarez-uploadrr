@@ -75,9 +75,12 @@ describe('Instancias', () => {
     expect(nombre.value).toBe('Radarr HD')
     expect(document.activeElement).toBe(nombre)
     expect(nombre.labels?.[0]?.textContent).toContain('máx. 15')
+    // Un solo principal a la vista: con la edición abierta, el de la cabecera se apaga como en el alta.
+    expect(boton('+ Añadir instancia').disabled).toBe(true)
     await pulsar(boton('Cancelar'))
     await fotograma()
     expect(document.activeElement).toBe(contenedor.querySelector('button[aria-label="Editar Radarr HD"]'))
+    expect(boton('+ Añadir instancia').disabled).toBe(false)
   })
 
   it('el botón de la cabecera no se convierte en «Cancelar»: se desactiva y el formulario lleva su propio «Cancelar»', async () => {

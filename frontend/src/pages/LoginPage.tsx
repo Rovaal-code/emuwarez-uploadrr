@@ -81,6 +81,7 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               aria-describedby={error ? 'login-error' : undefined}
+              aria-invalid={error ? true : undefined}
               disabled={loading}
             />
           </div>
@@ -95,6 +96,7 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               aria-describedby={error ? 'login-error' : undefined}
+              aria-invalid={error ? true : undefined}
               disabled={loading}
             />
           </div>

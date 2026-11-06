@@ -170,6 +170,16 @@
   --tap-min: 44px;
 }
 
+/* Con el dedo, el mínimo se compensa con el tamaño de la interfaz (zoom del body, utils/uiScale): al 80 % un control de
+   44 px mide 35 en pantalla. La cabecera crece lo justo para alojar los botones. Con ratón y ventana estrecha se queda en
+   44 px: ahí la escala es una opción de escritorio que el usuario eligió. */
+@media (pointer: coarse) {
+  :root {
+    --tap-min: calc(44px / var(--ui-scale));
+    --topbar-height: max(56px, calc(var(--tap-min) + 12px));
+  }
+}
+
 /* En el móvil, 100vh es el alto de la ventana con la barra de direcciones ya recogida: con ella a la vista, el pie de
    la aplicación quedaba tapado. 100dvh es el alto visible de verdad (si el navegador no lo conoce, vale el de arriba). */
 @supports (height: 100dvh) {

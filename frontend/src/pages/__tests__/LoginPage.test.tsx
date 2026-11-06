@@ -34,7 +34,17 @@ describe('LoginPage', () => {
     await enviar()
     expect(aviso()).toBe('Escribe tu contraseña.')
     expect(document.activeElement).toBe(clave())
-    expect(usuario().getAttribute('aria-describedby')).toBe('login-error')
+    // Un error sin campo concreto marca los dos campos como inválidos y los describe con el mismo aviso.
+    for (const campo of [usuario(), clave()]) {
+      expect(campo.getAttribute('aria-describedby')).toBe('login-error')
+      expect(campo.getAttribute('aria-invalid')).toBe('true')
+    }
+  })
+
+  it('sin error, los campos no se marcan como inválidos', async () => {
+    await montar(<LoginPage onSuccess={vi.fn()} />)
+    expect(usuario().hasAttribute('aria-invalid')).toBe(false)
+    expect(clave().hasAttribute('aria-describedby')).toBe(false)
   })
 
   it('con usuario y contraseña inicia sesión', async () => {

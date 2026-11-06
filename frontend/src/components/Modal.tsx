@@ -76,6 +76,9 @@ export function Modal({ titulo, onClose, className, style, tituloStyle, children
     <div
       className="modal-overlay"
       onPointerDown={e => { empezoEnElVelo.current = e.button === 0 && e.target === e.currentTarget }}
+      // Pulsar sobre el velo y soltar dentro del panel (o cancelar el gesto) no es pulsar fuera: el click llegaría igualmente al velo.
+      onPointerUp={e => { if (e.target !== e.currentTarget) empezoEnElVelo.current = false }}
+      onPointerCancel={() => { empezoEnElVelo.current = false }}
       onClick={e => { if (empezoEnElVelo.current && e.target === e.currentTarget) onClose(); empezoEnElVelo.current = false }}
     >
       <div

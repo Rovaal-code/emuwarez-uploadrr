@@ -49,6 +49,10 @@ describe('NotificationBell', () => {
     await pulsar(borrar)
     expect(deleteAllNotifications).not.toHaveBeenCalled()
     expect(boton('¿Seguro? Borrar todo')).toBeDefined()
+    // El cambio se anuncia en una región viva, y perder el foco no desarma la confirmación (lector de pantalla, iOS).
+    expect(document.querySelector('.notif-dropdown [role="status"]')?.textContent).toBe('Pulsa de nuevo para borrar todas las notificaciones.')
+    await act(async () => { boton('¿Seguro? Borrar todo')!.dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })
+    expect(boton('¿Seguro? Borrar todo')).toBeDefined()
 
     await pulsar(boton('¿Seguro? Borrar todo'))
     expect(deleteAllNotifications).toHaveBeenCalledTimes(1)

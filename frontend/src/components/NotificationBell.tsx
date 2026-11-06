@@ -367,11 +367,15 @@ export function NotificationBell() {
                     setConfirmandoBorrado(false)
                     handleDeleteAll()
                   }}
-                  onBlur={() => setConfirmandoBorrado(false)}
                 >
                   {confirmandoBorrado ? '¿Seguro? Borrar todo' : 'Borrar todo'}
                 </button>
               )}
+              {/* Región viva siempre presente (una que aparece ya con texto no se anuncia). La confirmación no se desarma al
+                  perder el foco: con lector de pantalla o en Safari/iOS el foco se mueve solo; caduca a los 4 s o al cerrar. */}
+              <span className="solo-lector" role="status">
+                {confirmandoBorrado ? 'Pulsa de nuevo para borrar todas las notificaciones.' : ''}
+              </span>
             </span>
           </div>
           <div className="notif-list">

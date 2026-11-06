@@ -282,14 +282,10 @@ export function AppShell({ user, onLogout }: AppShellProps) {
 
   return (
     <div className="app-shell hud-app">
-      {/* Primer tabulador de la página: salta la barra lateral y la cabecera. No es un enlace #ancla para no tocar la URL. */}
-      <a
-        className="saltar-contenido"
-        href="/"
-        onClick={e => { e.preventDefault(); contenedor.current?.focus() }}
-      >
+      {/* Primer tabulador de la página: salta la barra lateral y la cabecera. Es un botón, no un enlace: no navega a ningún sitio. */}
+      <button type="button" className="saltar-contenido" onClick={() => contenedor.current?.focus()}>
         Saltar al contenido
-      </a>
+      </button>
       <UnsavedChangesModal />
       {menu.abierto && <div className="sidebar-velo" onClick={menu.cerrar} aria-hidden="true" />}
       <Sidebar

@@ -565,7 +565,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   )}
                 </div>
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleAdmin} disabled={loading || !adminUser || !adminPasswordValid || adminPass !== adminPass2}>
@@ -604,7 +604,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <span className="form-hint">El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario).</span>
                 </div>
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="setup-fila-prueba">
                 <button className="btn btn-secondary btn-sm" onClick={handleTestEmu} disabled={emuTesting || loading || emuCooldown.active} type="button">
                   {emuTesting ? 'Probando…' : emuCooldown.active ? `Espera ${emuCooldown.remaining}s` : 'Probar conexión'}
@@ -616,7 +616,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 )}
               </div>
               {!emuCanContinue && (
-                <div className="alert alert-error setup-mt-10">
+                <div role="alert" className="alert alert-error setup-mt-10">
                   Necesitas una key de eMuwarez válida para continuar: pulsa “Probar conexión” y espera a
                   que confirme que funciona.
                 </div>
@@ -714,7 +714,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   )}
                 </div>
                 {instTestResult?.ok && instTestResult.details?.content_visible === false && (
-                  <div className="alert alert-error setup-mt-10">
+                  <div role="alert" className="alert alert-error setup-mt-10">
                     ⚠ La conexión funciona, pero eMuwarez Uploadrr <strong>no puede ver el contenido</strong> de
                     esta instancia: sus carpetas raíz no están accesibles desde aquí (probablemente el volumen de
                     medios no está montado igual que en Radarr/Sonarr).
@@ -734,9 +734,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   </div>
                 )}
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               {!instancesCanContinue && (
-                <div className="alert alert-error setup-mt-10">
+                <div role="alert" className="alert alert-error setup-mt-10">
                   Todavía no has añadido ninguna instancia. Si continúas sin añadir ninguna, la biblioteca
                   no tendrá contenido que cruzar hasta que la corrijas más tarde en Configuración.
                   <label className="checkbox-label setup-bloque">
@@ -798,7 +798,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   </div>
                 </div>
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="setup-fila-prueba">
                 <button className="btn btn-secondary btn-sm" onClick={handleTestTmdb} disabled={tmdbTesting || loading} type="button">
                   {tmdbTesting ? 'Probando…' : 'Probar conexión'}
@@ -810,7 +810,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 )}
               </div>
               {!tmdbCanContinue && (
-                <div className="alert alert-error setup-mt-10">
+                <div role="alert" className="alert alert-error setup-mt-10">
                   Necesitas una key de TMDb válida para continuar: pulsa “Probar conexión” y espera a
                   que confirme que funciona. Esta integración es obligatoria, así que aquí no se puede
                   saltar el paso.
@@ -849,7 +849,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <input id="setup-campo-15" type="password" className="form-input" value={qbitPass} onChange={e => setQbitPass(e.target.value)} placeholder="Contraseña del WebUI" autoComplete="new-password" />
                 </div>
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="setup-fila-prueba">
                 <button className="btn btn-secondary btn-sm" onClick={handleTestQbit} disabled={qbitTesting || loading || !qbitUrl.trim()} type="button">
                   {qbitTesting ? 'Probando…' : 'Probar conexión'}
@@ -859,7 +859,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 )}
               </div>
               {!qbitUrl.trim() && (
-                <div className="alert alert-error setup-mt-10">
+                <div role="alert" className="alert alert-error setup-mt-10">
                   Sin qBittorrent configurado, los torrents no se añadirán automáticamente a su cola tras
                   subir: tendrás que hacerlo a mano. Podrás configurarlo más tarde en Configuración.
                 </div>
@@ -883,7 +883,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 icono para reconocerlo de un vistazo.
               </div>
               <ProviderPriorityPicker order={nomProviderOrder} onChange={handleNomProviderOrderChange} linkIcons={false} />
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleProviders} disabled={loading}>
@@ -949,7 +949,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   renderRow={(id, _idx, { handleProps }) => fila(id, handleProps)} />
                 {resto.map(h => <div key={h.id}>{fila(h.id)}</div>)}
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleImghosts} disabled={loading}>
@@ -971,7 +971,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 desde Configuración. Si has añadido instancias Radarr/Sonarr, la primera sincronización se
                 ejecutará desde el dashboard.
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleComplete} disabled={loading}>

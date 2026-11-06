@@ -93,6 +93,18 @@ describe('Modal', () => {
     await evento(velo(), 'click')
     expect(alCerrar).not.toHaveBeenCalled()
 
+    // Pulsar en el velo y soltar dentro del panel: el click también cae en el velo (ancestro común) y no debe cerrar.
+    await evento(velo(), 'pointerdown')
+    await evento(panel()!, 'pointerup')
+    await evento(velo(), 'click')
+    expect(alCerrar).not.toHaveBeenCalled()
+
+    // Un gesto cancelado tampoco deja el cierre armado para un click posterior.
+    await evento(velo(), 'pointerdown')
+    await evento(velo(), 'pointercancel')
+    await evento(velo(), 'click')
+    expect(alCerrar).not.toHaveBeenCalled()
+
     // Un clic dentro del panel tampoco.
     await evento(panel()!, 'click')
     expect(alCerrar).not.toHaveBeenCalled()

@@ -22,13 +22,13 @@ import { hayMasPorCargar } from '../utils/paginarSubidas'
 import { CLAVE_ABRIR_LOTE, EVENTO_ABRIR_LOTE, PATRON_LOTE_ID } from '../utils/lote'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
-  progressCounter, queuedWaitText,
+  progressCounter, queuedWaitText, formatSecondsHM,
 } from '../utils/uploadStatus'
 import { useSeeding, type SeedingEstado } from '../hooks/useSeeding'
 import { SeedingCelda } from '../components/SaludSeeding'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { useAlSalir, useSeccionVisible } from '../context/SeccionVisible'
-import { IconoSubida, IconoTipo } from '../components/Iconos'
+import { IconoDesplegar, IconoSubida, IconoTipo } from '../components/Iconos'
 import { Modal } from '../components/Modal'
 import { BannerLote } from '../components/BannerLote'
 
@@ -132,9 +132,66 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
   )
 }
 
+// «06/11/2026, 04:31:26» en dos líneas (el día y la hora), para que la columna no ensanche la tabla.
+function Fecha({ valor }: { valor: string | null | undefined }) {
+  if (!valor) return <span className="sub-muted">—</span>
+  const [dia, hora] = formatDateTimeSeconds(valor).split(', ')
+  return <span className="sub-fecha"><span>{dia}</span>{hora && <span className="sub-fecha-hora">{hora}</span>}</span>
+}
+
+// El primer renglón de un error: la lista no es sitio para la pila entera (el motivo completo está en el detalle).
+const primeraLinea = (texto: string) => texto.split('\n').find(l => l.trim())?.trim() ?? texto
+
+// El estado de una subida y, debajo, lo que dice de ella: cómo va (barra y fase), cuánto tardó o por qué falló.
+function EstadoDeFila({ job }: { job: UploadJob }) {
+  const viva = job.status === 'preparing' || job.status === 'running'
+  const pct = Math.max(0, Math.min(100, job.progress?.global_pct ?? 0))
+  const phaseInfo = viva ? currentPhaseInfo(job) : null
+  const fase = phaseInfo?.label ?? (viva ? phaseLabel(job.progress_phase) : null)
+  const transcurrido = viva ? progressCounter(job) : null
+  const clase = STATUS_CLASS[job.status] || 'badge req-unknown'
+  const parpadea = job.status === 'preparing' || job.status === 'running'
+  const motivo = job.status === 'failed' && job.error_message ? primeraLinea(job.error_message) : null
+  return (
+    <div className="sub-estado">
+      <span className={parpadea ? `${clase} badge-blink` : clase}>{statusLabel(job.status)}</span>
+      {job.status === 'staging' && <span className="sub-estado-pie">Generando nomenclatura</span>}
+      {job.status === 'queued' && <span className="sub-estado-pie">{queuedWaitText(job)}</span>}
+      {viva && (
+        <>
+          <div className="sub-barra" role="progressbar" aria-label="Progreso global de la subida" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+            {/* Valor calculado: la fracción de la subida que va hecha. */}
+            <div className="sub-barra-relleno" style={{ transform: `scaleX(${pct / 100})` }} />
+          </div>
+          <span className="sub-estado-pie">
+            {fase}{phaseInfo?.counterText ? ` (${phaseInfo.counterText})` : ''}{transcurrido ? ` · ${transcurrido}` : ''}
+          </span>
+        </>
+      )}
+      {!viva && job.duration_seconds != null && (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') && (
+        <span className="sub-estado-pie">{job.status === 'completed' ? 'en' : 'tras'} {formatSecondsHM(job.duration_seconds)}</span>
+      )}
+      {motivo && <span className="sub-estado-error" title={job.error_message ?? undefined}>{motivo}</span>}
+    </div>
+  )
+}
+
+// Un botón de la fila: solo el icono, con su nombre para el lector de pantalla y el tooltip.
+function AccionDeFila({ etiqueta, tono, onClick, children }: {
+  etiqueta: string; tono?: 'peligro'; onClick: () => void; children: React.ReactNode
+}) {
+  const { triggerProps, tooltipNode } = useTooltip(etiqueta)
+  return (
+    <button type="button" className={`sub-accion${tono ? ` sub-accion-${tono}` : ''}`} aria-label={etiqueta} onClick={onClick} {...triggerProps}>
+      {children}
+      {tooltipNode}
+    </button>
+  )
+}
+
 // One table row — used both for the latest attempt in a retry chain (normal
 // row) and for its older attempts (indented/muted, revealed by expanding the
-// Reintentos toggle). `retryToggle` is only passed on the latest-attempt row.
+// chip of retries next to the title). `retryToggle` is only passed on the latest-attempt row.
 function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel, onRetry, onDelete, onFiltrarLote }: {
   job: UploadJob
   seeding: SeedingEstado
@@ -152,24 +209,11 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
   const canDelete = DELETABLE_STATUSES.has(job.status)
   // Un intento anterior de una cadena ya se reintentó: el servidor solo acepta reintentar el último.
   const canRetry = !indent && RETRYABLE_STATUSES.has(job.status)
-  const isPreparingOrRunning = job.status === 'preparing' || job.status === 'running'
-  const phaseInfo = isPreparingOrRunning ? currentPhaseInfo(job) : null
-  const phaseLabelText = phaseInfo?.label ?? (isPreparingOrRunning ? phaseLabel(job.progress_phase) : null)
-  const phaseElapsedText = isPreparingOrRunning ? progressCounter(job) : null
   const deepLink = buildDeepLink(job, instances)
   const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Ver progreso / detalle')
   const { triggerProps: emuTip, tooltipNode: emuTooltip } = useTooltip(job.result_url ? 'Ver en eMuwarez' : null)
   const { triggerProps: originTip, tooltipNode: originTooltip } = useTooltip(deepLink ? `Abrir en ${job.instance_name ?? job.instance_type}` : null)
   const retryToggleTip = useTooltip(retryToggle ? (retryToggle.expanded ? 'Ocultar intentos anteriores' : 'Ver intentos anteriores') : null)
-  const retryBtnTip = useTooltip(canRetry
-    ? 'Reintentar subida'
-    : indent ? 'Reintenta el último intento de la cadena' : 'Solo se puede reintentar una subida cancelada o fallida')
-  const deleteBtnTip = useTooltip(canDelete
-    ? ((job.retry_count ?? 0) > 0
-        ? 'Borrar esta subida del historial, con todos sus intentos'
-        : 'Borrar esta subida del historial')
-    : 'Solo se puede borrar una subida terminada: completada, cancelada o fallida')
-  const cancelBtnTip = useTooltip(canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo')
   // El chip del lote: solo si el lote tiene más de un elemento (uno que se quedó en uno no agrupa nada), y no en los
   // intentos anteriores, que van debajo de la fila que ya lo lleva.
   const loteId = !indent && job.lote_id && (job.lote_total ?? 0) > 1 ? job.lote_id : null
@@ -215,6 +259,25 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
                 {loteTip.tooltipNode}
               </button>
             )}
+            {retryToggle && (
+              <button
+                type="button"
+                className="sub-reintentos-chip sub-toggle-reintentos"
+                aria-expanded={retryToggle.expanded}
+                aria-label={retryToggle.count === 1 ? '1 intento anterior' : `${retryToggle.count} intentos anteriores`}
+                onClick={retryToggle.onClick}
+                {...retryToggleTip.triggerProps}
+              >
+                <RetryButtonIcon /> {job.retry_count ?? retryToggle.count}
+                <IconoDesplegar abierto={retryToggle.expanded} size={10} />
+                {retryToggleTip.tooltipNode}
+              </button>
+            )}
+            {!retryToggle && !indent && (job.retry_count ?? 0) > 0 && (
+              <span className="sub-reintentos-chip" title="Intentos anteriores">
+                <RetryButtonIcon /> {job.retry_count}
+              </span>
+            )}
             {job.result_url && (
               <a className="hover-link sub-enlace-emu" href={job.result_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
                 aria-label="Ver en eMuwarez" {...emuTip}>
@@ -245,88 +308,28 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
       <td className="col-prioridad-baja sub-nowrap sub-celda-peticion">
         <PeticionDeSubida job={job} />
       </td>
-      <td>
-        {job.status === 'queued' ? (
-          <span className="badge status-queued">En cola</span>
-        ) : (job.status === 'preparing' || job.status === 'running' || job.status === 'failed') ? (
-          <span className={`${STATUS_CLASS[job.status] || 'badge req-unknown'} badge-blink`}>
-            {statusLabel(job.status)}
-          </span>
-        ) : (
-          <span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>
-            {statusLabel(job.status)}
-          </span>
-        )}
-      </td>
-      <td className="sub-nowrap">
-        {job.status === 'staging' ? (
-          <span className="badge status-queued sub-badge-progreso">
-            <span className="spinner sub-spinner-10" />
-            Generando nomenclatura
-          </span>
-        ) : job.status === 'queued' ? (
-          <span className="badge status-queued sub-badge-progreso">
-            <span className="spinner sub-spinner-10" />
-            {queuedWaitText(job)}
-          </span>
-        ) : (job.status === 'preparing' || job.status === 'running') ? (
-          <span className="badge status-queued sub-badge-progreso">
-            <span className="spinner sub-spinner-10" />
-            {phaseLabelText}{phaseInfo?.counterText ? ` (${phaseInfo.counterText})` : ''}{phaseElapsedText ? ` · ${phaseElapsedText}` : ''}
-          </span>
-        ) : '—'}
+      <td className="sub-celda-estado">
+        <EstadoDeFila job={job} />
       </td>
       <td className="sub-nowrap"><SeedingCelda job={job} seeding={seeding} /></td>
-      <td className="sub-muted sub-t11 sub-nowrap">{formatDateTimeSeconds(job.created_at ?? null)}</td>
-      <td className="sub-muted sub-t11 sub-nowrap">{formatDateTimeSeconds(job.finished_at ?? null)}</td>
-      <td className="col-prioridad-baja sub-muted sub-t12">
-        {job.duration_seconds != null ? `${job.duration_seconds}s` : '—'}
-      </td>
-      <td className="sub-muted sub-t12">
-        {retryToggle ? (
-          <span
-            className="lib-title-link sub-toggle-reintentos"
-            onClick={retryToggle.onClick}
-            {...retryToggleTip.triggerProps}
-          >
-            x{job.retry_count} <span className="sub-t10">{retryToggle.expanded ? '▾' : '▸'}</span>
-            {retryToggleTip.tooltipNode}
-          </span>
-        ) : (job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '—'}
-      </td>
+      <td className="sub-nowrap"><Fecha valor={job.created_at} /></td>
+      <td className="sub-nowrap"><Fecha valor={job.finished_at} /></td>
       <td className="col-actions">
         <div className="sub-acciones-fila">
-          <RellenarPeticion job={job} />
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            disabled={!canRetry}
-            onClick={() => onRetry(job)}
-            {...retryBtnTip.triggerProps}
-          >
-            <RetryButtonIcon /> Reintentar
-            {retryBtnTip.tooltipNode}
-          </button>
-          <button
-            type="button"
-            className="btn btn-danger btn-sm"
-            disabled={!canCancel}
-            onClick={() => onCancel(job.id!)}
-            {...cancelBtnTip.triggerProps}
-          >
-            <CancelButtonIcon /> Cancelar
-            {cancelBtnTip.tooltipNode}
-          </button>
-          <button
-            type="button"
-            className="btn btn-danger btn-sm"
-            disabled={!canDelete}
-            onClick={() => onDelete(job)}
-            {...deleteBtnTip.triggerProps}
-          >
-            <DeleteButtonIcon /> Borrar
-            {deleteBtnTip.tooltipNode}
-          </button>
+          <RellenarPeticion job={job} compacto />
+          {canRetry && (
+            <AccionDeFila etiqueta="Reintentar" onClick={() => onRetry(job)}><RetryButtonIcon /></AccionDeFila>
+          )}
+          {canCancel && (
+            <AccionDeFila etiqueta="Cancelar" tono="peligro" onClick={() => onCancel(job.id!)}><CancelButtonIcon /></AccionDeFila>
+          )}
+          {canDelete && (
+            <AccionDeFila
+              etiqueta={(job.retry_count ?? 0) > 0 ? 'Borrar, con todos sus intentos' : 'Borrar'}
+              tono="peligro"
+              onClick={() => onDelete(job)}
+            ><DeleteButtonIcon /></AccionDeFila>
+          )}
         </div>
       </td>
     </tr>
@@ -785,18 +788,15 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   <th><HeaderFilter label="Estado" value={statusFilter} onChange={setStatusFilter} options={[
                     { value: '', label: 'Todos' }, ...STATUS_OPTIONS.filter(Boolean).map(s => ({ value: s, label: statusLabel(s) })),
                   ]} /></th>
-                  <th>Progreso</th>
                   <th>Seeding</th>
                   <th>Creado</th>
                   <th>Finalizado</th>
-                  <th className="col-prioridad-baja">Duración</th>
-                  <th>Reintentos</th>
                   <th className="col-actions sub-th-acciones">Acciones</th>
                 </tr>
               </thead>
               {visibleJobs.length === 0 && filtrando && (
                 <FilaVacia
-                  columnas={13}
+                  columnas={10}
                   icon={<IconoSubida />}
                   title="Sin resultados"
                   body={hayMas

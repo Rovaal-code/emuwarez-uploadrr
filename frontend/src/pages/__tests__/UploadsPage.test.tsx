@@ -256,7 +256,7 @@ describe('una cadena de reintentos', () => {
   const ORIGINAL = trabajo({ id: 5, status: 'failed', title: 'Película', media_type: 'movie' })
   const PUNTA = trabajo({ id: 6, status: 'failed', title: 'Película', media_type: 'movie', retry_of_job_id: 5, retry_count: 1 })
 
-  it('solo se reintenta desde el último intento: el anterior lo tiene deshabilitado', async () => {
+  it('solo se reintenta desde el último intento: el anterior no ofrece reintentar', async () => {
     vi.mocked(getUploads).mockResolvedValue([PUNTA, ORIGINAL])
     vi.mocked(countUploads).mockResolvedValue(2)
     await pagina()
@@ -264,12 +264,32 @@ describe('una cadena de reintentos', () => {
     await pulsar(document.querySelector('.sub-toggle-reintentos')!)
     const filas = [...document.querySelectorAll('tbody tr')]
     expect(filas).toHaveLength(2)
-    const reintentar = (tr: Element) =>
-      [...tr.querySelectorAll('button')].find(b => b.textContent?.includes('Reintentar'))!
+    const reintentar = (tr: Element) => tr.querySelector('button[aria-label="Reintentar"]')
     expect(filas[0].classList.contains('sub-fila-antigua')).toBe(false)
-    expect(reintentar(filas[0]).disabled).toBe(false)
+    expect(reintentar(filas[0])).not.toBeNull()
     expect(filas[1].classList.contains('sub-fila-antigua')).toBe(true)
-    expect(reintentar(filas[1]).disabled).toBe(true)
+    expect(reintentar(filas[1])).toBeNull()
+    // Borrar sí: borra la cadena entera.
+    expect(filas[1].querySelector('button[aria-label^="Borrar"]')).not.toBeNull()
+  })
+
+  it('cada fila ofrece solo lo que se puede hacer con ella', async () => {
+    const VIVA = trabajo({ id: 7, status: 'running', title: 'En marcha', media_type: 'movie' })
+    const HECHA = trabajo({ id: 8, status: 'completed', title: 'Hecha', media_type: 'movie' })
+    vi.mocked(getUploads).mockResolvedValue([VIVA, HECHA, ORIGINAL])
+    vi.mocked(countUploads).mockResolvedValue(3)
+    await pagina()
+    const acciones = (titulo: string) => [...filaDe(titulo).querySelectorAll('button[aria-label]')].map(b => b.getAttribute('aria-label'))
+    expect(acciones('En marcha')).toEqual(['Cancelar'])
+    expect(acciones('Hecha')).toEqual(['Borrar'])
+    expect(acciones('Película')).toEqual(['Reintentar', 'Borrar'])
+  })
+
+  it('una subida fallida enseña el primer renglón de su error bajo el estado', async () => {
+    vi.mocked(getUploads).mockResolvedValue([trabajo({ id: 9, status: 'failed', title: 'Rota', media_type: 'movie', error_message: 'Uploadrr falló\ncon la pila entera detrás' })])
+    vi.mocked(countUploads).mockResolvedValue(1)
+    await pagina()
+    expect(filaDe('Rota').querySelector('.sub-estado-error')?.textContent).toBe('Uploadrr falló')
   })
 })
 

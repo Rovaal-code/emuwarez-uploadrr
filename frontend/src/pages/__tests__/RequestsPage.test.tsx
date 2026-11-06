@@ -121,6 +121,42 @@ describe('Peticiones', () => {
   })
 })
 
+describe('Peticiones: grupos plegables y por qué aún no está lista', () => {
+  it('el resumen cuenta cada grupo, y plegar uno oculta sus filas y se recuerda en el navegador', async () => {
+    await pagina()
+    const chips = [...document.querySelectorAll('.pet-resumen-chip')].map(c => c.textContent)
+    expect(chips).toEqual(['Lista para subir2', 'Parcial1', 'No la tienes2', 'Cerradas1'])
+    const cab = document.querySelector('tbody.pet-bloque-lista .pet-grupo-boton')!
+    expect(cab.getAttribute('aria-expanded')).toBe('true')
+    await pulsar(cab)
+    expect(cab.getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelectorAll('tbody.pet-bloque-lista tr.clickable')).toHaveLength(0)
+    // El número del grupo sigue a la vista aunque esté plegado.
+    expect(document.querySelector('tbody.pet-bloque-lista .pet-grupo-n')?.textContent).toBe('2')
+    expect(JSON.parse(localStorage.getItem('emuwarez_pet_grupos_plegados') ?? '[]')).toEqual(['lista'])
+    // Pulsar su chip del resumen lo despliega.
+    await pulsar(document.querySelector('.pet-resumen-lista')!)
+    expect(document.querySelectorAll('tbody.pet-bloque-lista tr.clickable')).toHaveLength(2)
+  })
+
+  it('un grupo plegado en otra visita sale plegado', async () => {
+    localStorage.setItem('emuwarez_pet_grupos_plegados', JSON.stringify(['cerrada']))
+    await pagina()
+    expect(document.querySelectorAll('tbody.pet-bloque-cerrada tr.clickable')).toHaveLength(0)
+    expect(document.querySelectorAll('tbody.pet-bloque-lista tr.clickable')).toHaveLength(2)
+  })
+
+  it('bajo la compatibilidad, la fila dice por qué no está lista (solo cuando aporta algo)', async () => {
+    await pagina()
+    const motivo = (titulo: string) =>
+      [...document.querySelectorAll('tr.clickable')].find(tr => tr.querySelector('.lib-title-link')?.textContent === titulo)
+        ?.querySelector('.pet-motivo')?.textContent ?? null
+    expect(motivo('Petición 3')).toBe('Sin castellano')
+    expect(motivo('Petición 4')).toBeNull()
+    expect(motivo('Petición 1')).toBeNull()
+  })
+})
+
 // ── «Subir seleccionadas» ───────────────────────────────────────────────────────────────────────────────────────
 
 describe('«Subir seleccionadas» en Peticiones', () => {

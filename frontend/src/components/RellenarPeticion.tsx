@@ -9,7 +9,8 @@ import { useTooltip } from './Tooltip'
 // Tras subir algo que cubría una petición: copia la URL del torrent y abre la petición de eMuwarez, para pulsar
 // «Fill» y pegarla. eMuwarez no tiene API para rellenarla desde aquí. Si el navegador no deja copiar, se enseña la
 // URL para copiarla a mano.
-export function RellenarPeticion({ job }: { job: UploadJob }) {
+// `compacto`: solo el icono, para la fila de la lista de Subidas (el nombre va en `aria-label` y en el tooltip).
+export function RellenarPeticion({ job, compacto }: { job: UploadJob; compacto?: boolean }) {
   const [copiada, setCopiada] = useState(false)
   const [aMano, setAMano] = useState(false)
   const { triggerProps, tooltipNode } = useTooltip('Copia la URL del torrent y abre la petición para pegarla en «Fill»')
@@ -30,10 +31,17 @@ export function RellenarPeticion({ job }: { job: UploadJob }) {
 
   return (
     <>
-      <button type="button" className="btn btn-primary btn-sm" onClick={rellenar} {...triggerProps}>
-        <ExternalLinkButtonIcon /> {copiada ? 'URL copiada' : 'Rellenar petición'}
-        {tooltipNode}
-      </button>
+      {compacto ? (
+        <button type="button" className="sub-accion sub-accion-primaria" aria-label={copiada ? 'URL copiada' : 'Rellenar petición'} onClick={rellenar} {...triggerProps}>
+          <ExternalLinkButtonIcon />
+          {tooltipNode}
+        </button>
+      ) : (
+        <button type="button" className="btn btn-primary btn-sm" onClick={rellenar} {...triggerProps}>
+          <ExternalLinkButtonIcon /> {copiada ? 'URL copiada' : 'Rellenar petición'}
+          {tooltipNode}
+        </button>
+      )}
       {/* En el body: dentro de la celda fija de acciones, el modal quedaría atrapado bajo la columna. */}
       {aMano && createPortal(<CopiarAMano url={torrent} peticion={peticion} copiadaYa={copiada} onClose={() => setAMano(false)} />, document.body)}
     </>

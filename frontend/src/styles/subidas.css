@@ -41,8 +41,9 @@
   min-height: 0;
 }
 
-.sub-th-titulo {
+.data-table th.sub-th-titulo {
   width: 100%;
+  min-width: 260px;
 }
 
 .sub-th-acciones {
@@ -84,8 +85,9 @@
   opacity: 0.65;
 }
 
-.sub-celda-titulo {
-  max-width: 360px;
+/* El título toma lo que sobra y se corta con puntos suspensivos: así la tabla no pasa del ancho de la página. */
+.data-table td.sub-celda-titulo {
+  max-width: 0;
 }
 
 .sub-celda-peticion {
@@ -159,10 +161,40 @@
   list-style: none;
 }
 
-.sub-lote-contador-en_marcha { color: var(--color-uploading); }
-.sub-lote-contador-completadas { color: var(--color-available); }
-.sub-lote-contador-fallidas { color: var(--color-error); }
-.sub-lote-contador-canceladas { color: var(--text-muted); }
+.sub-lote-contador {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  --sub-lote-color: var(--text-muted);
+}
+
+.sub-lote-punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sub-lote-color);
+}
+
+.sub-lote-contador-en_cola, .sub-lote-tramo-en_cola { --sub-lote-color: var(--text-muted); }
+.sub-lote-contador-en_marcha, .sub-lote-tramo-en_marcha { --sub-lote-color: var(--text-accent); }
+.sub-lote-contador-completadas, .sub-lote-tramo-completadas { --sub-lote-color: var(--color-available); }
+.sub-lote-contador-fallidas, .sub-lote-tramo-fallidas { --sub-lote-color: var(--color-error); }
+.sub-lote-contador-canceladas, .sub-lote-tramo-canceladas { --sub-lote-color: var(--color-neutral); }
+
+/* El lote de un vistazo: cada estado ocupa lo que pesa en el lote (completadas, en marcha, en cola, fallidas…). */
+.sub-lote-barra {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+.sub-lote-tramo {
+  flex-basis: 0;
+  min-width: 6px;
+  background: var(--sub-lote-color);
+}
 
 .sub-lote-banner-acciones {
   display: flex;
@@ -190,9 +222,9 @@
 }
 
 .sub-poster {
-  width: 28px;
-  height: 42px;
-  border-radius: 4px;
+  width: 36px;
+  height: 54px;
+  border-radius: 5px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -231,27 +263,139 @@
   align-self: center;
 }
 
-/* `.badge` ya es inline-flex y centrado, con gap 4px. */
-.badge.sub-badge-progreso {
-  gap: 5px;
+/* Estado: la insignia y, debajo, cómo va (barra y fase), cuánto tardó o por qué falló. */
+.data-table td.sub-celda-estado {
+  min-width: 180px;
+  max-width: 260px;
 }
 
-.spinner.sub-spinner-10 {
-  width: 10px;
-  height: 10px;
-  border-width: 2px;
+.sub-estado {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
-/* `.lib-title-link { display: inline-block }` */
-.lib-title-link.sub-toggle-reintentos {
+.sub-estado-pie {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.sub-barra {
+  width: 100%;
+  min-width: 140px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--overlay-light) 9%, transparent);
+}
+
+.sub-barra-relleno {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--text-accent);
+  transform-origin: left;
+  transition: transform 0.4s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sub-barra-relleno {
+    transition: none;
+  }
+}
+
+/* El primer renglón del error de una subida fallida; el motivo entero está en su detalle. */
+.sub-estado-error {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--color-error-pale);
+}
+
+/* Fechas: el día y, debajo, la hora. */
+.sub-fecha {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12px;
+}
+
+.sub-fecha-hora {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+/* Chip de los intentos anteriores, junto al título: pulsarlo despliega la cadena. */
+.sub-reintentos-chip {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: var(--radius-badge);
+  border: 1px solid var(--border-input);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
+button.sub-reintentos-chip {
+  cursor: pointer;
+}
+
+button.sub-reintentos-chip:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+/* Acciones de la fila: solo el icono; el nombre va en aria-label y en el tooltip. Se ofrece solo lo que se puede
+   hacer con esa subida, así que no hay botones apagados. */
 .sub-acciones-fila {
   display: flex;
   gap: 6px;
+}
+
+.sub-accion {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-small);
+  border: 1px solid var(--border-input);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.sub-accion:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+  color: var(--text-accent);
+}
+
+.sub-accion-primaria {
+  border-color: color-mix(in srgb, var(--text-accent) 45%, transparent);
+  color: var(--color-accent-soft);
+}
+
+.sub-accion-peligro {
+  color: var(--color-error-soft);
+}
+
+.sub-accion-peligro:hover {
+  border-color: color-mix(in srgb, var(--color-error) 55%, transparent);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  color: var(--color-error-pale);
 }
 
 /* Modal de cancelar y de iniciar: `.modal-panel { max-width: 600px }` */

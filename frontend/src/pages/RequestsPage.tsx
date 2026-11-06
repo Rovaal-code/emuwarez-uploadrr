@@ -718,7 +718,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   // «Ir a»: despliega el grupo y lleva la vista a su cabecera.
   const irAlGrupo = (id: GrupoPeticion) => {
     alternarGrupo(id, false)
-    requestAnimationFrame(() => document.getElementById(`pet-grupo-${id}`)?.scrollIntoView({ block: 'start', behavior: 'auto' }))
+    requestAnimationFrame(() => document.getElementById(`pet-grupo-${id}`)?.scrollIntoView?.({ block: 'start' }))
   }
   const votesHeaderTip = useTooltip('Votos (otros usuarios que la quieren)')
   const commentsHeaderTip = useTooltip('Comentarios')

@@ -16,6 +16,9 @@ const CONTADORES: { clave: Contador; una: string; varias: string }[] = [
   { clave: 'canceladas', una: 'cancelada', varias: 'canceladas' },
 ]
 
+// El orden de la barra: lo hecho primero, luego lo que va y lo que espera, y al final lo que no salió.
+const ORDEN_BARRA: Contador[] = ['completadas', 'en_marcha', 'en_cola', 'fallidas', 'canceladas']
+
 // «3 canceladas · 1 ya había empezado»: lo que dice el banner tras «Cancelar pendientes».
 function textoCancelacion(r: LoteAccionResult, soloPendientes: boolean): string {
   if (r.canceladas === 0 && r.intactas === 0) return 'No había ninguna que cancelar.'
@@ -130,6 +133,7 @@ export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }
           <ul className="sub-lote-contadores" aria-label="Estado del lote">
             {CONTADORES.filter(c => resumen[c.clave] > 0).map(c => (
               <li key={c.clave} className={`sub-lote-contador sub-lote-contador-${c.clave}`}>
+                <span className="sub-lote-punto" aria-hidden="true" />
                 {cuenta(resumen[c.clave], c.una, c.varias)}
               </li>
             ))}
@@ -154,6 +158,17 @@ export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }
           <button type="button" className="btn btn-secondary btn-sm" onClick={onQuitar}>Quitar filtro</button>
         </div>
       </div>
+
+      {resumen && resumen.total > 0 && (
+        // Los elementos del lote por estado, en el orden en que avanza una subida; el texto de los contadores ya lo
+        // dice, así que la barra es solo un vistazo.
+        <div className="sub-lote-barra" aria-hidden="true">
+          {ORDEN_BARRA.filter(c => resumen[c] > 0).map(c => (
+            // Valor calculado: la parte del lote que está en este estado.
+            <span key={c} className={`sub-lote-tramo sub-lote-tramo-${c}`} style={{ flexGrow: resumen[c] }} />
+          ))}
+        </div>
+      )}
 
       {resumen?.parado && (
         <p className="sub-lote-parado" role="note">

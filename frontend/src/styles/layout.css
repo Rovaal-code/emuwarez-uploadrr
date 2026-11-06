@@ -280,6 +280,7 @@
 }
 
 .topbar-title {
+  /* Es el h1 de cada sección: el nombre de la sección, con el aspecto de siempre. */
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
@@ -447,6 +448,7 @@
 
 .notif-list {
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .notif-item {
@@ -504,8 +506,13 @@
   background: color-mix(in srgb, var(--color-error) 12%, transparent);
 }
 
-.notif-clearall:hover {
-  color: var(--color-missing);
+.notif-clearall:hover,
+.notif-clearall-confirmar {
+  color: var(--color-error-soft);
+}
+
+.notif-clearall-confirmar {
+  font-weight: 600;
 }
 
 .notif-item.unread {

@@ -238,6 +238,8 @@ export function NotificationBell() {
   const [items, setItems] = useState<NotificationItem[]>([])
   const [unread, setUnread] = useState(0)
   const [loading, setLoading] = useState(false)
+  // «Borrar todo» pide una segunda pulsación (no hay deshacer); se desarma solo a los 4 s o al cerrar el panel.
+  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const botonRef = useRef<HTMLButtonElement>(null)
   const bellTip = useTooltip('Notificaciones')
@@ -260,9 +262,18 @@ export function NotificationBell() {
     cadaConCanal: 120_000,
   })
 
+  useEffect(() => {
+    if (!confirmandoBorrado) return
+    const t = setTimeout(() => setConfirmandoBorrado(false), 4000)
+    return () => clearTimeout(t)
+  }, [confirmandoBorrado])
+
   // Close on outside click / Escape.
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setConfirmandoBorrado(false)
+      return
+    }
     const onDown = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
@@ -348,7 +359,18 @@ export function NotificationBell() {
                 <button className="notif-markall" onClick={handleMarkAll}>Marcar todo como leído</button>
               )}
               {items.length > 0 && (
-                <button className="notif-markall notif-clearall" onClick={handleDeleteAll}>Borrar todo</button>
+                <button
+                  type="button"
+                  className={`notif-markall notif-clearall${confirmandoBorrado ? ' notif-clearall-confirmar' : ''}`}
+                  onClick={() => {
+                    if (!confirmandoBorrado) { setConfirmandoBorrado(true); return }
+                    setConfirmandoBorrado(false)
+                    handleDeleteAll()
+                  }}
+                  onBlur={() => setConfirmandoBorrado(false)}
+                >
+                  {confirmandoBorrado ? '¿Seguro? Borrar todo' : 'Borrar todo'}
+                </button>
               )}
             </span>
           </div>

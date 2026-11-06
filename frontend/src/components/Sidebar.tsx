@@ -155,7 +155,7 @@ export function Sidebar({ active, onNavigate, movil = false, abierta = false, on
         {...logoTip}
       >
         <ServiceIcon type="emu" size={28} />
-        {!collapsed && <span className="sidebar-logo-text">eMuwarez Uploadrr</span>}
+        {!collapsed && <span className="sidebar-logo-text" translate="no">eMuwarez Uploadrr</span>}
         {movil && <span className="sidebar-cerrar"><IconoCerrar size={18} /></span>}
         {logoTooltip}
       </button>

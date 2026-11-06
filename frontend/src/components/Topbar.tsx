@@ -22,7 +22,7 @@ interface TopbarProps {
 
 // ⌘ K en Mac, Ctrl K en el resto: es lo que se lee en el botón de búsqueda.
 function textoDelAtajo(): string {
-  return /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'
+  return /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘\u00A0K' : 'Ctrl\u00A0K'
 }
 
 export function Topbar({ user, pageTitle, onLogout, onBuscar, menu }: TopbarProps) {
@@ -40,7 +40,7 @@ export function Topbar({ user, pageTitle, onLogout, onBuscar, menu }: TopbarProp
     <header className="topbar">
       <div className="topbar-left">
         <BotonMenu abierto={menu.abierto} onAlternar={menu.alternar} botonRef={menu.botonRef} />
-        <span className="topbar-title">{pageTitle}</span>
+        <h1 className="topbar-title">{pageTitle}</h1>
       </div>
       {/* Center slot for live sync status — same row as the page title, so
           it never changes the topbar's height whether a sync is running or

@@ -264,6 +264,11 @@ input, select, textarea {
   font-size: inherit;
 }
 
+/* Los títulos que se parten en dos líneas no dejan una palabra sola en la segunda. */
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
 code, kbd, pre, samp {
   font-family: var(--font-mono);
 }

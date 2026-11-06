@@ -500,7 +500,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       <div className="setup-wizard">
         <div className="wizard-logo">
           <ServiceIcon type="emu" size={40} />
-          <div className="wizard-logo-title setup-mt-8">eMuwarez Uploadrr</div>
+          <h1 className="wizard-logo-title setup-mt-8" translate="no">eMuwarez Uploadrr</h1>
           <div className="wizard-logo-sub">Asistente de configuración inicial</div>
         </div>
 
@@ -595,12 +595,12 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </div>
                 <div className="form-group">
                   <label htmlFor="setup-campo-5" className="form-label">Mi usuario de eMuwarez</label>
-                  <input id="setup-campo-5" className="form-input" value={emuUsername} onChange={e => setEmuUsername(e.target.value)} placeholder="Tu nombre de usuario en eMuwarez" />
+                  <input id="setup-campo-5" className="form-input" autoComplete="off" spellCheck={false} value={emuUsername} onChange={e => setEmuUsername(e.target.value)} placeholder="Tu nombre de usuario en eMuwarez" />
                   <span className="form-hint">Se usa para reconocer cuáles de todas las peticiones descargadas las has creado tú.</span>
                 </div>
                 <div className="form-group">
                   <label htmlFor="setup-campo-6" className="form-label">Tag del grupo de subida</label>
-                  <input id="setup-campo-6" className="form-input" value={nomTag} onChange={e => setNomTag(e.target.value)} placeholder="EMUWAREZ" />
+                  <input id="setup-campo-6" className="form-input" autoComplete="off" autoCapitalize="characters" spellCheck={false} value={nomTag} onChange={e => setNomTag(e.target.value)} placeholder="EMUWAREZ" />
                   <span className="form-hint">El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario).</span>
                 </div>
               </div>
@@ -680,11 +680,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <div className="setup-dos-col">
                   <div className="form-group">
                     <label htmlFor="setup-campo-7" className="form-label">Nombre</label>
-                    <input id="setup-campo-7" className="form-input" placeholder={instDraft.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={instDraft.name ?? ''} onChange={e => setInstDraft(p => ({ ...p, name: e.target.value }))} />
+                    <input id="setup-campo-7" className="form-input" autoComplete="off" placeholder={instDraft.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={instDraft.name ?? ''} onChange={e => setInstDraft(p => ({ ...p, name: e.target.value }))} />
                   </div>
                   <div className="form-group">
                     <label htmlFor="setup-campo-8" className="form-label">URL</label>
-                    <input id="setup-campo-8" className="form-input" placeholder={instDraft.type === 'sonarr' ? 'http://192.168.1.100:8989' : 'http://192.168.1.100:7878'} value={instDraft.url ?? ''} onChange={e => setInstDraft(p => ({ ...p, url: e.target.value }))} />
+                    <input id="setup-campo-8" className="form-input" type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder={instDraft.type === 'sonarr' ? 'http://192.168.1.100:8989' : 'http://192.168.1.100:7878'} value={instDraft.url ?? ''} onChange={e => setInstDraft(p => ({ ...p, url: e.target.value }))} />
                   </div>
                   <div className="form-group">
                     <label htmlFor="setup-campo-9" className="form-label">API key</label>
@@ -834,15 +834,15 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-fields">
                 <div className="form-group">
                   <label htmlFor="setup-campo-12" className="form-label">URL del WebUI</label>
-                  <input id="setup-campo-12" className="form-input" value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} placeholder="http://127.0.0.1:8080" />
+                  <input id="setup-campo-12" className="form-input" type="url" inputMode="url" autoComplete="off" spellCheck={false} value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} placeholder="http://127.0.0.1:8080" />
                 </div>
                 <div className="form-group">
                   <label htmlFor="setup-campo-13" className="form-label">Tag</label>
-                  <input id="setup-campo-13" className="form-input" value={qbitTag} onChange={e => setQbitTag(e.target.value)} placeholder="Subidas" />
+                  <input id="setup-campo-13" className="form-input" autoComplete="off" spellCheck={false} value={qbitTag} onChange={e => setQbitTag(e.target.value)} placeholder="Subidas" />
                 </div>
                 <div className="form-group">
                   <label htmlFor="setup-campo-14" className="form-label">Usuario</label>
-                  <input id="setup-campo-14" className="form-input" value={qbitUser} onChange={e => setQbitUser(e.target.value)} placeholder="admin" autoComplete="off" />
+                  <input id="setup-campo-14" className="form-input" value={qbitUser} onChange={e => setQbitUser(e.target.value)} placeholder="admin" autoComplete="off" autoCapitalize="none" spellCheck={false} />
                 </div>
                 <div className="form-group">
                   <label htmlFor="setup-campo-15" className="form-label">Contraseña</label>

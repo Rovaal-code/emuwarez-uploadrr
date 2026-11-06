@@ -12,6 +12,7 @@ from ..ajustes_registro import (
     UPLOAD_MAX_CONCURRENT_SETTING_KEY,
 )
 from ..eventos import EVENTO_SUBIDA_ESTADO, publicar
+from . import plazas_compartidas
 from .comun import _get_db_conn, logger
 from .registro import append_upload_log
 
@@ -25,6 +26,13 @@ from .registro import append_upload_log
 # (upload_queue._run_queued_job) y la pasa al subproceso. 0 = sin límite.
 # La clave (UPLOAD_MAX_CONCURRENT_SETTING_KEY), los valores que admite y el de
 # por defecto viven en el registro de ajustes (services/ajustes_registro.py).
+# El límite vale para toda la máquina: además de contar sus hilos, la puerta toma una plaza en
+# plazas_compartidas.py (cerrojos de fichero), así una subida lanzada por el CLI mientras el servidor
+# sube cuenta contra el mismo límite. El orden de turno (por id) es solo entre las subidas de este proceso.
+
+# Cada cuántos segundos mira otra vez una subida que espera (un aviso interno la despierta antes; lo que libera
+# otro proceso solo se nota en la vuelta siguiente).
+_VUELTA_DE_ESPERA = 3
 
 
 def get_upload_max_concurrent(conn=None) -> int:
@@ -71,6 +79,10 @@ class _UploadConcurrencyGate:
     def __init__(self) -> None:
         self._cond = threading.Condition()
         self._active = 0
+        # Las plazas en fichero de las subidas de este proceso que las tienen (se sueltan de la última a la primera).
+        self._plazas: list[plazas_compartidas.Plaza] = []
+        # Un hilo está tomando plaza (el recorrido de ficheros va fuera del candado): que no entre otro a la vez.
+        self._tomando = False
         self._waiting: set[int] = set()
         self._retirados: set[int] = set()
         self._liberaciones = 0
@@ -101,21 +113,51 @@ class _UploadConcurrencyGate:
                 return False
             self._waiting.add(job_id)
         announced = False
+        ocupadas = 0
         try:
             while True:
                 if cancelada is not None and _sin_fallos(cancelada):
                     return False
                 limit = self._limite()
+                intentar = False
                 with self._cond:
                     if job_id in self._retirados:
                         self._retirados.discard(job_id)
                         return False
                     is_next = job_id == min(self._waiting - self._retirados)
-                    if limit == 0 or (self._active < limit and is_next):
-                        self._waiting.discard(job_id)
-                        self._active += 1
-                        return True
+                    if (limit == 0 or (self._active < limit and is_next)) and not self._tomando:
+                        self._tomando = intentar = True
                     activas, vistas = self._active, self._liberaciones
+                if intentar:
+                    # El recorrido de ficheros va fuera del candado, como la base.
+                    plaza = None
+                    try:
+                        plaza, ocupadas = plazas_compartidas.tomar(limit)
+                    finally:
+                        with self._cond:
+                            # Quien esperaba porque yo estaba tomando se despierta; yo solo espero si nada
+                            # más cambió mientras tanto (una liberación en este proceso).
+                            cambio = self._liberaciones != vistas
+                            self._tomando = False
+                            self._liberaciones += 1
+                            self._cond.notify_all()
+                            if not cambio:
+                                vistas = self._liberaciones
+                    if plaza is not None:
+                        with self._cond:
+                            if job_id in self._retirados:
+                                self._retirados.discard(job_id)
+                                retirada = True
+                            else:
+                                retirada = False
+                                self._waiting.discard(job_id)
+                                self._active += 1
+                                self._plazas.append(plaza)
+                        if retirada:
+                            plaza.soltar()
+                            return False
+                        return True
+                    activas = max(activas, ocupadas)
                 if not announced:
                     announced = True
                     # Ahora sí espera de verdad: la interfaz pasa a enseñar su puesto.
@@ -130,7 +172,7 @@ class _UploadConcurrencyGate:
                         logger.warning("Subida %s: no se pudo registrar la espera de turno", job_id, exc_info=True)
                 with self._cond:
                     if self._liberaciones == vistas:
-                        self._cond.wait(timeout=3)
+                        self._cond.wait(timeout=_VUELTA_DE_ESPERA)
         finally:
             with self._cond:
                 self._waiting.discard(job_id)
@@ -148,8 +190,11 @@ class _UploadConcurrencyGate:
     def release(self) -> None:
         with self._cond:
             self._active = max(0, self._active - 1)
+            plaza = self._plazas.pop() if self._plazas else None
             self._liberaciones += 1
             self._cond.notify_all()
+        if plaza is not None:
+            plaza.soltar()
 
     def retirar_si_espera(self, job_id: int) -> None:
         """Como retirar(), pero solo si ya está esperando: quien aún no ha

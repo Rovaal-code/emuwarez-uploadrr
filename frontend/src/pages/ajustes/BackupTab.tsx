@@ -8,7 +8,7 @@ import {
   type MaintenanceStatus,
   type BackupInfo,
 } from '../../api/maintenance'
-import { formatBytes } from './formatBytes'
+import { formatBytes } from '../../utils/format'
 import { useSettingsMessage } from './mensajes'
 import { CabeceraTarjeta } from './CabeceraTarjeta'
 
@@ -38,7 +38,7 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
     setBusy(true)
     try {
       const r = await createBackup()
-      showMessage(r.ok, r.ok ? `✓ Backup creado: ${r.archive_name} (${formatBytes(r.size_bytes ?? 0)})` : `✗ ${r.error}`)
+      showMessage(r.ok, r.ok ? `✓ Backup creado: ${r.archive_name} (${formatBytes(r.size_bytes)})` : `✗ ${r.error}`)
       if (r.ok) { loadBackups(); onRefresh() }
     } catch (e: unknown) {
       showMessage(false, `✗ ${e instanceof Error ? e.message : String(e)}`)

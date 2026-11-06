@@ -1,5 +1,5 @@
 import type { MaintenanceStatus } from '../../api/maintenance'
-import { formatBytes } from './formatBytes'
+import { formatBytes } from '../../utils/format'
 import { VersionCard } from './diagnostico/VersionCard'
 import { DatabaseActions } from './diagnostico/DatabaseActions'
 import { PathMappingsCard } from './diagnostico/PathMappingsCard'
@@ -21,7 +21,7 @@ export function DiagnosticsTab({ status, onRefresh }: { status: MaintenanceStatu
             <tbody>
               {[
                 ['Ruta', db.db_path],
-                ['Tamaño', formatBytes(db.size_bytes ?? 0)],
+                ['Tamaño', formatBytes(db.size_bytes)],
                 ['Páginas', db.page_count],
                 ['Páginas libres', db.freelist_count],
                 ['Fragmentación', `${db.fragmentation_pct ?? 0} %`],

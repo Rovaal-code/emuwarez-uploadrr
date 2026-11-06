@@ -604,26 +604,47 @@ describe('Configuración: widget para Homepage', () => {
     expect(texto()).toContain('Clave puesta')
   })
 
-  it('regenerar y quitar piden confirmación', async () => {
+  it('regenerar y quitar piden confirmación en un diálogo de la app, no con window.confirm', async () => {
     vi.mocked(getWidgetKeyStatus).mockResolvedValue({ configurada: true })
     vi.mocked(generateWidgetKey).mockResolvedValue({ clave: 'emuw_otra' })
     vi.mocked(removeWidgetKey).mockResolvedValue({ configurada: false })
-    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const confirmarNativo = vi.spyOn(window, 'confirm')
     await montar()
+    const dialogo = () => document.body.querySelector<HTMLElement>('[role="dialog"]')
+    const enDialogo = (t: string) => [...dialogo()!.querySelectorAll('button')].find(x => x.textContent?.trim() === t)!
 
+    // Cancelar no toca la clave; el foco empieza en Cancelar.
     await pulsar(boton('Regenerar clave'))
+    expect(dialogo()?.textContent).toContain('Homepage dejará de ver el widget')
+    expect(document.activeElement?.textContent).toBe('Cancelar')
+    await pulsar(enDialogo('Cancelar'))
+    expect(dialogo()).toBeNull()
     await pulsar(boton('Quitar clave'))
+    await pulsar(enDialogo('Cancelar'))
     expect(generateWidgetKey).not.toHaveBeenCalled()
     expect(removeWidgetKey).not.toHaveBeenCalled()
 
-    confirmar.mockReturnValue(true)
     await pulsar(boton('Regenerar clave'))
+    await pulsar(enDialogo('Regenerar clave'))
     expect(generateWidgetKey).toHaveBeenCalledTimes(1)
+    expect(dialogo()).toBeNull()
     await pulsar(boton('Quitar clave'))
+    expect(dialogo()?.textContent).toContain('El widget dejará de responder')
+    await pulsar(enDialogo('Quitar clave'))
     expect(removeWidgetKey).toHaveBeenCalledTimes(1)
     expect(texto()).toContain('Sin clave: el widget está desactivado.')
     expect(document.querySelector('input[aria-label="Clave del widget"]')).toBeNull()
-    confirmar.mockRestore()
+    expect(confirmarNativo).not.toHaveBeenCalled()
+    confirmarNativo.mockRestore()
+  })
+
+  it('generar la primera clave no pregunta, y un fallo sale en la propia tarjeta', async () => {
+    vi.mocked(generateWidgetKey).mockRejectedValue(new Error('sin red'))
+    await montar()
+    await pulsar(boton('Generar clave'))
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(generateWidgetKey).toHaveBeenCalledTimes(1)
+    expect(document.body.querySelector('.widget-aviso')?.textContent).toBe('sin red')
   })
 })
 

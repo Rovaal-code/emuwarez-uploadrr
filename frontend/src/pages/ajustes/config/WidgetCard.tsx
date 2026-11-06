@@ -1,8 +1,24 @@
 import { useState, useCallback } from 'react'
 import { getWidgetKeyStatus, generateWidgetKey, removeWidgetKey } from '../../../api/widget'
 import { useAlEntrar } from '../../../context/SeccionVisible'
-import { useSettingsMessageAdapter } from '../mensajes'
+import { Modal } from '../../../components/Modal'
 import { CabeceraTarjeta } from '../CabeceraTarjeta'
+
+// Lo que se confirma antes de tocar una clave que ya está puesta.
+type Confirmacion = 'regenerar' | 'quitar'
+
+const TEXTO_CONFIRMACION: Record<Confirmacion, { titulo: string; texto: string; boton: string }> = {
+  regenerar: {
+    titulo: 'Regenerar la clave del widget',
+    texto: 'Homepage dejará de ver el widget hasta que pongas la clave nueva en su services.yaml.',
+    boton: 'Regenerar clave',
+  },
+  quitar: {
+    titulo: 'Quitar la clave del widget',
+    texto: 'El widget dejará de responder hasta que generes otra clave.',
+    boton: 'Quitar clave',
+  },
+}
 
 // ---------- Widget para Homepage ----------
 // La clave solo abre GET /api/widget (contadores de solo lectura). Se ve entera al generarla;
@@ -12,7 +28,10 @@ export function WidgetCard() {
   const [errorCarga, setErrorCarga] = useState(false)
   const [nueva, setNueva] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
-  const setMsg = useSettingsMessageAdapter()
+  const [confirmando, setConfirmando] = useState<Confirmacion | null>(null)
+  // El aviso de lo que acaba de pasar sale bajo los botones de la tarjeta, no en la fila de pestañas: la tarjeta
+  // está al fondo de la página y un aviso arriba no se veía.
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const cargar = useCallback(async () => {
     setErrorCarga(false)
@@ -22,6 +41,7 @@ export function WidgetCard() {
 
   async function ejecutar(accion: () => Promise<void>) {
     setOcupado(true)
+    setMsg(null)
     try {
       await accion()
     } catch (e: unknown) {
@@ -31,21 +51,22 @@ export function WidgetCard() {
     }
   }
 
-  const generar = () => {
-    if (configurada && !window.confirm('Homepage dejará de ver el widget hasta que pongas la clave nueva en su services.yaml. ¿Regenerar la clave?')) return
-    return ejecutar(async () => {
-      setNueva((await generateWidgetKey()).clave)
-      setConfigurada(true)
-    })
-  }
+  const generar = () => ejecutar(async () => {
+    setNueva((await generateWidgetKey()).clave)
+    setConfigurada(true)
+  })
 
-  const quitar = () => {
-    if (!window.confirm('El widget dejará de responder. ¿Quitar la clave?')) return
-    return ejecutar(async () => {
-      await removeWidgetKey()
-      setNueva(null)
-      setConfigurada(false)
-    })
+  const quitar = () => ejecutar(async () => {
+    await removeWidgetKey()
+    setNueva(null)
+    setConfigurada(false)
+  })
+
+  function confirmar() {
+    const accion = confirmando
+    setConfirmando(null)
+    if (accion === 'regenerar') void generar()
+    else if (accion === 'quitar') void quitar()
   }
 
   async function copiar() {
@@ -100,14 +121,30 @@ export function WidgetCard() {
           )}
           {!nueva && !configurada && <p className="form-hint widget-nota">Sin clave: el widget está desactivado.</p>}
           <div className="widget-botones">
-            <button className="btn btn-secondary btn-sm" type="button" onClick={generar} disabled={ocupado}>
+            <button className="btn btn-secondary btn-sm" type="button" disabled={ocupado}
+              onClick={() => { if (configurada) setConfirmando('regenerar'); else void generar() }}>
               {configurada ? 'Regenerar clave' : 'Generar clave'}
             </button>
             {configurada && (
-              <button className="btn btn-secondary btn-sm" type="button" onClick={quitar} disabled={ocupado}>Quitar clave</button>
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => setConfirmando('quitar')} disabled={ocupado}>Quitar clave</button>
             )}
           </div>
+          {msg && (
+            <p role={msg.ok ? 'status' : 'alert'} className={`aj-resultado aj-resultado--${msg.ok ? 'ok' : 'error'} widget-aviso`}>{msg.text}</p>
+          )}
         </>
+      )}
+      {confirmando && (
+        <Modal titulo={TEXTO_CONFIRMACION[confirmando].titulo} onClose={() => setConfirmando(null)} className="modal-estrecho">
+          <div className="modal-body">
+            <p className="menores-sin-guardar-texto">{TEXTO_CONFIRMACION[confirmando].texto}</p>
+            <div className="menores-sin-guardar-acciones">
+              {/* La acción segura lleva el foco: Intro sin mirar no deja a Homepage sin widget. */}
+              <button type="button" className="btn btn-secondary" onClick={() => setConfirmando(null)} autoFocus>Cancelar</button>
+              <button type="button" className="btn btn-danger" onClick={confirmar}>{TEXTO_CONFIRMACION[confirmando].boton}</button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   )

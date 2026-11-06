@@ -1226,3 +1226,8 @@ fieldset.aj-grupo-eventos {
 .aj-interruptor__etiqueta {
   touch-action: manipulation;
 }
+
+/* El aviso de la tarjeta del widget (copiada, error al generar), bajo sus botones. */
+.widget-aviso {
+  margin: 10px 0 0;
+}

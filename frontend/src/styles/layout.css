@@ -149,11 +149,6 @@
    the topbar's height (it used to live in the page body and pushed every
    card/table down when it appeared — see SyncProgressBanner). */
 .topbar {
-  /* Anchor for .topbar-center below — it needs to sit in the middle of the
-     WHOLE bar, not just the leftover space between the title and the user
-     controls (those two are rarely the same width, so centering it as a
-     flex:1 sibling used to land it off-center). */
-  position: relative;
   height: var(--topbar-height);
   background: var(--bg-topbar);
   border-bottom: 1px solid var(--border);
@@ -172,22 +167,16 @@
   z-index: 50;
 }
 
+/* El estado de la sincronización va en el hueco entre el título y los botones, no centrado en absoluto sobre la barra:
+   centrado así se montaba sobre Buscar, Tour y los enlaces de eMuwarez (y un clic en la lupa caía en el chip). En el
+   flujo encoge con elipsis y nunca tapa un control. */
 .topbar-center {
-  /* Taken out of the flex flow entirely and centered against the topbar's
-     own width, so it's unaffected by how wide the title or the user panel
-     happen to be. Capped and non-interactive so it can't cover the title/
-     user controls on a narrow window; the actual chip re-enables pointer
-     events on itself once it has real content to be clicked/hovered. */
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  max-width: min(60%, 520px);
-  overflow: hidden;
-  pointer-events: none;
+  padding: 0 16px;
 }
 
 .topbar-sync-row {
@@ -195,7 +184,12 @@
   align-items: center;
   gap: 22px;
   min-width: 0;
-  pointer-events: auto;
+  overflow: hidden;
+}
+
+/* Con poco ancho (menos de 1400 px de contenido), solo la etiqueta y la barra: el detalle sigue en el tooltip. */
+.ui-estrecha .topbar .sync-chip-detail {
+  display: none;
 }
 
 .sync-chip {
@@ -308,7 +302,7 @@
 .topbar-btn {
   width: var(--topbar-btn);
   height: var(--topbar-btn);
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   border: 1px solid var(--border-hover);
   background: var(--bg-card);
   color: var(--text-accent);
@@ -352,7 +346,7 @@
   gap: 2px;
   height: var(--topbar-btn);
   padding: 0 3px 0 9px;
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   border: 1px solid var(--border-hover);
   background: var(--bg-card);
 }
@@ -360,7 +354,7 @@
 .topbar-emu-enlace {
   width: calc(var(--topbar-btn) - 6px);
   height: calc(var(--topbar-btn) - 6px);
-  border-radius: 6px;
+  border-radius: var(--radius-button);
   color: var(--text-accent);
   display: flex;
   align-items: center;
@@ -493,13 +487,21 @@
   cursor: pointer;
   font-size: 12px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
   padding: 4px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-button);
   opacity: 0;
   transition: opacity 0.12s, color 0.12s, background 0.12s;
 }
 
-.notif-item:hover .notif-item-delete {
+/* Se ve al pasar el ratón por el aviso y también con el foco del teclado (si no, Tab llegaba a un botón invisible). */
+.notif-item:hover .notif-item-delete,
+.notif-item:focus-within .notif-item-delete,
+.notif-item-delete:focus-visible {
   opacity: 1;
 }
 
@@ -602,7 +604,7 @@
   align-items: center;
   gap: 8px;
   padding: 4px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   border: 1px solid var(--border-hover);
   background: var(--bg-card);
   cursor: default;
@@ -626,9 +628,19 @@
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-button);
   transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+/* Con el dedo, el ojo crece hasta casi el alto de los botones de la cabecera (y la caja del usuario no pasa de ellos). */
+@media (pointer: coarse) {
+  .topbar-user { padding-block: 3px; }
+  .topbar-eye {
+    min-width: calc(var(--topbar-btn) - 8px);
+    min-height: calc(var(--topbar-btn) - 8px);
+  }
 }
 
 .topbar-eye:hover {
@@ -669,13 +681,14 @@
   margin-top: 2px;
 }
 
-/* Ventanas estrechas (≤768 px): la barra lateral es un cajón que se abre con el botón de la cabecera y el contenido ocupa todo el ancho. */
+/* Ventanas estrechas (≤768 px), y el móvil apaisado (poco alto y con el dedo): la barra lateral es un cajón que se abre
+   con el botón de la cabecera y el contenido ocupa todo el ancho. El mismo corte que CONSULTA_MOVIL en useMenuMovil.ts. */
 .boton-menu,
 .sidebar-velo {
   display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
   .boton-menu {
     display: flex;
     justify-content: center;
@@ -743,25 +756,19 @@
     display: none;
   }
 
-  /* El estado de la sincronización ocupa el hueco entre el título y los botones, sin detalle ni barra. */
+  /* El estado de la sincronización, pegado a los botones y sin detalle ni barra. */
   .topbar-center {
-    position: static;
-    transform: none;
-    flex: 1;
-    min-width: 0;
-    max-width: none;
     justify-content: flex-end;
     padding: 0 10px;
   }
 
   .topbar-sync-row {
     gap: 12px;
-    min-width: 0;
-    overflow: hidden;
   }
 
-  .sync-chip-detail,
-  .sync-chip-bar {
+  /* Solo en la cabecera: el detalle de una subida reutiliza .sync-chip-bar para sus barras de progreso. */
+  .topbar .sync-chip-detail,
+  .topbar .sync-chip-bar {
     display: none;
   }
 
@@ -884,5 +891,24 @@
 @media (pointer: coarse) {
   .notif-markall {
     padding: 10px 8px;
+    white-space: nowrap;
+  }
+
+  /* Las filas de la barra lateral, de 44 px con el dedo aunque la ventana sea ancha (una tablet). */
+  .nav-item {
+    min-height: var(--tap-min);
+  }
+}
+
+/* Tablet: con el relleno táctil, «Marcar todo como leído» y «Borrar todo» no cabían junto al título en 360 px y se
+   partían en tres líneas. El panel crece un poco y, si aun así no caben, las acciones bajan enteras a su fila. */
+@media (pointer: coarse) and (min-width: 769px) {
+  .notif-dropdown {
+    width: 420px;
+  }
+
+  .notif-dropdown-header {
+    flex-wrap: wrap;
+    gap: 0 8px;
   }
 }

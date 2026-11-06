@@ -61,7 +61,7 @@
 
 /* El recuadro del dibujo: se mide, y el SVG se pinta a su ancho real (ver GraficoLinea). */
 .est-plot { margin-top: 6px; border-radius: var(--radius-small); touch-action: pan-y; }
-.est-plot:focus-visible { outline: 2px solid var(--hud-cyan, var(--color-accent)); outline-offset: 2px; }
+.est-plot:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .est-svg { display: block; max-width: 100%; cursor: crosshair; }
 
 .est-rejilla { stroke: var(--border); stroke-width: 1; }
@@ -71,7 +71,7 @@
 
 .est-linea { fill: none; stroke: var(--est-color); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .est-punto { fill: var(--est-color); }
-.est-punto-activo { stroke: var(--bg-surface, #0b1424); stroke-width: 2; }
+.est-punto-activo { stroke: var(--bg-surface); stroke-width: 2; }
 .est-serie-ratio { --est-color: var(--color-available-soft); }
 .est-serie-subido { --est-color: var(--color-accent-soft); }
 .est-serie-bajado { --est-color: var(--color-warning-soft); }
@@ -90,8 +90,8 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
 }
-.est-tabla-marco:focus-visible { outline: 2px solid var(--hud-cyan, var(--color-accent)); outline-offset: 2px; }
-.est-tabla-marco .data-table th { position: sticky; top: 0; background: var(--bg-surface, #0b1424); z-index: 1; }
+.est-tabla-marco:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.est-tabla-marco .data-table th { position: sticky; top: 0; background: var(--bg-surface); z-index: 1; }
 .est-tabla-marco .data-table th[scope="row"] { position: static; background: none; }
 .est-tabla .data-table td,
 .est-tabla .data-table th[scope="row"] { font-variant-numeric: tabular-nums; }

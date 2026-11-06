@@ -11,6 +11,10 @@
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
+  /* La disposición del Panel mira el ancho que le queda (sin la barra lateral y con la escala de la interfaz), no el de
+     la ventana: ver los @container del final. Los modales del Panel van fuera de este bloque, porque un contenedor es
+     el bloque de referencia de lo que lleva `position: fixed` dentro. */
+  container: panel / inline-size;
 }
 /* Cabecera: el título y «Sincronizar todo» arriba; tu cuenta en una franja debajo, a todo el ancho. Se coloca por
    áreas porque el orden del DOM (título, cuenta, sincronizar) es el de lectura. */
@@ -124,7 +128,7 @@
 .panel-aporte {
   font-size: 12px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-badge);
   background: color-mix(in srgb, var(--color-available) 14%, transparent);
   color: var(--color-available);
 }
@@ -152,7 +156,7 @@
   color: var(--text-primary);
   background: color-mix(in srgb, var(--overlay-light) 5%, transparent);
   border: 1px solid color-mix(in srgb, var(--overlay-light) 12%, transparent);
-  border-radius: 6px;
+  border-radius: var(--radius-badge);
 }
 .panel-rg-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-item-ver { flex-shrink: 0; white-space: nowrap; color: var(--text-muted); }
@@ -163,7 +167,8 @@
 .panel-pie .hover-link { display: inline-flex; align-items: center; min-height: 24px; }
 @media (pointer: coarse) {
   .panel-item-ver,
-  .panel-aviso-accion { min-height: 32px; }
+  .panel-aviso-accion,
+  .panel-pie .hover-link { min-height: 32px; }
   .hover-link.panel-item-titulo { padding-block: 6px; }
 }
 .panel-item-accion {
@@ -232,6 +237,8 @@
   color: var(--text-secondary);
 }
 .panel-atencion-cuenta { margin-left: 6px; font-weight: 400; color: var(--text-muted); }
+/* «y N más» alineado con el título: el relleno del botón fantasma sigue siendo área de pulsación, pero no aparta el texto. */
+.btn.panel-atencion-mas { margin-left: -10px; }
 .panel-atencion-lista {
   list-style: none;
   margin: 0;
@@ -276,7 +283,8 @@
 .panel-franja .stat-card { align-items: center; gap: 10px; padding: 8px 12px; }
 .panel-franja .stat-card-icon { width: 32px; height: 32px; }
 .panel-franja .stat-card-value { font-size: 20px; }
-.panel-franja .stat-card-label { overflow-wrap: anywhere; }
+/* Una palabra no se parte por dentro («Pet·icion·es»): solo salta de línea entre palabras. */
+.panel-franja .stat-card-label { overflow-wrap: break-word; }
 
 /* Subidas en curso y recientes */
 .panel-sin-curso {
@@ -300,7 +308,7 @@
 .poster-thumb.panel-poster {
   width: 44px;
   height: 66px;
-  border-radius: 4px;
+  border-radius: var(--radius-button);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -402,11 +410,13 @@
   overflow-y: auto;
 }
 
-/* Ventanas estrechas (≤768 px): los carriles uno bajo otro, la franja en dos columnas y el Panel se desplaza entero. */
 /* Entre 769 y 1400 px «Mis subidas» se queda en el icono (el nombre sigue accesible) y los huecos se aprietan para ir en una fila. */
 @media (min-width: 769px) and (max-width: 1400px) {
   .cuenta-emu { column-gap: 12px; }
   .cuenta-emu-cifras { column-gap: 12px; }
+}
+/* Con ratón el nombre está en el tooltip; con el dedo, que no lo abre, el enlace lleva su texto. */
+@media (min-width: 769px) and (max-width: 1400px) and (hover: hover) {
   .cuenta-emu-enlace-texto {
     position: absolute;
     width: 1px;
@@ -419,6 +429,7 @@
   .cuenta-emu-enlaces a { min-width: 28px; justify-content: center; }
 }
 
+/* Ventanas estrechas (≤768 px): el Panel se desplaza entero, y la cabecera y tu cuenta se recolocan. */
 @media (max-width: 768px) {
   .panel-pagina {
     height: auto;
@@ -443,6 +454,12 @@
   }
   .cuenta-emu-cifra { flex-direction: column; gap: 1px; min-width: 0; }
   .cuenta-emu-enlaces { margin-left: 0; flex-wrap: wrap; gap: 6px 14px; }
+}
+
+/* Poco ancho para el Panel (tablet en vertical, ventana partida o el móvil): los carriles uno bajo otro, la banda en una
+   columna y la franja en 3 + 2. Mira el ancho del Panel, no el de la ventana: entre 769 y unos 1100 px la barra lateral
+   fija le quita 240. */
+@container panel (max-width: 900px) {
   .panel-carriles {
     flex: none;
     min-height: 0;
@@ -469,8 +486,22 @@
   .panel-atencion { grid-template-columns: minmax(0, 1fr); }
   .panel-atencion-cabecera { flex-direction: row; align-items: center; justify-content: space-between; padding: 0 0 4px; }
   .panel-atencion-lista { grid-template-columns: minmax(0, 1fr); }
-  .panel-franja {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  .btn.panel-atencion-mas { margin-left: 0; }
+  .panel-franja { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .panel-franja .stat-card { grid-column: span 2; }
+  .panel-franja .stat-card:nth-child(n + 4) { grid-column: span 3; }
+}
+
+/* Tu cuenta, entre el móvil y el escritorio: los enlaces y «Actualizar» suben a la fila del usuario y las cifras van
+   debajo, a todo el ancho (si no, bajaban solos a una tercera fila y dejaban un tercio de la franja vacío). */
+@container panel (min-width: 440px) and (max-width: 980px) {
+  .cuenta-emu-cifras { order: 1; flex: 1 1 100%; }
+}
+
+/* Muy estrecho (el móvil): la franja de dos en dos y la última a todo el ancho. */
+@container panel (max-width: 560px) {
+  .panel-franja { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panel-franja .stat-card,
+  .panel-franja .stat-card:nth-child(n + 4) { grid-column: auto; }
   .panel-franja .stat-card:last-child { grid-column: 1 / -1; }
 }

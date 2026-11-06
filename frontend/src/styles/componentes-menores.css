@@ -83,10 +83,10 @@
   line-height: 1;
 }
 
-/* En táctil el «?» mide 13 px: la zona que se puede tocar crece sin que cambie lo que se ve. */
+/* En táctil el «?» mide 13 px: la zona que se puede tocar crece hasta unos 44 px sin que cambie lo que se ve. */
 @media (pointer: coarse) {
   .menores-info { position: relative; }
-  .menores-info::after { content: ""; position: absolute; inset: -12px; }
+  .menores-info::after { content: ""; position: absolute; inset: -16px; }
 }
 
 /* Favicon / ProviderIcon */

@@ -81,6 +81,9 @@
 @media (pointer: coarse) {
   .cuenta-emu-enlaces a,
   .cuenta-emu-usuario { min-height: 32px; }
+  /* Que un enlace o botón de solo icono no sea más estrecho que alto. */
+  .cuenta-emu-enlaces a { min-width: 32px; justify-content: center; }
+  .cuenta-emu .btn-sm { min-width: 36px; justify-content: center; }
 }
 
 /* Stat card */
@@ -139,11 +142,14 @@
   margin-top: 4px;
 }
 
+/* Si el desglose salta de línea, el icono se queda arriba, con la primera línea, y no centrado entre las dos. */
 .stat-card-sub-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
 }
+.stat-card-sub-row > svg { flex-shrink: 0; margin-top: 2px; }
+.stat-card-sub-cifra { white-space: nowrap; }
 
 /* Activity table section */
 .activity-section {

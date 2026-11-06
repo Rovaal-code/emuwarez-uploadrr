@@ -119,7 +119,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
       </div>
       <div className="asist-mt-16">
         <div className="asist-etiqueta">{INTERNAL_TITLE_LABEL}</div>
-        {preview?.internal_mkv_title ? <FitText min={9} text={preview.internal_mkv_title} /> : <GeneratingHint />}
+        {preview?.internal_mkv_title ? <div translate="no"><FitText min={9} text={preview.internal_mkv_title} /></div> : <GeneratingHint />}
       </div>
     </>
   )
@@ -194,7 +194,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
           {/* El nombre que saldrá, a la vista en las tres pestañas: lo que se cambie en cualquiera lo mueve. */}
           <div className="detail-card asist-tarjeta">
             <div className="asist-etiqueta">Nombre final del torrent (eMuwarez)</div>
-            {preview?.torrent_name ? <FitText min={9} text={preview.torrent_name} /> : <GeneratingHint />}
+            {preview?.torrent_name ? <div translate="no"><FitText min={9} text={preview.torrent_name} /></div> : <GeneratingHint />}
           </div>
 
           <Pestanas nombre="Detalle del archivo" pestanas={pestanas} activa={pestana} onCambiar={elegirPestana}>

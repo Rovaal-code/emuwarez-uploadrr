@@ -93,7 +93,9 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit, onIdio
               </tr>
             </thead>
             <tbody>
-              {mergeRemuxTracks(plan, edits).map(t => {
+              {mergeRemuxTracks(plan, edits).map((t, i) => {
+                // Lo que oye el lector en los controles de la fila: sin esto solo diría «editar texto».
+                const pista = `pista ${i + 1} (${TRACK_TYPE_LABEL[t.type] ?? t.type})`
                 const effectiveName = t.new_name
                 const effectiveDefault = t.default_after
                 return (
@@ -107,6 +109,7 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit, onIdio
                       {t.sin_idioma && onIdioma && plan.idiomas_elegibles?.length ? (
                         <select
                           className="form-input form-select asist-input-chico"
+                          aria-label={`Idioma de la ${pista}`}
                           value={edits?.[t.id]?.language ?? t.language_after ?? ''}
                           onChange={e => onIdioma(t.id, e.target.value)}
                         >
@@ -120,6 +123,10 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit, onIdio
                       {(nameEditable ?? editable) ? (
                         <input
                           className="form-input asist-input-chico"
+                          name={`pista-${t.id}-nombre`}
+                          aria-label={`Nombre nuevo de la ${pista}`}
+                          autoComplete="off"
+                          spellCheck={false}
                           value={effectiveName}
                           onChange={e => onEdit?.(t.id, { new_name: e.target.value })}
                         />
@@ -133,6 +140,7 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit, onIdio
                       ) : editable ? (
                         <input
                           type="checkbox"
+                          aria-label={`Predeterminada: ${pista}`}
                           checked={effectiveDefault}
                           onChange={e => onEdit?.(t.id, { default_after: e.target.checked })}
                         />

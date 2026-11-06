@@ -70,7 +70,7 @@ export function ResumenSubida({ a }: { a: Asistente }) {
             ))}
           </ul>
         ) : (
-          <p className="asist-nombre-torrent">{nombre || '—'}</p>
+          <p className="asist-nombre-torrent" translate="no">{nombre || '—'}</p>
         )}
         <dl className="asist-datos">
           <dt>Ficheros</dt>
@@ -110,7 +110,7 @@ export function ResumenSubida({ a }: { a: Asistente }) {
 export function NombreDeLaTanda({ nombre }: { nombre: string | null | undefined }) {
   if (nombre === undefined) return <span className="asist-lista-nombre asist-lista-espera">Calculando el nombre…</span>
   if (nombre === null) return <span className="asist-lista-nombre asist-aviso-dato">Sin nombre: este elemento no se podrá subir</span>
-  return <span className="asist-lista-nombre">{nombre}</span>
+  return <span className="asist-lista-nombre" translate="no">{nombre}</span>
 }
 
 function YaHayEnEmu({ yaHay }: { yaHay: YaHay }) {

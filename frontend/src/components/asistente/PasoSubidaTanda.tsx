@@ -53,8 +53,10 @@ export function PasoSubidaTanda({ a }: { a: Asistente }) {
             <ResumenSubida a={a} />
 
             <div className="asist-selector-fila asist-mt-14">
+              <span className="asist-etiqueta-selector" id="asist-comprobaciones-de">Comprobaciones de</span>
               <select
                 className="form-input form-select asist-select-auto"
+                aria-labelledby="asist-comprobaciones-de"
                 value={viewId} onChange={e => setBatchViewId(Number(e.target.value))}
               >
                 {batchQueue.map(id => {

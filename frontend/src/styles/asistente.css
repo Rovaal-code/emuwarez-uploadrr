@@ -235,6 +235,8 @@
 
 /* Chip del modo de pistas: --tono lo pone la variante */
 .asist-modo-pistas {
+  display: inline-block;
+  max-width: 100%;
   font-size: 11px;
   font-weight: 500;
   color: var(--tono);
@@ -484,6 +486,7 @@
   outline: 2px solid var(--text-accent);
   outline-offset: -2px;
 }
+.asist-etiqueta-selector { margin-right: 8px; font-size: 12px; color: var(--text-muted); align-self: center; }
 .asist-pestana-aviso { margin-left: 8px; font-size: 11px; font-weight: 500; color: var(--color-warning); }
 .asist-pestana-panel { padding-top: 14px; min-height: 240px; border-radius: var(--radius-small); }
 /* Dentro de una pestaña ya hace scroll el cuerpo del paso: las tablas no llevan el suyo, y su cabecera se pega arriba. */
@@ -491,12 +494,20 @@
 .asist-fila-titulo-pestana { margin-bottom: 10px; }
 .asist-fila-titulo-pestana:empty { display: none; }
 
+@media (prefers-reduced-motion: reduce) {
+  .asist-pestana { transition: none; }
+}
+
 @media (max-width: 640px) {
   .modal-panel.asist-marco { width: 96%; max-height: calc(var(--vh100) * 0.96); }
   .modal-panel.asist-marco.asist-alto-fijo { height: calc(var(--vh100) * 0.96); }
   .asist-pie-estado { order: -1; flex-basis: 100%; text-align: left; }
   .asist-rejilla-campos, .asist-rejilla-modos { grid-template-columns: 1fr; }
   .asist-pestana { padding: 10px 12px; }
+  /* Las tablas de Pistas y MediaInfo no caben a 390 px: se desplazan de lado en vez de apretar las columnas. */
+  .asist-pestana-panel .asist-tabla-caja { overflow-x: auto; }
+  .asist-tabla-pistas { min-width: 520px; }
+  .asist-tabla-mediainfo { min-width: 440px; }
   .asist-pie { padding: 10px 16px; }
   .asist-cuerpo.modal-body { padding: 14px 16px; }
   .asist-pasos { padding: 0 16px; }

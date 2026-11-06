@@ -1133,6 +1133,27 @@ describe('las pestañas del paso «Nombre y pistas»', () => {
   })
 })
 
+describe('los controles de la tabla de pistas tienen nombre para el lector', () => {
+  it('cada campo dice de qué pista es', async () => {
+    await abrir(PELICULA)
+    await esperar(() => texto().includes('Dune WEB-DL AMZN [GRP]'))
+    await abrirPestana('Pistas')
+    await esperar(() => document.querySelector('table input.form-input'))
+    const etiquetas = [...document.querySelectorAll('table input, table select')].map(c => c.getAttribute('aria-label'))
+    expect(etiquetas).toContain('Nombre nuevo de la pista 2 (Audio)')
+    expect(etiquetas).toContain('Idioma de la pista 3 (Audio)')
+    expect(etiquetas).toContain('Predeterminada: pista 2 (Audio)')
+    expect(etiquetas.every(Boolean)).toBe(true)
+  })
+
+  it('el nombre del torrent no se traduce solo', async () => {
+    await abrir(PELICULA)
+    await esperar(() => texto().includes('Dune WEB-DL AMZN [GRP]'))
+    const nombre = [...document.querySelectorAll('[translate="no"]')].find(e => e.textContent === 'Dune WEB-DL AMZN [GRP]')
+    expect(nombre).toBeDefined()
+  })
+})
+
 // El pie del asistente queda fuera del cuerpo que hace scroll: se ve siempre, a cualquier alto de ventana.
 describe('el marco: cuerpo con scroll y pie siempre a la vista', () => {
   const marco = () => document.querySelector<HTMLElement>('.asist-marco')!

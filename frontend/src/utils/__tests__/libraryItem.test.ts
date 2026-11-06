@@ -146,6 +146,9 @@ describe('tituloEnFicha', () => {
   it('una temporada se queda en «Temporada N»', () => {
     expect(tituloEnFicha(item({ title: 'La casa de papel - Temporada 2', season_number: 2 }))).toBe('Temporada 2')
     expect(tituloEnFicha(item({ title: 'Raro', season_number: 0 }))).toBe('Especiales')
+    // Con « - » en el nombre de la serie no se corta por el primero.
+    expect(tituloEnFicha(item({ title: 'Serie - Otro - Temporada 2', season_number: 2 }))).toBe('Temporada 2')
+    expect(tituloEnFicha(item({ title: 'Serie - Otro - Temporada 2', season_number: undefined }))).toBe('Temporada 2')
   })
 
   it('un capítulo, el código y su título propio', () => {

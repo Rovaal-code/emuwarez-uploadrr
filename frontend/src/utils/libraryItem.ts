@@ -42,9 +42,10 @@ export function listDisplayTitle(item: LibraryItemResponse): string {
 // Temporada: «Temporada 1». Capítulo: «S01E02 · Su título» (o solo el código si no tiene título propio).
 export function tituloEnFicha(item: LibraryItemResponse): string {
   if (item.item_type === 'season') {
-    const idx = item.title.indexOf(' - ')
-    if (idx !== -1) return item.title.slice(idx + 3)
+    // Del número, no del título: una serie puede llevar « - » en su nombre («Serie - Otro - Temporada 2»).
     if (item.season_number != null) return item.season_number === 0 ? 'Especiales' : `Temporada ${item.season_number}`
+    const idx = item.title.lastIndexOf(' - ')
+    if (idx !== -1) return item.title.slice(idx + 3)
   }
   if (item.item_type === 'episode' && item.season_number != null && item.episode_number != null) {
     const code = `S${String(item.season_number).padStart(2, '0')}E${String(item.episode_number).padStart(2, '0')}`

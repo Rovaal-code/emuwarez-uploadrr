@@ -158,7 +158,8 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
       left: Math.max(8, Math.min(btnRect.left, maxLeft)),
       top: Math.max(8, Math.min(btnRect.bottom + 4, maxTop)),
     })
-    menu.querySelector<HTMLElement>('input, button')?.focus({ preventScroll: true })
+    // El primer control que se pueda usar: «Desmarcar todo» va deshabilitado sin nada marcado y no recibe el foco.
+    menu.querySelector<HTMLElement>('input:not(:disabled), button:not(:disabled)')?.focus({ preventScroll: true })
   }, [open])
 
   return (

@@ -584,7 +584,8 @@
 }
 .lg-nivel { font-weight: 700; color: var(--text-secondary); }
 .lg-linea--debug .lg-nivel { color: var(--color-neutral); }
-.lg-linea--info .lg-nivel { color: var(--color-accent-soft); }
+/* INFO es casi todo el registro: en gris, para que WARNING y ERROR destaquen. */
+.lg-linea--info .lg-nivel { color: var(--text-secondary); }
 .lg-linea--warning .lg-nivel { color: var(--color-warning-soft); }
 .lg-linea--error .lg-nivel { color: var(--color-error-soft); }
 .lg-linea--critical .lg-nivel { color: var(--hud-danger, var(--color-error-soft)); }
@@ -628,6 +629,7 @@
   opacity: 0;
 }
 .lg-linea:hover .lg-copiar,
+.lg-linea:focus-within .lg-copiar,
 .lg-copiar:focus-visible { opacity: 1; }
 .lg-copiar:hover { color: var(--text-primary); }
 @media (hover: none) {

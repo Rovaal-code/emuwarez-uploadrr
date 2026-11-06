@@ -238,6 +238,11 @@
   .bibdet-ficha .detail-poster.detcard-poster.sin-poster { display: none; }
 }
 .bibdet-proveedores { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+/* Con el dedo, la zona de cada proveedor se agranda por fuera (components.css): aquí, con varios en líneas
+   distintas, invadiría la ficha de al lado. Cada ficha mide --tap-min de alto y la zona no sale de ella. */
+@media (pointer: coarse) {
+  .bibdet-proveedores > .value-chip.linkable { min-height: var(--tap-min); }
+}
 /* Fila «Petición» (CampoPeticion): la insignia arriba y, debajo, quién la pidió,
    la recompensa y los dos enlaces, alineados a la derecha como el resto de
    valores. El valor de la fila recorta lo que se sale (overflow: hidden), así

@@ -93,16 +93,19 @@
 .lote-fila:last-child { border-bottom: none; }
 .lote-fila-casilla { min-width: 0; }
 .lote-fila-casilla .lote-fila-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* En un móvil, cortado en una línea, las temporadas de una serie se leían igual («Serie (2019) - …»): en dos líneas
-   se ve lo que las distingue. */
+/* En un móvil, cortado en una línea, las temporadas de una serie se leían igual («Serie (2019) - …»): el nombre va
+   en hasta dos líneas y lo que distingue a la temporada («Temporada 1»), en la suya, siempre a la vista. */
 @media (max-width: 640px) {
-  .lote-fila-casilla .lote-fila-titulo {
-    white-space: normal;
-    overflow-wrap: anywhere;
+  .lote-fila-casilla .lote-fila-titulo { display: block; white-space: normal; }
+  .lote-fila-nombre {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
   }
+  .lote-fila-separador { display: none; }
+  .lote-fila-parte { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 .lote-fila-titulo { color: var(--text-primary); }
 .lote-fila-apagada .lote-fila-titulo { color: var(--text-muted); }

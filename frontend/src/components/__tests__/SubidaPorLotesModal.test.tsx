@@ -407,6 +407,11 @@ describe('series y temporadas', () => {
       'Lost (2020) - Temporada 1', 'Lost (2020) - Temporada 2', 'Lost (2020) - Temporada 3',
       'Lost (2020) - Temporada 4', 'Fargo (2020) - Temporada 1', 'Fargo (2020) - Temporada 2',
     ])
+    // La temporada va en su propio elemento, fuera del nombre que el móvil recorta a dos líneas: siempre se ve.
+    const fila1 = document.querySelector('.lote-fila-titulo')!
+    expect(fila1.querySelector('.lote-fila-nombre')!.textContent).toBe('Lost (2020)')
+    expect(fila1.querySelector('.lote-fila-parte')!.textContent).toBe('Temporada 1')
+    expect(fila1.querySelector('.lote-fila-nombre .lote-fila-parte')).toBeNull()
     expect(texto()).toContain('5 de 6 marcadas')
     expect(casillaPaso1('Lost (2020) - Temporada 4').checked).toBe(false)
     expect(casillaPaso1('Lost (2020) - Temporada 4').disabled).toBe(true)

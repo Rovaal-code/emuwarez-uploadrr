@@ -83,6 +83,12 @@
   line-height: 1;
 }
 
+/* En táctil el «?» mide 13 px: la zona que se puede tocar crece sin que cambie lo que se ve. */
+@media (pointer: coarse) {
+  .menores-info { position: relative; }
+  .menores-info::after { content: ""; position: absolute; inset: -12px; }
+}
+
 /* Favicon / ProviderIcon */
 .menores-icono-img { width: 100%; height: 100%; object-fit: contain; padding: 2px; }
 .menores-icono-img.menores-icono-img-caja { box-sizing: border-box; }

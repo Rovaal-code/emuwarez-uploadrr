@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useUnsavedGuard } from '../../../utils/unsavedGuard'
 import { getMe, changeCredentials } from '../../../api/auth'
 import { IconoUsuario } from '../../../components/Iconos'
@@ -18,7 +18,13 @@ export function AccountCard() {
   const [errorClave, setErrorClave] = useState<string | null>(null)
   const setMsg = useSettingsMessageAdapter()
 
-  useEffect(() => { getMe().then(u => setUsername(u.username)).catch(() => {}) }, [])
+  // Sin esto, un fallo dejaba «…» en el usuario actual para siempre, como si siguiera cargando.
+  const [errorUsuario, setErrorUsuario] = useState(false)
+  const cargarUsuario = useCallback(() => {
+    setErrorUsuario(false)
+    getMe().then(u => setUsername(u.username)).catch(() => setErrorUsuario(true))
+  }, [])
+  useEffect(() => { cargarUsuario() }, [cargarUsuario])
 
   const dirty = newUsername.trim() !== '' || newPassword !== ''
   useUnsavedGuard('cuenta', dirty)
@@ -54,11 +60,19 @@ export function AccountCard() {
         titulo="Cuenta"
         descripcion="Cambia el usuario y/o la contraseña con la que inicias sesión en esta aplicación."
       />
-      <Campo etiqueta="Usuario actual">
-        {c => <input {...c} className="form-input" value={username || '…'} disabled />}
+      <Campo
+        etiqueta="Usuario actual"
+        ayuda={errorUsuario ? (
+          <>
+            No se pudo leer el usuario actual.{' '}
+            <button type="button" className="btn btn-secondary btn-sm" onClick={cargarUsuario}>Reintentar</button>
+          </>
+        ) : undefined}
+      >
+        {c => <input {...c} className="form-input" value={username || (errorUsuario ? '' : '…')} disabled />}
       </Campo>
       <Campo etiqueta="Nuevo usuario" nota="dejar vacío para no cambiarlo">
-        {c => <input {...c} className="form-input" value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder={username} autoComplete="off" />}
+        {c => <input {...c} className="form-input" value={newUsername} onChange={e => setNewUsername(e.target.value)} autoComplete="off" />}
       </Campo>
       <Campo etiqueta="Nueva contraseña" nota="dejar vacío para no cambiarla">
         {c => <input {...c} type="password" className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña" autoComplete="new-password" />}

@@ -15,8 +15,10 @@ export function SessionsCard() {
   const [cerrando, setCerrando] = useState(false)
   const setMsg = useSettingsMessageAdapter()
 
+  const [errorCarga, setErrorCarga] = useState(false)
   const cargar = useCallback(async () => {
-    try { setDatos(await getSessions()) } catch { /* sin lista: la tarjeta queda cargando */ }
+    setErrorCarga(false)
+    try { setDatos(await getSessions()) } catch { setErrorCarga(true) }
   }, [])
   useAlEntrar(() => { void cargar() })
 
@@ -41,10 +43,18 @@ export function SessionsCard() {
         descripcion={datos ? `Los navegadores donde has iniciado sesión. Una sesión se cierra sola a los ${datos.inactive_days} días sin usarse.` : undefined}
       />
       {datos === null ? (
-        <p className="form-hint">Cargando…</p>
+        errorCarga ? (
+          <p className="form-hint">
+            No se pudo cargar la lista de sesiones.{' '}
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => { void cargar() }}>Reintentar</button>
+          </p>
+        ) : (
+          <p className="form-hint">Cargando…</p>
+        )
       ) : (
         <>
-          <div className="sesiones-lista">
+          {/* Con muchas sesiones se desplaza por dentro, y entonces el navegador la hace enfocable: con nombre y el foco de la app. */}
+          <div className="sesiones-lista" role="region" aria-label="Sesiones abiertas">
             {datos.sessions.map(s => (
               <div key={s.id}>
                 <div className="sesiones-lista__nombre">

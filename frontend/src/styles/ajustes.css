@@ -1231,3 +1231,42 @@ fieldset.aj-grupo-eventos {
 .widget-aviso {
   margin: 10px 0 0;
 }
+
+/* Una tabla que no cabe (backups en el móvil) se desplaza dentro de su caja, no saca la página por la derecha. */
+.aj-desborde-x {
+  overflow-x: auto;
+}
+
+.aj-cuerpo .sesiones-lista:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* La fila de pestañas ya tiene el alto de un aviso de dos líneas: que aparezca uno no la mueve. */
+@media (min-width: 769px) {
+  .aj-tabs {
+    min-height: 50px;
+  }
+}
+
+/* Sin ratón no hay tooltip con el texto entero: en el móvil el aviso tiene su propia línea y se lee completo. */
+@media (max-width: 768px) and (hover: none) {
+  .aj-mensaje__texto {
+    display: block;
+    -webkit-line-clamp: unset;
+    line-clamp: none;
+    overflow: visible;
+  }
+}
+
+/* En táctil, los enlaces del índice y la ✕ de los proveedores llegan al tamaño mínimo de toque. */
+@media (pointer: coarse) {
+  .aj-indice__enlace {
+    min-height: var(--tap-min);
+  }
+  .hud-app .aj-ghost-muted,
+  .aj-cuerpo .provprio-quitar {
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+  }
+}

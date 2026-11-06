@@ -46,8 +46,8 @@ export function EmuwarezCard({ form }: { form: ConfigForm }) {
         lateral={<EstadoSecreto configurado={settings?.emu_api_key_configured} enmascarado={settings?.emu_api_key_masked} />}
       />
       <Campo
-        etiqueta="Nueva API key"
-        nota="dejar vacío para mantener la actual"
+        etiqueta={settings?.emu_api_key_configured ? 'Nueva API key' : 'API key'}
+        nota={settings?.emu_api_key_configured ? 'dejar vacío para mantener la actual' : undefined}
         ayuda="Usada para leer el catálogo y las peticiones de eMuwarez."
       >
         {c => (

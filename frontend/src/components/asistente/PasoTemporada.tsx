@@ -229,7 +229,7 @@ export function PasoTemporada({ a }: { a: Asistente }) {
               <>
                 <p className="text-muted asist-t12 asist-mt-0 asist-mb-12">
                   Se sube como un único pack de temporada: todos los capítulos deben tener el mismo códec de
-                  audio y vídeo, los mismos idiomas de audio y subtítulos, la misma resolución y el mismo source.
+                  vídeo. Si difieren en resolución o source, se avisa y el nombre lleva la de más capítulos.
                   Source, Proveedor y Tag se pueden corregir a mano y se aplican a todos los capítulos por igual.
                 </p>
                 {seasonFieldBox}

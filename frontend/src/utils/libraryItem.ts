@@ -75,9 +75,9 @@ export function tituloEnFicha(item: LibraryItemResponse): string {
 // Lo único que un pack exige que coincida en todos sus capítulos. Copia de
 // season_pack._CONSISTENCY_FIELDS (el frontend no puede llamar a Python): si
 // allí cambia, aquí también. Antes eran cinco campos; el resto dejó de
-// bloquear y ahora se resume en el nombre del pack.
+// bloquear y ahora se resume en el nombre del pack. La resolución mezclada
+// tampoco bloquea: el asistente avisa y el pack lleva la de más capítulos.
 const SEASON_CONSISTENCY_FIELDS: { key: keyof LibraryItemResponse; label: string }[] = [
-  { key: 'resolution', label: 'la resolución' },
   { key: 'video_codec', label: 'el códec de vídeo' },
 ]
 

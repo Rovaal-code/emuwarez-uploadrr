@@ -492,12 +492,13 @@ def test_el_casamiento_guardado_baja_a_parcial_si_el_pack_no_se_puede_armar(db_c
     from emuwarez_uploadrr.models import RequestItem
     serie = db_conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id) "
                             "VALUES ('series','Serie','Disponible','88')").lastrowid
-    # Sus capítulos no coinciden en resolución: la fila de la temporada no lleva ninguna.
+    # Sus capítulos no coinciden en códec de vídeo: la fila de la temporada no lleva ninguno.
     temporada = db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,tmdb_id) "
                                 "VALUES ('season','T1','Disponible',?,1,'88')", (serie,)).lastrowid
-    for n, res in enumerate(("1080p", "720p"), start=1):
+    for n, codec in enumerate(("x264", "x265"), start=1):
         db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,episode_number,"
-                        "resolution,source) VALUES ('episode','E','Disponible',?,1,?,?,'WEB-DL')", (temporada, n, res))
+                        "resolution,source,video_codec) VALUES ('episode','E','Disponible',?,1,?,'1080p','WEB-DL',?)",
+                        (temporada, n, codec))
     db_conn.commit()
     upsert_request(db_conn, RequestItem(id=None, emu_id="p1", title="Serie", category="Series", tmdb_id="88",
                                         req_scope="season", req_season=1))

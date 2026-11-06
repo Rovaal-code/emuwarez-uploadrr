@@ -48,7 +48,6 @@ describe('una temporada lista para subir como pack', () => {
     // deshabilitada sin nada que enseñar al pasar por encima.
     const rotas = [
       item({ local_status: 'Faltante' }),
-      item({ resolution: null }),
       item({ video_codec: null }),
       item({ has_spanish_ok: 0 }),
       item({ has_spanish_ok: null }),
@@ -59,10 +58,10 @@ describe('una temporada lista para subir como pack', () => {
     }
   })
 
-  it('no lo está si sus capítulos no coinciden en resolución', () => {
+  it('lo está aunque sus capítulos no coincidan en resolución: eso solo avisa', () => {
     const t = item({ resolution: null })
-    expect(isSeasonReady(t)).toBe(false)
-    expect(seasonNotReadyReason(t)).toContain('resolución')
+    expect(isSeasonReady(t)).toBe(true)
+    expect(seasonNotReadyReason(t)).toBeNull()
   })
 
   it('no lo está si no coinciden en códec de vídeo', () => {

@@ -53,7 +53,7 @@ export function PasoSeleccion({ a }: { a: Asistente }) {
           {
             key: 'whole' as const,
             title: 'Temporada entera',
-            body: 'Un único release con todos los capítulos. Exige tenerlos todos, que coincidan en resolución y códec de vídeo, y que todos tengan audio en castellano o, si está en otro idioma, al menos subtítulos en castellano.',
+            body: 'Un único release con todos los capítulos. Exige tenerlos todos, que coincidan en códec de vídeo, y que todos tengan audio en castellano o, si está en otro idioma, al menos subtítulos en castellano.',
             reason: seasonPackReason,
           },
           {

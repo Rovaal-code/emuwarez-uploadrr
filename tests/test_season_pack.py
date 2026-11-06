@@ -767,22 +767,50 @@ def test_different_audio_languages_are_summed_not_blocked(isolated_db, tmp_path)
     conn.close()
 
 
-def test_a_resolution_mismatch_still_blocks(isolated_db, tmp_path):
-    """La resolución es lo único que sigue teniendo que coincidir: un pack con
-    capítulos a 1080p y a 720p no es una calidad, son dos."""
-    conn = _open(isolated_db)
+def _seed_resoluciones(conn, tmp_path, qualities):
     _series_id, season_id = _seed_series_season(conn)
     folder = tmp_path / "One Piece" / "Season 1"
     folder.mkdir(parents=True)
-    for i, quality in enumerate(["WEBDL-1080p", "WEBDL-720p"], start=1):
-        f = folder / f"S01E0{i}.mkv"
+    for i, quality in enumerate(qualities, start=1):
+        f = folder / f"S01E{i:02d}.mkv"
         f.write_bytes(b"video")
-        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E{i:02d}", path=str(f),
                       quality=quality, video_codec="x264", audio_codec="AC3",
                       audio_languages="spa", subtitle_languages="spa", source="WEB-DL")
+    return season_id
+
+
+def test_a_resolution_mismatch_only_warns(isolated_db, tmp_path):
+    """Un DVD con capítulos a 480p y otros a 540p es la misma temporada: el
+    pack se puede subir, con un aviso que dice qué capítulo tiene cada una, y
+    el nombre lleva la de más capítulos."""
+    conn = _open(isolated_db)
+    season_id = _seed_resoluciones(conn, tmp_path, ["WEBDL-720p", "WEBDL-1080p", "WEBDL-1080p"])
     plan = build_season_pack_plan(season_id, conn=conn)
-    assert plan["status"] == "blocked"
-    assert any("resolución" in e for e in plan["errors"]), plan["errors"]
+    assert plan["status"] == "valid", plan["errors"]
+    assert not any("resolución" in e for e in plan["errors"]), plan["errors"]
+    aviso = next(w for w in plan["warnings"] if "resolución" in w)
+    assert "720p (1)" in aviso and "1080p (2, 3)" in aviso, aviso
+    assert "la de más capítulos" in aviso, aviso
+    assert " 1080p " in plan["season_pack_title"], plan["season_pack_title"]
+    conn.close()
+
+
+def test_a_resolution_tie_takes_the_first_episodes(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    season_id = _seed_resoluciones(conn, tmp_path, ["WEBDL-720p", "WEBDL-1080p"])
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "valid", plan["errors"]
+    assert any("la primera de las que empatan" in w for w in plan["warnings"]), plan["warnings"]
+    assert " 720p " in plan["season_pack_title"], plan["season_pack_title"]
+    conn.close()
+
+
+def test_a_matching_resolution_does_not_warn(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    season_id = _seed_resoluciones(conn, tmp_path, ["WEBDL-1080p", "WEBDL-1080p"])
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert not any("resolución" in w for w in plan["warnings"]), plan["warnings"]
     conn.close()
 
 
@@ -859,20 +887,20 @@ def test_an_inconsistent_season_still_has_individually_uploadable_episodes(isola
     folder = tmp_path / "One Piece" / "Season 1"
     folder.mkdir(parents=True)
     ids = []
-    # Dos capítulos con resoluciones distintas: eso sí tumba el pack, que es
-    # lo único que sigue siendo obligatorio. Pero cada uno tiene castellano.
-    for i, quality in enumerate(["WEBDL-1080p", "WEBDL-720p"], start=1):
+    # Dos capítulos con códecs de vídeo distintos: eso sí tumba el pack, que
+    # es lo único que sigue siendo obligatorio. Pero cada uno tiene castellano.
+    for i, codec in enumerate(["x264", "x265"], start=1):
         f = folder / f"S01E0{i}.mkv"
         f.write_bytes(b"video")
         ids.append(_seed_episode(
             conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
-            quality=quality, video_codec="x264", audio_codec="AC3",
+            quality="WEBDL-1080p", video_codec=codec, audio_codec="AC3",
             audio_languages="spa", subtitle_languages="spa", source="WEB-DL",
         ))
 
     plan = build_season_pack_plan(season_id, conn=conn)
     assert plan["status"] == "blocked"
-    assert any("resolución" in e for e in plan["errors"])
+    assert any("códec de vídeo" in e for e in plan["errors"]), plan["errors"]
 
     # …yet neither episode fails on its own account: no check about the season's
     # consistency, and the Castilian one passes for both.
@@ -1008,7 +1036,7 @@ def test_the_dashboard_only_counts_seasons_that_could_really_be_packed(isolated_
     series_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     casos = [
         ("Sube",              "1080p", "x264", 1),
-        ("Resol. mezclada",   None,    "x264", 1),
+        ("Resol. mezclada",   None,    "x264", 1),   # solo avisa: sí cuenta
         ("Códec mezclado",    "1080p", None,   1),
         ("Sin castellano",    "1080p", "x264", 0),
     ]
@@ -1022,7 +1050,7 @@ def test_the_dashboard_only_counts_seasons_that_could_really_be_packed(isolated_
     # El SQL de la tarjeta y la regla de Python tienen que contar lo mismo.
     esperado = sum(1 for _t, res, codec, sp in casos
                    if can_pack_from_rollup({"resolution": res, "video_codec": codec, "has_spanish_ok": sp}))
-    assert esperado == 1
+    assert esperado == 2
     assert get_dashboard_summary(conn)["unique_seasons"] == esperado
     conn.close()
 

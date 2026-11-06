@@ -529,9 +529,7 @@ def _pack_blocked_reason(conn: sqlite3.Connection, matched_item: dict, req: dict
     season = dict(row)
     if can_pack_from_rollup(season):
         return None
-    if not season.get("resolution"):
-        falta = "los capítulos no coinciden en resolución"
-    elif not season.get("video_codec"):
+    if not season.get("video_codec"):
         falta = "los capítulos no coinciden en códec de vídeo"
     else:
         falta = "algún capítulo no tiene castellano"

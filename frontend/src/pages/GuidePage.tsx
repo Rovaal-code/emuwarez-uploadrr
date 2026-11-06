@@ -459,9 +459,15 @@ const OTHER_CONDITION_ROWS: OtherRow[] = [
   },
   {
     applies: 'Pack de temporada',
-    condition: 'Los capítulos no coinciden en resolución o en códec de vídeo',
+    condition: 'Los capítulos no coinciden en códec de vídeo',
     verdict: 'blocked', verdictLabel: 'Bloquea',
-    why: 'Son los dos únicos que tienen que coincidir. Una temporada con capítulos a 1080p y a 720p no es una calidad, son dos, y el nombre solo puede declarar una; con el códec de vídeo pasa lo mismo.',
+    why: 'Es lo único que tiene que coincidir: el nombre solo puede declarar un códec, y un pack con capítulos en x264 y en x265 no es un release, son dos.',
+  },
+  {
+    applies: 'Pack de temporada',
+    condition: 'Los capítulos no coinciden en resolución',
+    verdict: 'warn', verdictLabel: 'No bloquea',
+    why: 'Pasa en DVD, con capítulos a 480p y otros a 540p. El asistente avisa de qué capítulos tienen cada una y el nombre del pack lleva la de más capítulos (si empatan, la del primero); tú decides si lo subes.',
   },
   {
     applies: 'Pack de temporada',
@@ -652,8 +658,8 @@ function UploadConditionsContent() {
               ['1080p · cualquier source', '1080p · WEB-DL, BluRay', 'ok', 'La petición no restringe el source, así que la mezcla da igual.'],
               ['1080p · WEB-DL', '1080p · WEB-DL, BluRay', 'warn', 'No puedes prometer WEB-DL: la mitad de los capítulos no lo son.'],
               ['720p · cualquier source', '1080p en todos', 'ok', 'La comparación es «iguala o mejora», y 1080p supera lo pedido.'],
-              ['1080p · WEB-DL', '1080p, 720p mezclado', 'warn', 'No puedes prometer una resolución que no tienen todos. Y además esa temporada no se puede subir como pack.'],
-              ['Sin resolución · cualquier source', '1080p, 720p mezclado', 'warn', 'La comparación no tiene nada que exigir, pero el pack sigue bloqueado por la resolución, así que no sale Compatible: sus capítulos sí se pueden subir uno a uno.'],
+              ['1080p · WEB-DL', '1080p, 720p mezclado', 'warn', 'No puedes prometer una resolución que no tienen todos.'],
+              ['Sin resolución · cualquier source', '1080p, 720p mezclado', 'ok', 'La comparación no tiene nada que exigir, y una resolución mezclada no bloquea el pack: solo avisa al subirlo.'],
               ['2160p · BluRay', '1080p · WEB-DL', 'blocked', 'Fallan los dos campos.'],
             ] as [string, string, Verdict, string][]).map(([pide, tengo, verdict, why], i) => (
               <tr key={i}>

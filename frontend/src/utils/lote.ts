@@ -97,9 +97,13 @@ export function razonNoSubible(item: LibraryItemResponse): string | null {
   if (item.item_type !== 'movie' && !esCapitulo) return 'Esto no se sube por lotes.'
   if (item.local_status !== 'Disponible' && item.local_status !== 'Subido') {
     const estado = item.local_status || 'sin estado'
+    // «No la tienes en disco» solo es verdad con Faltante: una que está «Subiendo» sí está en disco.
+    if (item.local_status === 'Faltante') {
+      return esCapitulo ? 'El capítulo está «Faltante»: no lo tienes en disco.' : 'La película está «Faltante»: no la tienes en disco.'
+    }
     return esCapitulo
-      ? `El capítulo está «${estado}»: no lo tienes en disco.`
-      : `La película está «${estado}»: no la tienes en disco.`
+      ? `El capítulo está «${estado}»: ahora no se puede subir.`
+      : `La película está «${estado}»: ahora no se puede subir.`
   }
   if (item.has_spanish_ok !== 1) {
     return item.has_spanish_ok === 0

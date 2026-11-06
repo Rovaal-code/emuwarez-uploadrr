@@ -705,7 +705,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           label: CASTELLANO_OPCIONES.find(o => o.value === s)?.label ?? s,
         })),
       ]} /></th>
-      <th><HeaderFilter label="EMuwarez" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
+      <th><HeaderFilter label="eMuwarez" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
         { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
       ]} /></th>
       <HeaderSort label="Tamaño" desc="size_desc" asc="size_asc" sortBy={sortBy} onSort={v => { setSortBy(v); setOffset(0) }} />
@@ -737,7 +737,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <div className="bib-acciones">
           <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
             <button
-              className="btn btn-primary btn-sm"
+              className={`btn btn-sm ${libSyncing ? 'btn-primary' : 'btn-secondary'}`}
               onClick={startLibrarySync}
               disabled={isAnySyncing}
             >

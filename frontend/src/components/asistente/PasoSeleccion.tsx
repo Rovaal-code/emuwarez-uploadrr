@@ -1,5 +1,6 @@
 // Paso 0: qué se sube. De una serie, qué temporadas; de una temporada, el pack
 // entero o una selección de capítulos.
+import { useId } from 'react'
 import type { LibraryItemResponse } from '../../types/api'
 import { episodeNotReadyReason, isSeasonReady, seasonNotReadyReason } from '../../utils/libraryItem'
 import { IconoAviso } from '../Iconos'
@@ -12,6 +13,7 @@ export function PasoSeleccion({ a }: { a: Asistente }) {
     item, allowMultiSeason, seasons, episodes, multiSelected, setMultiSelected, seasonUploadMode, setSeasonUploadMode,
     episodeSelected, setEpisodeSelected, selError, confirmMultiSelection, confirmEpisodeSelection, confirmSeasonWhole,
   } = a
+  const idMotivo = useId()
 
   const eligibleEpisodes = episodes.filter(ep => !episodeNotReadyReason(ep))
   const allEligibleSelected = eligibleEpisodes.length > 0
@@ -65,6 +67,7 @@ export function PasoSeleccion({ a }: { a: Asistente }) {
         ]).map(m => {
           const enabled = !m.reason
           const selected = seasonUploadMode === m.key
+          const motivoId = `${idMotivo}-modo-${m.key}`
           // Tarjeta seleccionable: el mismo control que usa el resto del
           // asistente para una elección de este tipo. Añade el resaltado del
           // elegido (se queda en pantalla tras pulsarlo) y el atenuado cuando
@@ -74,15 +77,21 @@ export function PasoSeleccion({ a }: { a: Asistente }) {
               className={selected ? 'btn btn-secondary asist-modo asist-modo-elegido' : 'btn btn-secondary asist-modo'}
               type="button"
               disabled={!enabled}
+              aria-describedby={enabled ? undefined : motivoId}
               onClick={() => setSeasonUploadMode(m.key)}
             >
               <span className="asist-modo-titulo">{m.title}</span>
               <span className="asist-modo-cuerpo">{m.body}</span>
             </button>
           )
-          return enabled
-            ? <div key={m.key}>{card}</div>
-            : <Tooltip key={m.key} content={m.reason} style={{ width: '100%' }}>{card}</Tooltip>
+          // El motivo de un modo no disponible va a la vista, debajo de la tarjeta: en un tooltip solo salía al pasar
+          // el ratón, y con el dedo no se veía nunca.
+          return (
+            <div key={m.key}>
+              {card}
+              {!enabled && <MotivoNoDisponible id={motivoId}>{m.reason}</MotivoNoDisponible>}
+            </div>
+          )
         })}
       </div>
 
@@ -155,6 +164,7 @@ export function PasoSeleccion({ a }: { a: Asistente }) {
       <label className="asist-casilla asist-t13 asist-mb-10">
         <input
           type="checkbox"
+          disabled={selectableSeasons.length === 0}
           checked={selectableSeasons.length > 0 && multiSelected.size === selectableSeasons.length}
           onChange={e => setMultiSelected(e.target.checked ? new Set(selectableSeasons.map(s => s.id)) : new Set())}
         />
@@ -165,25 +175,29 @@ export function PasoSeleccion({ a }: { a: Asistente }) {
           const ready = isSeasonReady(s)
           const reason = seasonNotReadyReason(s)
           const selected = multiSelected.has(s.id)
-          const card = (
-            <button
-              type="button"
-              disabled={!ready}
-              onClick={() => toggleMultiSeason(s.id)}
-              className={selected ? 'asist-opcion asist-opcion-temporada asist-opcion-elegida' : 'asist-opcion asist-opcion-temporada'}
-            >
-              <span className="asist-negrita">{seasonCardLabel(s)}</span>
-            </button>
-          )
-          return ready ? (
-            <div key={s.id}>{card}</div>
-          ) : (
-            <Tooltip key={s.id} content={reason} style={{ width: '100%' }}>
-              {card}
-            </Tooltip>
+          const motivoId = `${idMotivo}-temporada-${s.id}`
+          return (
+            <div key={s.id}>
+              <button
+                type="button"
+                disabled={!ready}
+                aria-describedby={ready ? undefined : motivoId}
+                onClick={() => toggleMultiSeason(s.id)}
+                className={selected ? 'asist-opcion asist-opcion-temporada asist-opcion-elegida' : 'asist-opcion asist-opcion-temporada'}
+              >
+                <span className="asist-negrita">{seasonCardLabel(s)}</span>
+              </button>
+              {!ready && reason && <MotivoNoDisponible id={motivoId}>{reason}</MotivoNoDisponible>}
+            </div>
           )
         })}
       </div>
+      {seasons.length > 0 && selectableSeasons.length === 0 && (
+        <p className="text-muted asist-t12 asist-mt-10">
+          Ninguna temporada se puede subir entera. Para subir capítulos sueltos, abre la ficha de la temporada y pulsa
+          «Subir».
+        </p>
+      )}
     </div>
   )
 
@@ -193,7 +207,10 @@ export function PasoSeleccion({ a }: { a: Asistente }) {
       pie={
         <button
           className="btn btn-primary"
-          disabled={!allowMultiSeason && seasonUploadMode === null}
+          // Sin nada elegido no hay a dónde continuar: antes se pulsaba y solo entonces avisaba.
+          disabled={allowMultiSeason
+            ? multiSelected.size === 0
+            : seasonUploadMode === null || (seasonUploadMode === 'episodes' && episodeSelected.size === 0)}
           onClick={
             allowMultiSeason ? confirmMultiSelection
             : seasonUploadMode === 'episodes' ? confirmEpisodeSelection : confirmSeasonWhole
@@ -208,7 +225,12 @@ export function PasoSeleccion({ a }: { a: Asistente }) {
           : <>Elige cómo subir <strong>{item.title}</strong>.</>}
       </p>
       {allowMultiSeason ? multiSeasonChecklist : seasonModeSelection}
-      {selError && <p className="text-error asist-mt-10">{selError}</p>}
+      {selError && <p className="text-error asist-mt-10" role="alert">{selError}</p>}
     </MarcoPaso>
   )
+}
+
+// Por qué una opción del paso no se puede elegir, a la vista y enlazado al botón con aria-describedby.
+function MotivoNoDisponible({ id, children }: { id: string; children: React.ReactNode }) {
+  return <span id={id} className="asist-aviso-chip asist-motivo"><IconoAviso /> {children}</span>
 }

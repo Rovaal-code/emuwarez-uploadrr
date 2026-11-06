@@ -240,9 +240,13 @@ describe('cuándo se habilita «Subir»', () => {
     m(subidas.runUploadChecks).mockImplementation(async (_id, scope) => (scope === 'environment' ? ENTORNO : FALLA))
     await abrir([DUNE])
     await alResumen(1)
-    expect(fila(11).textContent).toContain('✗ Sin castellano')
+    // Qué falló (la etiqueta) y el detalle, no solo el detalle.
+    expect(fila(11).textContent).toContain('✗ Castellano: Sin castellano')
     expect(fila(11).textContent).toContain('Se saltará')
     expect(botonSubir()!.disabled).toBe(true)
+    // «0 se subirán» no es una buena noticia: sin el verde de las cifras que sí lo son.
+    expect(document.querySelector('.lote-cifra')!.textContent).toBe('0 se subirán')
+    expect(document.querySelector('.lote-cifra')!.classList.contains('lote-cifra-bien')).toBe(false)
   })
 })
 

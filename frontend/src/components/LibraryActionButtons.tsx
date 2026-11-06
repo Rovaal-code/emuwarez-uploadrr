@@ -4,8 +4,7 @@ import { Tooltip } from './Tooltip'
 import { UploadButtonIcon, RequestButtonIcon } from './DetailCard'
 
 // Single source of truth for the per-item action buttons, shared by the detail
-// page and the tree. Same visual format as the "Sincronizar biblioteca" button
-// (btn-primary). Both [Subir] and [Petición] are always shown; when the item is
+// page and the tree. Both [Subir] and [Petición] are always shown; when the item is
 // missing (Faltante) "Subir" is disabled — you can't upload what you don't
 // have. A season with SOME but not all episodes Disponible ("Parcial") is the
 // same story: build_season_pack_plan() blocks an incomplete pack outright
@@ -27,6 +26,9 @@ export function LibraryActionButtons({ item, onAction, title, soloIcono = false 
   // exactly one season to offer.
 }) {
   const missing = item.local_status === 'Faltante'
+  // El brillo de btn-primary es para la acción principal de la vista (DESIGN.md): en la ficha, «Subir». En la
+  // tabla se repiten en cada fila y van en secundario; «Petición» nunca es la principal.
+  const claseSubir = soloIcono ? 'btn btn-secondary btn-sm btn-icon-only' : 'btn btn-primary btn-sm'
   // A season no longer gets disabled for being incomplete or for its episodes
   // disagreeing: both of those only rule out the PACK, and the wizard now
   // offers a per-episode mode where neither applies. The reason moves to the
@@ -39,7 +41,7 @@ export function LibraryActionButtons({ item, onAction, title, soloIcono = false 
         ? 'No se puede subir: contenido faltante (no lo tienes en disco).'
         : (title ?? 'Prepara y sube este contenido a eMuwarez (nomenclatura, comprobaciones y subida).')}>
         <button
-          className={`btn btn-primary btn-sm${soloIcono ? ' btn-icon-only' : ''}`}
+          className={claseSubir}
           onClick={() => onAction('upload', item)}
           disabled={missing}
           aria-label="Subir"
@@ -48,7 +50,7 @@ export function LibraryActionButtons({ item, onAction, title, soloIcono = false 
         </button>
       </Tooltip>
       <Tooltip content="Crea una petición de este contenido en eMuwarez.">
-        <button className={`btn btn-primary btn-sm${soloIcono ? ' btn-icon-only' : ''}`}
+        <button className={`btn btn-secondary btn-sm${soloIcono ? ' btn-icon-only' : ''}`}
                 onClick={() => onAction('request', item)} aria-label="Petición">
           <RequestButtonIcon />{soloIcono ? null : ' Petición'}
         </button>

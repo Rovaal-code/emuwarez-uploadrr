@@ -18,8 +18,9 @@
 .asist-pasos { flex: none; padding: 0 20px; margin-top: 12px; }
 .asist-pasos ol { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .asist-paso {
+  /* Sin borde: con él parecían botones y no se pueden pulsar. El tinte del actual dice dónde estás. */
   padding: 4px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: var(--radius-small);
   font-size: 12.5px;
   color: var(--text-muted);
@@ -124,6 +125,9 @@
 }
 .asist-pie-fin { justify-content: flex-end; }
 .asist-bloque-error { padding: 20px 0; }
+.alert.asist-alerta { margin-bottom: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.alert.asist-alerta > svg { vertical-align: -2px; }
+.asist-alerta-pista { margin: 6px 0 0; color: var(--text-secondary); }
 .asist-bloque { display: block; }
 .asist-pila { display: flex; flex-direction: column; gap: 8px; }
 .asist-col-completa { grid-column: 1 / -1; }
@@ -147,6 +151,16 @@
   color: var(--color-warning);
 }
 .asist-aviso-chip { font-size: 11px; color: var(--color-warning); }
+/* Paso 0: el motivo de una tarjeta deshabilitada, debajo de ella y sin la opacidad del botón apagado. */
+.asist-aviso-chip.asist-motivo {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.asist-aviso-chip.asist-motivo > svg { flex-shrink: 0; margin-top: 2px; }
 .asist-aviso-linea { font-size: 12px; margin-top: 10px; }
 .form-input.asist-detectando {
   display: flex;

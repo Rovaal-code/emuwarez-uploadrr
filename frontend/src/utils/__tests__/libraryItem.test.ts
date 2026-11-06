@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  isSeasonReady, episodeNotReadyReason, seasonNotReadyReason, posterUrl,
+  isSeasonReady, episodeNotReadyReason, seasonNotReadyReason, posterUrl, tituloEnFicha,
 } from '../libraryItem'
 import type { LibraryItemResponse } from '../../types/api'
 
@@ -138,5 +138,27 @@ describe('el tamaño del póster', () => {
   it('una miniatura de TheTVDB no se vuelve a marcar', () => {
     const t = tvdb.replace('.jpg', '_t.jpg')
     expect(posterUrl(t, 'w154')).toBe(t)
+  })
+})
+
+// En la tabla de la ficha de una serie o temporada, lo que distingue cada fila, sin el nombre de la serie delante.
+describe('tituloEnFicha', () => {
+  it('una temporada se queda en «Temporada N»', () => {
+    expect(tituloEnFicha(item({ title: 'La casa de papel - Temporada 2', season_number: 2 }))).toBe('Temporada 2')
+    expect(tituloEnFicha(item({ title: 'Raro', season_number: 0 }))).toBe('Especiales')
+    // Con « - » en el nombre de la serie no se corta por el primero.
+    expect(tituloEnFicha(item({ title: 'Serie - Otro - Temporada 2', season_number: 2 }))).toBe('Temporada 2')
+    expect(tituloEnFicha(item({ title: 'Serie - Otro - Temporada 2', season_number: undefined }))).toBe('Temporada 2')
+  })
+
+  it('un capítulo, el código y su título propio', () => {
+    const cap = (title: string) => item({ item_type: 'episode', title, season_number: 1, episode_number: 2 })
+    expect(tituloEnFicha(cap('Serie S01E02 - El atraco'))).toBe('S01E02 · El atraco')
+    expect(tituloEnFicha(cap('Serie S01E02'))).toBe('S01E02')
+    expect(tituloEnFicha(cap('Capítulo 2'))).toBe('S01E02 · Capítulo 2')
+  })
+
+  it('una película o una serie, como en la lista', () => {
+    expect(tituloEnFicha(item({ item_type: 'movie', title: 'Dune', year: 2021 }))).toBe('Dune (2021)')
   })
 })

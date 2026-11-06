@@ -64,6 +64,14 @@ describe('razonNoSubible', () => {
       .toBe('El capítulo está «Faltante»: no lo tienes en disco.')
   })
 
+  it('«no la tienes en disco» solo con Faltante: una que se está subiendo sí está en disco', () => {
+    const razon = razonNoSubible(pelicula({ local_status: 'Subiendo' }))!
+    expect(razon).toBe('La película está «Subiendo»: ahora no se puede subir.')
+    expect(razon).not.toContain('disco')
+    expect(razonNoSubible(pelicula({ item_type: 'episode', local_status: 'Error' })))
+      .toBe('El capítulo está «Error»: ahora no se puede subir.')
+  })
+
   it('sin castellano, o sin poder leer sus pistas, no se puede', () => {
     expect(razonNoSubible(pelicula({ has_spanish_ok: 0 }))).toBe('No tiene castellano ni en el audio ni en los subtítulos.')
     expect(razonNoSubible(pelicula({ has_spanish_ok: null }))).toContain('no se puede confirmar que tenga castellano')

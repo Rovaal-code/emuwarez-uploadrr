@@ -159,8 +159,10 @@
 }
 /* Un nombre de instancia largo se corta con puntos suspensivos en vez de ensanchar la columna. */
 .data-table.bib-tabla td .value-chip a { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Con menos ancho la tabla se desplaza en horizontal en vez de aplastar el título. */
-.data-table th.hijos-col-titulo { min-width: 300px; }
+/* Con menos ancho la tabla se desplaza en horizontal en vez de aplastar el título. En la ficha el título es corto
+   («Temporada 1», «S01E02 · …»): con 300 px la tabla de capítulos medía 10 px más que su caja a 1440 y la columna fija
+   de Acciones tapaba el Tamaño. */
+.data-table th.hijos-col-titulo { min-width: 240px; }
 .data-table th.bib-col-titulo {
   width: 100%;
   min-width: 300px;
@@ -411,6 +413,8 @@
   min-width: 0;
   max-width: 100%;
 }
+/* En la tabla de la ficha el título es lo que distingue cada fila: mejor en dos líneas que cortado. */
+.hijos-scroll .lib-title-link.bib-titulo-enlace { white-space: normal; overflow-wrap: anywhere; }
 .lib-title-link.bib-titulo-enlace:hover { color: var(--text-accent); }
 .lib-title-link.bib-titulo-enlace:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .bib-rg-ninguno {
@@ -459,6 +463,43 @@
   font-size: 11px;
   color: var(--text-muted);
   align-self: center;
+}
+
+/* Escritorio de 1280-1440 px: con doce columnas la tabla medía 1315 px y dejaba eMuwarez y Tamaño detrás del scroll.
+   Título más estrecho, carátula más pequeña, márgenes de 6 px, sin el icono de adorno delante de cada valor (la
+   cabecera ya dice qué es) y Origen solo con el icono (el nombre sigue para el lector de pantalla y en el tooltip del
+   enlace). */
+@media (max-width: 1500px) {
+  .data-table th.bib-col-titulo { min-width: 190px; }
+  .data-table.bib-tabla td,
+  .data-table.bib-tabla th:not(:has(> .hf-trigger)) { padding-left: 6px; padding-right: 6px; }
+  .data-table.bib-tabla th > .hf-trigger { padding-left: 4px; padding-right: 4px; }
+  .data-table.bib-tabla td .detcard-plano > .vicon { display: none; }
+  .poster-thumb.bib-miniatura { width: 32px; height: 48px; }
+  .bib-celda-origen .service-inline > span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* A 1280 px aún sobraban 65 px: sin la carátula (la vista de pósters está a un clic) el título cabe en menos ancho. */
+@media (max-width: 1366px) {
+  .poster-thumb.bib-miniatura { display: none; }
+  .data-table th.bib-col-titulo { min-width: 155px; }
+  .data-table.bib-tabla th > .hf-trigger { gap: 2px; }
+  .data-table.bib-tabla td,
+  .data-table.bib-tabla th:not(:has(> .hf-trigger)) { padding-left: 5px; padding-right: 5px; }
+}
+
+/* Con el dedo, el selector de vista (34×30) y los filtros de cabecera (28 de alto) se quedaban cortos. */
+@media (pointer: coarse) {
+  .bib-vista-boton,
+  .data-table.bib-tabla th > .hf-trigger { min-height: var(--tap-min); }
+  .bib-vista-boton { min-width: var(--tap-min); }
 }
 
 /* Con el ancho de un móvil caben tres columnas: título, estado y acciones. El resto de datos sigue en la ficha. */

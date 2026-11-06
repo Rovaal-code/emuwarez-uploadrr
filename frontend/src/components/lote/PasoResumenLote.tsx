@@ -19,9 +19,14 @@ export interface FilaResumenLote {
   incluida: boolean
 }
 
+// Qué falló y dónde: la etiqueta dice qué («Contenido no accesible») y el mensaje, el detalle (la ruta, los errores
+// del pack). Con solo el mensaje la columna enseñaba una ruta en rojo sin decir qué le pasaba.
 export const primerFallo = (c: UploadChecksResult | undefined): string => {
   const fallo = c?.checks.find((x: UploadCheck) => x.status === 'fail')
-  return fallo ? fallo.message || fallo.label : 'Alguna comprobación falló'
+  if (!fallo) return 'Alguna comprobación falló'
+  const { label, message } = fallo
+  if (!message || message === label) return label
+  return label ? `${label}: ${message}` : message
 }
 
 const CLASE_NIVEL: Record<string, string> = {
@@ -62,7 +67,7 @@ export function PasoResumenLote({
     <div className="modal-body">
       {/* Lo que va a pasar con el lote, de un vistazo y sin tener que leer la tabla fila a fila. */}
       <div className="lote-cifras">
-        <span className="lote-cifra lote-cifra-bien"><strong>{incluidas}</strong> {incluidas === 1 ? 'se subirá' : 'se subirán'}</span>
+        <span className={`lote-cifra${incluidas > 0 ? ' lote-cifra-bien' : ''}`}><strong>{incluidas}</strong> {incluidas === 1 ? 'se subirá' : 'se subirán'}</span>
         {salta > 0 && <span className="lote-cifra lote-cifra-mal"><strong>{salta}</strong> {salta === 1 ? 'se saltará' : 'se saltarán'}</span>}
         {porComprobar > 0 && <span className="lote-cifra"><strong>{porComprobar}</strong> por comprobar</span>}
       </div>

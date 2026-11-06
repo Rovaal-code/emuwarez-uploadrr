@@ -46,6 +46,23 @@ describe('HeaderFilter', () => {
     expect(menu()).not.toBeNull()
   })
 
+  it('«Desmarcar todo» sin nada marcado se apaga en vez de salir resaltada', async () => {
+    await abrir()
+    const desmarcar = () => [...menu()!.querySelectorAll('button')].find(b => b.textContent === 'Desmarcar todo')!
+    expect(desmarcar().disabled).toBe(true)
+    expect(desmarcar().classList.contains('selected')).toBe(false)
+    await pulsar(menu()!.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? undefined)
+    expect(desmarcar().disabled).toBe(false)
+    expect(desmarcar().classList.contains('selected')).toBe(false)
+  })
+
+  it('al abrirse, el foco va al primer control que se puede usar, no a «Desmarcar todo» deshabilitado', async () => {
+    await abrir()
+    const activo = document.activeElement as HTMLElement | null
+    expect(activo && menu()!.contains(activo)).toBe(true)
+    expect((activo as HTMLButtonElement).disabled ?? false).toBe(false)
+  })
+
   it('ya no escucha mousedown: lo cierra el pointerdown que lo precede', async () => {
     await abrir()
     await disparar(document.getElementById('fuera')!, 'mousedown')

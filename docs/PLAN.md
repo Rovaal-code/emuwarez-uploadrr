@@ -482,11 +482,12 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 ## Siguiente
 
 Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que quedaba por ver se comprobó el 03/11 (ver en
-«Hecho»). Lo siguiente es la oleada 4. Tres detalles que salieron de la comprobación, ninguno por los estilos (ya estaban antes):
-- el paso «Configuración» del tour no resalta nada si Configuración se dejó en otra pestaña (`data-tour="settings-content"`
-  solo existe en la pestaña Configuración);
-- a 1280×800 el pie del asistente de subida queda cortado y el cuerpo del modal hace scroll por dentro;
-- a 390 px el sidebar no se pliega.
+«Hecho»). Los tres detalles que salieron de esa comprobación (ninguno por los estilos):
+- ~~el paso «Configuración» del tour no resalta nada si Configuración se dejó en otra pestaña~~: ya estaba arreglado
+  (d3aab6d, `data-tour="settings-content"` está en el marco de la página y vale en cualquier pestaña);
+- a 1280×800 el pie del asistente de subida queda cortado y el cuerpo del modal hace scroll por dentro: se retoma en la
+  tanda de rediseño del 06/11 (ver «Oleada 4»);
+- ~~a 390 px el sidebar no se pliega~~: ya estaba arreglado (5166cd8, con 768 px o menos es un cajón: `useMenuMovil`).
 
 Subida por lotes: hecha (PR 1-10, ver «Hecho» y `docs/PLAN_SUBIDA_POR_LOTES.md` §6 «PR 7 en adelante»). Falta que Gabriel la
 pruebe en `:edge` (duplicado real en Uploadrr-EMU, 50 hilos en el NAS, la rejilla con 200 seleccionadas) y que decida, al
@@ -503,8 +504,8 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
 - Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): P1 Panel, P4 detalle de subida, P5 asistente con Resumen,
   P2 Biblioteca, P3 Peticiones y P6 Configuración (todos hechos). Queda P7 móvil, pendiente de decidir. Las funciones que
   tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: le gusta el diseño original y solo quiere mejoras para ver mejor el contenido nuevo;
-  esquinas redondeadas (la esquina cortada, demasiado contrastada, no); modo compacto pero legible, inspirándose en apps como
-  Tracearr; y pasar cada pantalla por la skill `frontend-design`.
+  esquinas redondeadas (la esquina cortada, demasiado contrastada, no); algo compacto pero solo un poco y sin regla fija
+  (si dar aire mejora la lectura, se da; Tracearr era solo una inspiración); y pasar cada pantalla por la skill `frontend-design`.
 
 ## Aplazado / ideas
 

@@ -259,7 +259,7 @@ export function LogsPage() {
             action={hayFiltros ? <button className="btn btn-secondary btn-sm" onClick={quitarFiltros}>Quitar filtros</button> : undefined}
           />
         ) : (
-          <div ref={listaRef} className="lg-lista" role="region" aria-label="Líneas del registro (flechas para moverse, C copia la línea)" tabIndex={0} onKeyDown={alTeclearLista}>
+          <div ref={listaRef} className="lg-lista" role="region" aria-label="Líneas del registro (flechas para moverse, C copia la línea)" onKeyDown={alTeclearLista}>
             {error && <div className="lg-aviso lg-aviso--error" role="alert">{error}: se enseña la última lectura.</div>}
             {filas.map(f => f.tipo === 'dia'
               ? <div key={`dia-${f.dia}`} className="lg-dia">{f.dia}</div>

@@ -68,6 +68,8 @@ describe('Logs', () => {
   it('solo una línea está en el orden del tabulador, los botones de copiar no, y las flechas mueven el foco', async () => {
     await montar()
     expect(lineas().map(b => b.tabIndex)).toEqual([0, -1, -1])
+    // La lista no es otra parada: el primer Tab llega directo a la línea, donde funcionan las flechas y C.
+    expect(contenedor.querySelector('.lg-lista')!.hasAttribute('tabindex')).toBe(false)
     expect([...contenedor.querySelectorAll<HTMLButtonElement>('.lg-copiar')].every(b => b.tabIndex === -1)).toBe(true)
     await act(async () => { lineas()[0].focus() })
     await tecla(lineas()[0], 'ArrowDown')

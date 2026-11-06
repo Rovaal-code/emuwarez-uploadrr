@@ -507,6 +507,7 @@
   /* Las tablas de Pistas y MediaInfo no caben a 390 px: se desplazan de lado en vez de apretar las columnas. */
   .asist-pestana-panel .asist-tabla-caja { overflow-x: auto; }
   .asist-tabla-pistas { min-width: 520px; }
+  .asist-tabla-pistas select.form-input { min-width: 96px; }
   .asist-tabla-mediainfo { min-width: 440px; }
   .asist-pie { padding: 10px 16px; }
   .asist-cuerpo.modal-body { padding: 14px 16px; }

@@ -143,7 +143,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction,
           url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null}
           alt={item.title}
           alto={ALTO_FICHA}
-          fallbackIcon={<IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />}
+          fallbackIcon={<IconoTipo serie={item.item_type !== 'movie'} />}
         />
 
         <div className="bibdet-tarjetas">

@@ -3,7 +3,7 @@ import { getLibrary } from '../api/library'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
 import { formatBytes } from '../utils/format'
-import { buildDeepLink, posterUrl, listDisplayTitle } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl, listDisplayTitle, tituloEnFicha } from '../utils/libraryItem'
 import { ServiceLabel } from './ServiceIcon'
 import { ProviderTag } from './ProviderIcon'
 import { GrupoDeLaFila, LineaDeCalidad } from './LineaDeCalidad'
@@ -51,6 +51,8 @@ interface LibraryTreeRowProps {
   // Solo en una serie: los ids de sus temporadas marcadas, separados por comas («» si ninguna). Un texto y no un
   // Set, para que el memo compare por valor: marcar algo de otra serie no repinta esta.
   temporadasMarcadas?: string
+  // En la tabla de la ficha de una serie o temporada: el título sin el nombre de la serie (ver tituloEnFicha).
+  tituloCorto?: boolean
 }
 
 // Series -> Season -> Episode collapsible tree, one row per level, reused
@@ -92,7 +94,7 @@ export function SpanishAudioCell({ item }: { item: LibraryItemResponse }) {
 // of them on every keystroke even though their own props hadn't changed —
 // this (plus onSelect/onAction/onReload staying referentially stable at the
 // call site) is what makes that skip actually happen.
-export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false, onExpandedChange, seleccionado = false, loteLleno = false, onAlternar, temporadasMarcadas = '' }: LibraryTreeRowProps) {
+export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false, onExpandedChange, seleccionado = false, loteLleno = false, onAlternar, temporadasMarcadas = '', tituloCorto = false }: LibraryTreeRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<LibraryItemResponse[]>([])
   const [childTotal, setChildTotal] = useState(0)
@@ -237,7 +239,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                 />
               ) : (
                 <span className="bib-miniatura-icono">
-                  <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
+                  <IconoTipo serie={item.item_type !== 'movie'} />
                 </span>
               )}
             </div>}
@@ -255,14 +257,14 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                 }}
                 {...titleTip}
               >
-                <DetailTitleText title={listDisplayTitle(item)} />
+                <DetailTitleText title={tituloCorto ? tituloEnFicha(item) : listDisplayTitle(item)} />
                 {titleTooltip}
               </a>
               <LineaDeCalidad item={item} />
             </div>
           </div>
         </td>
-        <td className="bib-nowrap">
+        <td className="bib-nowrap bib-celda-origen">
           {item.instance_type
             ? (
               <ValueChip linkable={!!deepLink}>
@@ -350,6 +352,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
           onAction={onAction}
           onReload={onReload}
           compact={compact}
+          tituloCorto={tituloCorto}
           {...(isSeries && onAlternar
             ? { onAlternar, loteLleno, seleccionado: marcadasHijas.has(child.id) }
             : {})}

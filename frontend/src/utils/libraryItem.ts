@@ -37,6 +37,25 @@ export function listDisplayTitle(item: LibraryItemResponse): string {
   return `${item.title}${year}`
 }
 
+// El título de una temporada o un capítulo en la tabla de la ficha de su serie o temporada: el nombre de la serie
+// ya está en el título de la página, y con él delante las filas se cortaban todas en «La casa de papel (2015) - Tem…».
+// Temporada: «Temporada 1». Capítulo: «S01E02 · Su título» (o solo el código si no tiene título propio).
+export function tituloEnFicha(item: LibraryItemResponse): string {
+  if (item.item_type === 'season') {
+    const idx = item.title.indexOf(' - ')
+    if (idx !== -1) return item.title.slice(idx + 3)
+    if (item.season_number != null) return item.season_number === 0 ? 'Especiales' : `Temporada ${item.season_number}`
+  }
+  if (item.item_type === 'episode' && item.season_number != null && item.episode_number != null) {
+    const code = `S${String(item.season_number).padStart(2, '0')}E${String(item.episode_number).padStart(2, '0')}`
+    // Sonarr: «Serie S01E02» o «Serie S01E02 - Título». Sin código en el título, el título entero es el del capítulo.
+    const m = item.title.match(/\bS\d{2}E\d{2}\b\s*(?:-\s*)?(.*)$/i)
+    const propio = (m ? m[1] : item.title).trim()
+    return propio ? `${code} · ${propio}` : code
+  }
+  return listDisplayTitle(item)
+}
+
 // A season with EVERY episode Disponible can still fail
 // build_season_pack_plan()'s per-episode consistency check (codec/audio/
 // idiomas/resolución/source must all match) — the season row's own rollup

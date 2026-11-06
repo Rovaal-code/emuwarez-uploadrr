@@ -179,7 +179,7 @@ describe('Columnas de la lista', () => {
     const nombres = cabeceras().map(th => th.textContent?.replace(/[▾▼▲]/g, '').trim())
     expect(nombres).toEqual([
       'TítuloTipo', 'Origen', 'Estado', 'Petición', 'Resolución', 'Proveedor', 'Fuente', 'Grupo',
-      'Español', 'EMuwarez', 'Tamaño', 'Acciones',
+      'Español', 'eMuwarez', 'Tamaño', 'Acciones',
     ])
     for (const col of ['Origen', 'Resolución', 'Proveedor', 'Fuente', 'Grupo']) {
       const th = cabeceras().find(c => c.textContent?.includes(col))!

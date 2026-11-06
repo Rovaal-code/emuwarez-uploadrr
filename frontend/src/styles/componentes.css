@@ -206,6 +206,8 @@
   .bibdet-tarjetas { min-width: 0; }
   /* El alto del póster llega en línea (DetailPoster): aquí se pisa para que no mida 420 px en un móvil. */
   .bibdet-ficha .detail-poster.detcard-poster { height: auto !important; width: 55%; max-width: 220px; }
+  /* Sin póster, el marco vacío ocupaba unos 300 px antes del primer dato. */
+  .bibdet-ficha .detail-poster.detcard-poster.sin-poster { display: none; }
 }
 .bibdet-proveedores { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 /* Fila «Petición» (CampoPeticion): la insignia arriba y, debajo, quién la pidió,
@@ -388,3 +390,11 @@
 
 /* La moneda de los puntos: dorada y en línea con el texto, como el resto de iconos de las columnas. */
 .iconos-puntos { width: 15px; height: 15px; fill: var(--color-req-pending); flex-shrink: 0; vertical-align: middle; }
+
+/* HeaderFilter: «Desmarcar todo» sin nada marcado se apaga (no hay nada que desmarcar). */
+.hf-option:disabled,
+.hf-option:disabled:hover {
+  background: transparent;
+  color: var(--text-muted);
+  cursor: default;
+}

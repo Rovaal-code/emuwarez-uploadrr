@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { InstanceSafeResponse, LibraryItemResponse } from '../../types/api'
 import { LibraryTreeRow } from '../LibraryTreeRow'
+import { LibraryActionButtons } from '../LibraryActionButtons'
 import { especificaciones } from '../LineaDeCalidad'
 import { desmontar, montar } from './dom'
 
@@ -146,5 +147,34 @@ describe('LibraryTreeRow', () => {
     await montarFila(elemento({ poster_url: 'https://image.tmdb.org/t/p/w500/abc.jpg' }))
     expect(document.querySelector('.poster-thumb.bib-miniatura')).not.toBeNull()
     expect(document.querySelector<HTMLImageElement>('.bib-miniatura img')!.getAttribute('src')).toContain('w154')
+  })
+})
+
+// La regla del brillo en lo vivo (DESIGN.md): una sola acción principal por vista.
+describe('las acciones', () => {
+  it('en la tabla se repiten en cada fila y ninguna lleva el brillo del botón principal', async () => {
+    await montarFila(elemento({}))
+    const botones = [...document.querySelectorAll<HTMLButtonElement>('td.col-actions button')]
+    expect(botones.map(b => b.getAttribute('aria-label'))).toEqual(['Subir', 'Petición'])
+    expect(botones.every(b => b.classList.contains('btn-secondary') && !b.classList.contains('btn-primary'))).toBe(true)
+  })
+
+  it('en la ficha solo «Subir» es la principal', async () => {
+    await montar(<LibraryActionButtons item={elemento({})} onAction={() => {}} />)
+    const clase = (nombre: string) => document.querySelector(`button[aria-label="${nombre}"]`)!.className
+    expect(clase('Subir')).toContain('btn-primary')
+    expect(clase('Petición')).toContain('btn-secondary')
+  })
+})
+
+describe('en la tabla de la ficha', () => {
+  it('una temporada se distingue por su número, sin el nombre de la serie delante', async () => {
+    await montar(
+      <table><tbody>
+        <LibraryTreeRow item={elemento({ item_type: 'season', title: 'La casa de papel - Temporada 2', season_number: 2, year: 2015 })}
+          depth={0} instances={INSTANCIAS} onSelect={() => {}} onAction={() => {}} tituloCorto />
+      </tbody></table>,
+    )
+    expect(document.querySelector('a.bib-titulo-enlace')!.textContent).toBe('Temporada 2')
   })
 })

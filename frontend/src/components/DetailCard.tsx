@@ -205,7 +205,8 @@ export function DetailPoster({ url, alt, fallbackIcon, alto = DETAIL_CARD_HEIGHT
 }) {
   // La altura sale de DETAIL_CARD_HEIGHT (constante del módulo) o de `alto`: en línea.
   return (
-    <div className="detail-poster detcard-poster" style={{ height: alto }}>
+    // Sin póster, `sin-poster`: en un móvil el marco vacío empujaba los datos fuera de la pantalla y se oculta.
+    <div className={`detail-poster detcard-poster${url ? '' : ' sin-poster'}`} style={{ height: alto }}>
       {url ? (
         <img
           src={url}

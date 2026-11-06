@@ -31,7 +31,8 @@ export function EmuSyncButton({ label = 'Sincronizar eMuwarez' }: { label?: stri
   return (
     <>
       <Tooltip content="Sincroniza el catálogo de eMuwarez para comparar con tu biblioteca (elige rápido o completo).">
-        <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)} disabled={isAnySyncing}>
+        {/* Sincronizar no es lo que se viene a hacer en Biblioteca: secundario, y el brillo solo mientras trabaja. */}
+        <button className={`btn btn-sm ${catalogSyncing ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setOpen(true)} disabled={isAnySyncing}>
           {catalogSyncing
             ? <><span className="spinner emusync-spinner" /> Comparando…</>
             : `↻ ${label}`}

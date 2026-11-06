@@ -19,8 +19,9 @@ export interface FilterOption { value: string; label: string }
 //
 // Con `onOcultar` la casilla lleva al lado un botón que oculta ese valor: la
 // fila queda tachada y todo lo que lo tenga desaparece de la tabla.
-function FilterOptionButton({ option, selected, oculta, multiple, onClick, onOcultar }: {
+function FilterOptionButton({ option, selected, oculta, multiple, onClick, onOcultar, disabled = false }: {
   option: FilterOption; selected: boolean; oculta: boolean; multiple: boolean; onClick: () => void; onOcultar?: () => void
+  disabled?: boolean
 }) {
   const { triggerProps, tooltipNode } = useTooltip(option.label)
   if (multiple) {
@@ -49,6 +50,7 @@ function FilterOptionButton({ option, selected, oculta, multiple, onClick, onOcu
       type="button"
       className={`hf-option${selected ? ' selected' : ''}`}
       onClick={onClick}
+      disabled={disabled}
       {...triggerProps}
     >
       {option.label}
@@ -209,7 +211,9 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
               // En selección múltiple la opción '' no elige «Todos»: desmarca
               // lo marcado. Llamarla «Todos» al lado de casillas confundía.
               option={multiple && o.value === '' ? { ...o, label: 'Desmarcar todo' } : o}
-              selected={o.value === '' ? !active : elegidos.includes(o.value)}
+              // «Desmarcar todo» no es una opción elegida: sin nada marcado se apaga en vez de salir resaltada.
+              selected={o.value === '' ? !multiple && !active : elegidos.includes(o.value)}
+              disabled={multiple && o.value === '' && !active}
               oculta={elegidos.includes(EXCLUIDO + o.value)}
               onOcultar={ocultable && multiple && o.value !== '' ? () => ocultar(o.value) : undefined}
               // «Desmarcar todo» no es una casilla sino el botón que lo quita: con

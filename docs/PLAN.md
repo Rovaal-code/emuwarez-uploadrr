@@ -658,7 +658,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - Desenfoque (#254, salió al revisar #249): **no escribir `-webkit-backdrop-filter` a mano**. lightningcss (el minificador de Vite) ya lo
     añade, y si lo escribimos descarta la propiedad sin prefijo: Chrome y Firefox se quedaban sin desenfoque (y la cabecera sin ser el
     bloque contenedor de la campana). Lo vigila `tests/test_frontend_backdrop_sin_prefijo.py`.
-  - Decidido por Gabriel tras la revisión (#256): entre 769 y 1099 px la barra lateral arranca plegada mientras no haya preferencia
+  - Decidido por Gabriel tras la revisión (#257): entre 769 y 1099 px la barra lateral arranca plegada mientras no haya preferencia
     guardada (a 820 el contenido pasa de 580 a 756 px), con un chevrón en el logo plegado; con el dedo, `.btn` a 44 px y `.btn-sm` a 40
     (antes 40 y 36), y la barra de herramientas de Biblioteca entera a 40. `DESIGN.md` al día: Login y el asistente van en el HUD, la
     barra plegada en tableta, los altos táctiles, `@container` y no escribir `-webkit-backdrop-filter`.

@@ -630,6 +630,38 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - Verificado en local (la CI no tiene minutos): suite completa del backend sobre master y la del frontend en cada PR; cada arreglo de
     comportamiento lleva su test. **Sin ver:** lector de pantalla, iOS y tablet reales, el asistente con mediainfo y mkvmerge de verdad,
     `EmuComparisonSection` con datos reales, contraste AA medido con herramienta.
+- **Oleada 4, polish + adapt + optimize con `impeccable` (06/11, #249-#254):** cinco revisores independientes, uno por grupo de
+  pantallas (Panel y marco; Biblioteca, ficha y asistente; Configuración y resto; Peticiones y Subidas; rendimiento), con el método de
+  `polish.md`, `adapt.md`, `optimize.md` y `craft-floor.md` (sin el detector: su binario no se puede ejecutar en la nube) y capturas y
+  medidas con Playwright a 1440×900, 1280×800, 1024×768 y 820×1180 táctiles y 390×844; otros cinco agentes implementaron lo marcado
+  «claramente mejora» que comprobaron en master y encaja con el criterio de Gabriel. Lo dudoso está en «Aplazado».
+  - Panel, Estadísticas y marco (#249): el estado de la sincronización va en el hueco de la cabecera y no tapa sus botones; el Panel se
+    reordena con `@container` (el ancho del Panel, no la ventana); con el dedo, un toque abre y cierra los tooltips de ayuda (`Tooltip`, sin
+    tocar enlaces, asas ni filas `.clickable`); objetivos de 44 px en la barra lateral y la campana anclada a la cabecera en táctil;
+    Estadísticas ya no salta al llegar las cifras.
+  - Peticiones, Subidas y detalle (#250): la tarjeta por fila depende del ancho de la sección (`@container`), así que a 820 y 1024 no
+    quedan columnas tras un scroll invisible; banner del lote usable en el móvil; el detalle dice en qué paso se paró y su tabla de fases
+    cabe desde 1280. `FilasVirtuales` estima el alto con la media de filas ordinarias de la lista actual (sin cadenas desplegadas, filas
+    filtradas ni medidas de otro ancho): la altura total ya no cambia un 18 % al desplazarse.
+  - Biblioteca, ficha, «Subir por lotes» y asistente (#251): la ficha no corta valores en tableta (`@container`), controles de 44 px con el
+    dedo, la temporada siempre a la vista en el lote del móvil, «Subir (N)» como «Continuar (N)» y el aviso nombra «Configuración → Otros».
+  - Configuración, asistente, Guía, Logs, Instancias y Tareas (#252): las listas de proveedores se reordenan con el dedo (subir y bajar en
+    vez de la asa); el asistente no salta entre pasos y sus errores van en su campo; el buscador de Configuración trae a la vista el primer
+    campo; la tabla de backups cabe en tableta y móvil; plurales y tamaño de la copia programada con su unidad (test en
+    `test_copia_programada.py`).
+  - Rendimiento (#253): cada sección pedía sus datos tres veces al arrancar (el gancho de avisos tomaba la primera conexión por una
+    vuelta): ahora una (el Panel, de 580 a 198 kB de JSON en sus dos primeros segundos). El progreso de una subida pide solo las vivas y
+    las funde por id (`recargarProgreso`): en 15 s de Subidas con progreso, de 3928 a 100 kB de JSON y de 14 a 0 tareas largas. El
+    progreso de la sincronización va en su propio contexto; Logs reutiliza las líneas que ya tenía. Secciones, acceso, asistente y
+    modales en su chunk: `index` de 613 a 139 kB (gzip 174 a 43). `lazyConReintento` recarga una vez (como mucho cada 5 min) si tras
+    publicar una versión el chunk viejo ya no existe. `/assets/*` con `Cache-Control: immutable`.
+  - Desenfoque (#254, salió al revisar #249): **no escribir `-webkit-backdrop-filter` a mano**. lightningcss (el minificador de Vite) ya lo
+    añade, y si lo escribimos descarta la propiedad sin prefijo: Chrome y Firefox se quedaban sin desenfoque (y la cabecera sin ser el
+    bloque contenedor de la campana). Lo vigila `tests/test_frontend_backdrop_sin_prefijo.py`.
+  - Verificado en local: suite completa del backend (4229 pasan) sobre #253 y la del frontend en cada PR; cada arreglo de comportamiento
+    lleva su test de vitest. **Sin ver:** iOS/Safari, Android y tablet reales (todo es Chromium emulado con `hasTouch`), teclado virtual,
+    lector de pantalla, contraste AA medido con herramienta, el detector de `impeccable`, los pasos del asistente con eMuwarez y TMDb
+    respondiendo y con `mediainfo` (no está en la demo), una subida y un lote reales en marcha (se simularon).
 
 ## Siguiente
 
@@ -650,7 +682,7 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).
 - Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): P1 Panel, P4 detalle de subida, P5 asistente con Resumen,
   P2 Biblioteca, P3 Peticiones, P6 Configuración y P7 móvil (todos hechos; el 06/11 pasaron también por `frontend-design`, `impeccable` y
-  las guías de Vercel, ver «Hecho»). La tarjeta por fila en móvil para las listas largas llegó en #244. Las funciones que
+  las guías de Vercel, y por polish, adapt y optimize, ver «Hecho»). La tarjeta por fila en móvil para las listas largas llegó en #244. Las funciones que
   tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: le gusta el diseño original y solo quiere mejoras para ver mejor el contenido nuevo;
   esquinas redondeadas (la esquina cortada, demasiado contrastada, no); algo compacto pero solo un poco y sin regla fija
   (si dar aire mejora la lectura, se da; Tracearr era solo una inspiración); y pasar cada pantalla por la skill `frontend-design`.
@@ -666,6 +698,30 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
   que no se puede subir; en la Guía móvil, que la fila de secciones se desplace hasta la elegida.
 - Objetivos táctiles con `(any-pointer: coarse)` en vez de `(pointer: coarse)` para portátiles táctiles con ratón como puntero principal: es
   un cambio de toda la app (`--tap-min` en `globals.css` y sus usos), no de una pantalla (#242).
+- De polish + adapt + optimize (#249-#254), dudosos, los decide Gabriel:
+  - **Barra lateral plegada por defecto entre 769 y ~1100 px** (la señalaron cuatro de los cinco revisores): a 820 se lleva el 29 % del
+    ancho y la tabla de Biblioteca (988 px) vive en 530 con scroll. Plegada sin preferencia guardada (`emuwarez_uploadrr_sidebar_collapsed`
+    ya existe), con un chevrón visible en el logo. Cambia el marco de toda la app y lo que el usuario espera de su preferencia.
+  - `btn-sm` (36 px) y `btn` (40) con el dedo: subirlos a 44 de 769 px para arriba, o solo donde sobra sitio (Panel, Estadísticas,
+    acciones de fila de Biblioteca); hoy es una decisión para que las barras densas quepan a 390 px (`components.css`).
+  - Ritmo de espacios fuera de la escala de 4/8: 14 px en `.panel-atencion`, 22 en la leyenda de Estadísticas, 20 entre tarjetas de
+    Configuración frente a 16 en Tareas, 12 frente a 16 entre el Panel y Estadísticas.
+  - Panel: «Listo para subir» con una o dos peticiones deja ~400 px de carril vacío (encoger al contenido o una línea «Nada más listo»);
+    la burbuja del tour tapa el pie de un objetivo más alto que media ventana.
+  - Biblioteca: «Source» (ficha, asistente) frente a «Fuente» (tablas): elegir una; en móvil la lista es un scroll de 490 px dentro de una
+    página fija; en la ficha de una serie en móvil, «Temporadas» empieza tras ~1200 px de tarjetas; en pósters sin imagen, el título sale
+    dos veces con `hover: none`.
+  - Configuración: casillas nativas de 15 px frente a los interruptores; el orden de la rejilla cambia con el ancho y no coincide con el
+    índice; a 390 px «Backup» queda fuera de las pestañas; Diagnóstico y Backup sin icono en su cabecera; `DESIGN.md` dice que Login y el
+    asistente usan el azul plano y van con el degradado y el halo (se arregla en el documento); el asistente recargado en el paso 8 vuelve
+    al 7 (`handleProviders` no apunta `wizard_step`).
+  - Peticiones y Subidas: iconos rellenos de votos y comentarios frente a los de trazo; dos «Duración» distintas en una subida
+    interrumpida (la de la tabla va de `created_at` a `finished_at`); un error con el filtro de lote puesto no ofrece «Quitar filtro»; chips
+    de grupo en píldora (DESIGN dice 6 px); «Origen» con borde de botón en Subidas y enlace plano en Peticiones; «en cola» y «cancelada»
+    casi del mismo gris en el lote.
+  - Rendimiento: Inter variable o `preload` de las cuatro variantes (96 kB por carga); Logs pide 1000 líneas cada 3 s aunque entre una
+    (un `since` en el backend); precomprimir `/assets` en la imagen en vez de comprimir en cada petición; `JobRow` sin memorizar, así
+    que con progreso real la tabla de Subidas se repinta entera.
 - `nomenclature_check.check_item`/`count_pending` ya solo los llaman los tests (#240): borrarlos o volver a usarlos.
 - Recuperar solo el añadido a qBittorrent de una subida que ya estaba en eMuwarez (necesita un cambio en Uploadrr-EMU, otro repo).
 - Probar en el NAS (`:edge`): el límite compartido entre CLI y servidor (`flock` sobre el volumen de `CONFIG_DIR`), el campo y el enlace de

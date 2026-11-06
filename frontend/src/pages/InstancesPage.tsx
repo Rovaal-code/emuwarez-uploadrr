@@ -109,6 +109,8 @@ export function InstancesPage() {
   const [syncResults, setSyncResults] = useState<Record<number, Resultado>>({})
   const [aEliminar, setAEliminar] = useState<InstanceSafeResponse | null>(null)
   const botonAnadir = useRef<HTMLButtonElement>(null)
+  // El botón que abrió el alta (el de la cabecera o el del estado vacío): «Cancelar» devuelve ahí el foco.
+  const origenAlta = useRef<HTMLElement | null>(null)
 
   // Phase 11B — edit instance
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -153,17 +155,21 @@ export function InstancesPage() {
     requestAnimationFrame(() => document.querySelector<HTMLElement>(selector)?.focus())
   }
 
-  function abrirAlta() {
+  function abrirAlta(e?: React.MouseEvent<HTMLElement>) {
+    origenAlta.current = e?.currentTarget ?? null
     setShowAdd(true)
     enfocar('#inst-nueva select, #inst-nueva input')
   }
 
-  function cerrarAlta() {
+  // Al cancelar, el foco vuelve al botón que lo abrió si sigue ahí; tras crear (o sin él), al de la cabecera.
+  function cerrarAlta(creada = false) {
     setShowAdd(false)
     setAddError(null)
     setAddErrores({})
     setAddTestResult(null)
-    requestAnimationFrame(() => botonAnadir.current?.focus())
+    const origen = creada ? null : origenAlta.current
+    origenAlta.current = null
+    requestAnimationFrame(() => (origen?.isConnected ? origen : botonAnadir.current)?.focus())
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -180,7 +186,7 @@ export function InstancesPage() {
         is_anime: form.is_anime,
       })
       setForm(defaultForm())
-      cerrarAlta()
+      cerrarAlta(true)
       await load(true)
       void cargarSalud()
     } catch (err) {
@@ -391,7 +397,7 @@ export function InstancesPage() {
               <button type="button" className="btn btn-secondary btn-sm" onClick={handleAddTest} disabled={addTesting}>
                 {addTesting ? 'Probando…' : 'Probar conexión'}
               </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={cerrarAlta} disabled={adding}>Cancelar</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => cerrarAlta()} disabled={adding}>Cancelar</button>
               <ResultadoPrueba resultado={addTestResult} />
             </div>
           </form>

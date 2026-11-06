@@ -95,4 +95,17 @@ describe('Instancias', () => {
     expect(anadir.disabled).toBe(false)
     expect(document.activeElement).toBe(anadir)
   })
+
+  it('abierto desde el estado vacío, «Cancelar» devuelve el foco a ese botón y no al de la cabecera', async () => {
+    vi.mocked(getInstances).mockResolvedValue([])
+    await montar()
+    const delVacio = contenedor.querySelector<HTMLButtonElement>('.empty-state button, [class*="empty"] button')!
+    expect(delVacio.textContent).toBe('+ Añadir instancia')
+    await act(async () => { delVacio.focus() })
+    await pulsar(delVacio)
+    await fotograma()
+    await pulsar(boton('Cancelar'))
+    await fotograma()
+    expect(document.activeElement).toBe(delVacio)
+  })
 })

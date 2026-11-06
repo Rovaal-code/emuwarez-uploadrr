@@ -151,6 +151,15 @@ export function LogsPage() {
 
   const enfocable = activa !== null && claves.includes(activa) ? activa : claves[0]
 
+  // Si un refresco se lleva la línea que tenía el foco (deja de estar entre las más recientes), el foco cae al body:
+  // vuelve a la lista, a la línea que ahora entra con Tab, para que las flechas y C sigan funcionando.
+  const listaRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (activa === null || claves.includes(activa)) return
+    if (document.activeElement && document.activeElement !== document.body) return
+    listaRef.current?.querySelector<HTMLButtonElement>('.lg-linea__cuerpo[tabindex="0"]')?.focus()
+  }, [activa, claves])
+
   // Flechas, Inicio y Fin entre las líneas; C copia la enfocada.
   function alTeclearLista(e: React.KeyboardEvent<HTMLDivElement>) {
     const actual = (e.target as HTMLElement).closest<HTMLButtonElement>('.lg-linea__cuerpo')
@@ -250,7 +259,7 @@ export function LogsPage() {
             action={hayFiltros ? <button className="btn btn-secondary btn-sm" onClick={quitarFiltros}>Quitar filtros</button> : undefined}
           />
         ) : (
-          <div className="lg-lista" role="region" aria-label="Líneas del registro (flechas para moverse, C copia la línea)" tabIndex={0} onKeyDown={alTeclearLista}>
+          <div ref={listaRef} className="lg-lista" role="region" aria-label="Líneas del registro (flechas para moverse, C copia la línea)" tabIndex={0} onKeyDown={alTeclearLista}>
             {error && <div className="lg-aviso lg-aviso--error" role="alert">{error}: se enseña la última lectura.</div>}
             {filas.map(f => f.tipo === 'dia'
               ? <div key={`dia-${f.dia}`} className="lg-dia">{f.dia}</div>

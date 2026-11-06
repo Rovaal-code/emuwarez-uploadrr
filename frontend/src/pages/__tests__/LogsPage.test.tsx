@@ -80,6 +80,23 @@ describe('Logs', () => {
     expect(document.activeElement).toBe(lineas()[0])
   })
 
+  it('si un refresco se lleva la línea enfocada, el foco vuelve a la lista', async () => {
+    await montar()
+    await act(async () => { lineas()[2].focus() })
+    expect(document.activeElement).toBe(lineas()[2])
+    // Llega una línea nueva y la más vieja (la enfocada) sale de las que se enseñan.
+    vi.mocked(getLogs).mockResolvedValue({
+      items: [{ ts: 4, time: '2026-11-06 11:00:04', level: 'INFO', logger: 'app', message: 'cuarta' }, ...structuredClone(LINEAS).slice(0, 2)],
+      count: 3,
+    } as Awaited<ReturnType<typeof getLogs>>)
+    const refrescar = [...contenedor.querySelectorAll('button')].find(b => b.textContent === 'Refrescar')!
+    // Como el refresco automático: el foco sigue en la línea, que desaparece; sin el arreglo cae al body.
+    await act(async () => { refrescar.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await esperar()
+    expect(lineas().map(l => l.textContent).join(' ')).not.toContain('primera')
+    expect(contenedor.querySelector('.lg-lista')!.contains(document.activeElement)).toBe(true)
+  })
+
   it('la tecla C copia la línea enfocada', async () => {
     await montar()
     await act(async () => { lineas()[1].focus() })

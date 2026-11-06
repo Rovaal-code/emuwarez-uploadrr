@@ -80,7 +80,16 @@
 .sidebar.collapsed .sidebar-logo {
   padding: 0;
   justify-content: center;
+  gap: 2px;
 }
+
+/* El chevrón de «se abre» junto al logo plegado: pequeño y apagado, toma el color del texto al pasar. */
+.sidebar-expandir {
+  display: inline-flex;
+  margin-right: -14px; /* el logo sigue centrado en la barra de 64 px */
+  color: var(--text-muted);
+}
+.sidebar-logo:hover .sidebar-expandir { color: var(--text-secondary); }
 
 .sidebar-logo-text {
   font-size: 13px;

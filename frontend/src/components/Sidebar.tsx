@@ -4,7 +4,7 @@ import { ServiceIcon } from './ServiceIcon'
 import { useTooltip } from './Tooltip'
 import { SystemStatusPanel } from './SystemStatusPanel'
 import { CuentaDelCajon } from './CuentaDelCajon'
-import { IconoAyuda, IconoCerrar } from './Iconos'
+import { IconoAyuda, IconoCerrar, IconoDesplegar } from './Iconos'
 import type { CurrentUserResponse } from '../types/api'
 
 interface SidebarProps {
@@ -23,8 +23,28 @@ interface SidebarProps {
 
 const SIDEBAR_COLLAPSED_KEY = 'emuwarez_uploadrr_sidebar_collapsed'
 
-function loadCollapsed(): boolean {
-  try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true' } catch { return false }
+// Entre el cajón (≤768 px) y unos 1100 px, la barra abierta se comía casi un tercio del ancho (240 de 820): ahí arranca
+// plegada mientras el usuario no haya elegido. Lo que elija con el logo se guarda y manda en cualquier ancho.
+export const CONSULTA_PLEGADA = '(max-width: 1099px)'
+
+function loadCollapsed(): boolean | null {
+  try {
+    const guardado = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
+    return guardado === null ? null : guardado === 'true'
+  } catch { return null }
+}
+
+/** Si la ventana es de las que arrancan con la barra plegada; sigue los cambios de tamaño. */
+function useVentanaPlegada(): boolean {
+  const [plegada, setPlegada] = useState(() => window.matchMedia?.(CONSULTA_PLEGADA).matches ?? false)
+  useEffect(() => {
+    const consulta = window.matchMedia?.(CONSULTA_PLEGADA)
+    if (!consulta) return
+    const alCambiar = () => setPlegada(consulta.matches)
+    consulta.addEventListener('change', alCambiar)
+    return () => consulta.removeEventListener('change', alCambiar)
+  }, [])
+  return plegada
 }
 
 function NavIcon({ id }: { id: string }) {
@@ -126,7 +146,8 @@ function NavItemRow({ item, active, collapsed, onNavigate }: {
 
 export function Sidebar({ active, onNavigate, movil = false, abierta = false, onCerrar, onTour, user = null, onLogout }: SidebarProps) {
   const [collapsedGuardado, setCollapsed] = useState(loadCollapsed)
-  const collapsed = collapsedGuardado && !movil
+  const ventanaPlegada = useVentanaPlegada()
+  const collapsed = (collapsedGuardado ?? ventanaPlegada) && !movil
   const nav = useRef<HTMLElement>(null)
   const { triggerProps: logoTip, tooltipNode: logoTooltip } =
     useTooltip(movil ? null : collapsed ? 'Expandir menú' : 'Contraer menú')
@@ -137,11 +158,9 @@ export function Sidebar({ active, onNavigate, movil = false, abierta = false, on
   }, [abierta])
 
   function toggleCollapsed() {
-    setCollapsed(c => {
-      const next = !c
-      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next)) } catch { /* ignore */ }
-      return next
-    })
+    const next = !collapsed
+    try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next)) } catch { /* ignore */ }
+    setCollapsed(next)
   }
 
   return (
@@ -156,6 +175,8 @@ export function Sidebar({ active, onNavigate, movil = false, abierta = false, on
       >
         <ServiceIcon type="emu" size={28} />
         {!collapsed && <span className="sidebar-logo-text" translate="no">eMuwarez Uploadrr</span>}
+        {/* Plegada, el tooltip del logo no sale con el dedo: el chevrón dice que se puede abrir. */}
+        {collapsed && <span className="sidebar-expandir"><IconoDesplegar abierto={false} size={12} /></span>}
         {movil && <span className="sidebar-cerrar"><IconoCerrar size={18} /></span>}
         {logoTooltip}
       </button>

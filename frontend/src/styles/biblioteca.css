@@ -38,10 +38,15 @@
    tenían cuatro alturas distintas. Solo aquí: el .btn-sm de las demás pantallas no cambia. */
 .bib-pagina .filters-bar .btn,
 .bib-pagina .filters-bar .bib-vista { min-height: 36px; }
-/* Con el dedo los campos ya son más altos (16 px de letra): ahí no se tocan. */
+/* Con el dedo los campos ya son más altos (16 px de letra): toda la barra va a 40 px, el alto del buscador y del .btn-sm. */
 @media not (pointer: coarse) {
   .filters-bar .form-input.bib-buscar,
   .filters-bar .form-select.bib-orden { height: 36px; }
+}
+@media (pointer: coarse) {
+  .bib-pagina .filters-bar .btn,
+  .bib-pagina .filters-bar .bib-vista { min-height: 40px; }
+  .filters-bar .form-select.bib-orden { height: 40px; }
 }
 .filters-bar .form-select.bib-orden {
   width: max-content;

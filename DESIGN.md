@@ -126,8 +126,8 @@ Noche azulada con un acento cian eléctrico y una paleta de estados saturada que
 - **Cian de señal** (`signal-cyan`): foco (`--color-focus`), sección activa del menú, barras de progreso, el borde del botón
   principal y los puntos de «no leído». Es lo que brilla.
 - **Celeste de enlace** (`sky-link`): enlaces y acentos de texto dentro de la aplicación (`--text-accent` bajo `.hud-app`).
-- **Azur** (`azure`) y **Azul de acción** (`action-blue`): el relleno del botón principal (degradado cian→azur en el HUD; el
-  azul plano fuera de él, en Login y el asistente de primera configuración).
+- **Azur** (`azure`) y **Azul de acción** (`action-blue`): el relleno del botón principal (degradado cian→azur en el HUD, que
+  cubre toda la interfaz, también Login y el asistente de primera configuración; el azul plano solo queda fuera de `.hud-app`).
 
 ### Neutral
 - **Noche base** (`base-night`): fondo de la página, también `theme-color`.
@@ -172,11 +172,13 @@ tracking y el color hielo, no otra familia.
 
 ## Layout
 
-Barra lateral fija de 240 px (plegable) y barra superior de 56 px; el contenido va en `.page-container`, que es el único
-scroll de la página (alturas con `--vh100`, nunca `100vh`, porque la interfaz admite escala con `--ui-scale`). Escritorio
-manda: las pantallas se diseñan para 1280-1440 px y se adaptan hacia abajo. A ≤768 px la barra lateral pasa a cajón con
-hamburguesa y la cuenta baja a su pie; con puntero táctil los objetivos miden `--tap-min` (44 px compensados por la escala)
-y los campos 16 px. Las tablas anchas llevan su propio scroll horizontal; en móvil se quedan con las columnas esenciales.
+Barra lateral fija de 240 px (plegable a 64 px con el logo, que lleva un chevrón cuando está plegada) y barra superior de
+56 px; el contenido va en `.page-container`, que es el único scroll de la página (alturas con `--vh100`, nunca `100vh`,
+porque la interfaz admite escala con `--ui-scale`). Escritorio manda: las pantallas se diseñan para 1280-1440 px y se
+adaptan hacia abajo. Entre 769 y 1099 px (tableta) la barra arranca plegada mientras el usuario no haya elegido; lo que
+elija se guarda y manda en cualquier ancho. A ≤768 px pasa a cajón con hamburguesa y la cuenta baja a su pie. Con puntero
+táctil los objetivos miden `--tap-min` (44 px compensados por la escala), `.btn` 44 px, `.btn-sm` 40 px y los campos 16 px
+de letra. La disposición que depende del sitio de una sección (Panel, listas, ficha) usa `@container`, no `@media`. Las tablas anchas llevan su propio scroll horizontal; en móvil se quedan con las columnas esenciales.
 Ritmo de espacios en múltiplos de 4 (4, 8, 12, 16, 24 px).
 
 ## Elevation & Depth
@@ -207,7 +209,8 @@ lateral) no llevan esquinas. Bordes de 1 px; el acento lateral de 2 px solo en l
 ## Components
 
 ### Buttons
-- **Shape:** 6 px (`--radius-button`), 7×14 px de relleno, 13 px; `.btn-sm` 4×10 px y 12 px; `.btn-icon` 32 px.
+- **Shape:** 6 px (`--radius-button`), 7×14 px de relleno, 13 px; `.btn-sm` 4×10 px y 12 px; `.btn-icon` 32 px. Con el dedo,
+  alto mínimo de 44 px (`.btn`) y 40 px (`.btn-sm`); solo crece el alto, el ancho no cambia.
 - **Primary:** degradado cian→azur translúcido con borde cian y halo de señal; un solo botón principal por vista o diálogo.
 - **Secondary:** vidrio oscuro con borde azul al 50 %; al pasar, borde cian y halo suave.
 - **Ghost:** sin borde, texto hielo; al pasar toma el fondo del secundario.
@@ -245,7 +248,7 @@ lateral) no llevan esquinas. Bordes de 1 px; el acento lateral de 2 px solo en l
 - **Do** reservar el cian para lo vivo y lo accionable (La regla de la única señal).
 - **Do** dar a cada color de estado su texto.
 - **Do** usar `components/Modal.tsx` para todo diálogo, con fondo opaco.
-- **Do** diseñar para 1280-1440 px y comprobar 390 px; en táctil, objetivos de `--tap-min`.
+- **Do** diseñar para 1280-1440 px y comprobar 820 px táctil y 390 px; en táctil, objetivos de `--tap-min`.
 
 ### Don't:
 - **Don't** cambiar de tipografía ni añadir una de display: Inter se queda.
@@ -253,3 +256,5 @@ lateral) no llevan esquinas. Bordes de 1 px; el acento lateral de 2 px solo en l
 - **Don't** usar esquinas cortadas o rectas en tarjetas y controles.
 - **Don't** añadir brillo a títulos, cifras o decoración estática.
 - **Don't** usar `window.confirm`, `100vh` ni nada que dependa solo del hover.
+- **Don't** escribir `-webkit-backdrop-filter` a mano: el minificador ya lo añade, y si está escrito descarta la propiedad sin
+  prefijo (Chrome y Firefox se quedan sin desenfoque). Lo vigila `tests/test_frontend_backdrop_sin_prefijo.py`.

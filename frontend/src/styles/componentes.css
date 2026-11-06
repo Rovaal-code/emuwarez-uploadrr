@@ -49,7 +49,7 @@
   flex-shrink: 0;
   max-width: 100%;
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   overflow: hidden;
 }
 .detcard-poster-img { width: 100%; height: 100%; object-fit: cover; }
@@ -185,6 +185,8 @@
   margin-bottom: 10px;
 }
 .bibdet-volver { display: flex; gap: 8px; flex-wrap: wrap; }
+/* El texto del primer botón (sin borde ni fondo en reposo) se alinea con el recuadro del título, no su relleno. */
+.bibdet-volver > .btn.btn-ghost:first-child { margin-left: -11px; }
 .bibdet-acciones { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
 .bibdet-titulo {
   display: flex;
@@ -194,13 +196,37 @@
   flex-wrap: wrap;
   margin-bottom: 18px;
 }
-.bibdet-ficha { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.bibdet-ficha { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; container: bibdet-ficha / inline-size; }
 .bibdet-ficha.bibdet-ficha-plegada { display: none; }
-.bibdet-tarjetas { flex: 1; min-width: 300px; }
+/* Las columnas se eligen por el ancho que les queda a las tarjetas (ventana menos barra lateral, relleno y póster),
+   no por el de la ventana: a 1024 px con la barra abierta, tres columnas medían 130 px y cortaban los valores. Por
+   debajo de 440 px de sitio las tarjetas bajan bajo el póster en vez de apretarse a su lado. */
+.bibdet-tarjetas { flex: 1; min-width: 440px; container: bibdet-tarjetas / inline-size; }
 .bibdet-rejilla { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; min-height: var(--alto-ficha, 0); }
-/* Con poco ancho las tres tarjetas no caben en fila: de dos en dos y, en un móvil, una debajo de otra con el póster más chico. */
-@media (max-width: 1000px) {
+@container bibdet-tarjetas (max-width: 679px) {
   .bibdet-rejilla { grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 0; }
+}
+@container bibdet-tarjetas (max-width: 439px) {
+  .bibdet-rejilla { grid-template-columns: minmax(0, 1fr); }
+}
+/* Una tarjeta estrecha pasa el valor bajo su etiqueta en vez de cortarlo («06/11/…»). */
+.bibdet-rejilla .detcard-fila { flex-wrap: wrap; row-gap: 4px; }
+.bibdet-rejilla .detcard-fila-valor { margin-left: auto; }
+/* Con sitio para las tres columnas (984 px o más, lo que deja ≥ 680 a las tarjetas), el póster acaba a la altura
+   de las tarjetas: su alto fijo se quedaba unos píxeles corto cuando una tarjeta crecía. Por debajo, más estrecho,
+   para dejar sitio a dos columnas de tarjetas, y con su proporción (al lado de dos filas de tarjetas no se estira).
+   El alto llega en línea (DetailPoster): de ahí el !important. */
+@container bibdet-ficha (min-width: 984px) {
+  .bibdet-ficha .detail-poster.detcard-poster {
+    align-self: stretch;
+    width: calc(var(--alto-ficha) * 2 / 3);
+    height: auto !important;
+    min-height: var(--alto-ficha);
+    aspect-ratio: auto;
+  }
+}
+@container bibdet-ficha (max-width: 983px) {
+  .bibdet-ficha .detail-poster.detcard-poster { width: 200px; height: auto !important; }
 }
 @media (max-width: 640px) {
   .bibdet-rejilla { grid-template-columns: minmax(0, 1fr); }
@@ -366,7 +392,8 @@
 .delsub-botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
 /* LibraryChildrenSection */
-/* Con la ficha desplegada queda poco alto: la tabla no baja de 320 px y es la página la que se desplaza. */
+/* Con la ficha desplegada queda poco alto: la tabla no baja de 320 px y es la página la que se desplaza. La caja
+   se ajusta a sus filas (con pocas quedaba un hueco vacío dentro del recuadro) y, con muchas, se desplaza dentro. */
 .hijos-seccion { margin-top: 22px; flex: 1; min-height: 320px; display: flex; flex-direction: column; }
 .hijos-titulo {
   margin-bottom: 10px;
@@ -379,14 +406,14 @@
 .hijos-cuenta {
   font-variant-numeric: tabular-nums;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-badge);
   font-size: 12px;
   line-height: 20px;
   color: var(--text-secondary);
   background: color-mix(in srgb, var(--overlay-light) 8%, transparent);
 }
 .hijos-aviso { font-size: 12px; color: var(--text-muted); }
-.activity-section.hijos-caja { margin-bottom: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.activity-section.hijos-caja { margin-bottom: 0; flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .hijos-scroll { overscroll-behavior: contain; overflow: auto; flex: 1; min-height: 0; }
 .data-table th.hijos-col-titulo { width: 100%; }
 

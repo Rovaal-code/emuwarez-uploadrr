@@ -769,8 +769,8 @@ describe('«Subir seleccionadas» en «Listo para subir»', () => {
     expect(peticionesLote()).toEqual(['Petición #77', 'Petición #78'])
 
     await pulsar(boton('Continuar (3)'))
-    await esperar(() => boton('Subir 3') && !boton('Subir 3')!.disabled)
-    await pulsar(boton('Subir 3'))
+    await esperar(() => boton('Subir (3)') && !boton('Subir (3)')!.disabled)
+    await pulsar(boton('Subir (3)'))
     await esperar(() => texto().includes('3 de 3 encoladas'))
     expect(vi.mocked(queueLote).mock.calls[0][0].map(e => [e.item_id, e.request_item_id])).toEqual([
       [55, 77], [66, 78], [20, undefined],
@@ -805,8 +805,8 @@ describe('«Subir seleccionadas» en «Listo para subir»', () => {
     await elegir(select, '81')
 
     await pulsar(boton('Continuar (3)'))
-    await esperar(() => boton('Subir 3') && !boton('Subir 3')!.disabled)
-    await pulsar(boton('Subir 3'))
+    await esperar(() => boton('Subir (3)') && !boton('Subir (3)')!.disabled)
+    await pulsar(boton('Subir (3)'))
     await esperar(() => texto().includes('3 de 3 encoladas'))
     expect(vi.mocked(queueLote).mock.calls[0][0].map(e => [e.item_id, e.request_item_id])).toEqual([
       [51, 90], [55, 90], [77, 81],

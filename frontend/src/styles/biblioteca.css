@@ -180,6 +180,8 @@
 }
 
 /* Tarjeta de póster */
+.bib-tarjeta:hover,
+.clickable.poster-grande-tarjeta:hover { border-color: color-mix(in srgb, var(--text-accent) 55%, transparent); }
 .bib-tarjeta {
   display: flex;
   flex-direction: column;
@@ -212,10 +214,73 @@
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  padding: 10px;
   font-size: 36px;
-  opacity: 0.35;
+  color: var(--text-muted);
+}
+.bib-tarjeta-sin-nombre {
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+/* El botón que abre la ficha cubre la tarjeta; fuera del layout, como la imagen (el alto lo fija solo aspect-ratio). */
+.bib-tarjeta-abrir {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bib-tarjeta-abrir:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -3px;
+  border-radius: inherit;
+}
+.bib-tarjeta-pie {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 26px 8px 7px;
+  background: linear-gradient(to top, color-mix(in srgb, var(--overlay-dark) 88%, transparent) 20%, transparent);
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.bib-tarjeta:hover .bib-tarjeta-pie,
+.bib-tarjeta-abrir:focus-visible .bib-tarjeta-pie { opacity: 1; }
+/* Sin ratón no hay hover: el nombre se queda a la vista. */
+@media (hover: none) { .bib-tarjeta-pie { opacity: 1; } }
+.bib-tarjeta-titulo {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-on-color);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.bib-tarjeta-anio {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--overlay-light) 75%, transparent);
 }
 .bib-tarjeta-estado {
   position: absolute;

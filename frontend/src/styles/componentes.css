@@ -269,9 +269,25 @@
   align-items: center;
   justify-content: center;
   font-size: 64px;
-  opacity: 0.35;
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 .poster-grande-estado { position: absolute; top: 10px; right: 10px; }
+/* El botón que abre la ficha cubre el póster (fuera del layout, como la imagen). */
+.poster-grande-abrir {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+.poster-grande-abrir:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -3px;
+  border-radius: inherit;
+}
+.poster-grande-pie { pointer-events: none; }
 .poster-grande-pie {
   position: absolute;
   bottom: 0;

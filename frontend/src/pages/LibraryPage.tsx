@@ -21,6 +21,7 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { HeaderSort } from '../components/HeaderSort'
 import { FilasVirtuales, RejillaVirtual } from '../components/FilasVirtuales'
 import { posterUrl } from '../utils/libraryItem'
+import { formatItemType } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { hayAlgunFiltro, necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
 import { hayMasQueCargar, textoDeResultados, unirPagina } from '../utils/paginacionBiblioteca'
@@ -74,6 +75,9 @@ const LIST_ROW_HEIGHT = 77
 const LIST_COLUMNS = 12
 const claveDeItem = (it: LibraryItemResponse) => it.id
 
+// Lo que dice el lector de pantalla de una tarjeta: «Título (año)».
+const tituloDeTarjeta = (it: LibraryItemResponse) => (it.year ? `${it.title} (${it.year})` : it.title)
+
 // Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
 // new function identity every render, defeating memo — so this takes a
 // stable onSelect (openDetail, itself wrapping setSelected) and calls it with `item` internally.
@@ -87,28 +91,39 @@ const PosterCard = memo(function PosterCard({ item, onSelect, priority, seleccio
   loteLleno?: boolean
   onToggle?: (item: LibraryItemResponse) => void
 }) {
+  const nombre = tituloDeTarjeta(item)
   return (
     <div
       className={seleccionado ? 'clickable bib-tarjeta lote-marcada' : 'clickable bib-tarjeta'}
       onClick={() => onSelect(item)}
     >
       <div className="bib-tarjeta-marco">
-        {onToggle && seleccionableEnLote(item) && (
-          <CasillaLote item={item} seleccionado={seleccionado} bloqueada={loteLleno} onAlternar={onToggle} className="lote-casilla-poster" />
-        )}
         {item.poster_url ? (
           <img
             src={posterUrl(item.poster_url, 'w342')}
-            alt={item.title}
+            alt=""
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
             className="bib-tarjeta-img"
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
+          // Sin póster la tarjeta diría solo «un icono»: el nombre sale siempre.
           <div className="bib-tarjeta-sin-img">
             <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
+            <span className="bib-tarjeta-sin-nombre">{item.title}</span>
           </div>
+        )}
+        {/* El botón de verdad es el que abre la ficha: con teclado se llega a él y el lector dice qué es. El nombre
+            sale al pasar el ratón o al enfocar (y siempre en una pantalla táctil). */}
+        <button type="button" className="bib-tarjeta-abrir" aria-label={`Abrir la ficha de ${nombre}`}>
+          <span className="bib-tarjeta-pie">
+            <span className="bib-tarjeta-titulo">{item.title}</span>
+            <span className="bib-tarjeta-anio">{[formatItemType(item.item_type), item.year].filter(Boolean).join(' · ')}</span>
+          </span>
+        </button>
+        {onToggle && seleccionableEnLote(item) && (
+          <CasillaLote item={item} seleccionado={seleccionado} bloqueada={loteLleno} onAlternar={onToggle} className="lote-casilla-poster" />
         )}
         <div className="bib-tarjeta-estado">
           <PosterStatusIcon status={item.local_status} />

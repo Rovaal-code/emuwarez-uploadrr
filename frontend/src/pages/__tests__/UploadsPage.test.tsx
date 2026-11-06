@@ -342,6 +342,17 @@ describe('las acciones de la lista que fallan', () => {
     await esperar(() => aviso())
     expect(aviso()!.textContent).toContain('No se pudo cancelar «Viva»: El trabajo ya terminó')
   })
+
+  it('si fallan un reintento y luego una cancelación, enseña el fallo más reciente', async () => {
+    vi.mocked(retryUploadJobQueued).mockRejectedValue(new Error('Ya hay una subida activa para este elemento'))
+    vi.mocked(cancelUploadJob).mockRejectedValue(new Error('El trabajo ya terminó'))
+    await pagina()
+    await pulsar(filaDe('Rota').querySelector('button[aria-label="Reintentar"]')!)
+    await esperar(() => aviso())
+    await pulsar(filaDe('Viva').querySelector('button[aria-label="Cancelar"]')!)
+    await esperar(() => aviso()?.textContent?.includes('No se pudo cancelar') ?? false)
+    expect(aviso()!.textContent).not.toContain('Ya hay una subida activa')
+  })
 })
 
 describe('las columnas', () => {

@@ -667,7 +667,7 @@ input.sub-confirmar.sub-confirmar-ok:not([type="checkbox"]):not([type="radio"]):
     height: var(--tap-min);
   }
 
-  .sub-tarjeta .sub-accion-borrar,
+  /* Borrar se queda: una completada no se puede borrar desde el detalle. */
   .sub-tarjeta .sub-accion-primaria {
     display: none;
   }

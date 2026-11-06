@@ -583,7 +583,9 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }
   const doCancel = async (jobId: number) => {
     setConfirmCancel(null)
+    // Solo se enseña el fallo de la acción más reciente.
     setCancelError(null)
+    setRetryError(null)
     const titulo = jobs.find(j => j.id === jobId)?.title
     try {
       await cancelUploadJob(jobId)
@@ -601,6 +603,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // un fallo silencioso aquí parecía un botón que no hacía nada.
   const handleRetryQueued = async (job: UploadJob, desdeElPrincipio = false) => {
     setRetryError(null)
+    setCancelError(null)
     try {
       const r = await retryUploadJobQueued(job.id!, desdeElPrincipio)
       await load()

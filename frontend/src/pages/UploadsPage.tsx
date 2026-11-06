@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, Fragment, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { getUploads, countUploads, getUploadJob, startUploadJob, retryUploadJobQueued, cancelUploadJob, getLote } from '../api/uploads'
 import { useInstancias } from '../hooks/useInstancias'
 import { ApiClientError } from '../api/client'
@@ -31,6 +31,8 @@ import { useAlSalir, useSeccionVisible } from '../context/SeccionVisible'
 import { IconoDesplegar, IconoSubida, IconoTipo } from '../components/Iconos'
 import { Modal } from '../components/Modal'
 import { BannerLote } from '../components/BannerLote'
+import { FilasVirtuales } from '../components/FilasVirtuales'
+import { UMBRAL_VIRTUAL } from '../utils/ventana'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -54,6 +56,9 @@ const DELETABLE_STATUSES = new Set(['failed', 'cancelled', 'completed'])
 const CONFIRMATION_TOKEN = 'INICIAR_UPLOADRR'
 // Las columnas de la tabla (para las filas que ocupan el ancho entero).
 const COLUMNAS = 9
+// Lo que mide una fila antes de pintarla (FilasVirtuales la corrige con la primera que mide de verdad).
+const ALTO_FILA = 65
+const claveDeSubida = (job: UploadJob) => job.id!
 
 // Only real upload states — a job now only exists once the user uploads, so
 // the preparatory "ready"/"blocked" states no longer appear here. 'preparing'
@@ -697,6 +702,31 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     ? { ...selectedJob, display_title: selectedTitle.display_title }
     : selectedJob
 
+  // La fila del último intento de una cadena y, si está desplegada, sus intentos anteriores.
+  const pintarCadena = (job: UploadJob) => {
+    const ancestors = ancestorsOf(job)
+    const expanded = expandedChains.has(job.id!)
+    return [
+      <JobRow
+        key={job.id}
+        job={job}
+        instances={instances}
+        seeding={seeding}
+        onOpen={() => openUpload(job.id!)}
+        retryToggle={ancestors.length > 0 ? { count: ancestors.length, expanded, onClick: () => toggleChain(job.id!) } : undefined}
+        onCancel={handleCancel}
+        onDelete={setDeleteJob}
+        onRetry={handleRetryQueued}
+        onFiltrarLote={setLoteFiltro}
+      />,
+      ...(expanded ? ancestors.map(a => (
+        <JobRow key={a.id} job={a} instances={instances} seeding={seeding} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} onDelete={setDeleteJob} />
+      )) : []),
+    ]
+  }
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const theadRef = useRef<HTMLTableSectionElement>(null)
+
   const modals = (
     <>
       {confirmCancel && (
@@ -823,9 +853,9 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRetryError(null); setCancelError(null) }}>Cerrar</button>
             </div>
           )}
-          <div className="sub-scroll">
+          <div className="sub-scroll" ref={scrollRef}>
             <table className="data-table">
-              <thead>
+              <thead ref={theadRef}>
                 <tr>
                   <th className="sub-th-titulo">Título</th>
                   <th className="sub-sec"><HeaderFilter label="Tipo" value={typeFilter} onChange={setTypeFilter} options={[
@@ -867,30 +897,21 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   }
                 />
               )}
-              <tbody>
-                {visibleJobs.map(job => {
-                  const ancestors = ancestorsOf(job)
-                  const expanded = expandedChains.has(job.id!)
-                  return (
-                    <Fragment key={job.id}>
-                      <JobRow
-                        job={job}
-                        instances={instances}
-                        seeding={seeding}
-                        onOpen={() => openUpload(job.id!)}
-                        retryToggle={ancestors.length > 0 ? { count: ancestors.length, expanded, onClick: () => toggleChain(job.id!) } : undefined}
-                        onCancel={handleCancel}
-                        onDelete={setDeleteJob}
-                        onRetry={handleRetryQueued}
-                        onFiltrarLote={setLoteFiltro}
-                      />
-                      {expanded && ancestors.map(a => (
-                        <JobRow key={a.id} job={a} instances={instances} seeding={seeding} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} onDelete={setDeleteJob} />
-                      ))}
-                    </Fragment>
-                  )
-                })}
-              </tbody>
+              {/* Pasadas las UMBRAL_VIRTUAL subidas solo se pintan las que se ven: cada elemento es la fila del último
+                  intento con sus intentos anteriores desplegados, en su propio <tbody>. */}
+              {visibleJobs.length > UMBRAL_VIRTUAL ? (
+                <FilasVirtuales
+                  items={visibleJobs}
+                  clave={claveDeSubida}
+                  alturaEstimada={ALTO_FILA}
+                  columnas={COLUMNAS}
+                  contenedor={scrollRef}
+                  cabecera={theadRef}
+                  pintar={pintarCadena}
+                />
+              ) : (
+                <tbody>{visibleJobs.flatMap(j => pintarCadena(j))}</tbody>
+              )}
             </table>
           </div>
           {hayMas && (

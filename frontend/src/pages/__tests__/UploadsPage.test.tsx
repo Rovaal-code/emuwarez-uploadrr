@@ -370,6 +370,35 @@ describe('las columnas', () => {
   })
 })
 
+describe('lista virtualizada pasadas las 50', () => {
+  const muchas = (n: number) => Array.from({ length: n }, (_, i) =>
+    trabajo({ id: 1000 + i, title: `Subida ${i}`, media_type: 'movie', created_at: `2026-11-04T10:${String(i % 60).padStart(2, '0')}:00` }))
+  const pintadas = () => document.querySelectorAll('tbody tr.sub-tarjeta').length
+
+  it('con 50 o menos se pinta entera', async () => {
+    vi.mocked(getUploads).mockResolvedValue(muchas(50))
+    vi.mocked(countUploads).mockResolvedValue(50)
+    await pagina()
+    expect(pintadas()).toBe(50)
+    expect(document.querySelector('tr.fila-hueco')).toBeNull()
+  })
+
+  it('con más de 50 solo pinta lo que se ve, y cada subida con sus intentos anteriores en su bloque', async () => {
+    const lista = muchas(80)
+    lista[0] = trabajo({ ...lista[0], status: 'failed', retry_of_job_id: 999, retry_count: 1, created_at: '2026-11-05T10:00:00' })
+    lista.push(trabajo({ id: 999, status: 'failed', title: 'Subida 0', media_type: 'movie', created_at: '2026-11-01T10:00:00' }))
+    vi.mocked(getUploads).mockResolvedValue(lista)
+    vi.mocked(countUploads).mockResolvedValue(81)
+    await pagina()
+    expect(pintadas()).toBeGreaterThan(0)
+    expect(pintadas()).toBeLessThan(30)
+    expect(document.querySelector('tr.fila-hueco')).not.toBeNull()
+    await pulsar(document.querySelector('.sub-toggle-reintentos')!)
+    const bloque = document.querySelector('tr.sub-fila-antigua')!.closest('tbody')!
+    expect([...bloque.querySelectorAll('tr')].map(tr => tr.classList.contains('sub-fila-antigua'))).toEqual([false, true])
+  })
+})
+
 describe('«Ver el lote» desde el detalle de una subida', () => {
   it('cierra el detalle y filtra la tabla por su lote', async () => {
     vi.mocked(getUploadJob).mockResolvedValue({ ...TANDA, display_title: 'Serie (2024) - S01E01' })

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { getRequests, getRequestDetail } from '../api/requests'
 import { getCandidates, getReadiness } from '../api/requestReadiness'
 import type {
@@ -35,7 +35,12 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { HeaderSort } from '../components/HeaderSort'
 import { formatBytes, timeAgo, formatDate, formatNumero } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { agruparPeticiones, requestDisplayTitle, motivoDeLaPreparacion, grupoDePeticion, GRUPOS_PETICION, type GrupoPeticion } from '../utils/peticiones'
+import {
+  agruparPeticiones, requestDisplayTitle, motivoDeLaPreparacion, grupoDePeticion, GRUPOS_PETICION, type GrupoPeticion,
+  claveDeElemento, claveDeGrupo, elementosDeLista, type ElementoDeLista,
+} from '../utils/peticiones'
+import { FilasVirtuales } from '../components/FilasVirtuales'
+import { UMBRAL_VIRTUAL } from '../utils/ventana'
 import { FichaPoster } from '../components/FichaPoster'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
@@ -623,6 +628,10 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
 }
 
 const CLAVE_GRUPOS_PLEGADOS = 'emuwarez_pet_grupos_plegados'
+// Lo que mide una fila antes de pintarla (FilasVirtuales la corrige con la primera que mide de verdad).
+const ALTO_FILA = 63
+// Las claves de las cabeceras de grupo, que se pintan siempre (ver elementosDeLista).
+const CABECERAS_FIJAS: ReadonlySet<number> = new Set(GRUPOS_PETICION.map(g => claveDeGrupo(g.id)))
 const PAGE_SIZE = 2000  // show everything in one scrollable container (like Biblioteca)
 const NINGUNO: string[] = []
 
@@ -714,10 +723,16 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     setPlegados(sig)
     try { localStorage.setItem(CLAVE_GRUPOS_PLEGADOS, JSON.stringify([...sig])) } catch { /* ignore */ }
   }
-  // «Ir a»: despliega el grupo y lleva la vista a su cabecera.
+  // «Ir a»: despliega el grupo y lleva la vista a su cabecera. Con la lista virtualizada la cabecera siempre está en
+  // el DOM (es fija), pero lo de encima se pintó con alturas estimadas: al medirse las filas que aparecen, la
+  // cabecera puede moverse unos píxeles, así que se vuelve a llevar a su sitio dos fotogramas después.
   const irAlGrupo = (id: GrupoPeticion) => {
     alternarGrupo(id, false)
-    requestAnimationFrame(() => document.getElementById(`pet-grupo-${id}`)?.scrollIntoView?.({ block: 'start' }))
+    const llevar = () => document.getElementById(`pet-grupo-${id}`)?.scrollIntoView?.({ block: 'start' })
+    requestAnimationFrame(() => {
+      llevar()
+      requestAnimationFrame(() => requestAnimationFrame(llevar))
+    })
   }
   const votesHeaderTip = useTooltip('Votos (otros usuarios que la quieren)')
   const commentsHeaderTip = useTooltip('Comentarios')
@@ -981,7 +996,16 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
   const displayItems = items
   const agrupada = sortBy === ORDEN_POR_GRUPOS
-  const gruposVisibles = agrupada ? agruparPeticiones(displayItems) : []
+  // Memorizados: FilasVirtuales reajusta las columnas cuando cambia la lista, y una lista nueva en cada pintado lo
+  // haría siempre.
+  const gruposVisibles = useMemo(() => (agrupada ? agruparPeticiones(displayItems) : []), [agrupada, displayItems])
+  // Pasadas las UMBRAL_VIRTUAL peticiones solo se pintan las que se ven (FilasVirtuales).
+  const virtual = displayItems.length > UMBRAL_VIRTUAL
+  const elementos = useMemo<ElementoDeLista<RequestItemResponse>[]>(() => (
+    agrupada ? elementosDeLista(gruposVisibles, plegados) : displayItems.map(item => ({ tipo: 'peticion' as const, item }))
+  ), [agrupada, gruposVisibles, plegados, displayItems])
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const theadRef = useRef<HTMLTableSectionElement>(null)
   // Las peticiones reales no traen votos ni comentarios: sin dato, sin columna.
   const hayVotos = displayItems.some(i => i.votes != null)
   const hayComentarios = displayItems.some(i => i.comments != null)
@@ -1041,6 +1065,23 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       <CreatedAtCell createdAt={item.created_at} />
     </tr>
   )
+
+  const cabeceraDeGrupo = (g: { id: GrupoPeticion; titulo: string; ayuda: string; items: RequestItemResponse[] }) => {
+    const plegado = plegados.has(g.id)
+    return (
+      <tr className={`pet-grupo-cab pet-bloque-${g.id}`} id={`pet-grupo-${g.id}`}>
+        <th scope="rowgroup" colSpan={columnas} className="pet-grupo-th">
+          <button type="button" className="pet-grupo-boton" aria-expanded={!plegado} onClick={() => alternarGrupo(g.id)}>
+            <IconoDesplegar abierto={!plegado} size={12} />
+            <span className="pet-grupo-titulo">{g.titulo}</span>
+            <span className="pet-grupo-n">{g.items.length}</span>
+            <span className="pet-grupo-ayuda">{g.ayuda}</span>
+          </button>
+        </th>
+      </tr>
+    )
+  }
+  const pintarElemento = (e: ElementoDeLista<RequestItemResponse>) => (e.tipo === 'grupo' ? cabeceraDeGrupo(e.grupo) : fila(e.item))
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
@@ -1141,9 +1182,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         )}
 
           <div className="activity-section pet-seccion">
-            <div className="pet-scroll">
+            <div className="pet-scroll" ref={scrollRef}>
               <table className="data-table pet-tabla">
-                <thead>
+                <thead ref={theadRef}>
                   <tr>
                     <th>Título</th>
                     <th className="pet-tipo"><HeaderFilter label="Tipo" value={categoryFilter} onChange={setCategoryFilter} options={[
@@ -1182,24 +1223,23 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     action={<button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>}
                   />
                 )}
-                {agrupada ? gruposVisibles.map(g => {
-                  const plegado = plegados.has(g.id)
-                  return (
-                    <tbody key={g.id} className={`pet-bloque pet-bloque-${g.id}`}>
-                      <tr className="pet-grupo-cab" id={`pet-grupo-${g.id}`}>
-                        <th scope="rowgroup" colSpan={columnas} className="pet-grupo-th">
-                          <button type="button" className="pet-grupo-boton" aria-expanded={!plegado} onClick={() => alternarGrupo(g.id)}>
-                            <IconoDesplegar abierto={!plegado} size={12} />
-                            <span className="pet-grupo-titulo">{g.titulo}</span>
-                            <span className="pet-grupo-n">{g.items.length}</span>
-                            <span className="pet-grupo-ayuda">{g.ayuda}</span>
-                          </button>
-                        </th>
-                      </tr>
-                      {!plegado && g.items.map(fila)}
-                    </tbody>
-                  )
-                }) : (
+                {virtual ? (
+                  <FilasVirtuales
+                    items={elementos}
+                    clave={claveDeElemento}
+                    alturaEstimada={ALTO_FILA}
+                    columnas={columnas}
+                    contenedor={scrollRef}
+                    cabecera={theadRef}
+                    fijas={CABECERAS_FIJAS}
+                    pintar={pintarElemento}
+                  />
+                ) : agrupada ? gruposVisibles.map(g => (
+                  <tbody key={g.id} className={`pet-bloque pet-bloque-${g.id}`}>
+                    {cabeceraDeGrupo(g)}
+                    {!plegados.has(g.id) && g.items.map(fila)}
+                  </tbody>
+                )) : (
                   <tbody>
                     {displayItems.map(fila)}
                   </tbody>

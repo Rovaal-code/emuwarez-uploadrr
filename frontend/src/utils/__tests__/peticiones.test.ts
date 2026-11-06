@@ -2,7 +2,7 @@
 // Grupos de Peticiones: a cuál va cada estado y el orden por recompensa.
 import { describe, expect, it } from 'vitest'
 import {
-  agruparPeticiones, grupoDePeticion, motivoDeLaPreparacion, type GrupoPeticion,
+  agruparPeticiones, claveDeElemento, elementosDeLista, grupoDePeticion, motivoDeLaPreparacion, type GrupoPeticion,
 } from '../peticiones'
 
 const p = (id: number, readiness: string | null, extra: Record<string, unknown> = {}) => ({
@@ -73,5 +73,24 @@ describe('motivoDeLaPreparacion', () => {
     for (const s of ['ready_to_upload', 'no_local_match', 'claimed', 'filled', 'uploaded', null, undefined]) {
       expect(motivoDeLaPreparacion({ readiness_status: s as string | null })).toBeNull()
     }
+  })
+})
+
+describe('elementosDeLista (la lista virtualizada)', () => {
+  const grupos = agruparPeticiones([
+    p(1, 'ready_to_upload', { points: 50 }), p(2, 'no_local_match'), p(3, 'ready_to_upload', { points: 10 }), p(4, 'filled'),
+  ])
+
+  it('cada cabecera de grupo va delante de sus peticiones, y uno plegado se queda en la cabecera', () => {
+    const resumen = (plegados: GrupoPeticion[]) => elementosDeLista(grupos, new Set(plegados))
+      .map(e => (e.tipo === 'grupo' ? `[${e.grupo.id}]` : e.item.id))
+    expect(resumen([])).toEqual(['[lista]', 1, 3, '[sin_copia]', 2, '[cerrada]', 4])
+    expect(resumen(['lista', 'cerrada'])).toEqual(['[lista]', '[sin_copia]', 2, '[cerrada]'])
+  })
+
+  it('las cabeceras llevan claves negativas, distintas entre sí y de cualquier id', () => {
+    const claves = elementosDeLista(grupos, new Set()).map(claveDeElemento)
+    expect(new Set(claves).size).toBe(claves.length)
+    expect(claves.filter(k => k < 0)).toHaveLength(3)
   })
 })

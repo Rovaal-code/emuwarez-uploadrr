@@ -223,9 +223,9 @@
 }
 
 .sub-poster {
-  width: 36px;
-  height: 54px;
-  border-radius: 5px;
+  width: 28px;
+  height: 42px;
+  border-radius: 4px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -256,6 +256,53 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+/* Por debajo de 1400 px el título baja a dos líneas en vez de cortarse en una: a 1280 se quedaba en «El orfana…». */
+.ui-estrecha .sub-titulo {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.ui-estrecha .sub-titulo-texto {
+  align-items: center;
+}
+
+/* Lo vivo lleva el cian, en la lista y en el detalle de una subida. */
+.sub-en-vivo {
+  font-size: 11px;
+  color: var(--text-accent);
+}
+
+/* Reintentar o cancelar desde la lista no salió: se dice encima de la tabla hasta que se cierra o se vuelve a probar. */
+.sub-error-accion {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 12px;
+  padding: 6px 6px 6px 12px;
+  border-radius: var(--radius-small);
+  border: 1px solid color-mix(in srgb, var(--color-error) 35%, transparent);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  font-size: 12.5px;
+  color: var(--color-error-pale);
+}
+
+.sub-chips {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -6px;
+}
+
+.sub-chips:empty {
+  display: none;
 }
 
 .sub-enlace-emu {
@@ -317,17 +364,11 @@
   color: var(--color-error-pale);
 }
 
-/* Fechas: el día y, debajo, la hora. */
-.sub-fecha {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+/* Fecha: «hace 2 h»; las fechas exactas, en el tooltip. */
+.data-table td.sub-fecha {
   font-size: 12px;
-}
-
-.sub-fecha-hora {
-  color: var(--text-muted);
-  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Chip de los intentos anteriores, junto al título: pulsarlo despliega la cadena. */
@@ -514,40 +555,180 @@ input.sub-confirmar.sub-confirmar-ok:not([type="checkbox"]):not([type="radio"]):
   border-radius: 6px;
 }
 
-/* Con poca anchura (móvil) la lista se queda con el título, el estado y las acciones; tipo, origen, seeding y fechas
-   están en el detalle de cada subida. */
+/* Móvil: cada subida es una tarjeta de tres líneas (título y acción; estado; tipo · origen · fecha y chips); el resto, en el detalle. */
 @media (max-width: 760px) {
-  .data-table .sub-sec {
+  .sub-scroll .data-table,
+  .sub-scroll .data-table tbody,
+  .sub-scroll .data-table thead {
+    display: block;
+  }
+
+  .sub-scroll .data-table thead tr {
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 8px 10px;
+    box-shadow: inset 0 -1px 0 var(--border);
+  }
+
+  .sub-scroll .data-table thead th {
+    display: none;
+    position: static;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .sub-scroll .data-table thead th:has(.hf-trigger) {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .sub-scroll .data-table thead .hf-trigger {
+    min-height: var(--tap-min);
+    padding: 4px 10px;
+    border: 1px solid var(--border-input);
+    border-radius: var(--radius-badge);
+  }
+
+  .sub-scroll .data-table tr.sub-tarjeta {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--hud-sky) 9%, transparent);
+  }
+
+  .sub-scroll .data-table tr.sub-fila-antigua {
+    padding-left: 28px;
+  }
+
+  .sub-scroll .data-table tr.sub-tarjeta > td {
+    display: none;
+    padding: 0;
+    border: 0;
+  }
+
+  .sub-scroll .data-table tr.sub-tarjeta > td.sub-celda-titulo,
+  .sub-tarjeta .sub-titulo-fila {
+    display: contents;
+  }
+
+  .sub-tarjeta .sub-poster {
     display: none;
   }
 
-  .data-table td.sub-celda-estado {
+  /* Línea 1: el título y el año, en el mismo párrafo de dos líneas como mucho. */
+  .sub-tarjeta .sub-titulo-texto {
+    order: 1;
+    flex: 1 1 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    line-height: 1.35;
+  }
+
+  .sub-tarjeta .sub-titulo {
+    display: inline;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-weight: 600;
+  }
+
+  .sub-tarjeta .sub-titulo-texto > .sub-muted {
+    margin-right: 4px;
+  }
+
+  .sub-tarjeta .sub-anio {
+    margin-left: 4px;
+  }
+
+  .sub-tarjeta .sub-titulo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  .sub-scroll .data-table tr.sub-tarjeta > td.col-actions {
+    display: block;
+    order: 2;
+    position: relative;
+    z-index: 1;
+    align-self: center;
+    background: none;
+    box-shadow: none;
+  }
+
+  .sub-tarjeta .sub-accion {
+    width: var(--tap-min);
+    height: var(--tap-min);
+  }
+
+  .sub-tarjeta .sub-accion-borrar,
+  .sub-tarjeta .sub-accion-primaria {
+    display: none;
+  }
+
+  /* Línea 2 */
+  .sub-scroll .data-table tr.sub-tarjeta > td.sub-celda-estado {
+    display: block;
+    order: 3;
+    flex-basis: 100%;
     min-width: 0;
-    max-width: 128px;
+    max-width: none;
   }
 
   .sub-barra {
     min-width: 0;
   }
 
-  .sub-poster {
+  .sub-estado-error {
+    -webkit-line-clamp: 1;
+  }
+
+  /* Línea 3 */
+  .sub-scroll .data-table tr.sub-tarjeta > td.sub-meta {
+    display: block;
+    order: 4;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .sub-scroll .data-table tr.sub-tarjeta > td.sub-meta:not(.sub-col-tipo)::before {
+    content: "·";
+    margin-right: 8px;
+  }
+
+  .sub-tarjeta .sub-meta .vicon {
     display: none;
   }
 
-  .data-table th.sub-th-titulo {
-    width: auto;
-    min-width: 0;
+  .sub-tarjeta .sub-meta .detcard-plano-texto {
+    color: var(--text-muted);
   }
 
-  .data-table td.sub-celda-titulo {
-    max-width: 132px;
+  .sub-tarjeta .sub-meta .value-chip {
+    padding: 0;
+    border: 0;
+    background: none;
   }
 
-  .sub-titulo-texto {
-    flex-wrap: wrap;
+  .sub-tarjeta .sub-chips {
+    order: 5;
+    margin-left: 4px;
   }
 
-  .sub-titulo {
-    white-space: normal;
+  .sub-tarjeta .sub-chips > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .sub-tarjeta .sub-meta a,
+  .sub-tarjeta .sub-meta button {
+    position: relative;
+    z-index: 1;
   }
 }

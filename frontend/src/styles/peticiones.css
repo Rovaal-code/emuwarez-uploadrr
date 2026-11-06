@@ -58,6 +58,12 @@
   min-width: 0;
 }
 
+/* En modo Seleccionar, la fila que no se puede marcar guarda el sitio de la casilla (15 px y su margen por defecto). */
+.pet-casilla-hueco {
+  flex-shrink: 0;
+  width: 22px;
+}
+
 .pet-paginacion {
   display: flex;
   gap: 8px;
@@ -212,18 +218,148 @@
   padding-inline: 12px;
 }
 
-/* Con poca anchura (móvil) la lista se queda con lo esencial: título, tipo, compatibilidad y puntos. El resto de
-   los datos está en la ficha de cada petición, y los filtros de esas columnas dejan de verse con ellas. */
+/* Con poca anchura (móvil) cada petición es una tarjeta, con el mismo DOM de la fila:
+     1. [casilla] título (dos líneas como mucho) … moneda y puntos;
+     2. compatibilidad y el motivo por el que aún no está lista;
+     3. en gris: tipo · resolución · source · «hace 3 días» (y tu nombre en verde si es tuya).
+   Origen, el autor, votos y comentarios están en la ficha. La cabecera de columnas se queda como una tira de
+   filtros y órdenes, y la de cada grupo, pegada arriba como separador. Toda la tarjeta abre la ficha (la fila ya
+   tiene el clic; el título es el enlace de teclado). */
 @media (max-width: 760px) {
-  .data-table.pet-tabla .pet-sec,
-  .data-table.pet-tabla .pet-tipo,
-  .data-table.pet-tabla thead th:last-child,
-  .data-table.pet-tabla td.pet-creada {
+  .data-table.pet-tabla,
+  .data-table.pet-tabla tbody {
+    display: block;
+  }
+
+  .data-table.pet-tabla thead {
+    display: block;
+  }
+
+  /* Los filtros, en una sola línea que se desplaza de lado: en tres líneas se comían la mitad de la pantalla. */
+  .data-table.pet-tabla thead tr {
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 8px 10px;
+    box-shadow: inset 0 -1px 0 var(--border);
+  }
+
+  .data-table.pet-tabla thead th {
     display: none;
+    position: static;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .data-table.pet-tabla thead th:has(.hf-trigger) {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .data-table.pet-tabla thead .hf-trigger {
+    min-height: var(--tap-min);
+    padding: 4px 10px;
+    border: 1px solid var(--border-input);
+    border-radius: var(--radius-badge);
+  }
+
+  .data-table.pet-tabla tr.pet-grupo-cab {
+    display: block;
+  }
+
+  .data-table.pet-tabla th.pet-grupo-th {
+    display: block;
+    top: 0;
+    scroll-margin-top: 0;
   }
 
   .pet-grupo-ayuda {
     display: none;
+  }
+
+  .data-table.pet-tabla tr.clickable {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    min-height: var(--tap-min);
+    padding: 10px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--hud-sky) 9%, transparent);
+  }
+
+  .data-table.pet-tabla tr.clickable > td,
+  .data-table.pet-tabla tr.clickable > td:first-child {
+    display: none;
+    padding: 0;
+    border: 0;
+  }
+
+  .data-table.pet-tabla tr.clickable > td.pet-col-titulo {
+    display: block;
+    order: 1;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .pet-col-titulo .pet-poster {
+    display: none;
+  }
+
+  .pet-col-titulo .lib-title-link {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .data-table.pet-tabla tr.clickable > td.pet-puntos {
+    display: block;
+    order: 2;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .data-table.pet-tabla tr.clickable > td.pet-col-compat {
+    display: flex;
+    order: 3;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .pet-col-compat .pet-motivo {
+    margin-top: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .data-table.pet-tabla tr.clickable > td.pet-meta {
+    display: block;
+    order: 4;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .data-table.pet-tabla tr.clickable > td.pet-col-autor-mio {
+    order: 5;
+  }
+
+  .data-table.pet-tabla td.pet-meta:not(.pet-tipo)::before {
+    content: "·";
+    margin-right: 10px;
+    color: var(--text-muted);
+  }
+
+  .pet-meta .vicon {
+    display: none;
+  }
+
+  .data-table.pet-tabla .pet-meta .detcard-plano-texto {
+    color: var(--text-muted);
   }
 }
 
@@ -481,6 +617,11 @@
 @media (max-width: 640px) {
   .ficha-poster {
     width: 132px;
+  }
+
+  /* Sin imagen, el marcador vacío dejaba el veredicto por debajo del pliegue (en la ficha de petición y de subida). */
+  .ficha-poster:has(.ficha-poster-vacio) {
+    display: none;
   }
 
   .detail-card.pet-veredicto {

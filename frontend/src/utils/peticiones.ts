@@ -91,6 +91,30 @@ export function agruparPeticiones<T extends ParaAgrupar>(items: T[]): { id: Grup
     .filter(g => g.items.length > 0)
 }
 
+// La lista de Peticiones cuando se virtualiza (FilasVirtuales): la cabecera de cada grupo es un elemento más, seguida
+// de sus peticiones si no está plegado. Las cabeceras llevan una clave negativa (no choca con ningún id) y se pintan
+// siempre (`fijas`): así su `position: sticky` sigue valiendo mientras se recorre el grupo y «ir al grupo» las
+// encuentra en el DOM aunque estén lejos.
+export type ElementoDeLista<T> =
+  | { tipo: 'grupo'; grupo: { id: GrupoPeticion; titulo: string; ayuda: string; items: T[] } }
+  | { tipo: 'peticion'; item: T }
+
+export const claveDeGrupo = (id: GrupoPeticion): number => -1 - GRUPOS_PETICION.findIndex(g => g.id === id)
+
+export const claveDeElemento = <T extends { id: number }>(e: ElementoDeLista<T>): number =>
+  e.tipo === 'grupo' ? claveDeGrupo(e.grupo.id) : e.item.id
+
+export function elementosDeLista<T>(
+  grupos: { id: GrupoPeticion; titulo: string; ayuda: string; items: T[] }[], plegados: ReadonlySet<GrupoPeticion>,
+): ElementoDeLista<T>[] {
+  const r: ElementoDeLista<T>[] = []
+  for (const g of grupos) {
+    r.push({ tipo: 'grupo', grupo: g })
+    if (!plegados.has(g.id)) for (const item of g.items) r.push({ tipo: 'peticion', item })
+  }
+  return r
+}
+
 // Por qué una petición que tienes (o casi) aún no está lista, en pocas palabras para la lista: solo cuando aporta algo
 // que el grupo y la compatibilidad no dicen ya («Lista para subir» y «Sin copia» se explican solos). La ficha da el
 // texto entero de la preparación.

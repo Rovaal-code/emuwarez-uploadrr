@@ -20,7 +20,8 @@ vi.mock('../../api/eventos', () => ({
 }))
 
 import {
-  borrarLote, cancelarLote, countUploads, deleteUploadJob, getLote, getUploadJob, getUploads, reintentarLote,
+  borrarLote, cancelarLote, cancelUploadJob, countUploads, deleteUploadJob, getLote, getUploadJob, getUploads, reintentarLote,
+  retryUploadJobQueued,
 } from '../../api/uploads'
 import { ApiClientError } from '../../api/client'
 import { SeccionVisible } from '../../context/SeccionVisible'
@@ -311,6 +312,111 @@ describe('una cadena de reintentos', () => {
     vi.mocked(countUploads).mockResolvedValue(1)
     await pagina()
     expect(filaDe('Rota').querySelector('.sub-estado-error')?.textContent).toBe('Uploadrr falló')
+  })
+})
+
+describe('las acciones de la lista que fallan', () => {
+  const ROTA = trabajo({ id: 21, status: 'failed', title: 'Rota', media_type: 'movie' })
+  const VIVA = trabajo({ id: 22, status: 'running', title: 'Viva', media_type: 'movie' })
+  beforeEach(() => {
+    vi.mocked(getUploads).mockResolvedValue([ROTA, VIVA])
+    vi.mocked(countUploads).mockResolvedValue(2)
+  })
+  const aviso = () => document.querySelector('.sub-seccion [role="alert"]')
+
+  it('si reintentar falla, lo dice sobre la tabla y se puede cerrar', async () => {
+    vi.mocked(retryUploadJobQueued).mockRejectedValue(new Error('Ya hay una subida activa para este elemento'))
+    await pagina()
+    expect(aviso()).toBeNull()
+    await pulsar(filaDe('Rota').querySelector('button[aria-label="Reintentar"]')!)
+    await esperar(() => aviso())
+    expect(aviso()!.textContent).toContain('Ya hay una subida activa para este elemento')
+    await pulsar(boton('Cerrar'))
+    expect(aviso()).toBeNull()
+  })
+
+  it('si cancelar falla, lo dice con el título de la subida', async () => {
+    vi.mocked(cancelUploadJob).mockRejectedValue(new Error('El trabajo ya terminó'))
+    await pagina()
+    await pulsar(filaDe('Viva').querySelector('button[aria-label="Cancelar"]')!)
+    await esperar(() => aviso())
+    expect(aviso()!.textContent).toContain('No se pudo cancelar «Viva»: El trabajo ya terminó')
+  })
+})
+
+describe('las columnas', () => {
+  it('una sola columna Fecha, relativa, con las dos fechas exactas aparte', async () => {
+    await pagina()
+    const cab = [...document.querySelectorAll('thead th')].map(th => th.textContent?.trim())
+    expect(cab).toContain('Fecha')
+    expect(cab).not.toContain('Creado')
+    expect(cab).not.toContain('Finalizado')
+    expect(filaDe('Película suelta').querySelector('td.sub-fecha')!.textContent).toMatch(/^hace /)
+  })
+
+  it('sin ninguna subida, el vacío lleva a Biblioteca', async () => {
+    vi.mocked(getUploads).mockResolvedValue([])
+    vi.mocked(countUploads).mockResolvedValue(0)
+    const navegar = vi.fn()
+    await montar(
+      <SyncContext.Provider value={{ lastInvalidatedAt: 0, startAllSync: vi.fn(), isAnySyncing: false, todoPendiente: false } as never}>
+        <SeccionVisible visible><UploadsPage onNavigate={navegar} /></SeccionVisible>
+      </SyncContext.Provider>,
+    )
+    await esperar(() => boton('Ir a Biblioteca'))
+    expect(texto()).not.toContain('preflight')
+    await pulsar(boton('Ir a Biblioteca'))
+    expect(navegar).toHaveBeenCalledWith('library')
+  })
+})
+
+describe('lista virtualizada pasadas las 50', () => {
+  const muchas = (n: number) => Array.from({ length: n }, (_, i) =>
+    trabajo({ id: 1000 + i, title: `Subida ${i}`, media_type: 'movie', created_at: `2026-11-04T10:${String(i % 60).padStart(2, '0')}:00` }))
+  const pintadas = () => document.querySelectorAll('tbody tr.sub-tarjeta').length
+
+  it('con 50 o menos se pinta entera', async () => {
+    vi.mocked(getUploads).mockResolvedValue(muchas(50))
+    vi.mocked(countUploads).mockResolvedValue(50)
+    await pagina()
+    expect(pintadas()).toBe(50)
+    expect(document.querySelector('tr.fila-hueco')).toBeNull()
+  })
+
+  it('con más de 50 solo pinta lo que se ve, y cada subida con sus intentos anteriores en su bloque', async () => {
+    const lista = muchas(80)
+    lista[0] = trabajo({ ...lista[0], status: 'failed', retry_of_job_id: 999, retry_count: 1, created_at: '2026-11-05T10:00:00' })
+    lista.push(trabajo({ id: 999, status: 'failed', title: 'Subida 0', media_type: 'movie', created_at: '2026-11-01T10:00:00' }))
+    vi.mocked(getUploads).mockResolvedValue(lista)
+    vi.mocked(countUploads).mockResolvedValue(81)
+    await pagina()
+    expect(pintadas()).toBeGreaterThan(0)
+    expect(pintadas()).toBeLessThan(30)
+    expect(document.querySelector('tr.fila-hueco')).not.toBeNull()
+    await pulsar(document.querySelector('.sub-toggle-reintentos')!)
+    const bloque = document.querySelector('tr.sub-fila-antigua')!.closest('tbody')!
+    expect([...bloque.querySelectorAll('tr')].map(tr => tr.classList.contains('sub-fila-antigua'))).toEqual([false, true])
+  })
+})
+
+describe('cancelar desde el detalle de una subida', () => {
+  it('si falla, lo dice en el detalle y al volver a la lista no queda un aviso viejo', async () => {
+    const VIVA = trabajo({ id: 22, status: 'running', title: 'Viva', media_type: 'movie' })
+    vi.mocked(getUploads).mockResolvedValue([VIVA])
+    vi.mocked(countUploads).mockResolvedValue(1)
+    vi.mocked(getUploadJob).mockResolvedValue({ ...VIVA, display_title: 'Viva' })
+    vi.mocked(cancelUploadJob).mockRejectedValue(new Error('El trabajo ya terminó'))
+    await pagina()
+    await pulsar(filaDe('Viva').querySelector('.sub-titulo')!)
+    await esperar(() => document.querySelector('.dsub-resultado, .dsub-cabecera, [class*="dsub"]') !== null)
+    const cancelar = [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === 'Cancelar')!
+    await pulsar(cancelar)
+    const confirmar = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(b => /Cancelar subida|Sí, cancelar|Cancelar la subida/.test(b.textContent ?? ''))
+    if (confirmar) await pulsar(confirmar)
+    await esperar(() => texto().includes('No se pudo cancelar'))
+    await pulsar(boton('Volver') ?? [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => /Volver|Subidas/.test(b.getAttribute('aria-label') ?? b.textContent ?? ''))!)
+    await esperar(() => document.querySelectorAll('tbody tr').length > 0)
+    expect(document.querySelector('.sub-seccion [role="alert"]')).toBeNull()
   })
 })
 

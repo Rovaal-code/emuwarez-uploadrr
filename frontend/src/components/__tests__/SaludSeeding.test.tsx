@@ -127,18 +127,20 @@ describe('SaludSeeding', () => {
     expect(texto()).toContain('Estado')
   })
 
-  it('sin qBittorrent (no responde o no está configurado) dice «Sin datos de qBittorrent»', async () => {
+  it('sin qBittorrent (no responde o no está configurado) la celda es un guion que dice «Sin datos de qBittorrent»', async () => {
     m.mockResolvedValue(respuesta(null, { disponible: false, mensaje: 'No se pudo conectar con qBittorrent' }))
     await montar(<Pagina job={subida()} />)
     await esperar(() => texto().includes('No se pudo conectar con qBittorrent'))
-    expect(document.querySelector('[data-testid="celda"]')!.textContent).toBe('Sin datos de qBittorrent')
+    const celda = document.querySelector('[data-testid="celda"]')!
+    expect(celda.querySelector('[aria-hidden="true"]')!.textContent).toBe('—')
+    expect(celda.querySelector('.solo-lector')!.textContent).toBe('Sin datos de qBittorrent')
     expect(texto()).toContain('Sin datos de qBittorrent')
   })
 
   it('si la petición falla (un 500, sin red) tampoco rompe: «Sin datos de qBittorrent»', async () => {
     m.mockRejectedValue(new Error('HTTP 500'))
     await montar(<Pagina job={subida()} />)
-    await esperar(() => document.querySelector('[data-testid="celda"]')!.textContent === 'Sin datos de qBittorrent')
+    await esperar(() => document.querySelector('[data-testid="celda"] .solo-lector')?.textContent === 'Sin datos de qBittorrent')
     expect(texto()).toContain('Esto no afecta a la subida')
   })
 

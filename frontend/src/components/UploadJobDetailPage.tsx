@@ -273,7 +273,7 @@ function ChecksSection({ snapshot, mediaType, isActive }: {
                 <td>
                   {c ? (
                     <span
-                      className={`${CHECK_STATUS_BADGE[c.status] || 'badge status-unknown'} dsub-badge-chico${c.status === 'fail' ? ' badge-blink' : ''}`}
+                      className={`${CHECK_STATUS_BADGE[c.status] || 'badge status-unknown'} dsub-badge-chico`}
                     >
                       {CHECK_STATUS_TEXT[c.status] || c.status}
                     </span>
@@ -410,7 +410,7 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
               <td>{p.label}</td>
               <td>
                 <span
-                  className={`${PHASE_STATUS_BADGE[status] || 'badge status-unknown'} dsub-badge-chico${status === 'failed' ? ' badge-blink' : ''}`}
+                  className={`${PHASE_STATUS_BADGE[status] || 'badge status-unknown'} dsub-badge-chico`}
                 >
                   {PHASE_STATUS_TEXT[status] || status}
                 </span>
@@ -570,7 +570,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       <div className="dsub-titulo-caja">
         <DetailTitle>
           <h1 className="dsub-h1"><DetailTitleText title={job.display_title || job.title || `Job ${jobId}`} /></h1>
-          {isRunning && <span className="dsub-en-vivo">● en vivo</span>}
+          {isRunning && <span className="sub-en-vivo"><span aria-hidden="true">●</span> en vivo</span>}
         </DetailTitle>
       </div>
 

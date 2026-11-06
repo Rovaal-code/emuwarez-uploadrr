@@ -33,6 +33,8 @@ export const STATUS_LABEL: Record<string, string> = {
   config_staging: 'Configurando',
   blocked: 'Bloqueado',
   draft: 'Borrador',
+  // El valor por defecto de un trabajo recién creado (models.py), antes de que pase a la cola.
+  pending: 'Pendiente',
   // Subida "Automático": el servidor está generando nomenclatura/remux/
   // comprobaciones antes de que el job pueda pasar a "En cola" de verdad.
   staging: 'Preparando',

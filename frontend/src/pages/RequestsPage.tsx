@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { getRequests, getRequestDetail } from '../api/requests'
 import { getCandidates, getReadiness } from '../api/requestReadiness'
 import type {
@@ -35,7 +35,12 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { HeaderSort } from '../components/HeaderSort'
 import { formatBytes, timeAgo, formatDate, formatNumero } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { agruparPeticiones, requestDisplayTitle, motivoDeLaPreparacion, grupoDePeticion, GRUPOS_PETICION, type GrupoPeticion } from '../utils/peticiones'
+import {
+  agruparPeticiones, requestDisplayTitle, motivoDeLaPreparacion, grupoDePeticion, GRUPOS_PETICION, type GrupoPeticion,
+  claveDeElemento, claveDeGrupo, elementosDeLista, type ElementoDeLista,
+} from '../utils/peticiones'
+import { FilasVirtuales } from '../components/FilasVirtuales'
+import { UMBRAL_VIRTUAL } from '../utils/ventana'
 import { FichaPoster } from '../components/FichaPoster'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
@@ -82,7 +87,7 @@ function tipoOf(category: string | null): { icon: React.ReactNode; label: string
 function RequestPoster({ url, category, size = 'sm' }: { url: string | null; category: string | null; size?: 'sm' | 'lg' }) {
   const dims = size === 'lg'
     ? { width: 120, height: 180, radius: 8, font: 44 }
-    : { width: 36, height: 54, radius: 5, font: 17 }
+    : { width: 28, height: 42, radius: 4, font: 14 }
   const t = tipoOf(category)
   return (
     <div className="poster-thumb pet-poster" style={{ width: dims.width, height: dims.height, borderRadius: dims.radius }}>
@@ -303,7 +308,7 @@ function IdField({ label, id, href }: { label: string; id: string | null; href: 
 function CreatedAtCell({ createdAt }: { createdAt: string | null | undefined }) {
   const { triggerProps, tooltipNode } = useTooltip(createdAt ? formatDate(createdAt) : null)
   return (
-    <td className="pet-creada pet-sec" {...triggerProps}>
+    <td className="pet-creada pet-sec pet-meta" {...triggerProps}>
       {timeAgo(createdAt)}
       {tooltipNode}
     </td>
@@ -395,8 +400,9 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
           <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a peticiones</button>
         </div>
         <div className="pet-grupo pet-no-encoge">
+          {/* Secundario: la acción principal de la ficha es «Subir a eMuwarez», y solo ella brilla. */}
           <a
-            className="btn btn-primary btn-sm pet-sin-subrayado"
+            className="btn btn-secondary btn-sm pet-sin-subrayado"
             href={item.url || EMU_REQUESTS_FALLBACK_URL}
             target="_blank"
             rel="noreferrer"
@@ -629,6 +635,10 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
 }
 
 const CLAVE_GRUPOS_PLEGADOS = 'emuwarez_pet_grupos_plegados'
+// Lo que mide una fila antes de pintarla (FilasVirtuales la corrige con la primera que mide de verdad).
+const ALTO_FILA = 63
+// Las claves de las cabeceras de grupo, que se pintan siempre (ver elementosDeLista).
+const CABECERAS_FIJAS: ReadonlySet<number> = new Set(GRUPOS_PETICION.map(g => claveDeGrupo(g.id)))
 const PAGE_SIZE = 2000  // show everything in one scrollable container (like Biblioteca)
 const NINGUNO: string[] = []
 
@@ -644,6 +654,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   // (ver AppShell). Esto solo corre la PRIMERA vez que se entra.
   const [items, setItems] = useState<RequestItemResponse[]>([])
   const [total, setTotal] = useState(0)
+  // Cuántas hay sin filtro: con un filtro puesto el subtítulo dice «3 de 141», también con 0 resultados.
+  const [totalSinFiltro, setTotalSinFiltro] = useState<number | null>(null)
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   // The input stays bound to `search` for instant typing feedback; loadItems
@@ -718,10 +730,16 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     setPlegados(sig)
     try { localStorage.setItem(CLAVE_GRUPOS_PLEGADOS, JSON.stringify([...sig])) } catch { /* ignore */ }
   }
-  // «Ir a»: despliega el grupo y lleva la vista a su cabecera.
+  // «Ir a»: despliega el grupo y lleva la vista a su cabecera. Con la lista virtualizada la cabecera siempre está en
+  // el DOM (es fija), pero lo de encima se pintó con alturas estimadas: al medirse las filas que aparecen, la
+  // cabecera puede moverse unos píxeles, así que se vuelve a llevar a su sitio dos fotogramas después.
   const irAlGrupo = (id: GrupoPeticion) => {
     alternarGrupo(id, false)
-    requestAnimationFrame(() => document.getElementById(`pet-grupo-${id}`)?.scrollIntoView?.({ block: 'start' }))
+    const llevar = () => document.getElementById(`pet-grupo-${id}`)?.scrollIntoView?.({ block: 'start' })
+    requestAnimationFrame(() => {
+      llevar()
+      requestAnimationFrame(() => requestAnimationFrame(llevar))
+    })
   }
   const votesHeaderTip = useTooltip('Votos (otros usuarios que la quieren)')
   const commentsHeaderTip = useTooltip('Comentarios')
@@ -790,8 +808,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       setOffset(off)
       if (isUnfiltered && off === 0) {
         setFacets(computeFacets(res.items))
-        if (sortBy === 'created_desc') {
-        }
+        setTotalSinFiltro(res.total)
       }
     } catch (e: unknown) {
       if (esta === ultimaCarga.current) setError(e instanceof Error ? e.message : 'Error cargando peticiones')
@@ -809,6 +826,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     try {
       const res = await getRequests({ sort: 'created_desc', limit: PAGE_SIZE, offset: 0 })
       setFacets(computeFacets(res.items))
+      setTotalSinFiltro(res.total)
     } catch { /* optional */ }
   }, [])
 
@@ -985,7 +1003,16 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
   const displayItems = items
   const agrupada = sortBy === ORDEN_POR_GRUPOS
-  const gruposVisibles = agrupada ? agruparPeticiones(displayItems) : []
+  // Memorizados: FilasVirtuales reajusta las columnas cuando cambia la lista, y una lista nueva en cada pintado lo
+  // haría siempre.
+  const gruposVisibles = useMemo(() => (agrupada ? agruparPeticiones(displayItems) : []), [agrupada, displayItems])
+  // Pasadas las UMBRAL_VIRTUAL peticiones solo se pintan las que se ven (FilasVirtuales).
+  const virtual = displayItems.length > UMBRAL_VIRTUAL
+  const elementos = useMemo<ElementoDeLista<RequestItemResponse>[]>(() => (
+    agrupada ? elementosDeLista(gruposVisibles, plegados) : displayItems.map(item => ({ tipo: 'peticion' as const, item }))
+  ), [agrupada, gruposVisibles, plegados, displayItems])
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const theadRef = useRef<HTMLTableSectionElement>(null)
   // Las peticiones reales no traen votos ni comentarios: sin dato, sin columna.
   const hayVotos = displayItems.some(i => i.votes != null)
   const hayComentarios = displayItems.some(i => i.comments != null)
@@ -1002,15 +1029,20 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       onClick={() => handleRowClick(item.id)}
       className={selectedId === item.id ? 'clickable row-selected' : 'clickable'}
     >
-      <td>
+      {/* Por debajo de 760 px la fila es una tarjeta (peticiones.css): las clases pet-col-* y pet-meta dicen qué va
+          en cada línea. */}
+      <td className="pet-col-titulo">
         <div className="pet-titulo-fila">
           {/* La casilla va dentro de la celda Título, no en una columna nueva: `columnas` cuenta las de la tabla. */}
-          {modoSeleccion && peticionSeleccionableEnLote(item) && (
+          {modoSeleccion && (peticionSeleccionableEnLote(item) ? (
             <CasillaLote
               item={item} titulo={requestDisplayTitle(item)} seleccionado={seleccion.has(item.id)}
               bloqueada={loteLleno} onAlternar={alternarLote}
             />
-          )}
+          ) : (
+            // El hueco de la casilla, para que los títulos sigan alineados: esta no se puede subir en lote.
+            <span className="pet-casilla-hueco" aria-hidden="true" />
+          ))}
           <RequestPoster url={item.poster_url} category={item.category} />
           <div className="pet-min-0">
             <HoverTitle
@@ -1024,23 +1056,40 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           </div>
         </div>
       </td>
-      <td className="pet-nowrap pet-tipo">
+      <td className="pet-nowrap pet-tipo pet-meta">
         <PlainValue icon={<TypeValueIcon />}>{tipoOf(item.category).label}</PlainValue>
       </td>
-      <td className="pet-nowrap pet-sec"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
-      <td>
+      <td className="pet-nowrap pet-sec pet-col-origen"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
+      <td className="pet-col-compat">
         <CompatibilityBadge status={item.compatibility_status} reclamada={item.reclamada_por} />
         {motivoDeLaPreparacion(item) && <div className="pet-motivo">{motivoDeLaPreparacion(item)}</div>}
       </td>
-      <td className="pet-t12 pet-nowrap pet-sec"><AuthorCell author={item.author} isMine={item.is_mine} /></td>
-      <td className="pet-nowrap pet-sec"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
-      <td className="pet-nowrap pet-sec"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
-      {hayVotos && <td className="pet-centro pet-t12 pet-sec">{item.votes ?? '—'}</td>}
-      {hayComentarios && <td className="pet-centro pet-t12 pet-sec">{item.comments ?? '—'}</td>}
+      <td className={`pet-t12 pet-nowrap pet-sec pet-col-autor${item.is_mine && item.author ? ' pet-meta pet-col-autor-mio' : ''}`}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
+      <td className="pet-nowrap pet-sec pet-meta"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
+      <td className="pet-nowrap pet-sec pet-meta"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
+      {hayVotos && <td className="pet-centro pet-t12 pet-sec pet-col-votos">{item.votes ?? '—'}</td>}
+      {hayComentarios && <td className="pet-centro pet-t12 pet-sec pet-col-votos">{item.comments ?? '—'}</td>}
       <td className="pet-puntos">{item.points != null ? <><IconoPuntos />{fmtNum(item.points)}</> : <span className="pet-muted">—</span>}</td>
       <CreatedAtCell createdAt={item.created_at} />
     </tr>
   )
+
+  const cabeceraDeGrupo = (g: { id: GrupoPeticion; titulo: string; ayuda: string; items: RequestItemResponse[] }) => {
+    const plegado = plegados.has(g.id)
+    return (
+      <tr className={`pet-grupo-cab pet-bloque-${g.id}`} id={`pet-grupo-${g.id}`}>
+        <th scope="rowgroup" colSpan={columnas} className="pet-grupo-th">
+          <button type="button" className="pet-grupo-boton" aria-expanded={!plegado} onClick={() => alternarGrupo(g.id)}>
+            <IconoDesplegar abierto={!plegado} size={12} />
+            <span className="pet-grupo-titulo">{g.titulo}</span>
+            <span className="pet-grupo-n">{g.items.length}</span>
+            <span className="pet-grupo-ayuda">{g.ayuda}</span>
+          </button>
+        </th>
+      </tr>
+    )
+  }
+  const pintarElemento = (e: ElementoDeLista<RequestItemResponse>) => (e.tipo === 'grupo' ? cabeceraDeGrupo(e.grupo) : fila(e.item))
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
@@ -1067,7 +1116,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <div>
             <h1 className="page-title">Peticiones</h1>
             <div className="page-subtitle">
-              {total > 0 ? `${total} peticiones` : 'Peticiones activas cruzadas con tu biblioteca local'}
+              {!isUnfiltered && totalSinFiltro != null
+                ? `${total} de ${totalSinFiltro} peticiones`
+                : total > 0 ? `${total} peticiones` : 'Peticiones activas cruzadas con tu biblioteca local'}
             </div>
           </div>
           <div className="pet-fila">
@@ -1139,9 +1190,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         )}
 
           <div className="activity-section pet-seccion">
-            <div className="pet-scroll">
+            <div className="pet-scroll" ref={scrollRef}>
               <table className="data-table pet-tabla">
-                <thead>
+                <thead ref={theadRef}>
                   <tr>
                     <th>Título</th>
                     <th className="pet-tipo"><HeaderFilter label="Tipo" value={categoryFilter} onChange={setCategoryFilter} options={[
@@ -1180,24 +1231,23 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     action={<button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>}
                   />
                 )}
-                {agrupada ? gruposVisibles.map(g => {
-                  const plegado = plegados.has(g.id)
-                  return (
-                    <tbody key={g.id} className={`pet-bloque pet-bloque-${g.id}`}>
-                      <tr className="pet-grupo-cab" id={`pet-grupo-${g.id}`}>
-                        <th scope="rowgroup" colSpan={columnas} className="pet-grupo-th">
-                          <button type="button" className="pet-grupo-boton" aria-expanded={!plegado} onClick={() => alternarGrupo(g.id)}>
-                            <IconoDesplegar abierto={!plegado} size={12} />
-                            <span className="pet-grupo-titulo">{g.titulo}</span>
-                            <span className="pet-grupo-n">{g.items.length}</span>
-                            <span className="pet-grupo-ayuda">{g.ayuda}</span>
-                          </button>
-                        </th>
-                      </tr>
-                      {!plegado && g.items.map(fila)}
-                    </tbody>
-                  )
-                }) : (
+                {virtual ? (
+                  <FilasVirtuales
+                    items={elementos}
+                    clave={claveDeElemento}
+                    alturaEstimada={ALTO_FILA}
+                    columnas={columnas}
+                    contenedor={scrollRef}
+                    cabecera={theadRef}
+                    fijas={CABECERAS_FIJAS}
+                    pintar={pintarElemento}
+                  />
+                ) : agrupada ? gruposVisibles.map(g => (
+                  <tbody key={g.id} className={`pet-bloque pet-bloque-${g.id}`}>
+                    {cabeceraDeGrupo(g)}
+                    {!plegados.has(g.id) && g.items.map(fila)}
+                  </tbody>
+                )) : (
                   <tbody>
                     {displayItems.map(fila)}
                   </tbody>

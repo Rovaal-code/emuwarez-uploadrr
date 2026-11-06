@@ -17,6 +17,10 @@
  * las encontraría plegadas.
  */
 
+/** A partir de cuántas filas una tabla (Peticiones, Subidas) pinta solo las que se ven. Por debajo se pinta
+ *  entera, como siempre: con 43-65 nodos por fila, a 141 filas ya había fotogramas de 65-107 ms al desplazarse. */
+export const UMBRAL_VIRTUAL = 50
+
 export type Tramo =
   | { tipo: 'fila'; indice: number }
   | { tipo: 'hueco'; alto: number; clave: string }

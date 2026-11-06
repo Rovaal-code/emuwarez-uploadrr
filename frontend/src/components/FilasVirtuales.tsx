@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { planVentana, columnasAutoFill, filasDeRejilla, medidaCorregida, cuentaTrasMedir, topeRecienAlcanzado, AJUSTES_SEGUIDOS_MAX } from '../utils/ventana'
 import { medir } from '../utils/uiScale'
 
@@ -100,9 +100,7 @@ export function FilasVirtuales<T>({ items, clave, alturaEstimada, columnas, cont
         const item = items[t.indice]
         const k = clave(item)
         return (
-          <CuerpoMedido key={k} clave={k} fija={!!fijas?.has(k)} observador={observador}>
-            {pintar(item, t.indice)}
-          </CuerpoMedido>
+          <CuerpoMedido key={k} clave={k} fija={!!fijas?.has(k)} observador={observador} item={item} indice={t.indice} pintar={pintar} />
         )
       })}
     </>
@@ -236,7 +234,22 @@ function celdasDeCabecera(cabecera: HTMLElement | null): HTMLElement[] {
 
 // Se apunta al observador al montarse y se borra al desmontarse: un elemento
 // que sale del DOM sigue observado (y retenido) si nadie lo quita.
-function CuerpoMedido({ clave, fija, observador, children }: { clave: number; fija: boolean; observador: ResizeObserver | null; children: ReactNode }) {
+//
+// Pinta él mismo su elemento y va memorizado: al desplazarse solo cambia la
+// ventana, así que las filas que siguen a la vista no se vuelven a pintar
+// (con `pintar` estable entre desplazamientos, que lo es: el padre no se
+// repinta por el scroll). Sin esto, cada salto de PASO_PX repintaba todas las
+// filas visibles, y con la CPU a ×4 los fotogramas pasaban de 33 ms.
+const CuerpoMedido = memo(CuerpoMedidoSinMemo) as typeof CuerpoMedidoSinMemo
+
+function CuerpoMedidoSinMemo<T>({ clave, fija, observador, item, indice, pintar }: {
+  clave: number
+  fija: boolean
+  observador: ResizeObserver | null
+  item: T
+  indice: number
+  pintar: (item: T, indice: number) => ReactNode
+}) {
   const ref = useRef<HTMLTableSectionElement>(null)
   useLayoutEffect(() => {
     const el = ref.current
@@ -244,5 +257,5 @@ function CuerpoMedido({ clave, fija, observador, children }: { clave: number; fi
     observador.observe(el)
     return () => observador.unobserve(el)
   }, [observador])
-  return <tbody ref={ref} data-clave={clave} data-fija={fija ? '1' : undefined}>{children}</tbody>
+  return <tbody ref={ref} data-clave={clave} data-fija={fija ? '1' : undefined}>{pintar(item, indice)}</tbody>
 }

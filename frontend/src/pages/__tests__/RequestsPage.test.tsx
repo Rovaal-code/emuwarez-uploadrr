@@ -3,7 +3,7 @@
 // marcar las peticiones que se pueden subir y subirlas juntas con el modal de «Subir por lotes» (el de verdad), cada
 // una con su petición, como en «Listo para subir» del Panel.
 import { act, useState } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 vi.mock('../../api/requests', () => ({ getRequests: vi.fn(), getRequestDetail: vi.fn() }))
 vi.mock('../../api/requestReadiness', () => ({ getCandidates: vi.fn(), getReadiness: vi.fn() }))
@@ -18,6 +18,7 @@ vi.mock('../../api/eventos', () => ({ seguirProgreso: vi.fn(() => () => {}) }))
 vi.mock('../../components/UploadWizardModal', () => ({ UploadWizardModal: () => null }))
 
 import { getRequestDetail, getRequests } from '../../api/requests'
+import { getReadiness } from '../../api/requestReadiness'
 import { getInstances } from '../../api/instances'
 import { getEmuComparison, getLibraryItem } from '../../api/library'
 import { getNomenclatureFields } from '../../api/nomenclature'
@@ -154,6 +155,103 @@ describe('Peticiones: grupos plegables y por qué aún no está lista', () => {
     expect(motivo('Petición 3')).toBe('Sin castellano')
     expect(motivo('Petición 4')).toBeNull()
     expect(motivo('Petición 1')).toBeNull()
+  })
+})
+
+describe('Peticiones: lista virtualizada pasadas las 50', () => {
+  const muchas = (n: number) => Array.from({ length: n }, (_, i) => peticion(500 + i, i < n - 3
+    ? { readiness_status: 'no_local_match', compatibility_status: 'Sin coincidencia', points: 1000 - i }
+    : { readiness_status: 'filled', compatibility_status: 'Llena', points: 5 }))
+  const pintadas = () => document.querySelectorAll('tbody tr.clickable').length
+
+  it('con 50 o menos se pinta entera, en un bloque por grupo, como siempre', async () => {
+    vi.mocked(getRequests).mockResolvedValue({ items: muchas(50), total: 50 } as never)
+    await pagina()
+    expect(pintadas()).toBe(50)
+    expect(document.querySelector('tr.fila-hueco')).toBeNull()
+    expect(document.querySelectorAll('tbody.pet-bloque')).toHaveLength(2)
+  })
+
+  it('con más de 50 solo pinta lo que se ve, con un hueco del alto del resto', async () => {
+    vi.mocked(getRequests).mockResolvedValue({ items: muchas(120), total: 120 } as never)
+    await pagina()
+    expect(pintadas()).toBeGreaterThan(0)
+    expect(pintadas()).toBeLessThan(40)
+    expect(document.querySelector('tr.fila-hueco')).not.toBeNull()
+    // Las cabeceras de grupo están siempre, aunque la de «Cerradas» quede muy abajo.
+    expect([...document.querySelectorAll('.pet-grupo-titulo')].map(t => t.textContent)).toEqual(['No la tienes', 'Cerradas'])
+  })
+
+  it('el chip de un grupo salta a su cabecera aunque esté fuera de lo pintado', async () => {
+    vi.mocked(getRequests).mockResolvedValue({ items: muchas(120), total: 120 } as never)
+    const salto = vi.fn()
+    Element.prototype.scrollIntoView = salto
+    onTestFinished(() => { delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView })
+    await pagina()
+    expect(document.querySelectorAll('tr.clickable .lib-title-link')).not.toHaveLength(0)
+    await pulsar(document.querySelector('.pet-resumen-cerrada')!)
+    await esperar(() => salto.mock.instances.length > 0)
+    expect(salto.mock.instances[0]).toBe(document.getElementById('pet-grupo-cerrada'))
+    expect(salto).toHaveBeenCalledWith({ block: 'start' })
+  })
+
+  it('plegar un grupo de la lista virtualizada quita sus filas', async () => {
+    vi.mocked(getRequests).mockResolvedValue({ items: muchas(120), total: 120 } as never)
+    await pagina()
+    await pulsar(document.querySelector('#pet-grupo-sin_copia .pet-grupo-boton')!)
+    expect(pintadas()).toBe(3)
+    expect(document.querySelector('#pet-grupo-sin_copia .pet-grupo-boton')!.getAttribute('aria-expanded')).toBe('false')
+  })
+})
+
+describe('Peticiones: la ficha y el subtítulo', () => {
+  async function abrirFicha(navegar = vi.fn()) {
+    vi.mocked(getReadiness).mockResolvedValue(null as never)
+    vi.mocked(getRequestDetail).mockResolvedValue({
+      ...DATOS[1], match: { status: 'Compatible', library_item_id: 40, library_target_id: 41 },
+    } as unknown as RequestDetailResponse)
+    await montar(
+      <SyncContext.Provider value={{
+        requestsSyncing: false, requestsStatus: null, startRequestsSync: vi.fn(), lastInvalidatedAt: 0, isAnySyncing: false,
+      } as never}>
+        <SeccionVisible visible><RequestsPage onNavigate={navegar} /></SeccionVisible>
+      </SyncContext.Provider>,
+    )
+    await esperar(() => document.querySelector('table.data-table tbody tr'))
+    await pulsar([...document.querySelectorAll('tr.clickable .lib-title-link')].find(t => t.textContent === 'Petición 2'))
+    await esperar(() => document.querySelector('.pet-veredicto'))
+  }
+  // Abrir la ficha pone /requests/:id en la URL, y la siguiente prueba la abriría al montar.
+  afterEach(() => { sessionStorage.clear(); history.replaceState(null, '', '/') })
+
+  it('el título de la ficha se abre con el teclado: es un enlace a la biblioteca', async () => {
+    const navegar = vi.fn()
+    await abrirFicha(navegar)
+    // Un <a href> de verdad: Tab lo alcanza e Intro lo activa (el navegador dispara el clic).
+    const titulo = document.querySelector<HTMLAnchorElement>('.pet-mb-20 a.lib-title-link')!
+    expect(titulo.getAttribute('href')).toBe('/library/41')
+    await act(async () => { titulo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })) })
+    expect(navegar).toHaveBeenCalledWith('library')
+    expect(sessionStorage.getItem('emuwarez_open_library_item')).toBe('41')
+  })
+
+  it('la única acción principal de la ficha es «Subir a eMuwarez»', async () => {
+    await abrirFicha()
+    const primarios = [...document.querySelectorAll('.pet-barra .btn-primary')].map(b => b.textContent?.trim())
+    expect(primarios).toEqual(['Subir a eMuwarez'])
+    const consultar = [...document.querySelectorAll('.pet-barra a.btn')].find(a => a.textContent?.includes('Consultar en eMuwarez'))!
+    expect(consultar.classList.contains('btn-secondary')).toBe(true)
+  })
+
+  it('con un filtro puesto el subtítulo dice cuántas de cuántas, también con cero', async () => {
+    vi.mocked(getRequests).mockImplementation(async q => {
+      const quedan = q?.search ? DATOS.filter(i => i.title.includes(q.search!)) : DATOS
+      return { items: quedan, total: quedan.length } as never
+    })
+    await pagina()
+    expect(document.querySelector('.page-subtitle')!.textContent).toBe('6 peticiones')
+    await escribir(document.querySelector<HTMLInputElement>('input.pet-buscar')!, 'nada de esto')
+    await esperar(() => document.querySelector('.page-subtitle')!.textContent === '0 de 6 peticiones', 2000)
   })
 })
 
@@ -325,6 +423,9 @@ describe('«Subir seleccionadas» en Peticiones', () => {
   it(`no deja marcar más de ${MAX_ELEMENTOS_LOTE}`, async () => {
     const muchas = Array.from({ length: MAX_ELEMENTOS_LOTE + 1 }, (_, i) =>
       peticion(200 + i, lista({ title: `Película ${200 + i}`, library_item_id: 20 })))
+    // Pasan del umbral y la lista se virtualiza: con una ventana alta caben todas en lo que se pinta.
+    const alto = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(10_000)
+    onTestFinished(() => alto.mockRestore())
     await paginaConSeleccion(muchas)
     await seleccionar()
     for (const c of casillas().slice(0, MAX_ELEMENTOS_LOTE)) await pulsar(c)

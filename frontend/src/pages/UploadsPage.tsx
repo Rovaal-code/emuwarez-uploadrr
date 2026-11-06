@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, Fragment, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { getUploads, countUploads, getUploadJob, startUploadJob, retryUploadJobQueued, cancelUploadJob, getLote } from '../api/uploads'
 import { useInstancias } from '../hooks/useInstancias'
 import { ApiClientError } from '../api/client'
@@ -15,7 +15,7 @@ import { RellenarPeticion } from '../components/RellenarPeticion'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { CancelButtonIcon, RetryButtonIcon, DeleteButtonIcon, ExternalLinkButtonIcon, ValueChip, PlainValue, TypeValueIcon } from '../components/DetailCard'
 import { HoverTitle, useTooltip } from '../components/Tooltip'
-import { formatDateTimeSeconds } from '../utils/format'
+import { formatDateTimeSeconds, timeAgo } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { hayMasPorCargar } from '../utils/paginarSubidas'
@@ -31,6 +31,8 @@ import { useAlSalir, useSeccionVisible } from '../context/SeccionVisible'
 import { IconoDesplegar, IconoSubida, IconoTipo } from '../components/Iconos'
 import { Modal } from '../components/Modal'
 import { BannerLote } from '../components/BannerLote'
+import { FilasVirtuales } from '../components/FilasVirtuales'
+import { UMBRAL_VIRTUAL } from '../utils/ventana'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -52,6 +54,11 @@ const RETRYABLE_STATUSES = new Set(['failed', 'cancelled'])
 const DELETABLE_STATUSES = new Set(['failed', 'cancelled', 'completed'])
 
 const CONFIRMATION_TOKEN = 'INICIAR_UPLOADRR'
+// Las columnas de la tabla (para las filas que ocupan el ancho entero).
+const COLUMNAS = 9
+// Lo que mide una fila antes de pintarla (FilasVirtuales la corrige con la primera que mide de verdad).
+const ALTO_FILA = 65
+const claveDeSubida = (job: UploadJob) => job.id!
 
 // Only real upload states — a job now only exists once the user uploads, so
 // the preparatory "ready"/"blocked" states no longer appear here. 'preparing'
@@ -132,11 +139,22 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
   )
 }
 
-// «06/11/2026, 04:31:26» en dos líneas (el día y la hora), para que la columna no ensanche la tabla.
-function Fecha({ valor }: { valor: string | null | undefined }) {
-  if (!valor) return <span className="sub-muted">—</span>
-  const [dia, hora] = formatDateTimeSeconds(valor).split(', ')
-  return <span className="sub-fecha"><span>{dia}</span>{hora && <span className="sub-fecha-hora">{hora}</span>}</span>
+// Una sola columna «Fecha»: cuándo terminó o, si no ha terminado, cuándo se creó, en relativo («hace 2 h») como en
+// Peticiones; las dos fechas exactas van en el tooltip. Con Creado y Finalizado en dos columnas de fecha y hora la
+// tabla se desbordaba a 1280 px y el título se quedaba en 70 px.
+function FechaDeFila({ job }: { job: UploadJob }) {
+  const exactas = [
+    job.created_at ? `Creada: ${formatDateTimeSeconds(job.created_at)}` : null,
+    job.finished_at ? `Finalizada: ${formatDateTimeSeconds(job.finished_at)}` : null,
+  ].filter(Boolean).join(' · ')
+  const { triggerProps, tooltipNode } = useTooltip(exactas || null)
+  const valor = job.finished_at ?? job.created_at
+  return (
+    <td className="sub-nowrap sub-sec sub-fecha sub-meta" {...triggerProps}>
+      {valor ? timeAgo(valor) : <span className="sub-muted">—</span>}
+      {tooltipNode}
+    </td>
+  )
 }
 
 // El primer renglón de un error: la lista no es sitio para la pila entera (el motivo completo está en el detalle).
@@ -177,12 +195,12 @@ function EstadoDeFila({ job }: { job: UploadJob }) {
 }
 
 // Un botón de la fila: solo el icono, con su nombre para el lector de pantalla y el tooltip.
-function AccionDeFila({ etiqueta, tono, onClick, children }: {
-  etiqueta: string; tono?: 'peligro'; onClick: () => void; children: React.ReactNode
+function AccionDeFila({ etiqueta, tono, clase, onClick, children }: {
+  etiqueta: string; tono?: 'peligro'; clase?: string; onClick: () => void; children: React.ReactNode
 }) {
   const { triggerProps, tooltipNode } = useTooltip(etiqueta)
   return (
-    <button type="button" className={`sub-accion${tono ? ` sub-accion-${tono}` : ''}`} aria-label={etiqueta} onClick={onClick} {...triggerProps}>
+    <button type="button" className={`sub-accion${tono ? ` sub-accion-${tono}` : ''}${clase ? ` ${clase}` : ''}`} aria-label={etiqueta} onClick={onClick} {...triggerProps}>
       {children}
       {tooltipNode}
     </button>
@@ -218,7 +236,9 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
   const loteId = !indent && job.lote_id && (job.lote_total ?? 0) > 1 ? job.lote_id : null
   const loteTip = useTooltip(loteId ? 'Ver solo las subidas de este lote' : null)
   return (
-    <tr className={indent ? 'sub-fila-antigua' : undefined}>
+    // Por debajo de 760 px la fila es una tarjeta (subidas.css): título y la acción que toca, el estado, y en gris
+    // tipo · origen · fecha y los chips. Las clases sub-col-* y sub-meta dicen qué va en cada línea.
+    <tr className={indent ? 'sub-tarjeta sub-fila-antigua' : 'sub-tarjeta'}>
       <td className="sub-celda-titulo">
         <div className={`sub-titulo-fila${indent ? ' sub-titulo-fila-antigua' : ''}`}>
           <div className="poster-thumb sub-poster">
@@ -241,7 +261,10 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
             <HoverTitle as="span" className="lib-title-link sub-titulo" href={`/uploads/${job.id}`} onClick={onOpen} tip="Ver progreso / detalle">
               {job.title || '—'}
             </HoverTitle>
-            {job.year ? <span className="sub-muted sub-t11 sub-no-encoge">({job.year})</span> : null}
+            {job.year ? <span className="sub-muted sub-t11 sub-no-encoge sub-anio">({job.year})</span> : null}
+          </div>
+          {/* Aparte del título: en la tarjeta de móvil bajan a la última línea. */}
+          <div className="sub-chips">
             {loteId && onFiltrarLote && (
               <button
                 type="button"
@@ -282,12 +305,12 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
           </div>
         </div>
       </td>
-      <td className="sub-nowrap sub-sec">
+      <td className="sub-nowrap sub-sec sub-meta sub-col-tipo">
         {job.media_type
           ? <PlainValue icon={<TypeValueIcon />}>{UPLOAD_TYPE_LABEL[job.media_type] ?? job.media_type}</PlainValue>
           : <span className="sub-muted">—</span>}
       </td>
-      <td className="sub-nowrap sub-sec">
+      <td className="sub-nowrap sub-sec sub-meta">
         {job.instance_type
           ? (
             deepLink
@@ -305,9 +328,8 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
       <td className="sub-celda-estado">
         <EstadoDeFila job={job} />
       </td>
-      <td className="sub-nowrap sub-sec"><SeedingCelda job={job} seeding={seeding} /></td>
-      <td className="sub-nowrap sub-sec"><Fecha valor={job.created_at} /></td>
-      <td className="sub-nowrap sub-sec"><Fecha valor={job.finished_at} /></td>
+      <td className="sub-nowrap sub-sec sub-col-seeding"><SeedingCelda job={job} seeding={seeding} /></td>
+      <FechaDeFila job={job} />
       <td className="col-actions">
         <div className="sub-acciones-fila">
           <RellenarPeticion job={job} compacto />
@@ -321,6 +343,7 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
             <AccionDeFila
               etiqueta={(job.retry_count ?? 0) > 0 ? 'Borrar, con todos sus intentos' : 'Borrar'}
               tono="peligro"
+              clase="sub-accion-borrar"
               onClick={() => onDelete(job)}
             ><DeleteButtonIcon /></AccionDeFila>
           )}
@@ -358,14 +381,22 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [limite, setLimite] = useState(PAGINA)
   const [total, setTotal] = useState<number | null>(null)
   const [cargado, setCargado] = useState(false)
+  // Por qué no se pudo reintentar: se enseña en el detalle y, si se pulsó en la lista, sobre la tabla.
+  const [retryError, setRetryError] = useState<string | null>(null)
+  // Si cancelar falla se dice sobre la tabla o en el detalle: antes se tragaba el error y el botón parecía no hacer nada.
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
   // Keeps /uploads/:id in sync with whichever job's detail page is open.
   function openUpload(id: number) {
     pushDetailPath('uploads', id)
+    setRetryError(null)
+    setCancelError(null)
     setSelectedJobId(id)
   }
   function closeUpload() {
     closeDetailPath('uploads')
+    setRetryError(null)
+    setCancelError(null)
     setSelectedJobId(null)
   }
   const [startJob, setStartJob] = useState<UploadJob | null>(null)
@@ -552,14 +583,22 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }
   const doCancel = async (jobId: number) => {
     setConfirmCancel(null)
-    try { await cancelUploadJob(jobId); await load() } catch { /* ignore */ }
+    setCancelError(null)
+    const titulo = jobs.find(j => j.id === jobId)?.title
+    try {
+      await cancelUploadJob(jobId)
+    } catch (e: unknown) {
+      const motivo = e instanceof Error ? e.message : 'error desconocido'
+      setCancelError(titulo ? `No se pudo cancelar «${titulo}»: ${motivo}` : `No se pudo cancelar la subida: ${motivo}`)
+      return
+    }
+    await load()
   }
 
   // Sin confirmación: reintentar solo crea un trabajo nuevo en cola (el mismo camino que
   // «Subir a eMuwarez») y no toca el original, fallido o cancelado. Salta a la ficha del
   // trabajo nuevo para ver su progreso en el momento. Los errores se enseñan, no se tragan:
   // un fallo silencioso aquí parecía un botón que no hacía nada.
-  const [retryError, setRetryError] = useState<string | null>(null)
   const handleRetryQueued = async (job: UploadJob, desdeElPrincipio = false) => {
     setRetryError(null)
     try {
@@ -665,6 +704,31 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     ? { ...selectedJob, display_title: selectedTitle.display_title }
     : selectedJob
 
+  // La fila del último intento de una cadena y, si está desplegada, sus intentos anteriores.
+  const pintarCadena = (job: UploadJob) => {
+    const ancestors = ancestorsOf(job)
+    const expanded = expandedChains.has(job.id!)
+    return [
+      <JobRow
+        key={job.id}
+        job={job}
+        instances={instances}
+        seeding={seeding}
+        onOpen={() => openUpload(job.id!)}
+        retryToggle={ancestors.length > 0 ? { count: ancestors.length, expanded, onClick: () => toggleChain(job.id!) } : undefined}
+        onCancel={handleCancel}
+        onDelete={setDeleteJob}
+        onRetry={handleRetryQueued}
+        onFiltrarLote={setLoteFiltro}
+      />,
+      ...(expanded ? ancestors.map(a => (
+        <JobRow key={a.id} job={a} instances={instances} seeding={seeding} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} onDelete={setDeleteJob} />
+      )) : []),
+    ]
+  }
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const theadRef = useRef<HTMLTableSectionElement>(null)
+
   const modals = (
     <>
       {confirmCancel && (
@@ -720,7 +784,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           onOpenLibraryItem={goToLibraryItem}
           onVerLote={verLote}
           seeding={seeding}
-          retryError={retryError}
+          retryError={retryError ?? cancelError}
         />
         {modals}
       </div>
@@ -739,7 +803,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </div>
         </div>
         <div className="sub-fila">
-          {hasLiveJob && <span className="sub-muted sub-t11">● actualizando en vivo</span>}
+          {hasLiveJob && <span className="sub-en-vivo"><span aria-hidden="true">●</span> actualizando en vivo</span>}
         </div>
       </div>
 
@@ -762,7 +826,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         </select>
       </div>
 
-      {loteFiltro && (
+      {/* Con la lista sin cargar, las acciones del lote no tienen sobre qué actuar. */}
+      {loteFiltro && !error && (
         <BannerLote
           key={loteFiltro}
           loteId={loteFiltro}
@@ -776,12 +841,23 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
       {/* Ver RequestsPage: solo bloquea si no hay nada que enseñar todavía. */}
       {loading && jobs.length === 0 && !filtrando ? <LoadingState label="Cargando Subidas…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 && !filtrando ? (
-        <EmptyState icon={<IconoSubida />} title="No hay trabajos de subida." body="Usa el botón 'Subir' desde Biblioteca para generar un preflight." />
+        <EmptyState
+          icon={<IconoSubida />}
+          title="Sin subidas"
+          body="Sube algo desde Biblioteca o desde una petición lista."
+          action={onNavigate && <button className="btn btn-primary btn-sm" onClick={() => onNavigate('library')}>Ir a Biblioteca</button>}
+        />
       ) : (
         <div className="activity-section sub-seccion">
-          <div className="sub-scroll">
+          {(retryError || cancelError) && (
+            <div className="sub-error-accion" role="alert">
+              <span>{retryError ?? cancelError}</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRetryError(null); setCancelError(null) }}>Cerrar</button>
+            </div>
+          )}
+          <div className="sub-scroll" ref={scrollRef}>
             <table className="data-table">
-              <thead>
+              <thead ref={theadRef}>
                 <tr>
                   <th className="sub-th-titulo">Título</th>
                   <th className="sub-sec"><HeaderFilter label="Tipo" value={typeFilter} onChange={setTypeFilter} options={[
@@ -794,14 +870,13 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     { value: '', label: 'Todos' }, ...STATUS_OPTIONS.filter(Boolean).map(s => ({ value: s, label: statusLabel(s) })),
                   ]} /></th>
                   <th className="sub-sec">Seeding</th>
-                  <th className="sub-sec">Creado</th>
-                  <th className="sub-sec">Finalizado</th>
+                  <th className="sub-sec">Fecha</th>
                   <th className="col-actions sub-th-acciones">Acciones</th>
                 </tr>
               </thead>
               {visibleJobs.length === 0 && loteVacio && (
                 <FilaVacia
-                  columnas={10}
+                  columnas={COLUMNAS}
                   icon={<IconoSubida />}
                   title="Este lote ya no tiene subidas"
                   body="Se borraron todas las que lo formaban."
@@ -810,7 +885,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
               )}
               {visibleJobs.length === 0 && filtrando && !loteVacio && (
                 <FilaVacia
-                  columnas={10}
+                  columnas={COLUMNAS}
                   icon={<IconoSubida />}
                   title="Sin resultados"
                   body={hayMas
@@ -824,30 +899,21 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   }
                 />
               )}
-              <tbody>
-                {visibleJobs.map(job => {
-                  const ancestors = ancestorsOf(job)
-                  const expanded = expandedChains.has(job.id!)
-                  return (
-                    <Fragment key={job.id}>
-                      <JobRow
-                        job={job}
-                        instances={instances}
-                        seeding={seeding}
-                        onOpen={() => openUpload(job.id!)}
-                        retryToggle={ancestors.length > 0 ? { count: ancestors.length, expanded, onClick: () => toggleChain(job.id!) } : undefined}
-                        onCancel={handleCancel}
-                        onDelete={setDeleteJob}
-                        onRetry={handleRetryQueued}
-                        onFiltrarLote={setLoteFiltro}
-                      />
-                      {expanded && ancestors.map(a => (
-                        <JobRow key={a.id} job={a} instances={instances} seeding={seeding} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} onDelete={setDeleteJob} />
-                      ))}
-                    </Fragment>
-                  )
-                })}
-              </tbody>
+              {/* Pasadas las UMBRAL_VIRTUAL subidas solo se pintan las que se ven: cada elemento es la fila del último
+                  intento con sus intentos anteriores desplegados, en su propio <tbody>. */}
+              {visibleJobs.length > UMBRAL_VIRTUAL ? (
+                <FilasVirtuales
+                  items={visibleJobs}
+                  clave={claveDeSubida}
+                  alturaEstimada={ALTO_FILA}
+                  columnas={COLUMNAS}
+                  contenedor={scrollRef}
+                  cabecera={theadRef}
+                  pintar={pintarCadena}
+                />
+              ) : (
+                <tbody>{visibleJobs.flatMap(j => pintarCadena(j))}</tbody>
+              )}
             </table>
           </div>
           {hayMas && (

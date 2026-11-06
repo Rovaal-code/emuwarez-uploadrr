@@ -369,3 +369,71 @@ def test_sincronizar_al_volver_una_instancia_viene_activado_y_se_puede_apagar(cl
         resp = client.put("/api/settings", json={"sincronizar_al_volver_instancia": valor}, headers=auth_headers)
         assert resp.status_code == 200, resp.text
         assert resp.json()["sincronizar_al_volver_instancia"] is valor
+
+
+# ---------------------------------------------------------------------------
+# URL pública de qBittorrent (solo para el enlace «Abrir en qBittorrent»)
+# ---------------------------------------------------------------------------
+
+def test_la_url_publica_de_qbit_viene_vacia_y_se_guarda_sin_espacios(client, auth_headers):
+    assert client.get("/api/settings", headers=auth_headers).json()["qbit_public_url"] is None
+    resp = client.put("/api/settings", json={"qbit_public_url": "  https://qbit.midominio.es:8443/webui  "},
+                      headers=auth_headers)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["qbit_public_url"] == "https://qbit.midominio.es:8443/webui"
+    # Es independiente de la URL del servidor (que puede ser un nombre de contenedor).
+    assert resp.json()["qbit_url"] is None
+
+
+def test_la_url_publica_de_qbit_se_quita_con_un_valor_vacio(client, auth_headers):
+    client.put("/api/settings", json={"qbit_public_url": "http://192.168.1.5:8080"}, headers=auth_headers)
+    resp = client.put("/api/settings", json={"qbit_public_url": ""}, headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["qbit_public_url"] is None
+
+
+@pytest.mark.parametrize("mala", [
+    "qbit.lan:8080", "ftp://qbit.lan", "javascript:alert(1)", "http://", "https:///ruta", "http://qbit lan",
+    "http://admin:clave@qbit.lan:8080", "https://admin@qbit.lan", "http://qbit.lan:puerto",
+])
+def test_la_url_publica_de_qbit_rechaza_lo_que_no_es_http_o_lleva_credenciales(client, auth_headers, mala):
+    resp = client.put("/api/settings", json={"qbit_public_url": mala}, headers=auth_headers)
+    assert resp.status_code == 422
+    # Lo que se rechaza no se devuelve en el error: podría llevar una clave.
+    assert "clave" not in resp.text
+    assert client.get("/api/settings", headers=auth_headers).json()["qbit_public_url"] is None
+
+
+def test_guardar_la_url_publica_no_la_escribe_en_el_registro(client, auth_headers, caplog):
+    import logging
+    with caplog.at_level(logging.DEBUG):
+        client.put("/api/settings", json={"qbit_public_url": "https://qbit.midominio.es"}, headers=auth_headers)
+        client.put("/api/settings", json={"qbit_public_url": "https://u:SECRETO-XYZ@qbit.midominio.es"},
+                   headers=auth_headers)
+    assert "qbit_public_url" in caplog.text  # el nombre del ajuste sí
+    assert "midominio" not in caplog.text and "SECRETO-XYZ" not in caplog.text
+
+
+def test_la_url_publica_de_qbit_no_es_un_secreto_ni_hay_que_pedirla_con_clear(client, auth_headers):
+    from emuwarez_uploadrr.services.settings import es_secreto
+    assert not es_secreto("qbit.public_url")
+    resp = client.put("/api/settings", json={"clear": ["qbit_public_url"]}, headers=auth_headers)
+    assert resp.status_code == 422
+
+
+def test_la_url_publica_de_qbit_viaja_en_la_copia_de_configuracion(client, auth_headers, tmp_path):
+    """No lleva claves (el PUT las rechaza), así que va en la copia sin pedir `incluir_claves`."""
+    from emuwarez_uploadrr.services.backup_service import _vaciar_claves
+    from emuwarez_uploadrr.database import connect, db_path
+    client.put("/api/settings", json={"qbit_public_url": "https://qbit.midominio.es"}, headers=auth_headers)
+    copia = tmp_path / "copia.db"
+    origen = connect(db_path())
+    try:
+        origen.execute("VACUUM INTO ?", (str(copia),))
+    finally:
+        origen.close()
+    _vaciar_claves(copia)
+    import sqlite3
+    with sqlite3.connect(copia) as c:
+        valor = c.execute("SELECT value FROM settings WHERE key = 'qbit.public_url'").fetchone()
+    assert valor and valor[0] == "https://qbit.midominio.es"

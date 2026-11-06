@@ -162,7 +162,10 @@ def test_cada_ajuste_sencillo_se_guarda_en_su_clave_y_se_lee(client, auth_header
     a = AJUSTES[campo]
     valor = _otro_valor(a)
     if a.tipo == STR:
-        enviado, valor = (f"  http://{valor}  ", f"http://{valor}") if campo == "qbit_url" else (f"  {valor}  ", valor)
+        if campo in ("qbit_url", "qbit_public_url"):  # estos solo admiten una URL http(s)
+            enviado, valor = f"  http://{valor}  ", f"http://{valor}"
+        else:
+            enviado = f"  {valor}  "
     else:
         enviado = valor
     resp = client.put("/api/settings", json={campo: enviado}, headers=auth_headers)

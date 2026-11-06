@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Optional
+from urllib.parse import urlsplit
 
 from .mkv_remux import MODO_PISTAS_POR_DEFECTO, MODOS_PISTAS
 from .uploadrr_contract import DEFAULT_TIMEOUT_SECONDS, RUNTIME_EMU, RUNTIME_GENERIC
@@ -96,6 +97,9 @@ _REGISTRO: tuple[Ajuste, ...] = (
     # qBittorrent
     Ajuste("qbit_url", "qbit.url", STR),
     Ajuste("qbit_tag", "qbit.tag", STR),
+    # La dirección con la que TÚ abres la WebUI desde el navegador (la de `qbit_url` puede ser un nombre de
+    # contenedor). Opcional; solo sirve para el enlace «Abrir en qBittorrent». Ver `error_de_url_publica`.
+    Ajuste("qbit_public_url", "qbit.public_url", STR),
     Ajuste("qbit_username", "qbit.username", STR),
     Ajuste("qbit_password", "qbit.password", SECRET, campo_estado="qbit_password",
            enmascara=False, borrable=True),
@@ -140,6 +144,32 @@ assert len(AJUSTES) == len(POR_CLAVE) == len(_REGISTRO), "campo o clave repetido
 assert all(a.tipo in TIPOS for a in _REGISTRO)
 
 CLAVES_SECRETAS: frozenset[str] = frozenset(a.clave for a in _REGISTRO if a.tipo == SECRET)
+
+
+ERROR_URL_PUBLICA_QBIT = (
+    "La URL pública de qBittorrent debe empezar por http:// o https://, incluir un host válido y no llevar "
+    "usuario ni contraseña"
+)
+
+
+def error_de_url_publica(valor: Optional[str]) -> Optional[str]:
+    """Por qué no vale como URL pública de qBittorrent, o None si vale (o está vacía: sin URL pública).
+
+    Solo http/https con host y SIN credenciales (`usuario:clave@host`): la URL se devuelve tal cual en la
+    configuración y en la lista de seeding y acaba en un enlace, así que no puede llevar una clave."""
+    texto = (valor or "").strip()
+    if not texto:
+        return None
+    try:
+        partes = urlsplit(texto)
+        partes.port  # leerlo lanza ValueError si el puerto no es un número
+    except ValueError:
+        return ERROR_URL_PUBLICA_QBIT
+    if partes.scheme not in ("http", "https") or not partes.hostname or any(c.isspace() for c in texto):
+        return ERROR_URL_PUBLICA_QBIT
+    if partes.username is not None or partes.password is not None or "@" in partes.netloc:
+        return ERROR_URL_PUBLICA_QBIT
+    return None
 
 
 def desde_texto(ajuste: Ajuste, crudo: Optional[str]) -> Any:

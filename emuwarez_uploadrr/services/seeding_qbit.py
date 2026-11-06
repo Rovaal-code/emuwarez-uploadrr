@@ -33,6 +33,7 @@ from typing import Any, Optional
 
 from ..integrations import http_cliente
 from ..integrations.qbittorrent import ErrorQbit, qbit_listar_torrents
+from .ajustes_registro import error_de_url_publica
 from .carpeta_subida import RAIZ_SUBIDAS
 from .settings import get_setting_canonical
 
@@ -235,20 +236,30 @@ def _entrada(job_id: int, t: Optional[dict[str, Any]], como: str) -> dict[str, A
     }
 
 
+def url_publica(conn: sqlite3.Connection) -> Optional[str]:
+    """La URL con la que el usuario abre la WebUI de qBittorrent (ajuste opcional), o None. Se vuelve a comprobar
+    al leerla: una copia de configuración restaurada no pasó por la validación del PUT, y una URL con credenciales
+    no sale nunca."""
+    url = (get_setting_canonical(conn, "qbit.public_url") or "").strip()
+    return url if url and error_de_url_publica(url) is None else None
+
+
 def salud_del_seeding(conn: sqlite3.Connection, *, refrescar: bool = False) -> dict[str, Any]:
     """Para cada subida con torrent subido, su estado en qBittorrent.
 
-    Devuelve {configurado, disponible, mensaje, actualizado, items}. Sin qBittorrent configurado o sin respuesta,
+    Devuelve {configurado, disponible, mensaje, actualizado, items, url_publica}. Sin qBittorrent configurado o
+    sin respuesta,
     `items` va vacío y `disponible` es False: quien lo pide enseña «Sin datos de qBittorrent» y sigue."""
     url, usuario, clave, etiqueta = _configuracion(conn)
+    publica = url_publica(conn)
     if not url:
         return {"configurado": False, "disponible": False, "mensaje": MENSAJE_SIN_CONFIGURAR,
-                "actualizado": None, "items": []}
+                "actualizado": None, "items": [], "url_publica": publica}
     torrents, motivo, leido = _torrents(url, usuario, clave, refrescar=refrescar)
     actualizado = datetime.fromtimestamp(leido, tz=timezone.utc).isoformat(timespec="seconds")
     if torrents is None:
         return {"configurado": True, "disponible": False, "mensaje": motivo or MENSAJE_SIN_RESPUESTA,
-                "actualizado": actualizado, "items": []}
+                "actualizado": actualizado, "items": [], "url_publica": publica}
     indices = _indices(torrents)
     filas = conn.execute(
         "SELECT id, prepared_path FROM upload_jobs WHERE status = 'completed' OR torrent_subido = 1 ORDER BY id"
@@ -257,4 +268,5 @@ def salud_del_seeding(conn: sqlite3.Connection, *, refrescar: bool = False) -> d
     for fila in filas:
         t, como = casar(fila["prepared_path"], indices, etiqueta)
         items.append(_entrada(fila["id"], t, como))
-    return {"configurado": True, "disponible": True, "mensaje": None, "actualizado": actualizado, "items": items}
+    return {"configurado": True, "disponible": True, "mensaje": None, "actualizado": actualizado,
+            "items": items, "url_publica": publica}

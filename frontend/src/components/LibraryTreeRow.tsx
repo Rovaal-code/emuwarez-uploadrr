@@ -20,7 +20,7 @@ const NESTED_PAGE_SIZE = 25
 // is never paginated, unlike episodes), but still bounded defensively.
 const MAX_SEASONS_PER_SERIES = 500
 
-export type LibraryActionKind = 'nomenclature' | 'fields' | 'upload' | 'request'
+export type LibraryActionKind = 'upload' | 'request'
 
 interface LibraryTreeRowProps {
   item: LibraryItemResponse

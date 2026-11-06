@@ -395,35 +395,6 @@ export interface RequestSyncResponse {
   message: string
 }
 
-// Phase 6A — Nomenclature
-
-export interface NomenclatureProposal {
-  id?: number
-  library_item_id: number
-  status: 'draft' | 'valid' | 'warning' | 'blocked' | 'applied' | 'expired'
-  current_name?: string
-  current_path?: string
-  proposed_title?: string
-  proposed_torrent_name?: string
-  proposed_filename?: string
-  proposed_folder?: string
-  proposed_path?: string
-  media_type?: string
-  tmdb_id?: string
-  imdb_id?: string
-  resolution?: string
-  source?: string
-  provider?: string
-  video_codec?: string
-  audio_summary?: string
-  subtitle_summary?: string
-  release_tag?: string
-  warnings: string[]
-  errors: string[]
-  created_at?: string
-  updated_at?: string
-}
-
 // Phase 6 (Series/Season/Episode hierarchy) — season pack: one release for
 // a whole Temporada, not N independent per-episode jobs.
 
@@ -736,50 +707,4 @@ export interface UploadStartResult {
   command_preview: string | null
   message: string | null
   error: string | null
-}
-
-// Phase 6B — Nomenclature apply result
-
-export interface NomenclatureApplyResult {
-  dry_run: boolean
-  apply: boolean
-  status: string
-  source_path?: string
-  destination_path?: string
-  operation_id?: number
-  proposal?: NomenclatureProposal
-  warnings: string[]
-  errors: string[]
-  message?: string
-  renombrable?: boolean
-}
-
-export interface CommandPreview {
-  uploadrr_path?: string
-  tracker?: string
-  category?: string
-  title?: string
-  tmdb_id?: string
-  resolution?: string
-  source_path?: string
-  command_preview?: string
-  note?: string
-  using_prepared_path?: boolean
-  // Phase 10E: Uploadrr-EMU contract fields.
-  runtime_type?: string
-  contract_valid?: boolean
-  contract_errors?: string[]
-  contract_warnings?: string[]
-  can_execute?: boolean
-  requires_confirmation?: string
-  safe_to_execute?: boolean
-}
-
-export interface UploadPreflightResponse {
-  status: string
-  job?: UploadJob
-  preflight: Record<string, unknown>
-  command_preview?: CommandPreview
-  warnings: string[]
-  errors: string[]
 }

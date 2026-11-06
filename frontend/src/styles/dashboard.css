@@ -319,12 +319,9 @@
   background: var(--color-available);
 }
 
+/* Fondo, borde, esquinas y sombra de la tarjeta los pone `.hud-app .wizard-card` (hud-theme.css). */
 .wizard-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
   padding: 28px;
-  box-shadow: var(--shadow-modal);
 }
 
 .wizard-step-title {
@@ -415,14 +412,11 @@
   padding: 20px;
 }
 
+/* Fondo, borde, esquinas y sombra de la tarjeta los pone `.hud-app .login-card` (hud-theme.css). */
 .login-card {
   width: 100%;
   max-width: 380px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
   padding: 32px;
-  box-shadow: var(--shadow-modal);
 }
 
 .login-logo {

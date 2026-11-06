@@ -1,6 +1,5 @@
 import { api } from './client'
 import type {
-  UploadPreflightResponse,
   UploadJob,
   UploadJobLogsResponse,
   UploadStartRequest,
@@ -12,10 +11,6 @@ import type {
 } from '../types/api'
 import type { NomenclatureFields, TrackRemuxOverride } from './nomenclature'
 import { latestInChain } from '../utils/uploadStatus'
-
-export async function uploadPreflight(itemId: number, requestId?: number): Promise<UploadPreflightResponse> {
-  return api.post<UploadPreflightResponse>(`/library/${itemId}/upload/preflight`, { request_id: requestId ?? null })
-}
 
 export interface UploadQueueResult {
   status: string

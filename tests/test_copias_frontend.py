@@ -95,18 +95,14 @@ def test_los_tokens_de_confirmacion_coinciden():
     from emuwarez_uploadrr.services.maintenance_service import (
         VACUUM_CONFIRMATION,
     )
-    from emuwarez_uploadrr.services.mkv_title import MKV_CONFIRMATION_TOKEN
-    from emuwarez_uploadrr.services.nomenclature import CONFIRMATION_TOKEN as NOM_TOKEN
     from emuwarez_uploadrr.services.upload_execution import (
         CONFIRMATION_TOKEN as UPLOAD_TOKEN, DELETE_CONFIRMATION_TOKEN,
     )
 
     # token del backend -> fichero del frontend que lo escribe a mano
     esperados = {
-        UPLOAD_TOKEN: "components/UploadPreflightModal.tsx",
+        UPLOAD_TOKEN: "pages/UploadsPage.tsx",
         DELETE_CONFIRMATION_TOKEN: "api/uploads.ts",
-        NOM_TOKEN: "components/NomenclatureModal.tsx",
-        MKV_CONFIRMATION_TOKEN: "components/NomenclatureFieldsModal.tsx",
         VACUUM_CONFIRMATION: "pages/ajustes/diagnostico/DatabaseActions.tsx",
         RESTORE_CONFIRMATION: "pages/ajustes/BackupTab.tsx",
     }

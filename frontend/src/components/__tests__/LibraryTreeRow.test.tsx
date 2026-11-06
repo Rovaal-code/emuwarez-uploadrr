@@ -123,6 +123,15 @@ describe('LibraryTreeRow', () => {
     expect(celdas()[3].querySelector('.badge')!.textContent).toBe('Compatible')
   })
 
+  it('una temporada o capítulo sin petición propia dice de quién la hereda, sin insignia', async () => {
+    await montarFila(elemento({ item_type: 'season', request_status: 'Sin petición', peticion_heredada: 'serie' }))
+    expect(celdas()[3].querySelector('.badge')).toBeNull()
+    expect(celdas()[3].textContent).toBe('de la serie')
+    await desmontar()
+    await montarFila(elemento({ item_type: 'episode', request_status: 'Sin petición', peticion_heredada: 'temporada' }))
+    expect(celdas()[3].textContent).toBe('de la temporada')
+  })
+
   it('un capítulo sin póster no reserva el hueco de la carátula', async () => {
     await montarFila(elemento({ item_type: 'episode', title: 'Serie S01E02 - X', season_number: 1, episode_number: 2, poster_url: null }))
     expect(document.querySelector('.bib-miniatura')).toBeNull()

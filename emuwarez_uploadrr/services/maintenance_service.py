@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from .settings import get_setting_canonical, set_setting
+from ..integrations.base import texto_de_error
 
 VACUUM_CONFIRMATION = "MANTENIMIENTO_DB"
 
@@ -46,7 +47,7 @@ def get_database_maintenance_status() -> dict:
             "fragmentation_pct": round(freelist / page_count * 100, 1) if page_count else 0,
         }
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": texto_de_error(exc)}
 
 
 def run_database_integrity_check() -> dict:
@@ -67,7 +68,7 @@ def run_database_integrity_check() -> dict:
             "message": "Integridad OK" if passed else f"Problemas encontrados: {results}",
         }
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": texto_de_error(exc)}
 
 
 def run_database_vacuum(
@@ -118,7 +119,7 @@ def run_database_vacuum(
         busy = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0]
         conn.close()
     except Exception as exc:
-        return {"ok": False, "dry_run": False, "error": str(exc)}
+        return {"ok": False, "dry_run": False, "error": texto_de_error(exc)}
 
     after = _size_on_disk(db)
     saved = before - after
@@ -158,7 +159,7 @@ def run_database_analyze(*, dry_run: bool = True, apply: bool = False) -> dict:
         conn.close()
         return {"ok": True, "dry_run": False, "action": "analyze", "message": "ANALYZE completado"}
     except Exception as exc:
-        return {"ok": False, "dry_run": False, "error": str(exc)}
+        return {"ok": False, "dry_run": False, "error": texto_de_error(exc)}
 
 
 # --- Mantenimiento nocturno: limpiar lo antiguo y optimizar la base -----------------------------------------
@@ -287,13 +288,13 @@ def ejecutar_mantenimiento(conn: sqlite3.Connection, ahora: Optional[datetime] =
             borrados.append(f"{paso()} {nombre}")
         except sqlite3.Error as exc:
             conn.rollback()
-            fallos.append(f"{nombre}: {exc}")
+            fallos.append(f"{nombre}: {texto_de_error(exc)}")
     resumen = "Borradas " + ", ".join(borrados) if borrados else "No se ha borrado nada"
     try:
         if not optimizar_base(conn):
             resumen += ". WAL pendiente de vaciar: hay lecturas en curso"
     except sqlite3.Error as exc:
-        fallos.append(f"optimizar: {exc}")
+        fallos.append(f"optimizar: {texto_de_error(exc)}")
     if fallos:
         return "failed", f"{resumen}. Fallos: " + "; ".join(fallos)
     return "completed", resumen

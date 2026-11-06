@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from ..database import connect, row_to_dict, get_state
 from .filesystem_safety import safe_stat
 from .source_assistant import EMU_PROVIDERS, PROVIDER_SOURCES
+from ..integrations.base import texto_de_error
 
 logger = logging.getLogger("emuwarez.nomenclature")
 
@@ -961,7 +962,7 @@ def renombrar_en_subidas(item_id: int, origen: str, destino: str, *, conn,
             logger.exception("Renombrado hecho pero sin anotar en la biblioteca (item %s)", item_id)
             result["status"] = "failed"
             result["errors"] = list(result.get("errors") or []) + [
-                f"El archivo se renombró a {destino}, pero no se pudo anotar en la base de datos: {exc}"]
+                f"El archivo se renombró a {destino}, pero no se pudo anotar en la base de datos: {texto_de_error(exc)}"]
     return result
 
 
@@ -1058,26 +1059,6 @@ def marcar_nombre_aplicado(item_id: int, ruta: str, *, conn, proposal_id: int | 
 # ---------------------------------------------------------------------------
 # Consultas que vivían dentro de los endpoints (auditoría, hallazgo 6.2)
 # ---------------------------------------------------------------------------
-
-def list_filesystem_operations(item_id: int, *, limit: int = 20, conn=None) -> list[dict]:
-    """El historial de operaciones de fichero de un elemento, lo más reciente
-    primero. Solo las de nomenclatura: el resto del historial no es de esta
-    pantalla."""
-    own = conn is None
-    conn = conn or connect()
-    try:
-        rows = conn.execute(
-            """SELECT * FROM filesystem_operations
-               WHERE library_item_id = ?
-                 AND operation_type IN ('nomenclature_rename', 'nomenclature_hardlink')
-               ORDER BY created_at DESC LIMIT ?""",
-            (item_id, limit),
-        ).fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        if own:
-            conn.close()
-
 
 def item_tmdb_reference(item_id: int, *, conn=None) -> tuple[str | None, str | None]:
     """(tmdb_id, item_type) de un elemento, para consultar sus proveedores en

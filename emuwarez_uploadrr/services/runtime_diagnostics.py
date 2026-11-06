@@ -5,6 +5,8 @@ import os
 import sqlite3
 from pathlib import Path
 
+from ..integrations.base import texto_de_error
+
 
 def _check(name: str, status: str, message: str, details: dict | None = None) -> dict:
     return {"name": name, "status": status, "message": message, "details": details or {}}
@@ -34,7 +36,7 @@ def check_database_path() -> dict:
             conn.close()
             return _check("database", "ok", f"BD accesible en {db_path}", {"path": str(db_path)})
         except Exception as e:
-            return _check("database", "error", f"BD no accesible: {e}", {"path": str(db_path)})
+            return _check("database", "error", f"BD no accesible: {texto_de_error(e)}", {"path": str(db_path)})
     else:
         return _check(
             "database",
@@ -229,7 +231,7 @@ def check_arr_health_configuration() -> dict:
             },
         )
     except Exception as exc:
-        return _check("arr_health_config", "warning", f"No se pudo verificar configuración ARR: {exc}", {})
+        return _check("arr_health_config", "warning", f"No se pudo verificar configuración ARR: {texto_de_error(exc)}", {})
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:

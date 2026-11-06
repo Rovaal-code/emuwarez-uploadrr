@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import emu_format, media_probe
+from ..integrations.base import texto_de_error
 
 
 logger = logging.getLogger(__name__)
@@ -169,7 +170,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None,
     try:
         info = media_probe.run_mediainfo_json(p)
     except Exception as exc:  # noqa: BLE001
-        return {"available": False, "message": f"MediaInfo falló: {exc}", "rows": []}
+        return {"available": False, "message": f"MediaInfo falló: {texto_de_error(exc)}", "rows": []}
 
     video = media_probe.first_track(info, "Video")
     rows: list[dict] = []

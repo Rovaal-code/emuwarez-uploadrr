@@ -22,6 +22,7 @@ from . import cache, evidence, names, profile, scoring, tools, transcode
 from .budget import Budget
 from .constants import CANDIDATES, DEFAULT_BUDGET_S, ENGINE_VERSION
 from .sampling import MAX_SAMPLING_BUDGET_S, sample_bitstream
+from ...integrations.base import texto_de_error
 
 log = logging.getLogger("emuwarez.source_engine")
 
@@ -44,7 +45,7 @@ def analyze(path: str, *, radarr_source: Optional[str] = None,
     try:
         size_bytes = p.stat().st_size
     except OSError as exc:
-        return _error_result(f"Archivo no accesible: {exc}")
+        return _error_result(f"Archivo no accesible: {texto_de_error(exc)}")
 
     # --- 1. Run the 3 primary tools in parallel -----------------------------
     # They run concurrently, so giving each nearly the whole remaining budget

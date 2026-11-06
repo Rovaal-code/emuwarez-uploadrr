@@ -54,6 +54,8 @@ import shutil
 import threading
 from typing import Callable, Iterable, Optional
 
+from ..integrations.base import texto_de_error
+
 logger = logging.getLogger(__name__)
 
 # Dentro de /config, que es el volumen que el usuario ya monta: no hay nada
@@ -166,7 +168,7 @@ def preparar_carpeta_de_pack(
         os.makedirs(destino, exist_ok=True)
     except OSError as e:
         return {"status": "blocked", "carpeta": None,
-                "errors": [f"No se pudo preparar {destino}: {e}"]}
+                "errors": [f"No se pudo preparar {destino}: {texto_de_error(e)}"]}
 
     metodos: set[str] = set()
     try:
@@ -175,8 +177,8 @@ def preparar_carpeta_de_pack(
     except (OSError, NoSePudoPreparar) as e:
         shutil.rmtree(destino, ignore_errors=True)
         return {"status": "blocked", "carpeta": None,
-                "errors": [str(e) if isinstance(e, NoSePudoPreparar)
-                           else f"No se pudieron enlazar los capítulos: {e}"]}
+                "errors": [texto_de_error(e) if isinstance(e, NoSePudoPreparar)
+                           else f"No se pudieron enlazar los capítulos: {texto_de_error(e)}"]}
 
     return {"status": "ready", "carpeta": destino, "errors": [],
             "metodos": sorted(metodos), "cuantos": len(ficheros)}
@@ -217,8 +219,8 @@ def preparar_fichero_suelto(
         metodo = preparar(fichero, destino)
     except (OSError, NoSePudoPreparar) as e:
         return {"status": "blocked", "ruta": None,
-                "errors": [str(e) if isinstance(e, NoSePudoPreparar)
-                           else f"No se pudo enlazar en {raiz}: {e}"]}
+                "errors": [texto_de_error(e) if isinstance(e, NoSePudoPreparar)
+                           else f"No se pudo enlazar en {raiz}: {texto_de_error(e)}"]}
 
     return {"status": "ready", "ruta": destino, "errors": [],
             "metodos": [metodo], "cuantos": 1}
@@ -323,7 +325,7 @@ def comprobar_enlace(fichero: str, *, raiz: Optional[str] = None) -> dict:
         tipo = _enlazar(fichero, prueba)
         return {"ok": True, "tipo": tipo, "error": None}
     except OSError as e:
-        return {"ok": False, "tipo": None, "error": f"{raiz}: {e}"}
+        return {"ok": False, "tipo": None, "error": f"{raiz}: {texto_de_error(e)}"}
     finally:
         try:
             if os.path.lexists(prueba):

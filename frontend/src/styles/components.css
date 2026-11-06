@@ -1288,7 +1288,9 @@ optgroup {
 }
 @media (pointer: coarse) {
   .value-chip.linkable > a.hover-link:only-of-type::after {
-    inset-block: min(0px, calc((100% - var(--tap-min)) / 2));
+    /* En las filas de una tarjeta de ficha, sin pasar de la mitad del espacio hasta la fila de al lado
+       (--row-gap, más medio píxel del separador): con la interfaz reducida invadía la ficha de arriba o de abajo. */
+    inset-block: max(calc(-0.5px - var(--row-gap, 999px)), min(0px, calc((100% - var(--tap-min)) / 2)));
     inset-inline: min(0px, calc((100% - var(--tap-min)) / 2));
   }
 }

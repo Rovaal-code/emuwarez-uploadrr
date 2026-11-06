@@ -528,6 +528,10 @@
   /* Su zona ya deja aire alrededor del triángulo (y de la casilla del lote): sin el hueco de la fila detrás, y con
      la columna 44 px más ancha, el título se queda con el sitio que tenía. */
   .bib-titulo-fila > :is(.lote-casilla, .tree-expander, .bib-hueco-triangulo, .bib-num-episodio) { margin-right: -8px; }
+  /* Y la fila mide al menos eso (el contenido, menos los 5 + 5 px de relleno de la celda): con la interfaz reducida
+     (--tap-min crece en px de CSS) la casilla, el desplegable y la zona de la chapa de Origen invadían la fila de al
+     lado. A tamaño normal las filas ya medían 50 y no cambian. */
+  .data-table.bib-tabla .bib-titulo-fila { min-height: calc(var(--tap-min) - 10px); }
   /* El nombre completo solo estaba en un tooltip, que el dedo no abre: mejor en dos líneas que cortado. */
   .lib-title-link.bib-titulo-enlace { white-space: normal; overflow-wrap: anywhere; }
 }

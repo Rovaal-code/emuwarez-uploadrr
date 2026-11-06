@@ -591,21 +591,6 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   subidas», solo con icono entre 769 y 1400 px para ir en una fila. Los modales ya eran opacos tras #229. **Pendiente:** `--color-tab-active`
   (globals.css) y los endpoints de nomenclatura y preflight del backend, sin uso desde la interfaz; `pages/ajustes/formatBytes.ts` sigue con espacio
   normal y otra precisión; `viewport-fit=cover` espera a que el marco trate las safe areas; tablet táctil a 769–1400 px sin probar.
-- **Oleada 4, Peticiones, Subidas y detalle de subida tras la revisión C:** cierra lo aplazado en #228. Subidas avisa sobre la tabla si
-  Reintentar o Cancelar fallan desde la lista (antes solo en el detalle, o nada), junta Creado y Finalizado en una columna «Fecha» relativa
-  (las exactas en el tooltip) y pone el título en dos líneas por debajo de 1400 px: a 1280 px ya no se desborda (1068 → 990 px de 990). La
-  ficha de petición tiene una sola acción principal («Subir a eMuwarez») y su título se abre con el teclado (`HoverTitle`). Pósters vacíos de
-  28×42 (filas de 75 a ~63 px), «en vivo» en cian en lista y detalle, el detalle de una subida terminada sin «Pendiente» falsos ni «Dónde se
-  fue el tiempo» vacío, y Seeding sin qBittorrent como un guion con su texto en tooltip. **Una tarjeta por fila en móvil** (<760 px), solo
-  con CSS sobre el mismo DOM (`pet-col-*`/`pet-meta`, `sub-tarjeta`/`sub-meta`); la cabecera queda como una tira de filtros de 44 px que se
-  desplaza de lado. **Virtualizadas** con `FilasVirtuales` pasadas las 50 filas (`UMBRAL_VIRTUAL`, `utils/ventana.ts`): en Peticiones la
-  cabecera de cada grupo es un elemento más (clave negativa) y va en `fijas`, así que sigue pegada y «ir al grupo» la encuentra; en Subidas
-  cada elemento es el último intento con sus anteriores. `CuerpoMedido` va memorizado y pinta él mismo su fila: al desplazarse ya no se
-  repintan las que siguen a la vista. Medido con rueda continua a 1440×900 (141 peticiones, 80 subidas): nodos de la tabla de 6220 a 942
-  (Peticiones) y de 5182 a 995 (Subidas); con CPU ×4, tareas largas de 267/275/82 a 16/5/7. Con 400 subidas, p95 de 16,8 ms. Sin avisos de
-  «Maximum update depth». **Descartado:** ocultar Autor y Origen a 1280 (Autor siempre visible por decisión anterior; los dos filtran),
-  Grupo y Petición visibles por debajo de 1600 px (no caben a 1280 sin volver a desbordar), quitar el recuadro del título del detalle
-  (`DetailTitle` es compartido y lo tocan los `h1`). **Sin ver:** lector de pantalla, tarjeta en táctil real.
 
 ## Siguiente
 

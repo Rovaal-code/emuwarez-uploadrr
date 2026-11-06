@@ -21,7 +21,8 @@
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 20px;
-  align-items: stretch;
+  /* El panel crece con su contenido hasta el alto disponible: una sección corta no deja un panel vacío de pantalla entera. */
+  align-items: start;
 }
 
 /* Las secciones, en una lista a la izquierda: el título entero, sin recortar. */
@@ -70,6 +71,7 @@
   padding: 20px 24px;
   min-width: 0;
   min-height: 0;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -104,7 +106,7 @@
   color: var(--text-secondary);
   background: none;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-small);
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
@@ -219,13 +221,26 @@
     width: auto;
     white-space: nowrap;
     border-color: var(--border);
-    border-radius: 999px;
+    border-radius: var(--radius-small);
     padding: 7px 14px;
   }
   }
 
 @media (max-width: 520px) {
   .detail-card.guia-panel { padding: 16px 14px; }
+  /* En el móvil se desplaza la página entera, no un panel dentro de ella, y los saltos van en una fila que se
+     desplaza de lado (como las secciones) en vez de comerse media pantalla en cuatro filas. */
+  .guia-pagina { height: auto; }
+  .guia-cuerpo { grid-template-rows: auto auto; }
+  .detail-card.guia-panel { max-height: none; }
+  .guia-panel-cuerpo { overflow: visible; padding-right: 0; }
+  .guia-saltos {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .guia-salto { flex-shrink: 0; white-space: nowrap; }
 }
 
 .guia-pestana,

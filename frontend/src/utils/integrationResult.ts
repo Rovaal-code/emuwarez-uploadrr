@@ -1,7 +1,7 @@
 import type { IntegrationTestResult } from '../api/integrationTests'
 
 // Single source of truth for turning a "Probar conexión" result into a
-// label + color. Used to live duplicated (and drifting — e.g. only some
+// label (its colour now comes from ResultadoPrueba's classes). Used to live duplicated (and drifting — e.g. only some
 // call sites handled 'timeout') across SetupWizard, SettingsPage and
 // InstancesPage; now shared so every "Probar conexión" button in the app
 // reads the same status the same way.
@@ -46,10 +46,4 @@ export function testResultLabel(result: IntegrationTestResult): string {
     return label
   }
   return STATUS_LABELS[result.status] ?? `✗ ${result.message}`
-}
-
-export function testResultColor(result: IntegrationTestResult): string {
-  if (result.ok) return '#22c55e'
-  if (result.status === 'not_configured') return '#f59e0b'
-  return '#ef4444'
 }

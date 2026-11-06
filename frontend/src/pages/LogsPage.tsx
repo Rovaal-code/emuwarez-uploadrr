@@ -16,13 +16,17 @@ const AVISO_COPIADO_MS = 1800
 
 // Una línea del registro. Memoizada: con mil líneas, repintarlas todas cada 3 segundos para dejarlas igual era lo que
 // más costaba de esta pantalla. Con la línea abierta el mensaje se parte en varias líneas; cerrada, se recorta.
-const Linea = memo(function Linea({ linea, id, abierta, busqueda, onAlternar, onCopiar }: {
+// Solo una línea (`enfocable`) está en el orden del tabulador: con mil líneas y su botón de copiar eran dos mil paradas
+// antes de salir de la lista. Dentro, las flechas mueven el foco y la tecla C copia la línea.
+const Linea = memo(function Linea({ linea, id, abierta, enfocable, busqueda, onAlternar, onCopiar, onEnfocar }: {
   linea: LogEntry
   id: string
   abierta: boolean
+  enfocable: boolean
   busqueda: string
   onAlternar: (id: string) => void
   onCopiar: (linea: LogEntry) => void
+  onEnfocar: (id: string) => void
 }) {
   const nivel = NIVEL_CLASE[linea.level] ?? 'otro'
   return (
@@ -30,8 +34,12 @@ const Linea = memo(function Linea({ linea, id, abierta, busqueda, onAlternar, on
       <button
         type="button"
         className="lg-linea__cuerpo"
+        data-linea={id}
+        tabIndex={enfocable ? 0 : -1}
         aria-expanded={abierta}
+        aria-keyshortcuts="C"
         onClick={() => onAlternar(id)}
+        onFocus={() => onEnfocar(id)}
         title={abierta ? 'Recoger la línea' : 'Ver la línea entera'}
       >
         <span className="lg-hora" title={linea.time}>{horaDeLinea(linea)}</span>
@@ -42,7 +50,7 @@ const Linea = memo(function Linea({ linea, id, abierta, busqueda, onAlternar, on
             t.coincide ? <mark key={i} className="lg-coincidencia">{t.texto}</mark> : t.texto)}
         </span>
       </button>
-      <button type="button" className="lg-copiar" onClick={() => onCopiar(linea)} aria-label={`Copiar la línea de las ${horaDeLinea(linea)}`} title="Copiar la línea">
+      <button type="button" className="lg-copiar" tabIndex={-1} onClick={() => onCopiar(linea)} aria-label={`Copiar la línea de las ${horaDeLinea(linea)}`} title="Copiar la línea">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
           <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" />
         </svg>
@@ -53,6 +61,9 @@ const Linea = memo(function Linea({ linea, id, abierta, busqueda, onAlternar, on
 
 export function LogsPage() {
   const [items, setItems] = useState<LogEntry[]>([])
+  const listaRef = useRef<HTMLDivElement>(null)
+  // Si el foco estaba en una línea de la lista justo antes de aplicar un refresco (lo mira `load`).
+  const focoEnLista = useRef(false)
   const [level, setLevel] = useState('')
   const [search, setSearch] = useState('')
   // Lo buscado que ya se pidió al servidor: es lo que se resalta, para no repintar las líneas con cada tecla.
@@ -63,6 +74,8 @@ export function LogsPage() {
   const [abiertas, setAbiertas] = useState<ReadonlySet<string>>(new Set())
   const [todasAbiertas, setTodasAbiertas] = useState(false)
   const [copiado, setCopiado] = useState<string | null>(null)
+  // La línea que entra en el orden del tabulador (la última enfocada; al principio, la primera).
+  const [activa, setActiva] = useState<string | null>(null)
   const searchRef = useRef(search)
   searchRef.current = search
   // Hay una carga sin acabar: el refresco automático no lanza otra encima (con búsqueda son 1000 líneas con LIKE).
@@ -78,6 +91,7 @@ export function LogsPage() {
       const r = await getLogs({ limit: 1000, level: level || undefined, search: searchRef.current.trim() || undefined })
       if (esta !== ultimaCarga.current) return
       // Si no ha entrado nada, se deja la lista como está: no se repintan mil filas para nada.
+      focoEnLista.current = !!listaRef.current?.contains(document.activeElement)
       setItems(previas => (mismasLineas(previas, r.items) ? previas : r.items))
       setError(null)
     } catch {
@@ -139,6 +153,35 @@ export function LogsPage() {
   // Estable entre repintados para no invalidar el memo de las líneas.
   const copiarLinea = useCallback((l: LogEntry) => { void copiarTexto(textoDeLinea(l), 'linea') }, [copiarTexto])
 
+  const enfocable = activa !== null && claves.includes(activa) ? activa : claves[0]
+
+  // Si un refresco se lleva la línea que tenía el foco (deja de estar entre las más recientes), el foco cae al body:
+  // vuelve a la lista, a la línea que ahora entra con Tab. Solo si el foco estaba en la lista al refrescar.
+  useEffect(() => {
+    if (activa === null || claves.includes(activa) || !focoEnLista.current) return
+    focoEnLista.current = false
+    if (document.activeElement && document.activeElement !== document.body) return
+    listaRef.current?.querySelector<HTMLButtonElement>('.lg-linea__cuerpo[tabindex="0"]')?.focus()
+  }, [activa, claves])
+
+  // Flechas, Inicio y Fin entre las líneas; C copia la enfocada.
+  function alTeclearLista(e: React.KeyboardEvent<HTMLDivElement>) {
+    const actual = (e.target as HTMLElement).closest<HTMLButtonElement>('.lg-linea__cuerpo')
+    if (!actual || e.altKey || e.ctrlKey || e.metaKey) return
+    if (e.key === 'c' || e.key === 'C') {
+      const i = claves.indexOf(actual.dataset.linea ?? '')
+      if (i >= 0) { e.preventDefault(); copiarLinea(items[i]) }
+      return
+    }
+    const lineas = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('.lg-linea__cuerpo')]
+    const i = lineas.indexOf(actual)
+    const destino = e.key === 'ArrowDown' ? i + 1 : e.key === 'ArrowUp' ? i - 1
+      : e.key === 'Home' ? 0 : e.key === 'End' ? lineas.length - 1 : null
+    if (destino === null || destino < 0 || destino >= lineas.length) return
+    e.preventDefault()
+    lineas[destino].focus()
+  }
+
   const hayFiltros = level !== '' || search.trim() !== ''
   function quitarFiltros() { setLevel(''); setSearch(''); setBuscado('') }
 
@@ -188,7 +231,9 @@ export function LogsPage() {
           <input type="checkbox" checked={todasAbiertas} onChange={e => { setTodasAbiertas(e.target.checked); setAbiertas(new Set()) }} /> Líneas enteras
         </label>
         <div className="lg-barra__fin">
-          <span className="lg-contador" role="status">{items.length === 1 ? '1 línea' : `${items.length} líneas`}</span>
+          <span className="lg-contador" role="status">
+            {copiado === 'linea' ? 'Línea copiada' : items.length === 1 ? '1 línea' : `${items.length} líneas`}
+          </span>
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => copiarTexto(items.map(textoDeLinea).join('\n'), 'todas')}
@@ -218,7 +263,7 @@ export function LogsPage() {
             action={hayFiltros ? <button className="btn btn-secondary btn-sm" onClick={quitarFiltros}>Quitar filtros</button> : undefined}
           />
         ) : (
-          <div className="lg-lista" role="region" aria-label="Líneas del registro" tabIndex={0}>
+          <div ref={listaRef} className="lg-lista" role="region" aria-label="Líneas del registro (flechas para moverse, C copia la línea)" onKeyDown={alTeclearLista}>
             {error && <div className="lg-aviso lg-aviso--error" role="alert">{error}: se enseña la última lectura.</div>}
             {filas.map(f => f.tipo === 'dia'
               ? <div key={`dia-${f.dia}`} className="lg-dia">{f.dia}</div>
@@ -227,9 +272,11 @@ export function LogsPage() {
                   id={f.id}
                   linea={f.linea}
                   abierta={todasAbiertas || abiertas.has(f.id)}
+                  enfocable={f.id === enfocable}
                   busqueda={buscado}
                   onAlternar={alternar}
                   onCopiar={copiarLinea}
+                  onEnfocar={setActiva}
                 />)}
           </div>
         )}

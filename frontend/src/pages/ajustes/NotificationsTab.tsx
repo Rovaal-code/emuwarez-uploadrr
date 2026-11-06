@@ -259,6 +259,7 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
         <Interruptor etiqueta="Activar notificaciones por Discord" marcado={discordEnabled} onCambio={setDiscordEnabled} />
         <Campo
           etiqueta="Webhook URL"
+          nota={estadoWebhook ? 'dejar vacío para mantener el actual' : undefined}
           ayuda={estadoWebhook && settings?.notify_discord_webhook_masked ? <>Guardado: <code>{settings.notify_discord_webhook_masked}</code></> : undefined}
         >
           {c => (
@@ -269,7 +270,7 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
                 className="form-input"
                 value={discordWebhook}
                 onChange={e => { setDiscordWebhook(e.target.value); setQuitarDiscord(false) }}
-                placeholder={quitarDiscord ? 'Se quitará al guardar' : 'https://discord.com/api/webhooks/… (dejar vacío para mantener el actual)'}
+                placeholder={quitarDiscord ? 'Se quitará al guardar' : 'https://discord.com/api/webhooks/…'}
                 autoComplete="new-password"
               />
               {estadoWebhook && !discordWebhook && (
@@ -303,6 +304,7 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
         <Interruptor etiqueta="Activar notificaciones por Telegram" marcado={telegramEnabled} onCambio={setTelegramEnabled} />
         <Campo
           etiqueta="Bot token"
+          nota={estadoToken ? 'dejar vacío para mantener el actual' : undefined}
           ayuda={estadoToken && settings?.notify_telegram_bot_token_masked ? <>Guardado: <code>{settings.notify_telegram_bot_token_masked}</code></> : undefined}
         >
           {c => (
@@ -313,7 +315,7 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
                 className="form-input"
                 value={telegramToken}
                 onChange={e => { setTelegramToken(e.target.value); setQuitarTelegram(false) }}
-                placeholder={quitarTelegram ? 'Se quitará al guardar' : '123456:ABC-DEF… (dejar vacío para mantener el actual)'}
+                placeholder={quitarTelegram ? 'Se quitará al guardar' : '123456:ABC-DEF…'}
                 autoComplete="new-password"
               />
               {estadoToken && !telegramToken && (

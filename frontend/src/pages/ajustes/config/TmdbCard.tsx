@@ -35,8 +35,8 @@ export function TmdbCard({ form }: { form: ConfigForm }) {
         lateral={<EstadoSecreto configurado={settings?.tmdb_api_key_configured} enmascarado={settings?.tmdb_api_key_masked} />}
       />
       <Campo
-        etiqueta="Nueva API key"
-        nota="dejar vacío para mantener la actual"
+        etiqueta={settings?.tmdb_api_key_configured ? 'Nueva API key' : 'API key'}
+        nota={settings?.tmdb_api_key_configured ? 'dejar vacío para mantener la actual' : undefined}
         ayuda="Usada para marcar proveedores disponibles en TMDb y para traducir los títulos de las series al español (eMuwarez exige el título siempre en español)."
       >
         {c => (

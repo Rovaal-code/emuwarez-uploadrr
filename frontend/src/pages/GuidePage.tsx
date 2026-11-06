@@ -708,8 +708,14 @@ function useSubtitulos(cuerpo: React.RefObject<HTMLElement | null>, seccion: str
   return subtitulos
 }
 
+// La sección abierta va en la URL (`/guide?seccion=rules`): así se puede enlazar a una sección concreta.
+function seccionDeLaUrl(): string {
+  const pedida = new URLSearchParams(window.location.search).get('seccion')
+  return SECTIONS.some(s => s.id === pedida) ? pedida! : 'formula'
+}
+
 export function GuidePage() {
-  const [openId, setOpenId] = useState<string>('formula')
+  const [openId, setOpenId] = useState<string>(seccionDeLaUrl)
   const openSection = SECTIONS.find(s => s.id === openId) ?? SECTIONS[0]
   const listaPestanas = useRef<HTMLDivElement>(null)
   const cuerpo = useRef<HTMLDivElement>(null)
@@ -717,7 +723,11 @@ export function GuidePage() {
 
   function elegir(id: string) {
     setOpenId(id)
-    cuerpo.current?.scrollTo({ top: 0 })
+    cuerpo.current?.scrollTo?.({ top: 0 })
+    // Sin entrada nueva en el historial: cambiar de sección no es cambiar de página.
+    if (window.location.pathname === '/guide') {
+      window.history.replaceState(window.history.state, '', `/guide?seccion=${id}`)
+    }
   }
 
   // Flechas (arriba/abajo o izquierda/derecha según la disposición), Inicio y Fin: el foco y la sección van juntos.

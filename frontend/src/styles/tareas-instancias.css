@@ -240,10 +240,29 @@
 .detail-panel__actions.tareas-logs-acciones { padding: 10px 16px; }
 .btn.tareas-a-la-derecha { margin-left: auto; }
 
+/* Lo que confirma un cambio guardado solo (horario, opción). La región está siempre, vacía, para que el lector de
+   pantalla anuncie el «✓» cuando aparece. */
+.tareas-guardado {
+  font-size: 12px;
+  color: var(--color-available-pale);
+}
+
+/* El enlace a donde se arregla el fallo, bajo el resumen del error. */
+.tareas-arreglo {
+  align-self: flex-start;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
 @media (max-width: 520px) {
   .placeholder-card.tareas-tarjeta { padding: 16px 16px 16px 18px; }
   .tareas-cabecera { flex-direction: column; gap: 8px; }
   .tareas-datos { grid-template-columns: 1fr; gap: 8px; }
+  /* El historial en el móvil: la duración se queda (sirve para ver qué tarea va lenta), pero estrecha. */
+  .tareas-modal-logs .data-table th:nth-child(3),
+  .tareas-modal-logs .data-table td:nth-child(3) { white-space: nowrap; padding-left: 4px; padding-right: 4px; }
+  .tareas-modal-logs .data-table td.tareas-log-resumen { min-width: 14ch; }
+  .tareas-modal-logs .data-table td.tareas-log-fecha { white-space: normal; }
 }
 
 /* ---- Instancias ---- */
@@ -401,6 +420,12 @@
 .inst-resultado--neutro { color: var(--text-secondary); }
 
 .inst-edicion { width: 100%; }
+.inst-titulo.inst-titulo-edicion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 
 /* Diálogo de eliminar. */
 .modal-panel.inst-modal-borrar { max-width: 460px; }
@@ -559,7 +584,8 @@
 }
 .lg-nivel { font-weight: 700; color: var(--text-secondary); }
 .lg-linea--debug .lg-nivel { color: var(--color-neutral); }
-.lg-linea--info .lg-nivel { color: var(--color-accent-soft); }
+/* INFO es casi todo el registro: en gris, para que WARNING y ERROR destaquen. */
+.lg-linea--info .lg-nivel { color: var(--text-secondary); }
 .lg-linea--warning .lg-nivel { color: var(--color-warning-soft); }
 .lg-linea--error .lg-nivel { color: var(--color-error-soft); }
 .lg-linea--critical .lg-nivel { color: var(--hud-danger, var(--color-error-soft)); }
@@ -603,6 +629,7 @@
   opacity: 0;
 }
 .lg-linea:hover .lg-copiar,
+.lg-linea:focus-within .lg-copiar,
 .lg-copiar:focus-visible { opacity: 1; }
 .lg-copiar:hover { color: var(--text-primary); }
 @media (hover: none) {

@@ -16,6 +16,27 @@ import {
 
 const INTERVAL_OPTIONS_MINUTES = [15, 30, 45, 60, 90, 120, 180, 360, 720, 1440]
 const HORA_POR_DEFECTO = '04:00'
+// Cuánto se ve el «✓ Guardado» de un cambio que se guarda solo.
+const MS_CONFIRMACION = 3000
+
+// Adónde ir a arreglar lo que hace fallar cada tarea (task_key del backend, services/scheduler.py). Sin entrada, la
+// tarea solo enseña su error.
+const DONDE_SE_ARREGLA: Record<string, { pagina: string; texto: string }> = {
+  'sync-emu-requests': { pagina: 'settings', texto: 'Revisar eMuwarez en Configuración' },
+  'sync-library': { pagina: 'instances', texto: 'Revisar las instancias' },
+  'vigilar-instancias': { pagina: 'instances', texto: 'Revisar las instancias' },
+}
+
+// true unos segundos tras llamar a `avisar()`: la confirmación de algo que se ha guardado sin pulsar «Guardar».
+function useConfirmacion() {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    if (!visible) return
+    const t = window.setTimeout(() => setVisible(false), MS_CONFIRMACION)
+    return () => window.clearTimeout(t)
+  }, [visible])
+  return [visible, () => setVisible(true), () => setVisible(false)] as const
+}
 
 // Un solo reloj para todas las cuentas atrás de la pantalla: cada segundo repinta solo ellas, no las tarjetas.
 const suscriptores = new Set<() => void>()
@@ -101,7 +122,7 @@ function LogsModal({ taskKey, taskName, onClose }: { taskKey: string; taskName: 
         )}
       </div>
       <div className="detail-panel__actions tareas-logs-acciones">
-        <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>Actualizar</button>
+        <button className="btn btn-secondary" onClick={load} disabled={loading}>Actualizar</button>
         <button className="btn btn-secondary tareas-a-la-derecha" onClick={onClose}>Cerrar</button>
       </div>
     </Modal>
@@ -115,12 +136,15 @@ function OpcionDeTarea({ taskKey, opcion, onChanged }: {
   const id = useId()
   const [texto, setTexto] = useState(String(opcion.valor))
   const [error, setError] = useState<string | null>(null)
+  const [guardado, avisarGuardado, ocultarGuardado] = useConfirmacion()
   useEffect(() => { setTexto(String(opcion.valor)) }, [opcion.valor])
 
   async function enviar(n: number) {
     setError(null)
+    ocultarGuardado()
     try {
       await updateScheduledTaskOptions(taskKey, { [opcion.clave]: n })
+      avisarGuardado()
       onChanged()
     } catch (e: unknown) {
       setTexto(String(opcion.valor))
@@ -147,6 +171,7 @@ function OpcionDeTarea({ taskKey, opcion, onChanged }: {
         </label>
         {opcion.nota && <span className="form-hint">{opcion.nota}</span>}
         {error && <span className="form-error" role="alert">{error}</span>}
+        <span className="tareas-guardado" role="status">{guardado ? '✓ Guardado' : ''}</span>
       </div>
     )
   }
@@ -172,12 +197,13 @@ function OpcionDeTarea({ taskKey, opcion, onChanged }: {
       <span id={`${id}-ayuda`} className={error ? 'form-error' : 'form-hint'} role={error ? 'alert' : undefined}>
         {error ?? `De ${opcion.minimo} a ${opcion.maximo}`}
       </span>
+      <span className="tareas-guardado" role="status">{guardado ? '✓ Guardado' : ''}</span>
       {opcion.nota && <span className="form-hint">{opcion.nota}</span>}
     </div>
   )
 }
 
-function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => void }) {
+function TaskCard({ task, onChanged, onNavigate }: { task: ScheduledTask; onChanged: () => void; onNavigate?: (page: string) => void }) {
   const base = useId()
   const [interval, setIntervalValue] = useState(task.interval_minutes)
   const [horaFija, setHoraFija] = useState(task.run_at !== null)
@@ -185,6 +211,7 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [horarioGuardado, avisarHorario, ocultarHorario] = useConfirmacion()
   const [logsOpen, setLogsOpen] = useState(false)
 
   useEffect(() => { setIntervalValue(task.interval_minutes) }, [task.interval_minutes])
@@ -196,8 +223,10 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
   async function guardarHorario(horario: { interval_minutes: number } | { run_at: string }) {
     setSaving(true)
     setMsg(null)
+    ocultarHorario()
     try {
       await updateScheduledTaskSchedule(task.task_key, horario)
+      avisarHorario()
       onChanged()
     } catch (e: unknown) {
       // El servidor no aceptó el cambio: lo mostrado vuelve a lo guardado.
@@ -242,6 +271,7 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
   const options = INTERVAL_OPTIONS_MINUTES.filter(m => m >= task.min_interval_minutes)
   const tono = task.enabled ? tonoDeEstado(task.last_status) : 'neutro'
   const idTitulo = `${base}-titulo`
+  const arreglo = task.enabled && task.last_status === 'failed' ? DONDE_SE_ARREGLA[task.task_key] : undefined
 
   return (
     <article className={`placeholder-card tareas-tarjeta tareas-tarjeta--${tono}`} aria-labelledby={idTitulo}>
@@ -269,6 +299,13 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
         task.last_status === 'failed'
           ? <p className="tareas-resumen tareas-resumen--error" role="status"><IconoAviso />{task.last_summary}</p>
           : <p className="tareas-resumen">{task.last_summary}</p>
+      )}
+      {arreglo && onNavigate && (
+        // Un enlace de verdad (se abre en otra pestaña con el botón central), que dentro de la app navega sin recargar.
+        <a className="tareas-arreglo hover-link" href={`/${arreglo.pagina}`}
+          onClick={e => { if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey) { e.preventDefault(); onNavigate(arreglo.pagina) } }}>
+          {arreglo.texto} →
+        </a>
       )}
 
       <div className="tareas-rejilla-160">
@@ -342,6 +379,7 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
           </span>
         )}
         <button className="btn btn-secondary btn-sm" onClick={() => setLogsOpen(true)}>Ver logs</button>
+        <span className="tareas-guardado" role="status">{horarioGuardado ? '✓ Horario guardado' : ''}</span>
       </div>
     </article>
   )
@@ -361,7 +399,7 @@ function ResumenTareas({ tasks }: { tasks: ScheduledTask[] }) {
   )
 }
 
-export function TasksPage() {
+export function TasksPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -402,7 +440,7 @@ export function TasksPage() {
           <EmptyState title="Sin tareas programadas" body="Las tareas aparecen aquí cuando el servidor las registra al arrancar." />
         ) : <div data-tour="tasks-content" className="tareas-lista">
           {tasks.map(task => (
-            <TaskCard key={task.task_key} task={task} onChanged={load} />
+            <TaskCard key={task.task_key} task={task} onChanged={load} onNavigate={onNavigate} />
           ))}
         </div>
       )}

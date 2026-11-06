@@ -8,7 +8,7 @@ import {
   type MaintenanceStatus,
   type BackupInfo,
 } from '../../api/maintenance'
-import { formatBytes } from './formatBytes'
+import { formatBytes, formatDate } from '../../utils/format'
 import { useSettingsMessage } from './mensajes'
 import { CabeceraTarjeta } from './CabeceraTarjeta'
 
@@ -38,7 +38,7 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
     setBusy(true)
     try {
       const r = await createBackup()
-      showMessage(r.ok, r.ok ? `✓ Backup creado: ${r.archive_name} (${formatBytes(r.size_bytes ?? 0)})` : `✗ ${r.error}`)
+      showMessage(r.ok, r.ok ? `✓ Backup creado: ${r.archive_name} (${formatBytes(r.size_bytes)})` : `✗ ${r.error}`)
       if (r.ok) { loadBackups(); onRefresh() }
     } catch (e: unknown) {
       showMessage(false, `✗ ${e instanceof Error ? e.message : String(e)}`)
@@ -121,29 +121,32 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
         {backups.length === 0 ? (
           <p className="aj-sec-13">No hay backups.</p>
         ) : (
-          <table className="aj-tabla aj-fs-12">
-            <thead>
-              <tr>
-                {['Nombre', 'Tipo', 'Tamaño', 'Fecha'].map(h => (
-                  <th key={h} className="aj-th">{h}</th>
-                ))}
-                <th className="aj-th"><span className="solo-lector">Acciones</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {backups.map(b => (
-                <tr key={b.path} className="aj-fila-borde">
-                  <td className="aj-td-5">{b.name}</td>
-                  <td className="aj-td-5">{TIPO_COPIA[b.tipo]}{b.con_claves ? ' · con claves' : b.con_claves === null ? ' · puede llevar claves' : ''}</td>
-                  <td className="aj-td-5">{formatBytes(b.size_bytes)}</td>
-                  <td className="aj-td-5">{b.created_at.slice(0, 16).replace('T', ' ')}</td>
-                  <td className="aj-td-5 aj-der">
-                    <button className="btn btn-secondary btn-sm" onClick={() => handleDownload(b)} aria-label={`Descargar ${b.name}`}>Descargar</button>
-                  </td>
+          // En el móvil la tabla no cabe: se desplaza dentro de su caja en vez de salirse de la pantalla.
+          <div className="aj-desborde-x">
+            <table className="aj-tabla aj-fs-12">
+              <thead>
+                <tr>
+                  {['Nombre', 'Tipo', 'Tamaño', 'Fecha'].map(h => (
+                    <th key={h} className="aj-th">{h}</th>
+                  ))}
+                  <th className="aj-th"><span className="solo-lector">Acciones</span></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {backups.map(b => (
+                  <tr key={b.path} className="aj-fila-borde">
+                    <td className="aj-td-5">{b.name}</td>
+                    <td className="aj-td-5">{TIPO_COPIA[b.tipo]}{b.con_claves ? ' · con claves' : b.con_claves === null ? ' · puede llevar claves' : ''}</td>
+                    <td className="aj-td-5">{formatBytes(b.size_bytes)}</td>
+                    <td className="aj-td-5">{formatDate(b.created_at)}</td>
+                    <td className="aj-td-5 aj-der">
+                      <button className="btn btn-secondary btn-sm" onClick={() => handleDownload(b)} aria-label={`Descargar ${b.name}`}>Descargar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         <div className="aj-mt-12">
           <input

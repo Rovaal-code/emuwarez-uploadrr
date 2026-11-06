@@ -70,7 +70,16 @@ export function SettingsPage() {
   const listaPestanas = useRef<HTMLDivElement>(null)
 
   function elegirPestana(key: Tab) {
-    if (key !== tab) guardedLeave(() => { setTab(key); setMsgPasajero(null) })
+    if (key === tab) return
+    guardedLeave(() => {
+      setTab(key)
+      setMsgPasajero(null)
+      // El permanente lo pone Diagnóstico (versión) y habla de esa pestaña: no se lleva a las demás. Al volver, la
+      // comprobación se repite y lo pone otra vez.
+      setMsgPermanente(null)
+      // En el móvil la fila de pestañas se desplaza: la elegida no puede quedarse cortada en el borde.
+      document.getElementById(`aj-pestana-${key}`)?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' })
+    })
   }
 
   // Flechas, Inicio y Fin mueven el foco entre las pestañas; activar una es Intro o Espacio, como cualquier botón

@@ -34,6 +34,7 @@ import { getMe, changeCredentials, getSessions, closeOtherSessions } from '../..
 import { getWidgetKeyStatus, generateWidgetKey, removeWidgetKey } from '../../api/widget'
 import { hasUnsavedChanges, setLeavePrompt } from '../../utils/unsavedGuard'
 import { SettingsPage } from '../SettingsPage'
+import { formatDate } from '../../utils/format'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -385,8 +386,8 @@ describe('Configuración: índice, buscador, barra de guardado y Avanzado', () =
     await montar()
     const nav = document.querySelector('nav[aria-label="Secciones de Configuración"]')!
     expect([...nav.querySelectorAll('button')].map(b => b.textContent)).toEqual([
-      'Cuenta', 'Sesiones abiertas', 'eMuwarez', 'TMDb', 'qBittorrent', 'Proveedores de vídeo',
-      'Proveedores de imágenes', 'Otros', 'Widget para Homepage', 'Avanzado',
+      'eMuwarez', 'TMDb', 'qBittorrent', 'Proveedores de vídeo', 'Proveedores de imágenes', 'Otros',
+      'Widget para Homepage', 'Cuenta', 'Sesiones abiertas', 'Avanzado',
     ])
     expect(nav.querySelectorAll('[aria-current]').length).toBe(1)
   })
@@ -413,10 +414,10 @@ describe('Configuración: índice, buscador, barra de guardado y Avanzado', () =
     try {
       await montar()
       const [franja, final] = avisos
-      expect(enlace('Cuenta').getAttribute('aria-current')).toBe('true')
+      expect(enlace('eMuwarez').getAttribute('aria-current')).toBe('true')
       await act(async () => { franja([{ target: seccion('qbittorrent'), isIntersecting: true }]) })
       expect(enlace('qBittorrent').getAttribute('aria-current')).toBe('true')
-      expect(enlace('Cuenta').getAttribute('aria-current')).toBeNull()
+      expect(enlace('eMuwarez').getAttribute('aria-current')).toBeNull()
       await act(async () => { franja([{ target: seccion('qbittorrent'), isIntersecting: false }, { target: seccion('otros'), isIntersecting: true }]) })
       expect(enlace('Otros').getAttribute('aria-current')).toBe('true')
       await act(async () => { final([{ target: seccion('avanzado'), intersectionRatio: 1 }]) })
@@ -440,9 +441,24 @@ describe('Configuración: índice, buscador, barra de guardado y Avanzado', () =
     await buscar('zzz')
     expect(visibles()).toEqual([])
     expect(texto()).toContain('Ninguna sección coincide con «zzz».')
+    expect(texto()).toContain('Las notificaciones (Discord, Telegram)')
     await buscar('')
     expect(visibles()).toHaveLength(10)
     expect(texto()).not.toContain('Ninguna sección coincide')
+  })
+
+  it('el buscador también lee ayudas, botones y sinónimos: «clave», «token» e «imgbox» encuentran sus tarjetas', async () => {
+    await montar()
+    await buscar('clave')
+    expect(visibles()).toEqual(expect.arrayContaining(['emuwarez', 'tmdb', 'proveedores-imagenes', 'widget']))
+    await buscar('token')
+    expect(visibles()).toEqual(expect.arrayContaining(['emuwarez', 'tmdb', 'widget']))
+    // imgbox solo sale en el botón «Quitar imgbox» (una ✕) y en el nombre del proveedor
+    await buscar('imgbox')
+    expect(visibles()).toEqual(['proveedores-imagenes'])
+    // una ayuda de campo: «Usada para leer el catálogo y las peticiones de eMuwarez»
+    await buscar('catalogo')
+    expect(visibles()).toContain('emuwarez')
   })
 
   it('el filtrado no desmonta las tarjetas: lo escrito en una oculta se conserva', async () => {
@@ -572,6 +588,32 @@ describe('Configuración: cuenta y sesiones', () => {
     expect(getSessions).toHaveBeenCalledTimes(2)
     expect(texto()).toContain('✓ Se ha cerrado 1 sesión.')
   })
+
+  it('si no se pueden leer las sesiones ni el usuario, lo dice y deja reintentar en vez de quedarse cargando', async () => {
+    vi.mocked(getSessions).mockRejectedValueOnce(new Error('sin red'))
+    vi.mocked(getMe).mockRejectedValueOnce(new Error('sin red'))
+    await montar()
+    expect(texto()).toContain('No se pudo cargar la lista de sesiones.')
+    expect(texto()).toContain('No se pudo leer el usuario actual.')
+    const reintentar = [...document.body.querySelectorAll('button')].filter(b => b.textContent === 'Reintentar')
+    expect(reintentar).toHaveLength(2)
+    for (const b of reintentar) await pulsar(b)
+    expect(texto()).toContain('Esta sesión')
+    expect(campo('Usuario actual').value).toBe('admin')
+    expect(texto()).not.toContain('No se pudo')
+  })
+
+  it('«Nuevo usuario» no lleva el usuario actual de placeholder: parecía ya relleno', async () => {
+    await montar()
+    expect(campo('Nuevo usuario').placeholder).toBe('')
+  })
+
+  it('sin clave guardada, el campo se llama «API key» sin la nota de mantener la actual', async () => {
+    vi.mocked(fetchSettings).mockImplementation(async () => ({ ...structuredClone(AJUSTES), emu_api_key_configured: false, emu_api_key_masked: null }))
+    await montar()
+    expect(porPlaceholder('API key de eMuwarez').labels?.[0]?.textContent).toBe('API key')
+    expect(porPlaceholder('API key de TMDb').labels?.[0]?.textContent).toContain('Nueva API key (dejar vacío para mantener la actual)')
+  })
 })
 
 describe('Configuración: widget para Homepage', () => {
@@ -604,26 +646,47 @@ describe('Configuración: widget para Homepage', () => {
     expect(texto()).toContain('Clave puesta')
   })
 
-  it('regenerar y quitar piden confirmación', async () => {
+  it('regenerar y quitar piden confirmación en un diálogo de la app, no con window.confirm', async () => {
     vi.mocked(getWidgetKeyStatus).mockResolvedValue({ configurada: true })
     vi.mocked(generateWidgetKey).mockResolvedValue({ clave: 'emuw_otra' })
     vi.mocked(removeWidgetKey).mockResolvedValue({ configurada: false })
-    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const confirmarNativo = vi.spyOn(window, 'confirm')
     await montar()
+    const dialogo = () => document.body.querySelector<HTMLElement>('[role="dialog"]')
+    const enDialogo = (t: string) => [...dialogo()!.querySelectorAll('button')].find(x => x.textContent?.trim() === t)!
 
+    // Cancelar no toca la clave; el foco empieza en Cancelar.
     await pulsar(boton('Regenerar clave'))
+    expect(dialogo()?.textContent).toContain('Homepage dejará de ver el widget')
+    expect(document.activeElement?.textContent).toBe('Cancelar')
+    await pulsar(enDialogo('Cancelar'))
+    expect(dialogo()).toBeNull()
     await pulsar(boton('Quitar clave'))
+    await pulsar(enDialogo('Cancelar'))
     expect(generateWidgetKey).not.toHaveBeenCalled()
     expect(removeWidgetKey).not.toHaveBeenCalled()
 
-    confirmar.mockReturnValue(true)
     await pulsar(boton('Regenerar clave'))
+    await pulsar(enDialogo('Regenerar clave'))
     expect(generateWidgetKey).toHaveBeenCalledTimes(1)
+    expect(dialogo()).toBeNull()
     await pulsar(boton('Quitar clave'))
+    expect(dialogo()?.textContent).toContain('El widget dejará de responder')
+    await pulsar(enDialogo('Quitar clave'))
     expect(removeWidgetKey).toHaveBeenCalledTimes(1)
     expect(texto()).toContain('Sin clave: el widget está desactivado.')
     expect(document.querySelector('input[aria-label="Clave del widget"]')).toBeNull()
-    confirmar.mockRestore()
+    expect(confirmarNativo).not.toHaveBeenCalled()
+    confirmarNativo.mockRestore()
+  })
+
+  it('generar la primera clave no pregunta, y un fallo sale en la propia tarjeta', async () => {
+    vi.mocked(generateWidgetKey).mockRejectedValue(new Error('sin red'))
+    await montar()
+    await pulsar(boton('Generar clave'))
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(generateWidgetKey).toHaveBeenCalledTimes(1)
+    expect(document.body.querySelector('.widget-aviso')?.textContent).toBe('sin red')
   })
 })
 
@@ -728,6 +791,17 @@ describe('Configuración: pestaña de diagnóstico', () => {
     expect(texto()).toContain('Estás en la última versión publicada')
   })
 
+  it('el aviso permanente de versión se queda en Diagnóstico: no sigue en Backup y vuelve al regresar', async () => {
+    vi.mocked(getVersionInfo).mockResolvedValue({ version: '0.14.0', estado: 'hay_novedad', ultima: { version: '0.15.0' } } as Awaited<ReturnType<typeof getVersionInfo>>)
+    await diagnostico()
+    const aviso = () => document.querySelector('.aj-mensaje')?.textContent ?? ''
+    expect(aviso()).toContain('Hay una versión más nueva: v0.15.0')
+    await pulsar(boton('Backup'))
+    expect(aviso()).not.toContain('Hay una versión más nueva')
+    await pulsar(boton('Diagnóstico'))
+    expect(aviso()).toContain('Hay una versión más nueva')
+  })
+
   it('VACUUM real exige escribir MANTENIMIENTO_DB; la previsualización no', async () => {
     vi.mocked(runVacuum).mockResolvedValue({ ok: true, message: 'Hecho' })
     await diagnostico()
@@ -771,6 +845,10 @@ describe('Configuración: pestaña de backup', () => {
     await backup()
     expect(texto()).toContain('Backups existentes (1)')
     expect(texto()).toContain('copia-1.tar.gz')
+    // Tamaño y fecha con los formatos de toda la app; la tabla va en una caja que se desplaza en el móvil.
+    expect(texto()).toContain('2,0 KB')
+    expect(texto()).toContain(formatDate(COPIA.created_at))
+    expect(document.querySelector('.aj-desborde-x > table')).not.toBeNull()
   })
 
   it('restaurar exige elegir backup y escribir RESTAURAR_CONFIG; previsualizar solo lo primero', async () => {

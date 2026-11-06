@@ -10,7 +10,8 @@ import { InfoIcon } from './InfoIcon'
 import { SeedingBloque } from './SaludSeeding'
 import { StatsTrackerBloque } from './StatsTracker'
 import type { SeedingEstado } from '../hooks/useSeeding'
-import { DetailPoster, DetailHero, DetailTitle, DetailTitleText } from './DetailCard'
+import { DetailHero, DetailTitle, DetailTitleText } from './DetailCard'
+import { FichaPoster } from './FichaPoster'
 import { ResultadoSubida, type Consulta } from './detalle-subida/ResultadoSubida'
 import { DondeSeFueElTiempo } from './detalle-subida/DondeSeFueElTiempo'
 import { RemuxTable } from './asistente/RemuxTable'
@@ -349,7 +350,8 @@ function ProgressCell({ pct, bold }: { pct: number; bold?: boolean }) {
   )
 }
 
-// Los pasos con nombre de la subida y cuál se paró (los manda el servidor: services/subida_pasos.py).
+// Los pasos con nombre de la subida y cuál se paró (los manda el servidor: services/subida_pasos.py). Es un recorrido de
+// verdad (cada paso sigue al anterior), así que lleva su número; los subpasos de Uploadrr-EMU cuelgan del paso que los hace.
 function PasosDeSubida({ pasos }: { pasos: PasoSubida[] }) {
   return (
     <ol aria-label="Pasos de la subida" className="dsub-pasos">
@@ -357,11 +359,15 @@ function PasosDeSubida({ pasos }: { pasos: PasoSubida[] }) {
         const e = estadoDePaso(p)
         return (
           <li key={p.clave} title={e.texto} aria-label={`${p.nombre}: ${e.texto}`} className={`dsub-paso dsub-paso-${e.clave}`}>
-            <span aria-hidden="true">{e.simbolo}</span>
-            <span>{i + 1}. {p.nombre}</span>
+            <span className="dsub-paso-marca" aria-hidden="true">{e.simbolo}</span>
+            <span className="dsub-paso-nombre">{i + 1}. {p.nombre}</span>
             {p.subpasos && p.subpasos.length > 0 && (
               <span className="dsub-subpasos">
-                ({p.subpasos.map(sp => `${sp.nombre.toLowerCase()} ${sp.hecho ? '✓' : '○'}`).join(' · ')})
+                {p.subpasos.map(sp => (
+                  <span key={sp.clave} className={sp.hecho ? 'dsub-subpaso dsub-subpaso-hecho' : 'dsub-subpaso'}>
+                    <span aria-hidden="true">{sp.hecho ? '✓' : '○'}</span> {sp.nombre.toLowerCase()}
+                  </span>
+                ))}
               </span>
             )}
           </li>
@@ -569,22 +575,26 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       </div>
 
       <div className="dsub-cuerpo">
-        <DetailPoster url={job.poster_url ? posterUrl(job.poster_url, 'w500') : null} alt={job.title || `Job ${jobId}`} fallbackIcon={mediaIcon} />
+        <FichaPoster url={job.poster_url ? posterUrl(job.poster_url, 'w500') : null} alt={job.title || `Job ${jobId}`} fallbackIcon={mediaIcon} />
 
         <div className="dsub-columna">
           <ResultadoSubida
             job={job} seeding={seeding} retryError={retryError}
             onStart={onStart} onRetry={onRetry} onCancel={onCancel} onDelete={onDelete}
             onOpenLibraryItem={onOpenLibraryItem} onConsulta={abrirConsulta}
+            pasos={completada ? null : pasosDeSubida}
           />
-          {completada ? <DondeSeFueElTiempo job={job} /> : pasosDeSubida}
+          {completada && <DondeSeFueElTiempo job={job} />}
         </div>
       </div>
       </DetailHero>
       </div>
 
-      <SeedingBloque job={job} seeding={seeding} />
-      <StatsTrackerBloque key={job.id} job={job} />
+      {/* Seeding y estadísticas del tracker, una junto a otra cuando caben. */}
+      <div className="dsub-externos">
+        <SeedingBloque job={job} seeding={seeding} />
+        <StatsTrackerBloque key={job.id} job={job} />
+      </div>
 
       {completada ? (
         // Terminada, las fases ya no son la noticia: quedan a un clic.

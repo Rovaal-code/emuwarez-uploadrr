@@ -437,6 +437,23 @@
   opacity: 0.35;
 }
 
+@media (max-width: 640px) {
+  .ficha-poster {
+    width: 132px;
+  }
+
+  .detail-card.pet-veredicto {
+    flex-wrap: wrap;
+  }
+
+  .pet-veredicto-premio {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    margin-left: 42px;
+  }
+}
+
 /* Qué se puede hacer con la petición: el tono (verde, ámbar, gris) es el único color y va con símbolo y texto. */
 .detail-card.pet-veredicto {
   --pet-tono: var(--text-muted);

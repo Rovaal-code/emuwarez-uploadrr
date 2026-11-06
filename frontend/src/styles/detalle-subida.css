@@ -234,31 +234,89 @@ a.btn.dsub-sin-subrayado { text-decoration: none; }
   word-break: break-all;
 }
 
-/* Pasos con nombre de la subida */
+/* Pasos con nombre de la subida: un recorrido de cuatro paradas. La marca de cada paso lleva símbolo y color, y el
+   nombre dice lo mismo con texto; los subpasos de Uploadrr-EMU cuelgan del paso que los hace. */
 .dsub-pasos {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px 8px;
   list-style: none;
-  margin: 0 0 12px;
+  margin: 0;
   padding: 0;
 }
 .dsub-paso {
+  --color-paso: var(--text-muted);
+  position: relative;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  border: 1px solid var(--color-paso);
-  color: var(--color-paso);
+  padding-top: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
 }
-.dsub-subpasos { font-size: 11px; opacity: 0.85; }
-.dsub-paso-hecho,
-.dsub-paso-en_curso { --color-paso: var(--color-available); }
-.dsub-paso-fallido { --color-paso: var(--color-error-pale); }
+/* El hilo que une cada paso con el anterior. */
+.dsub-paso::before {
+  content: "";
+  position: absolute;
+  top: 11px;
+  left: calc(-100% - 8px + 30px);
+  width: calc(100% + 8px - 36px);
+  height: 2px;
+  background: color-mix(in srgb, var(--color-paso) 45%, transparent);
+}
+.dsub-paso:first-child::before { display: none; }
+.dsub-paso-marca {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--color-paso);
+  background: var(--bg-surface);
+  color: var(--color-paso);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.dsub-paso-nombre { font-weight: 600; color: var(--text-primary); }
+.dsub-paso-pendiente .dsub-paso-nombre,
+.dsub-paso-cancelado .dsub-paso-nombre { color: var(--text-secondary); font-weight: 500; }
+.dsub-subpasos { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--text-muted); }
+.dsub-subpaso-hecho { color: var(--color-available-soft); }
+.dsub-paso-hecho { --color-paso: var(--color-available); }
+.dsub-paso-en_curso { --color-paso: var(--text-accent); }
+.dsub-paso-fallido { --color-paso: var(--color-error-soft); }
 .dsub-paso-cancelado,
 .dsub-paso-pendiente { --color-paso: var(--text-muted); }
+
+/* Dentro del recuadro de resultado van sin caja propia; en «Ver todas las fases», con aire debajo. */
+.dsub-resultado .dsub-pasos { padding: 2px 0 4px; }
+.dsub-caja > .dsub-pasos { margin-bottom: 18px; }
+
+@media (max-width: 640px) {
+  /* En vertical el hilo baja de un paso al siguiente. */
+  .dsub-pasos { grid-template-columns: 1fr; }
+  .dsub-paso { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-left: 0; }
+  .dsub-paso::before { top: -14px; left: 11px; width: 2px; height: 14px; }
+  .dsub-subpasos { flex-basis: 100%; padding-left: 34px; }
+}
+
+/* Seeding y datos del tracker: uno junto al otro cuando caben, sin estirar cada recuadro a todo el ancho. */
+.dsub-externos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0 20px;
+  align-items: start;
+}
+
+/* Lo que se hizo con los ficheros: tres consultas en una fila propia, separadas de los datos clave. */
+.dsub-datos.dsub-consultas {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
 
 /* Modales y registro de actividad */
 .modal-wide.dsub-modal-680 { max-width: 680px; }

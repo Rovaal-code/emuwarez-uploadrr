@@ -259,8 +259,9 @@ cobertura, los resultados de los tests y el tamaño del bundle: las líneas nuev
 necesitan un 70 % de cobertura. El workflow *Bundle* sube el tamaño del bundle de cada push a `master` que toca
 `frontend/`, para que los PR tengan con qué compararse. Un PR que solo toca `frontend/`, `docs/` o ficheros `.md`
 limita los tests del backend a los que mencionan el frontend, sin mínimo de cobertura. Si toca `.github/`,
-[zizmor](https://docs.zizmor.sh) revisa los workflows y `dependabot.yml`. Mencionar `@claude` en un issue o un PR
-(solo el mantenedor) lanza el workflow *Claude*.
+[zizmor](https://docs.zizmor.sh) revisa los workflows y `dependabot.yml`. El workflow *Claude* responde cuando el
+mantenedor publica un comentario nuevo con `@claude` en un issue, en un PR o en el código de un PR (no basta con
+mencionarlo en la descripción).
 
 Dependabot propone cada semana las versiones nuevas de pip, npm, la imagen base del `Dockerfile` y las GitHub
 Actions, cuando llevan 7 días publicadas: las menores y los parches juntos en un PR por ecosistema, y cada versión

@@ -1,5 +1,4 @@
 import { api } from './client'
-import type { NomenclatureProposal, NomenclatureApplyResult } from '../types/api'
 
 // Phase 10A — Sources, Providers, Fields, MKV title
 
@@ -94,17 +93,6 @@ export interface SourceBitrateRow {
   comment: string
 }
 
-export interface MkvTitlePreview {
-  status: string
-  prepared_path?: string | null
-  torrent_name?: string | null
-  internal_mkv_title?: string | null
-  mkvpropedit_available?: boolean
-  command_preview?: string | null
-  errors?: string[]
-  warnings?: string[]
-}
-
 export async function getEmuSources(): Promise<{ sources: EmuSource[] }> {
   return api.get<{ sources: EmuSource[] }>('/nomenclature/sources')
 }
@@ -158,18 +146,6 @@ export async function saveNomenclatureFields(
   fields: NomenclatureFields,
 ): Promise<{ ok: boolean; torrent_name: string; internal_mkv_title: string; fields: NomenclatureFields }> {
   return api.post(`/library/${itemId}/nomenclature/save-fields`, { fields })
-}
-
-export async function previewMkvTitle(itemId: number): Promise<MkvTitlePreview> {
-  return api.get<MkvTitlePreview>(`/library/${itemId}/mkv-title/preview`)
-}
-
-export async function applyMkvTitle(
-  itemId: number,
-  options: { dryRun?: boolean; apply?: boolean; confirmation?: string | null } = {},
-): Promise<MkvTitlePreview & { status: string }> {
-  const { dryRun = true, apply = false, confirmation = null } = options
-  return api.post(`/library/${itemId}/mkv-title/apply`, { dry_run: dryRun, apply, confirmation })
 }
 
 // Phase 12A — track reorder/rename (remux via mkvmerge)
@@ -244,27 +220,5 @@ export async function applyTrackRemux(
     : undefined
   return api.post(`/library/${itemId}/track-remux/apply`, {
     dry_run: dryRun, apply, confirmation, overrides: overridesPayload,
-  })
-}
-
-export async function previewNomenclature(itemId: number, forceRefresh = false): Promise<NomenclatureProposal> {
-  return api.post<NomenclatureProposal>(`/library/${itemId}/nomenclature/preview`, { force_refresh: forceRefresh })
-}
-
-export async function adaptNomenclature(
-  itemId: number,
-  options: {
-    dryRun?: boolean
-    apply?: boolean
-    confirmation?: string | null
-    proposalId?: number | null
-  } = {},
-): Promise<NomenclatureApplyResult> {
-  const { dryRun = true, apply = false, confirmation = null, proposalId = null } = options
-  return api.post<NomenclatureApplyResult>(`/library/${itemId}/adapt-nomenclature`, {
-    dry_run: dryRun,
-    apply,
-    confirmation,
-    proposal_id: proposalId,
   })
 }

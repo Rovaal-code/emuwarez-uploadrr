@@ -805,7 +805,7 @@ describe('los pasos y el Resumen', () => {
       await esperar(() => texto().includes('Dune WEB-DL AMZN [GRP]'))
       await pulsar(boton('Continuar'))
       await esperar(() => dato('Copia').includes('Enlace duro'))
-      expect(dato('Ficheros')).toBe('1 fichero · 4,2 GB')
+      expect(dato('Ficheros')).toBe('1 fichero · 4,2 GB')
       expect(dato('Copia')).toContain('sin espacio extra')
     })
 

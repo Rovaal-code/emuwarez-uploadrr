@@ -31,7 +31,7 @@ describe('paso «Configuración» del tour', () => {
   it.each(['Configuración', 'Notificaciones', 'Diagnóstico', 'Backup'])('su objetivo existe con la pestaña «%s» abierta', async (pestana) => {
     await montar(<SettingsPage />)
     // «Configuración» está en el título de la página y en la pestaña: se pulsa la de las pestañas.
-    await pulsar([...document.querySelectorAll('.settings-tab')].find(b => b.textContent === pestana) ?? boton(pestana))
+    await pulsar([...document.querySelectorAll('.aj-tab')].find(b => b.textContent === pestana) ?? boton(pestana))
     expect(document.querySelector(paso.selector)).not.toBeNull()
   })
 })

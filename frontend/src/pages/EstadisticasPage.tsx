@@ -14,7 +14,7 @@ import { formatDia, type PuntoSerie } from '../utils/graficos'
 const RANGOS = [30, 90, 365]
 
 // formatBytes enseña una raya para el cero; en un eje o en la tabla, 0 es una cifra.
-const bytes = (n: number) => (n === 0 ? '0 B' : formatBytes(n))
+const bytes = (n: number) => (n === 0 ? '0\u00A0B' : formatBytes(n))
 const ratio = (n: number) => formatNumero(n, 2)
 const entero = (n: number) => formatNumero(n)
 

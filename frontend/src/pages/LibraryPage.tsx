@@ -9,9 +9,6 @@ import type { LibraryItemResponse, LibraryListResponse } from '../types/api'
 import { PosterStatusIcon } from '../components/PosterStatusIcon'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState, FilaVacia } from '../components/EmptyState'
-import { NomenclatureModal } from '../components/NomenclatureModal'
-import { NomenclatureFieldsModal } from '../components/NomenclatureFieldsModal'
-import { UploadPreflightModal } from '../components/UploadPreflightModal'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
 import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTreeRow'
@@ -220,10 +217,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try { sessionStorage.setItem('emuwarez_open_request', String(requestId)) } catch { /* ignore */ }
     onNavigate?.('requests')
   }, [onNavigate])
-  // Only opened from the "Pósters grandes" view — the small modal (grid/list) stays as-is.
-  const [nomenclatureItem, setNomenclatureItem] = useState<LibraryItemResponse | null>(null)
-  const [fieldsItem, setFieldsItem] = useState<LibraryItemResponse | null>(null)
-  const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
   const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
@@ -240,17 +233,14 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     setModoSeleccion(m => !m)
   }
 
-  // Movie/episode leaf rows: open the existing single-item modals as before.
-  // Season/Series rows: 'upload' opens the same unified wizard too — it asks
-  // which season/episode (or the whole season) to target, and handles a
-  // whole-season pack internally (server-side).
+  // 'upload' abre el asistente unificado para cualquier fila (película, serie,
+  // temporada o capítulo): pregunta qué temporada/capítulo (o la temporada
+  // entera) y resuelve el pack en el servidor. 'request' abre la petición.
   // Stable reference (empty deps: only calls setState setters, which React
   // itself guarantees are stable) — LibraryTreeRow is memoized, and a new
   // function identity on every render here would defeat that memoization
   // for every row's onAction prop.
   const handleTreeAction = useCallback((kind: LibraryActionKind, item: LibraryItemResponse) => {
-    if (kind === 'nomenclature') { setNomenclatureItem(item); return }
-    if (kind === 'fields') { setFieldsItem(item); return }
     if (kind === 'request') { setRequestItem(item); return }
     // 'upload' abre el asistente. Él decide qué preguntar según el tipo: una
     // serie elige temporadas, una temporada elige entre pack y capítulos
@@ -625,15 +615,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // having to go back to the library first.
   const modals = (
     <>
-      {nomenclatureItem && (
-        <NomenclatureModal itemId={nomenclatureItem.id} itemTitle={nomenclatureItem.title} onClose={() => setNomenclatureItem(null)} />
-      )}
-      {fieldsItem && (
-        <NomenclatureFieldsModal itemId={fieldsItem.id} itemTitle={fieldsItem.title} onClose={() => setFieldsItem(null)} onSaved={load} />
-      )}
-      {uploadItem && (
-        <UploadPreflightModal itemId={uploadItem.id} itemTitle={uploadItem.title} onClose={() => setUploadItem(null)} />
-      )}
       {wizardItem && (
         <UploadWizardModal
           item={wizardItem}

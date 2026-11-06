@@ -172,7 +172,7 @@ describe('Panel', () => {
     // Las peticiones salen en el orden del servidor (por recompensa), con su línea de datos y su recompensa.
     const peticiones = filas('Listo para subir')
     expect(peticiones.map(f => f.querySelector('.panel-item-titulo')!.textContent)).toEqual(['La bola negra (2026)', 'Kill Bill (2011)'])
-    expect(peticiones[0].textContent).toContain('Película · 1080p WEB-DL · castellano (audio) · 6,0 GB')
+    expect(peticiones[0].textContent).toContain('Película · 1080p WEB-DL · castellano (audio) · 6,0 GB')
     expect(peticiones[0].textContent).toContain('120.000')
     expect(carril('Listo para subir').textContent).toContain('2 peticiones')
 
@@ -463,7 +463,7 @@ describe('Panel', () => {
       await pagina()
       const fila = filas('Listo para subir')[0]
       // La primera línea sigue siendo la de siempre; el grupo no se mezcla con ella.
-      expect(fila.querySelector('.panel-item-spec')!.textContent).toBe('Película · 1080p WEB-DL · 6,0 GB')
+      expect(fila.querySelector('.panel-item-spec')!.textContent).toBe('Película · 1080p WEB-DL · 6,0 GB')
       expect(meta(0).querySelector('.panel-rg')!.textContent).toBe('Grupo de release: Ryodan')
       expect(meta(0).querySelector('.panel-rg-texto')!.textContent).toBe('Ryodan')
       const idiomas = [...meta(0).querySelectorAll('.detcard-plano')].map(p => p.textContent)

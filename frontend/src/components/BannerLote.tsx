@@ -58,12 +58,14 @@ type Aviso = { texto: string; saltadas: LoteAccionResult['saltadas'] } | { error
  * Sobre la tabla de Subidas filtrada por un lote: cuántas hay en cada estado, «Cancelar pendientes», «Reintentar
  * fallidas», «Borrar lote» (las terminadas) y «Quitar filtro». Si el freno paró el lote, por qué y cuántas paró. El resumen lo pide UploadsPage en su `load()`, que ya refrescan los avisos del servidor.
  */
-export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }: {
+export function BannerLote({ loteId, resumen, totalConocido, sinSubidas = false, onQuitar, onHecho }: {
   loteId: string
   // null mientras llega o si el servidor no conoce el lote (404): sin contadores ni acciones.
   resumen: LoteResumen | null
   // Lo que dicen las filas cargadas, hasta que llega el resumen.
   totalConocido: number | null
+  // El servidor ya no conoce el lote: se borraron todas sus subidas.
+  sinSubidas?: boolean
   onQuitar: () => void
   // Tras cancelar, reintentar o borrar: recargar la lista y el resumen.
   onHecho: () => Promise<void> | void
@@ -127,7 +129,7 @@ export function BannerLote({ loteId, resumen, totalConocido, onQuitar, onHecho }
     <div className="sub-lote-banner sub-no-encoge">
       <div className="sub-lote-banner-fila">
         <span className="sub-lote-banner-titulo">
-          {total != null ? `Lote de ${cuenta(total, 'subida', 'subidas')}` : 'Lote'}
+          {sinSubidas ? 'Lote sin subidas' : total != null ? `Lote de ${cuenta(total, 'subida', 'subidas')}` : 'Lote'}
         </span>
         {resumen && (
           <ul className="sub-lote-contadores" aria-label="Estado del lote">

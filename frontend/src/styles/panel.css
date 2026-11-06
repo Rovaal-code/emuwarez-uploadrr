@@ -402,6 +402,23 @@
 }
 
 /* Ventanas estrechas (≤768 px): los carriles uno bajo otro, la franja en dos columnas y el Panel se desplaza entero. */
+/* Entre el móvil y ~1400 px las ocho cifras llenan la franja: «Mis subidas» se queda en el icono (el nombre sigue en
+   el tooltip y para el lector de pantalla) y los huecos se aprietan para que todo siga en una sola fila. */
+@media (min-width: 769px) and (max-width: 1400px) {
+  .cuenta-emu { column-gap: 12px; }
+  .cuenta-emu-cifras { column-gap: 12px; }
+  .cuenta-emu-enlace-texto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .cuenta-emu-enlaces a { min-width: 28px; justify-content: center; }
+}
+
 @media (max-width: 768px) {
   .panel-pagina {
     height: auto;

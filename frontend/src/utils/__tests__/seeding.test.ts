@@ -30,13 +30,13 @@ describe('seeding', () => {
     expect(resumenSeeding({ job_id: 1, estado: 'no_encontrado', etiqueta: 'No se encuentra' })).toBe('No se encuentra')
   })
 
-  it('sin dato de lo subido sale una raya, no «0 B»', () => {
+  it('sin dato de lo subido sale una raya, no «0 B»', () => {
     expect(textoSubido({ job_id: 1, estado: 'no_encontrado', etiqueta: 'No se encuentra' })).toBe('—')
     expect(textoSubido({ job_id: 1, estado: 'no_encontrado', etiqueta: 'No se encuentra', subido: null })).toBe('—')
   })
 
   it('cero bytes subidos es un dato, no una raya', () => {
-    expect(textoSubido({ job_id: 1, estado: 'pausado', etiqueta: 'Pausado', subido: 0 })).toBe('0 B')
-    expect(textoSubido({ job_id: 1, estado: 'pausado', etiqueta: 'Pausado', subido: 1536 })).toBe('1,5 KB')
+    expect(textoSubido({ job_id: 1, estado: 'pausado', etiqueta: 'Pausado', subido: 0 })).toBe('0 B')
+    expect(textoSubido({ job_id: 1, estado: 'pausado', etiqueta: 'Pausado', subido: 1536 })).toBe('1,5 KB')
   })
 })

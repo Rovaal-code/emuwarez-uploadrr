@@ -1,21 +1,5 @@
 /* Reusable components */
 
-/* Configuración's sub-tabs (config/notifications/diagnostics/backup) */
-.settings-tab {
-  padding: 8px 16px;
-  font-size: 13px;
-  border: 2px solid transparent;
-  background: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  margin-bottom: -1px;
-  border-radius: 0;
-}
-.settings-tab.active {
-  color: var(--color-tab-active);
-  border-bottom-color: var(--color-tab-active);
-}
-
 /* Detail-page semantic cards (DetailCard.tsx's <Card>) */
 .detail-card {
   background: color-mix(in srgb, var(--overlay-light) 3%, transparent);
@@ -785,7 +769,7 @@ optgroup {
   color: var(--color-error);
 }
 
-/* Phase 10A — NomenclatureFieldsModal */
+/* Panel de los modales */
 
 .modal-panel {
   background: var(--bg-surface);
@@ -929,92 +913,8 @@ optgroup {
 }
 .cmp-readiness[open] summary { margin-bottom: 8px; }
 
-.fields-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.fields-grid label {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.fields-grid input,
-.fields-grid select {
-  padding: 7px 10px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-input);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 13px;
-  outline: 2px solid transparent;
-  outline-offset: -2px;
-}
-
-.fields-grid input:focus,
-.fields-grid select:focus {
-  border-color: var(--text-accent);
-  outline-color: var(--color-focus);
-}
-
-.preview-box {
-  background: color-mix(in srgb, var(--overlay-light) 3%, transparent);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  font-size: 13px;
-  margin-top: 10px;
-}
-
-.preview-box p {
-  margin: 4px 0;
-}
-
-.preview-ok {
-  border-color: color-mix(in srgb, var(--color-available) 30%, transparent);
-  background: color-mix(in srgb, var(--color-available) 5%, transparent);
-}
-
-.preview-error {
-  border-color: color-mix(in srgb, var(--color-error) 30%, transparent);
-  background: color-mix(in srgb, var(--color-error) 5%, transparent);
-}
-
-.apply-section {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-  align-items: center;
-}
-
-.confirm-input {
-  flex: 1;
-  padding: 7px 10px;
-  background: color-mix(in srgb, var(--overlay-dark) 30%, transparent);
-  border: 1px solid color-mix(in srgb, var(--overlay-light) 12%, transparent);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-family: var(--font-mono);
-  outline: 2px solid transparent;
-  outline-offset: -2px;
-}
-
-.confirm-input:focus {
-  border-color: var(--text-accent);
-  outline-color: var(--color-focus);
-}
-
 .text-error  { color: var(--color-error-soft); }
-.text-success { color: var(--color-available-soft); }
 .text-warning { color: var(--color-warning-soft); }
-.text-sm     { font-size: 12px; }
 
 .badge-tmdb {
   display: inline-flex;

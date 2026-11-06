@@ -58,9 +58,9 @@ describe('ResumenSistema', () => {
     expect(cpu.getAttribute('aria-label')).toBe('CPU 0%')
     expect(await detalle(cpu)).toBe('AMD Ryzen 5 5600G')
     expect(ram.getAttribute('aria-label')).toBe('RAM 1%')
-    expect(await detalle(ram)).toBe('512,0 MB / 32,0 GB')
+    expect(await detalle(ram)).toBe('512,0 MB / 32,0 GB')
     expect(disco.getAttribute('aria-label')).toBe('Disco 6%')
-    expect(await detalle(disco)).toContain('60,0 GB / 1000,0 GB')
+    expect(await detalle(disco)).toContain('60,0 GB / 1000,0 GB')
     expect(await detalle(disco)).toContain('/data/uploads')
   })
 
@@ -82,7 +82,7 @@ describe('ResumenSistema', () => {
 
   it('sigue habiendo velocidad de red debajo', async () => {
     await montar(<ResumenSistema stats={stats({ net_down_bps: 2048, net_up_bps: 1024 })} />)
-    expect(document.querySelector('.sys-net-row')?.textContent).toContain('2,0 KB/s')
-    expect(document.querySelector('.sys-net-row')?.textContent).toContain('1,0 KB/s')
+    expect(document.querySelector('.sys-net-row')?.textContent).toContain('2,0 KB/s')
+    expect(document.querySelector('.sys-net-row')?.textContent).toContain('1,0 KB/s')
   })
 })

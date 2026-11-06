@@ -105,18 +105,19 @@ describe('el chip del lote', () => {
     expect(banner()).toBeNull()
   })
 
-  it('con el lote vacío, el estado vacío ofrece «Quitar filtros» y lo quita', async () => {
+  it('con el lote ya sin subidas, el estado vacío lo dice y ofrece «Quitar filtro del lote»', async () => {
     await pagina()
     vi.mocked(getUploads).mockImplementation(async q => (q?.lote_id ? [] : [TANDA, LOTE_DE_UNO, SUELTA]))
     vi.mocked(getLote).mockRejectedValue(new ApiClientError('Lote no encontrado.', 404, null))
     await pulsar(chips()[0])
-    await esperar(() => texto().includes('Sin resultados'))
-    // Sin filas, el título del lote no sabe cuántas tiene, y el servidor ya no lo conoce: sin contadores.
-    expect(banner()!.querySelector('.sub-lote-banner-titulo')!.textContent).toBe('Lote')
+    await esperar(() => texto().includes('Este lote ya no tiene subidas'))
+    // El servidor ya no conoce el lote: ni «Sin resultados» ni contadores, y el banner lo dice.
+    expect(texto()).not.toContain('Sin resultados')
+    expect(banner()!.querySelector('.sub-lote-banner-titulo')!.textContent).toBe('Lote sin subidas')
     expect(contadores()).toEqual([])
     expect(boton('Cancelar pendientes')!.disabled).toBe(true)
 
-    await pulsar(boton('Quitar filtros'))
+    await pulsar(boton('Quitar filtro del lote'))
     await esperar(() => document.querySelectorAll('tbody tr').length === 3)
     expect(ultimaPeticion()?.lote_id).toBeUndefined()
     expect(chips()).toHaveLength(1)
@@ -228,6 +229,26 @@ describe('el banner del lote', () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull()
     // El borrado suelto sigue siendo otra cosa.
     expect(deleteUploadJob).not.toHaveBeenCalled()
+  })
+
+  it('«Borrar lote» con todo terminado: la tabla dice que el lote ya no tiene subidas', async () => {
+    vi.mocked(getLote).mockResolvedValue({ ...RESUMEN, en_cola: 0, en_marcha: 0, completadas: 3, puede_cancelar: false })
+    vi.mocked(borrarLote).mockResolvedValue({ borradas: 3, intentos: 3, en_curso: 0, resumen: null })
+    await filtrarPorLote()
+    await pulsar(boton('Borrar lote'))
+    // Tras borrar, el servidor ya no conoce el lote ni devuelve filas.
+    vi.mocked(getUploads).mockImplementation(async q => (q?.lote_id ? [] : [LOTE_DE_UNO, SUELTA]))
+    vi.mocked(getLote).mockRejectedValue(new ApiClientError('Lote no encontrado.', 404, null))
+    await pulsar(boton('Borrar 3 subidas'))
+    await esperar(() => texto().includes('Este lote ya no tiene subidas'))
+    expect(document.querySelector('.sub-lote-aviso')!.textContent).toBe('3 borradas')
+    expect(banner()!.querySelector('.sub-lote-banner-titulo')!.textContent).toBe('Lote sin subidas')
+    expect(texto()).not.toContain('No hay subidas que coincidan con los filtros')
+
+    await pulsar(boton('Quitar filtro del lote'))
+    await esperar(() => document.querySelectorAll('tbody tr').length === 2)
+    expect(banner()).toBeNull()
+    expect(ultimaPeticion()?.lote_id).toBeUndefined()
   })
 
   it('«No borrar» cierra sin borrar nada, y sin terminadas no se puede borrar', async () => {

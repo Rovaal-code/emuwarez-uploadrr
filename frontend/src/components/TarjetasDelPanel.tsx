@@ -30,8 +30,8 @@ export const EXPLICACION = {
   uploads: 'Número de subidas a eMuwarez que has completado con Uploadrr.',
 }
 
-// Las diez tarjetas que antes llenaban el pie del Panel. El color de la cifra solo marca un estado
-// (disponible, faltante, compatible, parcial); el resto va en el color del texto.
+// Las diez tarjetas que antes llenaban el pie del Panel. Las que también salen en la franja del Panel llevan su mismo
+// nombre. El color de estado (disponible, faltante, compatible, parcial) va en el icono, no en la cifra.
 export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResponse }) {
   return (
     <>
@@ -39,7 +39,7 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
       <div className="stat-cards-row" role="group" aria-labelledby="est-grupo-biblioteca">
         <StatCard
           icon={ICON_LIBRARY}
-          label="Biblioteca sincronizada"
+          label="En biblioteca"
           value={s.library_total}
           info="Total de películas y episodios importados desde tus instancias de Radarr y Sonarr."
         >
@@ -55,7 +55,7 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
 
         <StatCard
           icon={ICON_AVAILABLE}
-          label="Disponibles"
+          label="En disco"
           value={s.available}
           accentColor="var(--color-available)"
           info={EXPLICACION.available}
@@ -71,7 +71,7 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
 
         <StatCard
           icon={ICON_UNIQUE}
-          label="Contenido único"
+          label="Únicos sin subir"
           value={s.unique_content ?? 0}
           info={EXPLICACION.unique}
         >
@@ -93,7 +93,7 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
       <div className="stat-cards-row" role="group" aria-labelledby="est-grupo-peticiones">
         <StatCard
           icon={ICON_REQUESTS}
-          label="Peticiones eMuwarez"
+          label="Peticiones abiertas"
           value={s.requests_total ?? 0}
           info={EXPLICACION.requests}
         />

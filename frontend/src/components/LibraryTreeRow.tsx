@@ -278,7 +278,13 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
           {/* «Sin petición» es lo normal y llenaba la columna de insignias grises: se queda en un guion, y la
               insignia solo sale cuando hay algo que mirar. */}
           {item.request_status === 'Sin petición'
-            ? <span className="bib-guion" role="img" aria-label="Sin petición" title="Sin petición">—</span>
+            ? (item.peticion_heredada
+              // Sin petición propia pero cubierta por la de su serie o temporada (la ficha la enseña). El filtro
+              // sigue siendo el estado guardado: por eso es texto atenuado y no una insignia.
+              ? <span className="bib-guion" title={`Sin petición propia: la cubre la petición de la ${item.peticion_heredada}`}>
+                  de la {item.peticion_heredada}
+                </span>
+              : <span className="bib-guion" role="img" aria-label="Sin petición" title="Sin petición">—</span>)
             : <StatusBadge status={item.request_status} type="request" />}
         </td>
         <td className="bib-nowrap">

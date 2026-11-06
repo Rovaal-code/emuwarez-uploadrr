@@ -237,3 +237,64 @@ def test_el_cruce_guarda_la_de_temporada_en_la_temporada_y_la_serie_la_ve_debajo
     assert serie_ficha["request_status"] == "Sin petición" and serie_ficha["peticion"] is None
     assert [p["id"] for p in serie_ficha["peticiones_debajo"]] == [rid]
     assert _ficha(client, cab, t1)["peticion"]["id"] == rid
+
+
+# ---------------------------------------------------------------------------
+# La lista: la celda «Petición» dice de quién la hereda (#230), sin tocar el estado ni el filtro
+# ---------------------------------------------------------------------------
+
+def _lista(client, cab, **params):
+    r = client.get("/api/library", params={"limit": 50, **params}, headers=cab)
+    assert r.status_code == 200, r.text
+    return {i["id"]: i for i in r.json()["items"]}
+
+
+def test_la_lista_dice_de_quien_hereda_la_peticion_una_temporada_o_un_capitulo(base):
+    conn, client, cab = base
+    rid = _peticion(conn, "640", "Re:Zero")
+    serie = _fila(conn, "series", "Re:Zero", request_id=rid, request_status="Compatible")
+    t1 = _fila(conn, "season", "Temporada 1", parent_id=serie, season=1)
+    e1 = _fila(conn, "episode", "Re:Zero S01E01", parent_id=t1, season=1, episode=1)
+    otra = _fila(conn, "series", "Bear")
+    t2_req = _peticion(conn, "641", "Bear", scope="season", season=2)
+    t2 = _fila(conn, "season", "Temporada 2", parent_id=otra, season=2, request_id=t2_req, request_status="Parcial")
+    e3 = _fila(conn, "episode", "Bear S02E03", parent_id=t2, season=2, episode=3)
+    t3 = _fila(conn, "season", "Temporada 3", parent_id=otra, season=3)
+    conn.commit()
+
+    temporadas = _lista(client, cab, parent_id=serie)
+    assert temporadas[t1]["peticion_heredada"] == "serie"
+    assert temporadas[t1]["request_status"] == "Sin petición"  # el estado guardado no cambia
+    assert _lista(client, cab, parent_id=t1)[e1]["peticion_heredada"] == "serie"
+    assert _lista(client, cab, parent_id=t2)[e3]["peticion_heredada"] == "temporada"
+    de_bear = _lista(client, cab, parent_id=otra)
+    assert de_bear[t2]["peticion_heredada"] is None  # tiene la suya
+    assert de_bear[t3]["peticion_heredada"] is None  # nadie la pide
+    assert _lista(client, cab)[serie]["peticion_heredada"] is None  # una serie no hereda
+
+    # El filtro sigue siendo el estado guardado: la temporada heredada sale con «Sin petición».
+    assert t1 not in _lista(client, cab, parent_id=serie, request_status="Compatible")
+    assert t1 in _lista(client, cab, parent_id=serie, request_status="Sin petición")
+
+
+def test_la_peticion_heredada_de_una_pagina_es_una_sola_consulta(base):
+    from emuwarez_uploadrr.services.requests import peticiones_heredadas
+    conn, _, _ = base
+    rid = _peticion(conn, "650", "Larga")
+    serie = _fila(conn, "series", "Larga", request_id=rid, request_status="Compatible")
+    ids = []
+    for s in range(1, 4):
+        t = _fila(conn, "season", f"Temporada {s}", parent_id=serie, season=s)
+        ids.append(t)
+        ids.extend(_fila(conn, "episode", f"Larga S0{s}E0{e}", parent_id=t, season=s, episode=e)
+                   for e in range(1, 6))
+    conn.commit()
+
+    consultas: list[str] = []
+    conn.set_trace_callback(consultas.append)
+    try:
+        heredadas = peticiones_heredadas(conn, ids)
+    finally:
+        conn.set_trace_callback(None)
+    assert heredadas == {i: "serie" for i in ids}
+    assert len([c for c in consultas if c.lstrip().upper().startswith("SELECT")]) == 1

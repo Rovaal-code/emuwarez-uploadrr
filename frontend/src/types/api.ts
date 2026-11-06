@@ -201,6 +201,8 @@ export interface LibraryItemResponse {
   size_bytes: number | null
   local_status: string
   request_status: string
+  // Solo en la lista: sin petición propia, la cubre la de su serie o temporada (request_status sigue igual).
+  peticion_heredada?: 'serie' | 'temporada' | null
   nomenclature_status: string
   updated_at: string | null
   // Phase 8A

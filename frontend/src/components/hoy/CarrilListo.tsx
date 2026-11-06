@@ -52,7 +52,7 @@ function Fila({ item, extra, verPeticion, accion, onVerFicha, seleccion }: {
       )}
       <Cartel url={item.poster_url} serie={esSerie(item)} />
       <div className="panel-item-texto">
-        <HoverTitle className="hover-link panel-item-titulo" onClick={() => onVerFicha(item)} tip="Ver ficha del contenido">
+        <HoverTitle className="hover-link panel-item-titulo" href={`/library/${item.id}`} onClick={() => onVerFicha(item)} tip="Ver ficha del contenido">
           <DetailTitleText title={item.content_name} />
         </HoverTitle>
         <div className="panel-item-spec">{spec}</div>
@@ -80,7 +80,7 @@ function Fila({ item, extra, verPeticion, accion, onVerFicha, seleccion }: {
                 <PlainValue icon={<SubtitleValueIcon />}><span className="solo-lector">Subtítulos: </span>{subs.join(', ')}</PlainValue>
               </span>
             )}
-            {verPeticion && <HoverTitle as="span" className="hover-link panel-item-ver" onClick={verPeticion} tip="Abrir la petición en Peticiones">Ver petición</HoverTitle>}
+            {verPeticion && <HoverTitle as="span" className="hover-link panel-item-ver" href={`/requests/${item.rec_request_id}`} onClick={verPeticion} tip="Abrir la petición en Peticiones">Ver petición</HoverTitle>}
           </div>
         )}
       </div>
@@ -158,10 +158,11 @@ export function CarrilListo({ recomendaciones, error, onReintentar, onSubir, onV
         )
       ) : (
         <ul className="panel-lista">
-          {peticiones.map(item => (
+          {/* Un solo botón principal: el de la primera, la que más paga (la lista va por recompensa). */}
+          {peticiones.map((item, i) => (
             <Fila key={item.rec_request_id ?? item.id} item={item} onVerFicha={onVerFicha} seleccion={seleccion}
               verPeticion={item.rec_request_id != null ? () => onVerPeticion(item) : undefined}
-              accion={<button type="button" className="btn btn-primary btn-sm" onClick={() => onSubir(item)}>Subir</button>} />
+              accion={<button type="button" className={`btn ${i === 0 ? 'btn-primary' : 'btn-secondary'} btn-sm`} onClick={() => onSubir(item)}>Subir</button>} />
           ))}
         </ul>
       )}

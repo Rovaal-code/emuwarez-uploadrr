@@ -24,6 +24,7 @@ from ..schemas import (
     UpdateScheduledTaskRequest,
     UpdateTaskOptionsRequest,
 )
+from ...integrations.base import texto_de_error
 
 router = APIRouter(prefix="/tasks/scheduled", tags=["tasks"])
 
@@ -73,8 +74,9 @@ def update_scheduled_task(
         try:
             task = set_task_schedule(conn, task_key, interval_minutes=body.interval_minutes, run_at=body.run_at)
         except ValueError as exc:
-            code = 404 if "desconocida" in str(exc).lower() else 422
-            raise HTTPException(status_code=code, detail=str(exc))
+            texto = texto_de_error(exc)
+            code = 404 if "desconocida" in texto.lower() else 422
+            raise HTTPException(status_code=code, detail=texto)
         return _to_response(task, opciones_de_tarea(conn, task_key))
 
 
@@ -89,8 +91,9 @@ def update_scheduled_task_options(
         try:
             opciones = set_task_options(conn, task_key, body.valores)
         except ValueError as exc:
-            code = 404 if "desconocida" in str(exc).lower() else 422
-            raise HTTPException(status_code=code, detail=str(exc))
+            texto = texto_de_error(exc)
+            code = 404 if "desconocida" in texto.lower() else 422
+            raise HTTPException(status_code=code, detail=texto)
         return _to_response(get_scheduled_task(conn, task_key), opciones)
 
 
@@ -104,8 +107,9 @@ def run_scheduled_task_now(
         try:
             result = run_scheduled_task(conn, task_key, manual=True)
         except ValueError as exc:
-            code = status.HTTP_404_NOT_FOUND if "desconocida" in str(exc).lower() else status.HTTP_400_BAD_REQUEST
-            raise HTTPException(status_code=code, detail=str(exc))
+            texto = texto_de_error(exc)
+            code = status.HTTP_404_NOT_FOUND if "desconocida" in texto.lower() else status.HTTP_400_BAD_REQUEST
+            raise HTTPException(status_code=code, detail=texto)
     return RunScheduledTaskResponse(**result)
 
 

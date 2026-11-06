@@ -242,8 +242,11 @@ export function Tooltip({ content, children, style, maxWidth }: {
 type AtributosExtra = Omit<React.HTMLAttributes<HTMLElement>, 'onClick' | 'onMouseDown' | 'onMouseUp' | 'children' | 'style' | 'className'>
   & { [dato: `data-${string}`]: string | undefined }
 
-export function HoverTitle({ as = 'div', className, style, onClick, onMouseDown, onMouseUp, tip, children, onKeyDown, ...resto }: {
+export function HoverTitle({ as = 'div', href, className, style, onClick, onMouseDown, onMouseUp, tip, children, onKeyDown, ...resto }: {
   as?: 'div' | 'span'
+  /** Con onClick: la ruta a la que lleva. Se pinta un enlace de verdad (<a href>), así que el clic central y Ctrl/⌘+clic
+   *  abren esa ruta en otra pestaña; el clic normal hace preventDefault y llama a onClick (la navegación de la SPA). */
+  href?: string
   className?: string
   style?: React.CSSProperties
   onClick?: (e: React.SyntheticEvent) => void
@@ -253,21 +256,52 @@ export function HoverTitle({ as = 'div', className, style, onClick, onMouseDown,
   children: React.ReactNode
 } & AtributosExtra) {
   const { triggerProps, tooltipNode } = useTooltip(tip)
-  const Tag = as as 'div'
-  // Con onClick es un enlace (abre una ficha o una subida): se alcanza con
-  // Tab y se abre con Intro, igual que con el ratón.
-  const comoEnlace = onClick ? { role: 'link', tabIndex: 0 } : {}
-  // Las teclas pasan por todos: Escape cierra el tooltip, Intro abre el
-  // enlace y el onKeyDown de quien llama hace lo suyo.
+  // Las teclas pasan por todos: Escape cierra el tooltip y el onKeyDown de quien llama hace lo suyo. Intro ya lo
+  // resuelven el <a> y el <button> nativos (disparan el clic).
   const teclas = (e: React.KeyboardEvent<HTMLElement>) => {
     triggerProps.onKeyDown(e)
     onKeyDown?.(e)
-    if (onClick && e.key === 'Enter') onClick(e)
   }
+  const comunes = { style, onMouseDown, onMouseUp, ...resto, ...triggerProps, onKeyDown: teclas }
+  // Con as="div" el enlace ocupa su línea, como el div de antes.
+  const bloque = as === 'div' ? ' titulo-bloque' : ''
+  if (onClick && href) {
+    // Clic con modificador o con otro botón: lo hace el navegador (otra pestaña o ventana), y no sube a la fila,
+    // que si no abriría el detalle también en esta pestaña.
+    const alPulsar = (e: React.MouseEvent<HTMLAnchorElement>) => {
+      if (e.defaultPrevented) return
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        e.stopPropagation()
+        return
+      }
+      e.preventDefault()
+      onClick(e)
+    }
+    return (
+      <a href={href} className={clases('enlace-titulo' + bloque, className)} onClick={alPulsar} {...comunes}>
+        {children}
+        {tooltipNode}
+      </a>
+    )
+  }
+  if (onClick) {
+    // Sin ruta propia es una acción: botón, con el aspecto del texto que lo rodea.
+    return (
+      <button type="button" className={clases('boton-titulo' + bloque, className)} onClick={onClick} {...comunes}>
+        {children}
+        {tooltipNode}
+      </button>
+    )
+  }
+  const Tag = as as 'div'
   return (
-    <Tag className={className} style={style} onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp} {...resto} {...triggerProps} {...comoEnlace} onKeyDown={teclas}>
+    <Tag className={className} {...comunes}>
       {children}
       {tooltipNode}
     </Tag>
   )
+}
+
+function clases(base: string, extra?: string): string {
+  return extra ? `${base} ${extra}` : base
 }

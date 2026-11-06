@@ -282,7 +282,7 @@
 }
 
 .topbar-title {
-  /* Es el h1 de cada sección: el nombre de la sección, con el aspecto de siempre. */
+  /* Miga de pan con el nombre de la sección; el h1 es el .page-title de cada página. */
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
@@ -699,6 +699,12 @@
     transform: none;
     visibility: visible;
     transition: transform 0.2s ease;
+  }
+
+  /* El cajón flota sobre la página: fondo opaco bajo el degradado de vidrio, como los modales, para que no se lea la
+     página a través del menú. */
+  .hud-app .sidebar.abierta {
+    background-color: var(--hud-panel-solid);
   }
 
   .sidebar-velo {

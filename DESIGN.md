@@ -192,8 +192,8 @@ fondo opaco (`panel-solid`) bajo el degradado, para que no se transparente la p�
 
 ### Named Rules
 **La regla del brillo en lo vivo.** El brillo cian (`box-shadow` o `text-shadow` de color) es para lo activo, lo enfocado, la
-acción principal y el progreso. Los títulos y las cifras estáticas no brillan: hoy algunos lo hacen (`.page-title`,
-`.section-title`, `.stat-card-value`) y en trabajo futuro se les va quitando, sin cambiar el resto del tema.
+acción principal y el progreso. Los títulos, las cifras, el nombre del logo y los botones de la barra superior en reposo no
+brillan; los botones de la barra toman el halo al pasar.
 
 ## Shapes
 

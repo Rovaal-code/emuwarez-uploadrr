@@ -138,7 +138,7 @@ def _restore_uploadrr_config(job_id: int, config_path: Path | None) -> None:
         else:
             append_upload_log(job_id, "warning", "No había backup de config.yaml que restaurar.", stream="system")
     except Exception as exc:
-        append_upload_log(job_id, "error", f"Fallo al restaurar config.yaml: {exc}", stream="system")
+        append_upload_log(job_id, "error", f"Fallo al restaurar config.yaml: {texto_de_error(exc)}", stream="system")
 
 
 # The staged config.yaml (TMDb/EMU keys) is a SHARED resource: every job stages

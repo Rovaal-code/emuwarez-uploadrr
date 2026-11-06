@@ -331,7 +331,7 @@ export function InstancesPage() {
     <div data-tour="instances-content" className="inst-pagina">
       <div className="page-header">
         <div>
-          <div className="page-title">Instancias</div>
+          <h1 className="page-title">Instancias</h1>
           <div className="page-subtitle">Gestiona tus instancias Radarr y Sonarr</div>
         </div>
         <div className="inst-cabecera-acciones">

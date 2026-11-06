@@ -18,6 +18,8 @@
   text-wrap: balance;
 }
 .detcard-anio { color: var(--text-muted); font-weight: 500; }
+/* El título de una ficha es el h1 de su pantalla, con el aspecto de la tarjeta que lo envuelve. */
+.detcard-h1 { font: inherit; letter-spacing: inherit; }
 .detail-card.detcard-tarjeta { border-radius: var(--radius-card); }
 .detail-card-title.detcard-titulo {
   font-size: 13.5px;

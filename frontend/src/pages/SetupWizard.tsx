@@ -997,6 +997,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   renderRow={(id, _idx, { handleProps, botones }) => fila(id, handleProps, botones)} />
                 {resto.map(h => <div key={h.id}>{fila(h.id)}</div>)}
               </div>
+              {imgCarga === 'lista' && activos.length === 0 && (
+                <div role="status" className="alert alert-warning setup-mt-10">
+                  Sin proveedores: añade al menos uno o las subidas no podrán arrancar.
+                </div>
+              )}
               {imgCarga === 'cargando' && <p className="setup-t13 text-muted" role="status">Cargando los proveedores…</p>}
               {imgCarga === 'error' && (
                 <div role="alert" className="alert alert-error setup-mt-14">

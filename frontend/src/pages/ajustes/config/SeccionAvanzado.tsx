@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { IconoDesplegar } from '../../../components/Iconos'
 
 // Sección plegable para lo que casi nunca hace falta tocar. El contenido sigue montado al plegarla, así que
 // los campos conservan lo escrito.
@@ -16,7 +17,7 @@ export function SeccionAvanzado({ abierta, onAlternar, children }: {
         aria-controls="aj-avanzado-cuerpo"
         onClick={onAlternar}
       >
-        <span className="aj-avanzado__flecha" aria-hidden>{abierta ? '▾' : '▸'}</span>
+        <span className="aj-avanzado__flecha"><IconoDesplegar abierto={abierta} size={12} /></span>
         Avanzado
         <span className="form-hint">Rutas de acceso a la biblioteca</span>
       </button>

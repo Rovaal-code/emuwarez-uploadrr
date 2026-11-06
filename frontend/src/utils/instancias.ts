@@ -1,5 +1,18 @@
 import type { InstanceSafeResponse } from '../types/api'
 import { timeAgo } from './format'
+import { isValidHttpUrl } from './validation'
+
+// Errores de campo de un formulario de instancia (Instancias y el asistente); vacío si todo está bien.
+export interface ErroresDeCampo { name?: string; url?: string; api_key?: string }
+
+export function validarInstancia(f: { name?: string; url?: string; api_key?: string }, exigirClave: boolean): ErroresDeCampo {
+  const e: ErroresDeCampo = {}
+  if (!f.name?.trim()) e.name = 'Escribe un nombre.'
+  if (!f.url?.trim()) e.url = 'Escribe la URL de la instancia.'
+  else if (!isValidHttpUrl(f.url)) e.url = 'La URL debe empezar por http:// o https:// e incluir un host válido.'
+  if (exigirClave && !f.api_key?.trim()) e.api_key = 'Pega la API key de la instancia.'
+  return e
+}
 
 // Una instancia que la vigilancia no vio responder en su última mirada (dato de /dashboard/summary).
 export interface CaidaDeInstancia {

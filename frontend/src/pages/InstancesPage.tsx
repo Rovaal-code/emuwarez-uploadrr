@@ -10,8 +10,7 @@ import { EmptyState } from '../components/EmptyState'
 import { Modal } from '../components/Modal'
 import { ApiClientError } from '../api/client'
 import { formatDate } from '../utils/format'
-import { isValidHttpUrl } from '../utils/validation'
-import { estadoDeInstancia, type CaidaDeInstancia } from '../utils/instancias'
+import { estadoDeInstancia, validarInstancia as validar, type CaidaDeInstancia, type ErroresDeCampo } from '../utils/instancias'
 import { useRefrescoPorAvisos } from '../hooks/useRefrescoPorAvisos'
 import { IconoEnchufe } from '../components/Iconos'
 import { Campo, ResultadoPrueba, enfocarPrimerError } from './ajustes/Campo'
@@ -42,18 +41,6 @@ interface EditForm {
 
 function editFormFrom(inst: InstanceSafeResponse): EditForm {
   return { name: inst.name, url: inst.url, api_key: '', is_4k: inst.is_4k, is_anime: inst.is_anime, enabled: inst.enabled }
-}
-
-// Errores de campo de un formulario de instancia; vacío si todo está bien.
-interface ErroresDeCampo { name?: string; url?: string; api_key?: string }
-
-function validar(f: { name: string; url: string; api_key: string }, exigirClave: boolean): ErroresDeCampo {
-  const e: ErroresDeCampo = {}
-  if (!f.name.trim()) e.name = 'Escribe un nombre.'
-  if (!f.url.trim()) e.url = 'Escribe la URL de la instancia.'
-  else if (!isValidHttpUrl(f.url)) e.url = 'La URL debe empezar por http:// o https:// e incluir un host válido.'
-  if (exigirClave && !f.api_key.trim()) e.api_key = 'Pega la API key de la instancia.'
-  return e
 }
 
 // Lo que se enseña bajo una instancia tras probarla o sincronizarla.
@@ -347,14 +334,15 @@ export function InstancesPage() {
               {sinResponder === 1 ? '1 sin responder' : `${sinResponder} sin responder`}
             </span>
           )}
-          {/* Siempre dice lo mismo: con el formulario abierto se desactiva, y «Cancelar» está junto a «Añadir». */}
+          {/* Siempre dice lo mismo: con el formulario abierto se desactiva, y «Cancelar» está junto a «Añadir». Con una
+              edición abierta, también: el principal de la vista es entonces «Guardar cambios». */}
           <button
             ref={botonAnadir}
             className="btn btn-primary btn-sm"
             aria-expanded={showAdd}
             aria-controls="inst-nueva"
             onClick={abrirAlta}
-            disabled={showAdd}
+            disabled={showAdd || editingId !== null}
           >
             + Añadir instancia
           </button>

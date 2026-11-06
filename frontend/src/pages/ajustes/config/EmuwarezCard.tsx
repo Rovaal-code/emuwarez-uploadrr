@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { testEmuwarezConnection, type IntegrationTestResult } from '../../../api/integrationTests'
 import { useCooldown } from '../../../hooks/useCooldown'
 import { ServiceIcon } from '../../../components/ServiceIcon'
+import { IconoCerrar } from '../../../components/Iconos'
 import { InfoIcon } from '../../../components/InfoIcon'
 import { emuTestCooldownSeconds } from '../../../utils/integrationResult'
 import { Campo, EstadoSecreto, ResultadoPrueba } from '../Campo'
@@ -103,7 +104,7 @@ export function EmuwarezCard({ form }: { form: ConfigForm }) {
                         onClick={() => setTags([t, ...tags.filter(x => x !== t)])}>☆</button>}
                   {tags.length > 1 && (
                     <button type="button" className="btn-icon" aria-label={`Quitar ${t}`}
-                      onClick={() => { setTags(tags.filter(x => x !== t)); if (borrador === t) setNuevoTag('') }}>✕</button>
+                      onClick={() => { setTags(tags.filter(x => x !== t)); if (borrador === t) setNuevoTag('') }}><IconoCerrar size={14} /></button>
                   )}
                 </li>
               ))}

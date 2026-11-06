@@ -144,7 +144,7 @@ def test_sin_api_key_falla_al_momento_y_no_deja_nada_activo(isolated_db, monkeyp
     conn = connect(db_path())
     init_db(conn)
     conn.close()
-    with pytest.raises(IntegrationError, match="API Key"):
+    with pytest.raises(IntegrationError, match="API key"):
         reqs.start_requests_sync_background(force=True)
     assert not reqs.get_request_sync_progress()["active"]
 

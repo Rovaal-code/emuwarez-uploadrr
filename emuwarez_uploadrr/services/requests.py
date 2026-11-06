@@ -282,7 +282,7 @@ def start_requests_sync_background(force: bool = False) -> dict:
         if motivo:
             return {"status": "busy", "message": motivo}
         if not _resolve_emu_api_key(conn):
-            raise IntegrationError("No hay API Key de eMuwarez configurada")
+            raise IntegrationError("No hay API key de eMuwarez configurada")
         # Activa antes de que el hilo arranque: la interfaz la sigue desde que esta respuesta llega.
         _set_progress(active=True, done=False, phase="Iniciando…", page=0, total_pages=None, imported=0, message="",
                       error=None)
@@ -303,8 +303,8 @@ def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
     task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
     api_key = _resolve_emu_api_key(conn)
     if not api_key:
-        finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API Key de eMuwarez configurada")
-        raise IntegrationError("No hay API Key de eMuwarez configurada")
+        finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API key de eMuwarez configurada")
+        raise IntegrationError("No hay API key de eMuwarez configurada")
 
     # Record the throttle at START (not at the end), so a slow fetch or a page
     # refresh mid-sync can't relaunch it. Restored if the sync fails, so a

@@ -101,7 +101,8 @@ def vigilar_instancias(conn: sqlite3.Connection) -> tuple[str, str]:
             sincronizadas.append(instancia.name)
         _sincronizada[instancia.id] = _ahora()
 
-    resumen = f"{len(instancias)} instancia(s) comprobadas, {caidas} sin responder"
+    n = len(instancias)
+    resumen = f"{n} {'instancia comprobada' if n == 1 else 'instancias comprobadas'}, {caidas} sin responder"
     if sincronizadas:
         resumen += "; sincronizada al volver: " + ", ".join(sincronizadas)
     if fallos:

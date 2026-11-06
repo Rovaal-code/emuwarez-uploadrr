@@ -89,6 +89,10 @@ export function WidgetCard() {
           </svg>
         )}
         titulo="Widget para Homepage"
+        descripcion={<>
+          Una clave de solo lectura para el widget «customapi» de Homepage: solo abre <code>/api/widget</code> y
+          enseña unos contadores. La configuración de Homepage está en la guía de despliegue.
+        </>}
         lateral={configurada === null ? undefined : (
           <span className={`aj-estado aj-estado--${configurada ? 'ok' : 'falta'}`}>
             <span className="aj-estado__punto" aria-hidden />
@@ -107,10 +111,6 @@ export function WidgetCard() {
         )
       ) : (
         <>
-          <p className="form-hint widget-nota">
-            Una clave de solo lectura para el widget «customapi» de Homepage: solo abre <code>/api/widget</code> y
-            enseña unos contadores. La configuración de Homepage está en la guía de despliegue.
-          </p>
           {nueva && (
             <div className="widget-clave">
               <input className="form-input widget-clave__valor" readOnly value={nueva} aria-label="Clave del widget"
@@ -119,7 +119,6 @@ export function WidgetCard() {
               <p className="form-hint">Guárdala ahora: no se vuelve a mostrar.</p>
             </div>
           )}
-          {!nueva && !configurada && <p className="form-hint widget-nota">Sin clave: el widget está desactivado.</p>}
           <div className="widget-botones">
             <button className="btn btn-secondary btn-sm" type="button" disabled={ocupado}
               onClick={() => { if (configurada) setConfirmando('regenerar'); else void generar() }}>

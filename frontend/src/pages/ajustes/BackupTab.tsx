@@ -121,29 +121,37 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
         {backups.length === 0 ? (
           <p className="aj-sec-13">No hay backups.</p>
         ) : (
-          // En el móvil la tabla no cabe: se desplaza dentro de su caja en vez de salirse de la pantalla.
-          <div className="aj-desborde-x">
+          // En una caja estrecha (tableta, móvil) Tipo, Tamaño y Fecha pasan a una segunda línea bajo el nombre, que se
+          // parte, y «Descargar» sigue a la vista (`.aj-backups` en ajustes.css).
+          <div className="aj-desborde-x aj-backups">
             <table className="aj-tabla aj-fs-12">
               <thead>
                 <tr>
-                  {['Nombre', 'Tipo', 'Tamaño', 'Fecha'].map(h => (
-                    <th key={h} className="aj-th">{h}</th>
+                  <th className="aj-th">Nombre</th>
+                  {['Tipo', 'Tamaño', 'Fecha'].map(h => (
+                    <th key={h} className="aj-th aj-backups__col">{h}</th>
                   ))}
                   <th className="aj-th"><span className="solo-lector">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
-                {backups.map(b => (
+                {backups.map(b => {
+                  const tipo = `${TIPO_COPIA[b.tipo]}${b.con_claves ? ' · con claves' : b.con_claves === null ? ' · puede llevar claves' : ''}`
+                  return (
                   <tr key={b.path} className="aj-fila-borde">
-                    <td className="aj-td-5">{b.name}</td>
-                    <td className="aj-td-5">{TIPO_COPIA[b.tipo]}{b.con_claves ? ' · con claves' : b.con_claves === null ? ' · puede llevar claves' : ''}</td>
-                    <td className="aj-td-5">{formatBytes(b.size_bytes)}</td>
-                    <td className="aj-td-5">{formatDate(b.created_at)}</td>
+                    <td className="aj-td-5">
+                      <span className="aj-ruta">{b.name}</span>
+                      <span className="aj-backups__meta">{tipo} · {formatBytes(b.size_bytes)} · {formatDate(b.created_at)}</span>
+                    </td>
+                    <td className="aj-td-5 aj-backups__col">{tipo}</td>
+                    <td className="aj-td-5 aj-backups__col">{formatBytes(b.size_bytes)}</td>
+                    <td className="aj-td-5 aj-backups__col">{formatDate(b.created_at)}</td>
                     <td className="aj-td-5 aj-der">
                       <button className="btn btn-secondary btn-sm" onClick={() => handleDownload(b)} aria-label={`Descargar ${b.name}`}>Descargar</button>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -188,7 +196,7 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
           placeholder="Confirmación: RESTAURAR_CONFIG (solo para restauración real)"
           value={restoreConfirm}
           onChange={e => setRestoreConfirm(e.target.value)}
-          className="aj-campo-ancho aj-mb-10"
+          className="form-input aj-campo-ancho aj-mb-10"
         />
         <div className="aj-flex-8">
           <button className="btn btn-secondary" onClick={() => handleRestore(true)} disabled={busy}>Previsualizar</button>

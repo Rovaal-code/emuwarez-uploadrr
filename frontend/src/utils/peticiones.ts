@@ -90,3 +90,22 @@ export function agruparPeticiones<T extends ParaAgrupar>(items: T[]): { id: Grup
     .map(g => ({ ...g, items: items.filter(i => grupoDePeticion(i) === g.id).sort(porRecompensa) }))
     .filter(g => g.items.length > 0)
 }
+
+// Por qué una petición que tienes (o casi) aún no está lista, en pocas palabras para la lista: solo cuando aporta algo
+// que el grupo y la compatibilidad no dicen ya («Lista para subir» y «Sin copia» se explican solos). La ficha da el
+// texto entero de la preparación.
+const MOTIVOS_CORTOS: Record<string, string> = {
+  preflight_needed: 'Falta la comprobación',
+  needs_nomenclature: 'Falta la nomenclatura',
+  partially_available: 'Incompleta',
+  spec_mismatch: 'No cumple lo pedido',
+  no_castellano: 'Sin castellano',
+  downloading: 'Descargando',
+  pending_import: 'Sin importar aún',
+  import_error: 'Error al importar',
+  file_missing: 'Falta el archivo',
+}
+
+export function motivoDeLaPreparacion(item: Pick<RequestItemResponse, 'readiness_status'>): string | null {
+  return MOTIVOS_CORTOS[item.readiness_status ?? ''] ?? null
+}

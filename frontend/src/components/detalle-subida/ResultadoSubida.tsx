@@ -36,10 +36,12 @@ function Espera() {
 
 // Lo primero del detalle de una subida: cómo acabó (o cómo va), por qué, los datos clave y qué se puede hacer.
 // Las acciones y las consultas viven aquí; el resto de la página es el detalle de lo que pasó.
-export function ResultadoSubida({ job, seeding, retryError, onStart, onRetry, onCancel, onDelete, onOpenLibraryItem, onConsulta }: {
+export function ResultadoSubida({ job, seeding, retryError, pasos, onStart, onRetry, onCancel, onDelete, onOpenLibraryItem, onConsulta }: {
   job: UploadJob
   seeding: SeedingEstado
   retryError?: string | null
+  // Los pasos de la subida (el recorrido): van dentro del recuadro, bajo el estado, mientras no esté completada.
+  pasos?: React.ReactNode
   onStart: (job: UploadJob) => void
   onRetry: (job: UploadJob, desdeElPrincipio?: boolean) => void
   onCancel: (jobId: number) => void
@@ -87,6 +89,8 @@ export function ResultadoSubida({ job, seeding, retryError, onStart, onRetry, on
           </div>
         </div>
       )}
+
+      {pasos}
 
       <div className="dsub-acciones">
         {job.status === 'ready' && (
@@ -142,6 +146,10 @@ export function ResultadoSubida({ job, seeding, retryError, onStart, onRetry, on
           </Dato>
         )}
         {reintentos > 0 && <Dato etiqueta="Reintentos">x{reintentos}</Dato>}
+      </dl>
+
+      {/* Lo que se hizo con los ficheros: cada consulta abre su detalle. */}
+      <dl className="dsub-datos dsub-consultas">
         <Dato etiqueta="Nomenclatura" ayuda={AYUDA_NOMENCLATURA}>
           <ValueChip as="button" linkable onClick={() => onConsulta('nomenclatura')} title="Ver nomenclatura">
             {preparando && job.stage === 'nomenclature' && <Espera />}

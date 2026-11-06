@@ -37,6 +37,8 @@
 }
 
 .pet-scroll {
+  /* Lo que queda bajo las cabeceras pegadas (columnas y grupo) no tapa la fila a la que se llega con Tab. */
+  scroll-padding-top: 76px;
   overflow: auto;
   flex: 1;
   min-height: 0;
@@ -77,12 +79,94 @@
   color: var(--color-warning);
 }
 
-/* Grupos de la lista: lo que se puede hacer con cada petición. El color solo marca el estado. */
+/* Grupos de la lista: lo que se puede hacer con cada petición. El color solo marca el estado; el nombre y el
+   número lo dicen también con texto. La cabecera de cada grupo es un botón que lo pliega y se queda pegada bajo
+   la de las columnas mientras se recorre el grupo (--pet-cabecera: el alto de esa fila de cabeceras). */
+.pet-resumen {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 0 10px;
+}
+
+.pet-resumen-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-input);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.pet-resumen-chip:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+
+.pet-resumen-n {
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.pet-punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.pet-resumen-lista .pet-punto,
+.pet-bloque-lista .pet-grupo-titulo::before {
+  background: var(--color-available);
+}
+
+.pet-resumen-parcial .pet-punto,
+.pet-bloque-parcial .pet-grupo-titulo::before {
+  background: var(--color-warning);
+}
+
 .data-table th.pet-grupo-th {
-  padding: 16px 12px 6px;
+  position: sticky;
+  top: var(--pet-cabecera, 34px);
+  z-index: 1;
+  padding: 0;
   font-size: 12px;
+  background: var(--bg-surface);
+  box-shadow: inset 0 -1px 0 var(--border);
+  scroll-margin-top: var(--pet-cabecera, 34px);
+}
+
+.pet-grupo-boton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 12px 8px;
+  border: 0;
+  background: transparent;
   color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pet-grupo-boton:focus-visible,
+.pet-resumen-chip:focus-visible {
+  outline-offset: -2px;
+}
+
+.pet-grupo-boton:hover .pet-grupo-titulo {
+  color: var(--text-accent);
 }
 
 .pet-grupo-titulo {
@@ -102,16 +186,7 @@
   background: var(--text-muted);
 }
 
-.pet-bloque-lista .pet-grupo-titulo::before {
-  background: var(--color-available);
-}
-
-.pet-bloque-parcial .pet-grupo-titulo::before {
-  background: var(--color-warning);
-}
-
 .pet-grupo-n {
-  margin: 0 10px 0 8px;
   padding: 1px 7px;
   border-radius: var(--radius-small);
   background: var(--bg-card);
@@ -121,6 +196,35 @@
 
 .pet-grupo-ayuda {
   font-weight: 400;
+}
+
+/* Margen horizontal de celda algo menor que el de otras tablas: con once columnas, a 1280 px la fila entera cabe sin
+   desplazar. El título conserva el suyo. */
+.data-table.pet-tabla td {
+  padding-inline: 6px;
+}
+
+.data-table.pet-tabla .hf-trigger {
+  padding-inline: 8px;
+}
+
+.data-table.pet-tabla td:first-child {
+  padding-inline: 12px;
+}
+
+/* Con poca anchura (móvil) la lista se queda con lo esencial: título, tipo, compatibilidad y puntos. El resto de
+   los datos está en la ficha de cada petición, y los filtros de esas columnas dejan de verse con ellas. */
+@media (max-width: 760px) {
+  .data-table.pet-tabla .pet-sec,
+  .data-table.pet-tabla .pet-tipo,
+  .data-table.pet-tabla thead th:last-child,
+  .data-table.pet-tabla td.pet-creada {
+    display: none;
+  }
+
+  .pet-grupo-ayuda {
+    display: none;
+  }
 }
 
 /* Celdas y cabeceras: `.data-table th { text-align }` y `.data-table td { color }` */
@@ -150,6 +254,34 @@
   font-size: 12px;
   white-space: nowrap;
   color: var(--text-secondary);
+}
+
+/* Por qué una petición que tienes aún no está lista, bajo su compatibilidad. */
+.pet-motivo {
+  margin-top: 3px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  color: var(--color-warning-soft);
+}
+
+/* Puntos: la moneda y la cifra juntas, alineadas bajo el icono de la cabecera. */
+.data-table td.pet-puntos {
+  text-align: center;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.pet-puntos .iconos-puntos {
+  width: 13px;
+  height: 13px;
+  margin-right: 5px;
+  vertical-align: -2px;
+}
+
+.data-table.pet-tabla .value-chip {
+  padding: 3px 8px;
+  font-size: 12.5px;
 }
 
 .pet-nombre {
@@ -299,11 +431,158 @@
   min-width: 300px;
 }
 
-/* El alto mínimo (DETAIL_CARD_HEIGHT) va en línea. */
+/* Las tarjetas miden lo que lleva cada una: antes se estiraban a 480 px y dejaban la mitad vacía. */
 .pet-ficha-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+@media (max-width: 1100px) {
+  .pet-ficha-grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+/* «Cualquiera» y los valores cortos no se cortan con puntos suspensivos dentro de las tarjetas. */
+.pet-ficha-grid .value-chip .txt {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* Póster de la ficha (FichaPoster): de ancho fijo, para que el contenido tenga el sitio. */
+.ficha-poster {
+  flex-shrink: 0;
+  width: 230px;
+  max-width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ficha-poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ficha-poster-vacio {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 72px;
+  opacity: 0.35;
+}
+
+@media (max-width: 640px) {
+  .ficha-poster {
+    width: 132px;
+  }
+
+  .detail-card.pet-veredicto {
+    flex-wrap: wrap;
+  }
+
+  .pet-veredicto-premio {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    margin-left: 42px;
+  }
+}
+
+/* Qué se puede hacer con la petición: el tono (verde, ámbar, gris) es el único color y va con símbolo y texto. */
+.detail-card.pet-veredicto {
+  --pet-tono: var(--text-muted);
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 22px;
+  border-radius: var(--radius-card);
+  border-color: color-mix(in srgb, var(--pet-tono) 38%, var(--border));
+}
+
+.detail-card.pet-tono-lista { --pet-tono: var(--color-available-soft); }
+.detail-card.pet-tono-parcial { --pet-tono: var(--color-warning-soft); }
+
+.pet-veredicto-simbolo {
+  flex-shrink: 0;
+  width: 28px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  color: var(--pet-tono);
+}
+
+.pet-veredicto-texto {
+  min-width: 0;
+  flex: 1;
+}
+
+.pet-veredicto-texto > p {
+  margin: 0;
+}
+
+.pet-veredicto-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.pet-veredicto-ayuda {
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+.pet-veredicto-estado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 12px;
+}
+
+.pet-veredicto-estado .pet-motivo {
+  margin-top: 0;
+  font-size: 12.5px;
+}
+
+.pet-veredicto-premio {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.pet-veredicto-premio-etiqueta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pet-veredicto-premio-valor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pet-veredicto-premio-valor .iconos-puntos {
+  width: 20px;
+  height: 20px;
 }
 
 /* Petición frente a tu biblioteca */

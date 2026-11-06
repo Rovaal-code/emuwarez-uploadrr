@@ -61,6 +61,9 @@ const Linea = memo(function Linea({ linea, id, abierta, enfocable, busqueda, onA
 
 export function LogsPage() {
   const [items, setItems] = useState<LogEntry[]>([])
+  const listaRef = useRef<HTMLDivElement>(null)
+  // Si el foco estaba en una línea de la lista justo antes de aplicar un refresco (lo mira `load`).
+  const focoEnLista = useRef(false)
   const [level, setLevel] = useState('')
   const [search, setSearch] = useState('')
   // Lo buscado que ya se pidió al servidor: es lo que se resalta, para no repintar las líneas con cada tecla.
@@ -88,6 +91,7 @@ export function LogsPage() {
       const r = await getLogs({ limit: 1000, level: level || undefined, search: searchRef.current.trim() || undefined })
       if (esta !== ultimaCarga.current) return
       // Si no ha entrado nada, se deja la lista como está: no se repintan mil filas para nada.
+      focoEnLista.current = !!listaRef.current?.contains(document.activeElement)
       setItems(previas => (mismasLineas(previas, r.items) ? previas : r.items))
       setError(null)
     } catch {
@@ -152,10 +156,10 @@ export function LogsPage() {
   const enfocable = activa !== null && claves.includes(activa) ? activa : claves[0]
 
   // Si un refresco se lleva la línea que tenía el foco (deja de estar entre las más recientes), el foco cae al body:
-  // vuelve a la lista, a la línea que ahora entra con Tab, para que las flechas y C sigan funcionando.
-  const listaRef = useRef<HTMLDivElement>(null)
+  // vuelve a la lista, a la línea que ahora entra con Tab. Solo si el foco estaba en la lista al refrescar.
   useEffect(() => {
-    if (activa === null || claves.includes(activa)) return
+    if (activa === null || claves.includes(activa) || !focoEnLista.current) return
+    focoEnLista.current = false
     if (document.activeElement && document.activeElement !== document.body) return
     listaRef.current?.querySelector<HTMLButtonElement>('.lg-linea__cuerpo[tabindex="0"]')?.focus()
   }, [activa, claves])

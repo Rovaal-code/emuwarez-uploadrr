@@ -99,6 +99,23 @@ describe('Logs', () => {
     expect(contenedor.querySelector('.lg-lista')!.contains(document.activeElement)).toBe(true)
   })
 
+  it('si el foco ya no estaba en la lista (clic fuera), un refresco no se lo devuelve', async () => {
+    await montar()
+    await act(async () => { lineas()[2].focus() })
+    // Clic en una zona no interactiva: el foco sale de la línea, aunque esa línea siga siendo la «activa».
+    await act(async () => { lineas()[2].blur() })
+    expect(document.activeElement).toBe(document.body)
+    vi.mocked(getLogs).mockResolvedValue({
+      items: [{ ts: 4, time: '2026-11-06 11:00:04', level: 'INFO', logger: 'app', message: 'cuarta' }, ...structuredClone(LINEAS).slice(0, 2)],
+      count: 3,
+    } as Awaited<ReturnType<typeof getLogs>>)
+    const refrescar = [...contenedor.querySelectorAll('button')].find(b => b.textContent === 'Refrescar')!
+    await act(async () => { refrescar.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await esperar()
+    expect(lineas().map(l => l.textContent).join(' ')).not.toContain('primera')
+    expect(document.activeElement).toBe(document.body)
+  })
+
   it('la tecla C copia la línea enfocada', async () => {
     await montar()
     await act(async () => { lineas()[1].focus() })

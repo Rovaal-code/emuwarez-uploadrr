@@ -3,8 +3,14 @@
 [![CI](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/ci.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/ci.yml)
 [![Publicar versión](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/publicar.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/publicar.yml)
 [![zizmor](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/zizmor.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/zizmor.yml)
+[![Bundle](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/bundle.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/bundle.yml)
+[![Claude](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/claude.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/claude.yml)
+[![Cobertura: Codecov](https://img.shields.io/badge/cobertura-Codecov-F01F7A?logo=codecov&logoColor=white)](https://app.codecov.io/gh/Kisnov/emuwarez-uploadrr)
 [![Revisión: CodeRabbit](https://img.shields.io/badge/revisi%C3%B3n-CodeRabbit-FF570A)](https://coderabbit.ai)
 [![Dependabot](https://img.shields.io/badge/dependabot-activo-025E8C?logo=dependabot&logoColor=white)](.github/dependabot.yml)
+[![Imagen: ghcr.io](https://img.shields.io/badge/imagen-ghcr.io-2496ED?logo=docker&logoColor=white)](https://github.com/Kisnov/emuwarez-uploadrr/pkgs/container/emuwarez-uploadrr)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![Node 26](https://img.shields.io/badge/node-26-5FA04E?logo=nodedotjs&logoColor=white)](frontend/package.json)
 
 Aplicación web autoalojada (+ CLI) para subir a **[eMuwarez](https://emu-warez.com)** (tracker UNIT3D) desde tu
 biblioteca de **Radarr**/**Sonarr**. Sincroniza la biblioteca, la cruza con las peticiones abiertas de eMuwarez,
@@ -37,11 +43,12 @@ con [Uploadrr-EMU](https://github.com/Kisnov/Uploadrr-EMU), que va dentro de la 
   directo, límite de subidas en paralelo y varios grupos de subida guardados para el tag. «Seleccionar» en
   Biblioteca marca varias películas, series o temporadas y «Subir por lotes» las encola de una vez (una serie se
   abre en sus temporadas y solo entran como pack las que están listas; las demás se listan con su motivo), con su
-  nombre, sus comprobaciones y lo que ya hay en eMuwarez de cada una; en el Panel, «Seleccionar» en «Listo para subir» hace lo mismo con las peticiones (cada subida, enlazada a su petición)
-  y las otras ideas, y en Peticiones, con las peticiones que ya se pueden subir. Desde Biblioteca, cada subida se enlaza a
-  la petición abierta que la cubre si hay una sola. En Subidas el lote se sigue, se cancela, se reintenta o se borra junto
-  (las que siguen en cola o subiendo no se borran). En Ajustes → Notificaciones se elige si un lote avisa una vez por subida o una sola vez
-  al terminar, con el resumen.
+  nombre, sus comprobaciones y lo que ya hay en eMuwarez de cada una; en el Panel, «Seleccionar» en «Listo para
+  subir» hace lo mismo con las peticiones (cada subida, enlazada a su petición) y las otras ideas, y en Peticiones,
+  con las peticiones que ya se pueden subir. Desde Biblioteca, cada subida se enlaza a la petición abierta que la
+  cubre si hay una sola. En Subidas el lote se sigue, se cancela, se reintenta o se borra junto (las que siguen en
+  cola o subiendo no se borran). En Ajustes → Notificaciones se elige si un lote avisa una vez por subida o una sola
+  vez al terminar, con el resumen.
 - **Estadísticas**: tu ratio, lo subido, lo bajado y el bonus en gráficos, día a día, junto a las cifras de la
   biblioteca y de las peticiones.
 - **Guía**: cada campo de la nomenclatura de eMuwarez, con ejemplos y de dónde lo saca la aplicación.
@@ -179,7 +186,7 @@ La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.en
 - `latest` (sin la variable): la última versión publicada. La publica el workflow *Publicar versión*, a mano
   o solo los días impares del mes si hay cambios suficientes, siempre después de pasar los tests (con la entrada `ref`
   publica la versión de un commit anterior); o `scripts/desplegar.sh` desde tu equipo. Se actualiza con `docker compose pull && docker compose up -d`.
-- `0.16.2`: una versión concreta, de las que tienen etiqueta `v0.16.2` en el repo. Sirve para quedarte en ella o
+- `0.17.0`: una versión concreta, de las que tienen etiqueta `v0.17.0` en el repo. Sirve para quedarte en ella o
   para volver atrás si la nueva falla.
 - El sha del commit de una versión: cada versión publicada tiene también esa etiqueta.
 - `edge`: lo más nuevo. Una prueba sin publicar como versión (la punta de `master` con el workflow en *solo
@@ -187,7 +194,7 @@ La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.en
   se queda por detrás de `latest`.
 
 ```bash
-EMUWAREZ_UPLOADRR_TAG=0.16.2 docker compose up -d
+EMUWAREZ_UPLOADRR_TAG=0.17.0 docker compose up -d
 ```
 
 Si la versión nueva cambió el esquema de la base, la versión vieja no arranca y lo dice en el registro: la base ya
@@ -237,18 +244,21 @@ la nomenclatura, subir…): ver [`README_CLI_READY.md`](README_CLI_READY.md).
 ## Desarrollo
 
 ```bash
-# Backend, en Linux (hardlinks, mediainfo, mkvtoolnix): ~4000 tests, ~11 min
+# Backend, en Linux (hardlinks, mediainfo, mkvtoolnix): ~4200 tests
 pip install -e ".[web,dev]"
 python -m pytest tests -q -p no:cacheprovider
 
 # Frontend
-cd frontend && npm ci && npx tsc --noEmit && npx vitest run && npx vite build
+cd frontend && npm ci && npx tsc --noEmit && npm run lint && npx vitest run && npx vite build
 ```
 
 En cada PR, el CI pasa las reglas graves de `ruff`, los tests del backend con una cobertura mínima del 78 % y `tsc`,
-`vitest` y `vite build` del frontend. Un PR que solo toca `frontend/`, `docs/` o ficheros `.md` limita los
+`eslint`, `vitest` y `vite build` del frontend. Sube a [Codecov](https://app.codecov.io/gh/Kisnov/emuwarez-uploadrr) la
+cobertura, los resultados de los tests y el tamaño del bundle: las líneas nuevas o cambiadas de `emuwarez_uploadrr/`
+necesitan un 70 % de cobertura. El workflow *Bundle* sube el tamaño del bundle de cada push a `master` que toca
+`frontend/`, para que los PR tengan con qué compararse. Un PR que solo toca `frontend/`, `docs/` o ficheros `.md` limita los
 tests del backend a los que mencionan el frontend, sin mínimo de cobertura. Si toca `.github/`, [zizmor](https://docs.zizmor.sh) revisa los
-workflows y `dependabot.yml`.
+workflows y `dependabot.yml`. Mencionar `@claude` en un issue o un PR (solo el mantenedor) lanza el workflow *Claude*.
 
 Dependabot propone cada semana las versiones nuevas de pip, npm, la imagen base del `Dockerfile` y las GitHub
 Actions, cuando llevan 7 días publicadas: las menores y los parches juntos en un PR por ecosistema, y cada versión

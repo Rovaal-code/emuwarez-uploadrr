@@ -17,12 +17,13 @@ import { REGION_OPTIONS } from '../constants/regionLanguage'
 import { SETUP_STEPS, SETUP_STEP_LABELS } from '../types/domain'
 import type { SetupStep } from '../types/domain'
 import type { SetupStatusResponse } from '../types/api'
-import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
+import { emuTestCooldownSeconds } from '../utils/integrationResult'
 import { isValidHttpUrl } from '../utils/validation'
 import { useCooldown } from '../hooks/useCooldown'
 import { HoverTitle } from '../components/Tooltip'
 import { EMU_URL } from '../constants/emu'
-import { IconoUsuario } from '../components/Iconos'
+import { IconoOjo, IconoUsuario } from '../components/Iconos'
+import { ResultadoPrueba } from './ajustes/Campo'
 
 // Mirrors validate_password_strength() in web/security.py exactly (same
 // regexes) so the checklist never drifts from what the backend enforces.
@@ -48,6 +49,32 @@ function PasswordChecklist({ password }: { password: string }) {
       })}
     </ul>
   )
+}
+
+// Una API key: oculta como en Configuración, con un botón para verla antes de probarla (se pega a menudo con un
+// espacio de más). Lo que se escribe y lo que se envía no cambian.
+function CampoClave({ id, value, onChange, placeholder }: {
+  id: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+}) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <div className="setup-con-ojo">
+      <input id={id} className="form-input setup-pr-ojo" type={visible ? 'text' : 'password'} value={value}
+        onChange={e => onChange(e.target.value)} placeholder={placeholder} autoComplete="off" spellCheck={false} />
+      <button type="button" className="setup-ojo" onClick={() => setVisible(v => !v)}
+        aria-label={visible ? 'Ocultar la key' : 'Mostrar la key'} aria-pressed={visible}>
+        <IconoOjo tachado={visible} size={16} />
+      </button>
+    </div>
+  )
+}
+
+// Volver al paso anterior sin perder lo escrito: lo guardado se vuelve a guardar al continuar.
+function BotonAtras({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return <button type="button" className="btn btn-secondary" onClick={onClick} disabled={disabled}>Atrás</button>
 }
 
 interface SetupWizardProps {
@@ -487,12 +514,21 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   })
 
   const stepIdx = SETUP_STEPS.indexOf(step)
+  // «Atrás» desde el paso siguiente a eMuwarez: el admin ya está creado y no se deshace. Solo a pasos vistos en esta
+  // visita (se avanza de uno en uno desde el inicial): tras recargar, el anterior tendría la prueba de la key sin hacer.
+  const anterior = SETUP_STEPS[stepIdx - 1]
+  const puedeVolver = stepIdx - 1 >= Math.max(SETUP_STEPS.indexOf(initialStep), SETUP_STEPS.indexOf('emu'))
+  const atras = puedeVolver
+    ? <BotonAtras onClick={() => { setError(null); setStep(anterior) }} disabled={loading} />
+    : <span />
   const adminPasswordValid = PASSWORD_RULES.every(rule => rule.test(adminPass))
   // No skip escape hatch here (unlike TMDb/instances/qBit below) — an
   // unverified or invalid eMuwarez key would let setup finish while every
   // eMuwarez-dependent feature (sync, requests, catalog) silently can't work.
   const emuCanContinue = Boolean(emuTestResult?.ok)
-  const instancesCanContinue = instances.length > 0 || instAckSkip
+  // Las ya guardadas cuentan: al volver atrás a este paso salen del borrador, pero existen.
+  const instancesCanContinue = instances.length > 0 || instancesGuardadas > 0
+    || setupStatus.radarr_instances + setupStatus.sonarr_instances > 0 || instAckSkip
   const tmdbCanContinue = Boolean(tmdbTestResult?.ok)
 
   return (
@@ -507,10 +543,13 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
         <StepsBar current={step} steps={SETUP_STEPS} />
 
         <div className="wizard-card">
-          <div className="wizard-step-title setup-titulo-paso">
+          <h2 className="wizard-step-title setup-titulo-paso">
             <StepTitleIcon step={step} />
-            {stepIdx + 1}. {SETUP_STEP_LABELS[step]}
-          </div>
+            <span>
+              {SETUP_STEP_LABELS[step]}
+              <span className="setup-paso-de"> · paso {stepIdx + 1} de {SETUP_STEPS.length}</span>
+            </span>
+          </h2>
 
           {/* Welcome step */}
           {step === 'welcome' && (
@@ -521,7 +560,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-feature-grid">
                 <FeatureCard icon={FEATURE_ICONS.sync} text="Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr" />
                 <FeatureCard icon={FEATURE_ICONS.upload} text="Prepara y sube contenido siguiendo la nomenclatura de eMuwarez" />
-                <FeatureCard icon={FEATURE_ICONS.audio} text="Reordena y renombra las pistas de video, audio y subtítulos adecuadamente" />
+                <FeatureCard icon={FEATURE_ICONS.audio} text="Reordena y renombra las pistas de vídeo, audio y subtítulos adecuadamente" />
                 <FeatureCard icon={FEATURE_ICONS.parallel} text="Cualquier subida se puede ejecutar en paralelo" />
                 <FeatureCard icon={FEATURE_ICONS.unique} text="Muestra el contenido único que aún no está en eMuwarez" />
                 <FeatureCard icon={FEATURE_ICONS.requests} text="Se conecta con eMuwarez para listar las peticiones actuales" />
@@ -591,7 +630,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                       <ExternalLinkButtonIcon />
                     </a>
                   </label>
-                  <input id="setup-campo-4" className="form-input" value={emuKey} onChange={e => { setEmuKey(e.target.value); setEmuTestResult(null) }} placeholder="Tu API key de eMuwarez" autoComplete="off" spellCheck={false} />
+                  <CampoClave id="setup-campo-4" value={emuKey} onChange={v => { setEmuKey(v); setEmuTestResult(null) }} placeholder="Tu API key de eMuwarez" />
                 </div>
                 <div className="form-group">
                   <label htmlFor="setup-campo-5" className="form-label">Mi usuario de eMuwarez</label>
@@ -609,18 +648,19 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <button className="btn btn-secondary btn-sm" onClick={handleTestEmu} disabled={emuTesting || loading || emuCooldown.active} type="button">
                   {emuTesting ? 'Probando…' : emuCooldown.active ? `Espera ${emuCooldown.remaining}s` : 'Probar conexión'}
                 </button>
-                {emuTestResult && (
-                  <span className="setup-resultado" style={{ color: testResultColor(emuTestResult) }}>
-                    {testResultLabel(emuTestResult)}
-                  </span>
-                )}
+                <ResultadoPrueba resultado={emuTestResult} />
               </div>
-              {!emuCanContinue && (
+              {/* Antes de probar es una indicación, no un error: el usuario aún no ha hecho nada mal. */}
+              {!emuCanContinue && (emuTestResult?.ok === false ? (
                 <div role="alert" className="alert alert-error setup-mt-10">
-                  Necesitas una key de eMuwarez válida para continuar: pulsa “Probar conexión” y espera a
-                  que confirme que funciona.
+                  La key no ha pasado la prueba. Sin una key de eMuwarez válida no se puede continuar: revísala y
+                  vuelve a pulsar «Probar conexión».
                 </div>
-              )}
+              ) : (
+                <p className="form-hint setup-mt-10">
+                  Pulsa «Probar conexión»: hace falta una key de eMuwarez válida para seguir.
+                </p>
+              ))}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleEmu} disabled={loading || !emuCanContinue}>
@@ -707,11 +747,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <button className="btn btn-secondary btn-sm" onClick={handleTestInst} disabled={instTesting} type="button">
                     {instTesting ? 'Probando…' : 'Probar conexión'}
                   </button>
-                  {instTestResult && (
-                    <span className="setup-resultado" style={{ color: testResultColor(instTestResult) }}>
-                      {testResultLabel(instTestResult)}
-                    </span>
-                  )}
+                  <ResultadoPrueba resultado={instTestResult} />
                 </div>
                 {instTestResult?.ok && instTestResult.details?.content_visible === false && (
                   <div role="alert" className="alert alert-error setup-mt-10">
@@ -736,7 +772,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               {!instancesCanContinue && (
-                <div role="alert" className="alert alert-error setup-mt-10">
+                <div className="alert alert-warning setup-mt-10">
                   Todavía no has añadido ninguna instancia. Si continúas sin añadir ninguna, la biblioteca
                   no tendrá contenido que cruzar hasta que la corrijas más tarde en Configuración.
                   <label className="checkbox-label setup-bloque">
@@ -745,7 +781,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </div>
               )}
               <div className="wizard-actions">
-                <span />
+                {atras}
                 <button className="btn btn-primary" onClick={handleInstances} disabled={loading || !instancesCanContinue}>
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
@@ -780,7 +816,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                       <ExternalLinkButtonIcon />
                     </a>
                   </label>
-                  <input id="setup-campo-10" className="form-input" value={tmdbKey} onChange={e => { setTmdbKey(e.target.value); setTmdbTestResult(null) }} placeholder="API key de TMDb" autoComplete="off" spellCheck={false} />
+                  <CampoClave id="setup-campo-10" value={tmdbKey} onChange={v => { setTmdbKey(v); setTmdbTestResult(null) }} placeholder="API key de TMDb" />
                   <div className="setup-enlace-fila">
                     <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer" className="hover-link setup-t115">
                       Cómo obtener una API KEY en TMDB
@@ -803,21 +839,20 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <button className="btn btn-secondary btn-sm" onClick={handleTestTmdb} disabled={tmdbTesting || loading} type="button">
                   {tmdbTesting ? 'Probando…' : 'Probar conexión'}
                 </button>
-                {tmdbTestResult && (
-                  <span className="setup-resultado" style={{ color: testResultColor(tmdbTestResult) }}>
-                    {testResultLabel(tmdbTestResult)}
-                  </span>
-                )}
+                <ResultadoPrueba resultado={tmdbTestResult} />
               </div>
-              {!tmdbCanContinue && (
+              {!tmdbCanContinue && (tmdbTestResult?.ok === false ? (
                 <div role="alert" className="alert alert-error setup-mt-10">
-                  Necesitas una key de TMDb válida para continuar: pulsa “Probar conexión” y espera a
-                  que confirme que funciona. Esta integración es obligatoria, así que aquí no se puede
-                  saltar el paso.
+                  La key no ha pasado la prueba. TMDb es obligatorio, así que este paso no se puede saltar: revísala
+                  y vuelve a pulsar «Probar conexión».
                 </div>
-              )}
+              ) : (
+                <p className="form-hint setup-mt-10">
+                  Pulsa «Probar conexión»: hace falta una key de TMDb válida para seguir. Este paso no se puede saltar.
+                </p>
+              ))}
               <div className="wizard-actions">
-                <span />
+                {atras}
                 <button className="btn btn-primary" onClick={handleTmdb} disabled={loading || !tmdbCanContinue}>
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
@@ -854,18 +889,16 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <button className="btn btn-secondary btn-sm" onClick={handleTestQbit} disabled={qbitTesting || loading || !qbitUrl.trim()} type="button">
                   {qbitTesting ? 'Probando…' : 'Probar conexión'}
                 </button>
-                {qbitTestResult && (
-                  <span className="setup-resultado" style={{ color: testResultColor(qbitTestResult) }}>{testResultLabel(qbitTestResult)}</span>
-                )}
+                <ResultadoPrueba resultado={qbitTestResult} />
               </div>
               {!qbitUrl.trim() && (
-                <div role="alert" className="alert alert-error setup-mt-10">
+                <div className="alert alert-warning setup-mt-10">
                   Sin qBittorrent configurado, los torrents no se añadirán automáticamente a su cola tras
                   subir: tendrás que hacerlo a mano. Podrás configurarlo más tarde en Configuración.
                 </div>
               )}
               <div className="wizard-actions">
-                <span />
+                {atras}
                 <button className="btn btn-primary" onClick={handleQbit} disabled={loading}>
                   {loading ? 'Guardando…' : qbitUrl.trim() ? 'Continuar' : 'Omitir'}
                 </button>
@@ -885,7 +918,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <ProviderPriorityPicker order={nomProviderOrder} onChange={handleNomProviderOrderChange} linkIcons={false} />
               {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
-                <span />
+                {atras}
                 <button className="btn btn-primary" onClick={handleProviders} disabled={loading}>
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
@@ -934,8 +967,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                       value={imgKeys[h.id] ?? ''} onChange={e => setImgKeys(p => ({ ...p, [h.id]: e.target.value }))}
                       placeholder={`API key de ${h.label}`} />
                   )}
-                  {/* El color lo da el resultado de la prueba. */}
-                  {t && <div className="setup-pie" style={{ color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+                  {t && <div className="setup-pie"><ResultadoPrueba resultado={t} /></div>}
                 </div>
               )
             }
@@ -951,7 +983,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
-                <span />
+                {atras}
                 <button className="btn btn-primary" onClick={handleImghosts} disabled={loading}>
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
@@ -973,7 +1005,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
-                <span />
+                {atras}
                 <button className="btn btn-primary" onClick={handleComplete} disabled={loading}>
                   {loading ? 'Inicializando…' : 'Completar setup'}
                 </button>

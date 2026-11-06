@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .api.router import api_router
@@ -221,6 +221,15 @@ def create_app() -> FastAPI:
         start = time.time()
         try:
             response = await call_next(request)
+        except RuntimeError as exc:
+            # Starlette lanza esto cuando la app acaba sin responder porque el navegador cerró la conexión (p. ej. al
+            # cambiar de página con iconos a medio bajar). No es un fallo de la app: una línea baja, sin traza, y una
+            # respuesta vacía que nadie recibe, para que uvicorn tampoco lo registre como error.
+            if str(exc) == "No response returned." and await request.is_disconnected():
+                _req_log.debug("%s %s → el cliente cerró la conexión", request.method, request.url.path)
+                return Response(status_code=204)
+            _req_log.exception("%s %s → EXCEPCIÓN", request.method, request.url.path)
+            raise
         except Exception:
             _req_log.exception("%s %s → EXCEPCIÓN", request.method, request.url.path)
             raise

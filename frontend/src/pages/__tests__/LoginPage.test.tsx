@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../api/auth', () => ({ login: vi.fn() }))
 
 import { login } from '../../api/auth'
+import { ApiClientError } from '../../api/client'
 import { LoginPage } from '../LoginPage'
 import { desmontar, escribir, montar, pulsar } from '../../components/__tests__/dom'
 
@@ -34,11 +35,10 @@ describe('LoginPage', () => {
     await enviar()
     expect(aviso()).toBe('Escribe tu contraseña.')
     expect(document.activeElement).toBe(clave())
-    // Un error sin campo concreto marca los dos campos como inválidos y los describe con el mismo aviso.
-    for (const campo of [usuario(), clave()]) {
-      expect(campo.getAttribute('aria-describedby')).toBe('login-error')
-      expect(campo.getAttribute('aria-invalid')).toBe('true')
-    }
+    // Los dos campos se describen con el aviso, pero solo el que falta se marca como inválido.
+    for (const campo of [usuario(), clave()]) expect(campo.getAttribute('aria-describedby')).toBe('login-error')
+    expect(clave().getAttribute('aria-invalid')).toBe('true')
+    expect(usuario().hasAttribute('aria-invalid')).toBe(false)
   })
 
   it('sin error, los campos no se marcan como inválidos', async () => {
@@ -56,6 +56,22 @@ describe('LoginPage', () => {
     expect(login).toHaveBeenCalledWith('gabriel', 'secreta', true)
     expect(onSuccess).toHaveBeenCalledTimes(1)
     expect(aviso()).toBeUndefined()
+  })
+
+  it('unas credenciales malas marcan los dos campos; un fallo de red, ninguno', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await montar(<LoginPage onSuccess={vi.fn()} />)
+    await escribir(usuario(), 'gabriel')
+    await escribir(clave(), 'mala')
+    vi.mocked(login).mockRejectedValueOnce(new ApiClientError('no', 401, null))
+    await enviar()
+    expect(aviso()).toContain('Credenciales incorrectas')
+    expect([usuario(), clave()].map(c => c.getAttribute('aria-invalid'))).toEqual(['true', 'true'])
+    vi.mocked(login).mockRejectedValueOnce(new ApiClientError('sin red', 0, null))
+    await enviar()
+    expect(aviso()).toContain('No se pudo conectar con el servidor')
+    expect([usuario(), clave()].some(c => c.hasAttribute('aria-invalid'))).toBe(false)
+    vi.mocked(console.error).mockRestore()
   })
 
   it('el título es el h1 de la pantalla y el nombre de la marca no se traduce', async () => {

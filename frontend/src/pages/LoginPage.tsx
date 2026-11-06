@@ -12,6 +12,8 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Qué campo tiene la culpa del error: solo ese se marca como inválido. Un fallo de red no es culpa de ninguno.
+  const [invalido, setInvalido] = useState<'usuario' | 'clave' | 'ambos' | null>(null)
   const [loading, setLoading] = useState(false)
   const usuarioRef = useRef<HTMLInputElement>(null)
   const claveRef = useRef<HTMLInputElement>(null)
@@ -22,10 +24,12 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
     if (!username.trim() || !password) {
       const falta = !username.trim() ? usuarioRef : claveRef
       setError(!username.trim() ? 'Escribe tu usuario.' : 'Escribe tu contraseña.')
+      setInvalido(!username.trim() ? 'usuario' : 'clave')
       falta.current?.focus()
       return
     }
     setError(null)
+    setInvalido(null)
     setLoading(true)
     try {
       await login(username.trim(), password, remember)
@@ -38,6 +42,7 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
       if (err instanceof ApiClientError) {
         if (err.status === 401) {
           setError('Credenciales incorrectas. Revisa usuario y contraseña.')
+          setInvalido('ambos')
         } else if (err.status === 429) {
           setError(err.message)
         } else if (err.status === 0) {
@@ -81,7 +86,7 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               aria-describedby={error ? 'login-error' : undefined}
-              aria-invalid={error ? true : undefined}
+              aria-invalid={invalido === 'usuario' || invalido === 'ambos' ? true : undefined}
               disabled={loading}
             />
           </div>
@@ -96,7 +101,7 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               aria-describedby={error ? 'login-error' : undefined}
-              aria-invalid={error ? true : undefined}
+              aria-invalid={invalido === 'clave' || invalido === 'ambos' ? true : undefined}
               disabled={loading}
             />
           </div>

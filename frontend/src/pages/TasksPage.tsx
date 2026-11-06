@@ -391,7 +391,7 @@ export function TasksPage() {
     <div>
       <div className="page-header">
         <div>
-          <div className="page-title">Tareas</div>
+          <h1 className="page-title">Tareas</h1>
           <div className="page-subtitle">Tareas automáticas de sincronización</div>
         </div>
         {!loading && !error && <ResumenTareas tasks={tasks} />}

@@ -308,7 +308,8 @@ describe('Panel', () => {
     expect(banda().querySelector('button')).toBeNull()
 
     // «Ver motivo» abre esa subida en Subidas.
-    const ver = [...banda().querySelectorAll('[role="link"]')].find(l => l.textContent === 'Ver motivo')!
+    const ver = [...banda().querySelectorAll('a[href]')].find(l => l.textContent === 'Ver motivo')!
+    expect(ver.getAttribute('href')).toBe('/uploads/9')
     await pulsar(ver)
     expect(sessionStorage.getItem('emuwarez_open_upload')).toBe('9')
     expect(navegar).toHaveBeenCalledWith('uploads')
@@ -360,7 +361,8 @@ describe('Panel', () => {
       expect(filas[0].querySelector('.panel-fila-duracion')).toBeNull()
       expect(filas.every(f => f.querySelector('.panel-poster'))).toBe(true)
 
-      await pulsar(filas[1].querySelector('[role="link"]')!)
+      expect(filas.map(f => f.querySelector('a.upload-row')!.getAttribute('href'))).toEqual(['/uploads/2', '/uploads/1', '/uploads/3'])
+      await pulsar(filas[1].querySelector('a[href]')!)
       expect(sessionStorage.getItem('emuwarez_open_upload')).toBe('1')
       expect(navegar).toHaveBeenCalledWith('uploads')
     })
@@ -470,7 +472,7 @@ describe('Panel', () => {
       expect(meta(0).querySelector('.panel-rg-texto')!.textContent).toBe('Ryodan')
       const idiomas = [...meta(0).querySelectorAll('.detcard-plano')].map(p => p.textContent)
       expect(idiomas).toEqual(['Audio: ESP, ING', 'Subtítulos: ESP'])
-      expect(meta(0).querySelector('[role="link"]')!.textContent).toBe('Ver petición')
+      expect(meta(0).querySelector('a[href]')!.textContent).toBe('Ver petición')
     })
 
     it('sin grupo ni idiomas no sale nada en su lugar, solo «Ver petición»', async () => {
@@ -548,7 +550,10 @@ describe('Panel', () => {
     vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [rec({ id: 5, rec_request_id: 77, rec_points: 5, content_name: 'Pedida (2020)' })] })
     await pagina()
     const fila = filas('Listo para subir')[0]
-    await pulsar([...fila.querySelectorAll('[role="link"]')].find(l => l.textContent === 'Ver petición'))
+    const verPeticion = [...fila.querySelectorAll('a[href]')].find(l => l.textContent === 'Ver petición')!
+    expect(verPeticion.getAttribute('href')).toBe('/requests/77')
+    expect(fila.querySelector('a.panel-item-titulo')!.getAttribute('href')).toBe('/library/5')
+    await pulsar(verPeticion)
     expect(sessionStorage.getItem('emuwarez_open_request')).toBe('77')
     expect(navegar).toHaveBeenLastCalledWith('requests')
 
@@ -615,7 +620,7 @@ describe('Panel', () => {
     expect(mas.textContent).toBe('+4 en cola · Ver todas las subidas')
     // El enlace no se repite al pie.
     expect(carril('En curso').querySelector('.panel-pie')).toBeNull()
-    await pulsar(mas.querySelector('[role="link"]')!)
+    await pulsar(mas.querySelector('a[href]')!)
     expect(navegar).toHaveBeenCalledWith('uploads')
   })
 
@@ -629,7 +634,7 @@ describe('Panel', () => {
 
   it('«Ver todas las subidas» abre Subidas', async () => {
     await pagina()
-    await pulsar([...carril('En curso').querySelectorAll('[role="link"]')].find(l => l.textContent === 'Ver todas las subidas'))
+    await pulsar([...carril('En curso').querySelectorAll('a[href]')].find(l => l.textContent === 'Ver todas las subidas'))
     expect(navegar).toHaveBeenCalledWith('uploads')
   })
 

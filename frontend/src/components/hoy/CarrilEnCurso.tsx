@@ -34,7 +34,7 @@ function FilaSubida({ job, yendose = false, onOpen }: {
     // poco. Las que se despiden van al final de la lista, así
     // que al desaparecer no mueven de sitio a las de arriba.
     // En línea solo la duración, que es una constante del código.
-    <HoverTitle className={`upload-row${yendose ? ' panel-fila-saliendo' : ''}`} tip="Ver detalle de la subida" onClick={() => onOpen(job.id!)}
+    <HoverTitle className={`upload-row${yendose ? ' panel-fila-saliendo' : ''}`} tip="Ver detalle de la subida" href={`/uploads/${job.id}`} onClick={() => onOpen(job.id!)}
       style={{ transition: `opacity ${DESVANECER_MS}ms ease-out` }}>
       <Cartel url={job.poster_url} serie={job.media_type === 'series' || job.media_type === 'episode'} />
       <div className="panel-fila-texto">
@@ -138,7 +138,7 @@ export function CarrilEnCurso({ filas, recientes, onOpen, onVerTodas }: {
         <p className="panel-en-curso-mas">
           {textoOcultas(ocultas)}
           {' · '}
-          <HoverTitle as="span" className="hover-link" onClick={onVerTodas} tip="Abrir Subidas">Ver todas las subidas</HoverTitle>
+          <HoverTitle as="span" className="hover-link" href="/uploads" onClick={onVerTodas} tip="Abrir Subidas">Ver todas las subidas</HoverTitle>
         </p>
       )}
       {recientes.length > 0 && (
@@ -152,7 +152,7 @@ export function CarrilEnCurso({ filas, recientes, onOpen, onVerTodas }: {
       {/* Con la línea «+N en cola» ya hay un enlace a Subidas: no se repite al pie. */}
       {ocultas.length === 0 && (
         <div className="panel-pie">
-          <HoverTitle as="span" className="hover-link" onClick={onVerTodas} tip="Abrir Subidas">Ver todas las subidas</HoverTitle>
+          <HoverTitle as="span" className="hover-link" href="/uploads" onClick={onVerTodas} tip="Abrir Subidas">Ver todas las subidas</HoverTitle>
         </div>
       )}
     </Carril>

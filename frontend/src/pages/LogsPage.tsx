@@ -158,7 +158,7 @@ export function LogsPage() {
     <div data-tour="logs-content" className="lg-pagina">
       <div className="page-header lg-cabecera">
         <div>
-          <div className="page-title">Logs</div>
+          <h1 className="page-title">Logs</h1>
           <div className="page-subtitle">Todo lo que hace la aplicación (peticiones HTTP, sincronizaciones, subidas, errores…)</div>
         </div>
       </div>

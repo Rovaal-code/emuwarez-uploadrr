@@ -52,7 +52,7 @@ function Fila({ item, extra, verPeticion, accion, onVerFicha, seleccion }: {
       )}
       <Cartel url={item.poster_url} serie={esSerie(item)} />
       <div className="panel-item-texto">
-        <HoverTitle className="hover-link panel-item-titulo" onClick={() => onVerFicha(item)} tip="Ver ficha del contenido">
+        <HoverTitle className="hover-link panel-item-titulo" href={`/library/${item.id}`} onClick={() => onVerFicha(item)} tip="Ver ficha del contenido">
           <DetailTitleText title={item.content_name} />
         </HoverTitle>
         <div className="panel-item-spec">{spec}</div>
@@ -80,7 +80,7 @@ function Fila({ item, extra, verPeticion, accion, onVerFicha, seleccion }: {
                 <PlainValue icon={<SubtitleValueIcon />}><span className="solo-lector">Subtítulos: </span>{subs.join(', ')}</PlainValue>
               </span>
             )}
-            {verPeticion && <HoverTitle as="span" className="hover-link panel-item-ver" onClick={verPeticion} tip="Abrir la petición en Peticiones">Ver petición</HoverTitle>}
+            {verPeticion && <HoverTitle as="span" className="hover-link panel-item-ver" href={`/requests/${item.rec_request_id}`} onClick={verPeticion} tip="Abrir la petición en Peticiones">Ver petición</HoverTitle>}
           </div>
         )}
       </div>

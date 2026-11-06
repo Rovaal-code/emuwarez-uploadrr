@@ -97,7 +97,7 @@ export function SettingsPage() {
     <div className="aj-marco" data-tour="settings-content">
       <div className="page-header aj-no-encoge">
         <div>
-          <div className="page-title">Configuración</div>
+          <h1 className="page-title">Configuración</h1>
           <div className="page-subtitle">Ajustes, diagnóstico y backup</div>
         </div>
       </div>

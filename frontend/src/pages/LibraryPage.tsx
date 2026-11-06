@@ -723,7 +723,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     <div data-tour="library-content" className="bib-pagina">
       <div className="page-header">
         <div>
-          <div className="page-title">Biblioteca</div>
+          <h1 className="page-title">Biblioteca</h1>
           <div className="page-subtitle">
             {/* Cuenta ARCHIVOS (películas + capítulos que tienes), no filas de la
                 tabla: enseñando las filas, una serie con 90 capítulos contaba 1.

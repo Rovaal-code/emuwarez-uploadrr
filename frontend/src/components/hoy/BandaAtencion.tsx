@@ -51,13 +51,13 @@ export function BandaAtencion({ avisos, onVerSubida, onVerSubidas, onVerVersion 
               {a.detalle && <div className="panel-aviso-detalle" title={a.detalle}>{a.detalle}</div>}
             </div>
             {a.tipo === 'subida' && (
-              <HoverTitle as="span" className="hover-link panel-aviso-accion" onClick={() => onVerSubida(a.jobId)} tip="Abrir la subida y ver por qué falló">Ver motivo</HoverTitle>
+              <HoverTitle as="span" className="hover-link panel-aviso-accion" href={`/uploads/${a.jobId}`} onClick={() => onVerSubida(a.jobId)} tip="Abrir la subida y ver por qué falló">Ver motivo</HoverTitle>
             )}
             {a.tipo === 'mas' && (
-              <HoverTitle as="span" className="hover-link panel-aviso-accion" onClick={onVerSubidas} tip="Abrir Subidas">Ver todas</HoverTitle>
+              <HoverTitle as="span" className="hover-link panel-aviso-accion" href="/uploads" onClick={onVerSubidas} tip="Abrir Subidas">Ver todas</HoverTitle>
             )}
             {a.tipo === 'version' && (
-              <HoverTitle as="span" className="hover-link panel-aviso-accion" onClick={onVerVersion} tip="Abrir Configuración">Ver</HoverTitle>
+              <HoverTitle as="span" className="hover-link panel-aviso-accion" href="/settings" onClick={onVerVersion} tip="Abrir Configuración">Ver</HoverTitle>
             )}
           </li>
         ))}

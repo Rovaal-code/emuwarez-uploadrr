@@ -282,7 +282,7 @@
 }
 
 .topbar-title {
-  /* Es el h1 de cada sección: el nombre de la sección, con el aspecto de siempre. */
+  /* Miga de pan con el nombre de la sección; el h1 es el .page-title de cada página. */
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);

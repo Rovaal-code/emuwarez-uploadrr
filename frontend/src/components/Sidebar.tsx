@@ -3,6 +3,9 @@ import { NAV_ITEMS, type NavItem } from '../types/domain'
 import { ServiceIcon } from './ServiceIcon'
 import { useTooltip } from './Tooltip'
 import { SystemStatusPanel } from './SystemStatusPanel'
+import { CuentaDelCajon } from './CuentaDelCajon'
+import { IconoAyuda, IconoCerrar } from './Iconos'
+import type { CurrentUserResponse } from '../types/api'
 
 interface SidebarProps {
   active: string
@@ -13,6 +16,9 @@ interface SidebarProps {
   onCerrar?: () => void
   // En el cajón: volver a ver el tour guiado (en la cabecera no cabe el botón).
   onTour?: () => void
+  // En el cajón, al pie: tu usuario y cerrar sesión (en la cabecera del móvil no caben).
+  user?: CurrentUserResponse | null
+  onLogout?: () => void
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'emuwarez_uploadrr_sidebar_collapsed'
@@ -118,7 +124,7 @@ function NavItemRow({ item, active, collapsed, onNavigate }: {
   )
 }
 
-export function Sidebar({ active, onNavigate, movil = false, abierta = false, onCerrar, onTour }: SidebarProps) {
+export function Sidebar({ active, onNavigate, movil = false, abierta = false, onCerrar, onTour, user = null, onLogout }: SidebarProps) {
   const [collapsedGuardado, setCollapsed] = useState(loadCollapsed)
   const collapsed = collapsedGuardado && !movil
   const nav = useRef<HTMLElement>(null)
@@ -144,15 +150,16 @@ export function Sidebar({ active, onNavigate, movil = false, abierta = false, on
         type="button"
         className="sidebar-logo"
         onClick={movil ? onCerrar : toggleCollapsed}
-        aria-expanded={!collapsed}
+        aria-expanded={movil ? undefined : !collapsed}
         aria-label={movil ? 'Cerrar menú' : collapsed ? 'Expandir menú' : 'Contraer menú'}
         {...logoTip}
       >
         <ServiceIcon type="emu" size={28} />
-        {!collapsed && <span className="sidebar-logo-text">eMuwarez Uploadrr</span>}
+        {!collapsed && <span className="sidebar-logo-text" translate="no">eMuwarez Uploadrr</span>}
+        {movil && <span className="sidebar-cerrar"><IconoCerrar size={18} /></span>}
         {logoTooltip}
       </button>
-      <nav className="sidebar-nav" ref={nav}>
+      <nav className="sidebar-nav" ref={nav} aria-label="Secciones">
         {NAV_ITEMS.map((item) => (
           <NavItemRow
             key={item.id}
@@ -162,8 +169,13 @@ export function Sidebar({ active, onNavigate, movil = false, abierta = false, on
             onNavigate={id => { onNavigate(id); if (movil) onCerrar?.() }}
           />
         ))}
-        {movil && onTour && <button type="button" className="nav-item" onClick={onTour}>Ver el tour guiado</button>}
+        {movil && onTour && (
+          <button type="button" className="nav-item" onClick={onTour}>
+            <span className="nav-item-icon"><IconoAyuda size={18} /></span>Ver el tour guiado
+          </button>
+        )}
       </nav>
+      {movil && onLogout && <CuentaDelCajon user={user} onLogout={onLogout} />}
       <SystemStatusPanel collapsed={collapsed} />
     </aside>
   )

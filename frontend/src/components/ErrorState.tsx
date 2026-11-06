@@ -7,7 +7,7 @@ interface ErrorStateProps {
 
 export function ErrorState({ title = 'Error', message, onRetry }: ErrorStateProps) {
   return (
-    <div className="empty-state">
+    <div className="empty-state" role="alert">
       <div className="empty-state-icon"><IconoAviso /></div>
       <div className="empty-state-title">{title}</div>
       <div className="empty-state-body">{message}</div>

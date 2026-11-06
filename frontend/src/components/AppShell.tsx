@@ -8,7 +8,7 @@ import { guardedLeave, hasUnsavedChanges } from '../utils/unsavedGuard'
 import { UnsavedChangesModal } from './UnsavedChangesModal'
 import { TourOverlay } from './TourOverlay'
 import { useTour } from '../context/TourContext'
-import { TOUR_STEPS } from '../tour/steps'
+import { pasosDelTour } from '../tour/steps'
 import { CommandPalette } from './CommandPalette'
 import { esAtajoDePaleta } from '../utils/paleta'
 
@@ -162,9 +162,14 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   const [paletaAbierta, setPaletaAbierta] = useState(false)
   const menu = useMenuMovil()
 
+  // La pestaña del navegador dice dónde estás (historial, pestañas fijadas, lector de pantalla).
+  useEffect(() => {
+    document.title = PAGE_TITLE[activePage] ? `${PAGE_TITLE[activePage]} · eMuwarez Uploadrr` : 'eMuwarez Uploadrr'
+  }, [activePage])
+
   useEffect(() => {
     if (localStorage.getItem(TOUR_SEEN_KEY) !== '1') {
-      startTour(TOUR_STEPS, {
+      startTour(pasosDelTour(menu.movil), {
         onClose: () => localStorage.setItem(TOUR_SEEN_KEY, '1'),
       })
     }
@@ -277,20 +282,26 @@ export function AppShell({ user, onLogout }: AppShellProps) {
 
   return (
     <div className="app-shell hud-app">
+      {/* Primer tabulador de la página: salta la barra lateral y la cabecera. Es un botón, no un enlace: no navega a ningún sitio. */}
+      <button type="button" className="saltar-contenido" onClick={() => contenedor.current?.focus()}>
+        Saltar al contenido
+      </button>
       <UnsavedChangesModal />
       {menu.abierto && <div className="sidebar-velo" onClick={menu.cerrar} aria-hidden="true" />}
       <Sidebar
         active={activePage} onNavigate={navigate} movil={menu.movil} abierta={menu.abierto} onCerrar={menu.cerrar}
-        onTour={() => { menu.cerrar(); startTour(TOUR_STEPS) }}
+        onTour={() => { menu.cerrar(); startTour(pasosDelTour(menu.movil)) }}
+        user={user} onLogout={onLogout}
       />
       <div className="main-content" inert={menu.abierto}>
         <Topbar
           user={user}
           pageTitle={PAGE_TITLE[activePage] ?? ''}
           onLogout={onLogout}
+          onBuscar={() => setPaletaAbierta(true)}
           menu={menu}
         />
-        <main className="page-container" ref={contenedor}>
+        <main className="page-container" id="contenido" tabIndex={-1} ref={contenedor}>
           <PageContent page={activePage} onNavigate={navigate} />
         </main>
       </div>

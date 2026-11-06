@@ -160,7 +160,15 @@ const FEATURE_ICONS = {
 function StepsBar({ current, steps }: { current: string; steps: readonly string[] }) {
   const currentIdx = steps.indexOf(current)
   return (
-    <div className="wizard-steps-bar">
+    <div
+      className="wizard-steps-bar"
+      role="progressbar"
+      aria-label="Progreso del asistente"
+      aria-valuemin={1}
+      aria-valuemax={steps.length}
+      aria-valuenow={currentIdx + 1}
+      aria-valuetext={`Paso ${currentIdx + 1} de ${steps.length}: ${SETUP_STEP_LABELS[current as SetupStep]}`}
+    >
       {steps.map((s, i) => (
         <HoverTitle
           key={s}
@@ -492,7 +500,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       <div className="setup-wizard">
         <div className="wizard-logo">
           <ServiceIcon type="emu" size={40} />
-          <div className="wizard-logo-title setup-mt-8">eMuwarez Uploadrr</div>
+          <h1 className="wizard-logo-title setup-mt-8" translate="no">eMuwarez Uploadrr</h1>
           <div className="wizard-logo-sub">Asistente de configuración inicial</div>
         </div>
 
@@ -539,17 +547,17 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               {adminCreated && <div className="alert alert-success setup-mb-14">Admin creado. Iniciando sesión…</div>}
               <div className="wizard-fields">
                 <div className="form-group">
-                  <label className="form-label">Usuario</label>
-                  <input className="form-input" placeholder="admin" value={adminUser} onChange={e => setAdminUser(e.target.value)} />
+                  <label htmlFor="setup-campo-1" className="form-label">Usuario</label>
+                  <input id="setup-campo-1" className="form-input" placeholder="admin" autoComplete="username" autoCapitalize="none" spellCheck={false} value={adminUser} onChange={e => setAdminUser(e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Contraseña</label>
-                  <input className="form-input" type="password" placeholder="Mínimo 12 caracteres" value={adminPass} onChange={e => setAdminPass(e.target.value)} />
+                  <label htmlFor="setup-campo-2" className="form-label">Contraseña</label>
+                  <input id="setup-campo-2" className="form-input" type="password" placeholder="Mínimo 12 caracteres" autoComplete="new-password" value={adminPass} onChange={e => setAdminPass(e.target.value)} />
                   <PasswordChecklist password={adminPass} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Confirmar contraseña</label>
-                  <input className="form-input" type="password" placeholder="Repite la contraseña" value={adminPass2} onChange={e => setAdminPass2(e.target.value)} />
+                  <label htmlFor="setup-campo-3" className="form-label">Confirmar contraseña</label>
+                  <input id="setup-campo-3" className="form-input" type="password" placeholder="Repite la contraseña" autoComplete="new-password" value={adminPass2} onChange={e => setAdminPass2(e.target.value)} />
                   {adminPass2 && (
                     <span className={adminPass === adminPass2 ? 'setup-coinciden setup-coinciden-ok' : 'setup-coinciden'}>
                       {adminPass === adminPass2 ? '✓ Las contraseñas coinciden' : '✗ Las contraseñas no coinciden'}
@@ -557,7 +565,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   )}
                 </div>
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleAdmin} disabled={loading || !adminUser || !adminPasswordValid || adminPass !== adminPass2}>
@@ -573,7 +581,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-step-desc">Credenciales de eMuwarez.</div>
               <div className="wizard-fields">
                 <div className="form-group">
-                  <label className="form-label setup-label-enlace">
+                  <label htmlFor="setup-campo-4" className="form-label setup-label-enlace">
                     API key eMuwarez
                     <a
                       href={EMU_URL}
@@ -583,20 +591,20 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                       <ExternalLinkButtonIcon />
                     </a>
                   </label>
-                  <input className="form-input" value={emuKey} onChange={e => { setEmuKey(e.target.value); setEmuTestResult(null) }} placeholder="Tu API key de eMuwarez" />
+                  <input id="setup-campo-4" className="form-input" value={emuKey} onChange={e => { setEmuKey(e.target.value); setEmuTestResult(null) }} placeholder="Tu API key de eMuwarez" autoComplete="off" spellCheck={false} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Mi usuario de eMuwarez</label>
-                  <input className="form-input" value={emuUsername} onChange={e => setEmuUsername(e.target.value)} placeholder="Tu nombre de usuario en eMuwarez" />
+                  <label htmlFor="setup-campo-5" className="form-label">Mi usuario de eMuwarez</label>
+                  <input id="setup-campo-5" className="form-input" autoComplete="off" spellCheck={false} value={emuUsername} onChange={e => setEmuUsername(e.target.value)} placeholder="Tu nombre de usuario en eMuwarez" />
                   <span className="form-hint">Se usa para reconocer cuáles de todas las peticiones descargadas las has creado tú.</span>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Tag del grupo de subida</label>
-                  <input className="form-input" value={nomTag} onChange={e => setNomTag(e.target.value)} placeholder="EMUWAREZ" />
+                  <label htmlFor="setup-campo-6" className="form-label">Tag del grupo de subida</label>
+                  <input id="setup-campo-6" className="form-input" autoComplete="off" autoCapitalize="characters" spellCheck={false} value={nomTag} onChange={e => setNomTag(e.target.value)} placeholder="EMUWAREZ" />
                   <span className="form-hint">El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario).</span>
                 </div>
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="setup-fila-prueba">
                 <button className="btn btn-secondary btn-sm" onClick={handleTestEmu} disabled={emuTesting || loading || emuCooldown.active} type="button">
                   {emuTesting ? 'Probando…' : emuCooldown.active ? `Espera ${emuCooldown.remaining}s` : 'Probar conexión'}
@@ -608,7 +616,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 )}
               </div>
               {!emuCanContinue && (
-                <div className="alert alert-error setup-mt-10">
+                <div role="alert" className="alert alert-error setup-mt-10">
                   Necesitas una key de eMuwarez válida para continuar: pulsa “Probar conexión” y espera a
                   que confirme que funciona.
                 </div>
@@ -638,7 +646,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                         </div>
                       </div>
                       <button
+                        type="button"
                         className="btn btn-ghost btn-sm"
+                        aria-label={`Quitar ${inst.name}`}
                         onClick={() => setInstances(prev => prev.filter(i => i.id !== inst.id))}
                       >✕</button>
                     </div>
@@ -649,33 +659,36 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <div className="setup-caja-titulo">
                   Añadir instancia
                 </div>
-                <div className="setup-dos-col setup-mb-12">
+                <div className="setup-dos-col setup-mb-12" role="radiogroup" aria-label="Tipo de instancia">
                   {(['radarr', 'sonarr'] as const).map(t => (
-                    <div
+                    <button
                       key={t}
+                      type="button"
+                      role="radio"
+                      aria-checked={instDraft.type === t}
                       onClick={() => setInstDraft(p => ({ ...p, type: t }))}
                       className={instDraft.type === t ? 'setup-tipo setup-tipo-activo' : 'setup-tipo'}
                     >
                       <ServiceIcon type={t} size={24} />
-                      <div>
-                        <div className="setup-tipo-nombre">{t === 'radarr' ? 'Radarr' : 'Sonarr'}</div>
-                        <div className="setup-tipo-sub">{t === 'radarr' ? 'Películas' : 'Series'}</div>
-                      </div>
-                    </div>
+                      <span>
+                        <span className="setup-tipo-nombre">{t === 'radarr' ? 'Radarr' : 'Sonarr'}</span>
+                        <span className="setup-tipo-sub">{t === 'radarr' ? 'Películas' : 'Series'}</span>
+                      </span>
+                    </button>
                   ))}
                 </div>
                 <div className="setup-dos-col">
                   <div className="form-group">
-                    <label className="form-label">Nombre</label>
-                    <input className="form-input" placeholder={instDraft.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={instDraft.name ?? ''} onChange={e => setInstDraft(p => ({ ...p, name: e.target.value }))} />
+                    <label htmlFor="setup-campo-7" className="form-label">Nombre</label>
+                    <input id="setup-campo-7" className="form-input" autoComplete="off" placeholder={instDraft.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={instDraft.name ?? ''} onChange={e => setInstDraft(p => ({ ...p, name: e.target.value }))} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">URL</label>
-                    <input className="form-input" placeholder={instDraft.type === 'sonarr' ? 'http://192.168.1.100:8989' : 'http://192.168.1.100:7878'} value={instDraft.url ?? ''} onChange={e => setInstDraft(p => ({ ...p, url: e.target.value }))} />
+                    <label htmlFor="setup-campo-8" className="form-label">URL</label>
+                    <input id="setup-campo-8" className="form-input" type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder={instDraft.type === 'sonarr' ? 'http://192.168.1.100:8989' : 'http://192.168.1.100:7878'} value={instDraft.url ?? ''} onChange={e => setInstDraft(p => ({ ...p, url: e.target.value }))} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">API key</label>
-                    <input className="form-input" type="password" placeholder="API key" value={instDraft.api_key ?? ''} onChange={e => setInstDraft(p => ({ ...p, api_key: e.target.value }))} />
+                    <label htmlFor="setup-campo-9" className="form-label">API key</label>
+                    <input id="setup-campo-9" className="form-input" type="password" autoComplete="off" placeholder="API key" value={instDraft.api_key ?? ''} onChange={e => setInstDraft(p => ({ ...p, api_key: e.target.value }))} />
                   </div>
                 </div>
                 <div className="setup-checks">
@@ -701,7 +714,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   )}
                 </div>
                 {instTestResult?.ok && instTestResult.details?.content_visible === false && (
-                  <div className="alert alert-error setup-mt-10">
+                  <div role="alert" className="alert alert-error setup-mt-10">
                     ⚠ La conexión funciona, pero eMuwarez Uploadrr <strong>no puede ver el contenido</strong> de
                     esta instancia: sus carpetas raíz no están accesibles desde aquí (probablemente el volumen de
                     medios no está montado igual que en Radarr/Sonarr).
@@ -721,9 +734,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   </div>
                 )}
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               {!instancesCanContinue && (
-                <div className="alert alert-error setup-mt-10">
+                <div role="alert" className="alert alert-error setup-mt-10">
                   Todavía no has añadido ninguna instancia. Si continúas sin añadir ninguna, la biblioteca
                   no tendrá contenido que cruzar hasta que la corrijas más tarde en Configuración.
                   <label className="checkbox-label setup-bloque">
@@ -757,7 +770,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               <div className="wizard-fields">
                 <div className="form-group">
-                  <label className="form-label setup-label-enlace">
+                  <label htmlFor="setup-campo-10" className="form-label setup-label-enlace">
                     API key TMDb
                     <a
                       href="https://www.themoviedb.org/settings/api"
@@ -767,7 +780,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                       <ExternalLinkButtonIcon />
                     </a>
                   </label>
-                  <input className="form-input" value={tmdbKey} onChange={e => { setTmdbKey(e.target.value); setTmdbTestResult(null) }} placeholder="API key de TMDb" />
+                  <input id="setup-campo-10" className="form-input" value={tmdbKey} onChange={e => { setTmdbKey(e.target.value); setTmdbTestResult(null) }} placeholder="API key de TMDb" autoComplete="off" spellCheck={false} />
                   <div className="setup-enlace-fila">
                     <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer" className="hover-link setup-t115">
                       Cómo obtener una API KEY en TMDB
@@ -776,8 +789,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   </div>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Región</label>
-                  <select className="form-input form-select" value={tmdbRegion} onChange={e => setTmdbRegion(e.target.value)}>
+                  <label htmlFor="setup-campo-11" className="form-label">Región</label>
+                  <select id="setup-campo-11" className="form-input form-select" value={tmdbRegion} onChange={e => setTmdbRegion(e.target.value)}>
                     {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
                   </select>
                   <div className="setup-pie setup-muted">
@@ -785,7 +798,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   </div>
                 </div>
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="setup-fila-prueba">
                 <button className="btn btn-secondary btn-sm" onClick={handleTestTmdb} disabled={tmdbTesting || loading} type="button">
                   {tmdbTesting ? 'Probando…' : 'Probar conexión'}
@@ -797,7 +810,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 )}
               </div>
               {!tmdbCanContinue && (
-                <div className="alert alert-error setup-mt-10">
+                <div role="alert" className="alert alert-error setup-mt-10">
                   Necesitas una key de TMDb válida para continuar: pulsa “Probar conexión” y espera a
                   que confirme que funciona. Esta integración es obligatoria, así que aquí no se puede
                   saltar el paso.
@@ -820,23 +833,23 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               <div className="wizard-fields">
                 <div className="form-group">
-                  <label className="form-label">URL del WebUI</label>
-                  <input className="form-input" value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} placeholder="http://127.0.0.1:8080" />
+                  <label htmlFor="setup-campo-12" className="form-label">URL del WebUI</label>
+                  <input id="setup-campo-12" className="form-input" type="url" inputMode="url" autoComplete="off" spellCheck={false} value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} placeholder="http://127.0.0.1:8080" />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Tag</label>
-                  <input className="form-input" value={qbitTag} onChange={e => setQbitTag(e.target.value)} placeholder="Subidas" />
+                  <label htmlFor="setup-campo-13" className="form-label">Tag</label>
+                  <input id="setup-campo-13" className="form-input" autoComplete="off" spellCheck={false} value={qbitTag} onChange={e => setQbitTag(e.target.value)} placeholder="Subidas" />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Usuario</label>
-                  <input className="form-input" value={qbitUser} onChange={e => setQbitUser(e.target.value)} placeholder="admin" autoComplete="off" />
+                  <label htmlFor="setup-campo-14" className="form-label">Usuario</label>
+                  <input id="setup-campo-14" className="form-input" value={qbitUser} onChange={e => setQbitUser(e.target.value)} placeholder="admin" autoComplete="off" autoCapitalize="none" spellCheck={false} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Contraseña</label>
-                  <input type="password" className="form-input" value={qbitPass} onChange={e => setQbitPass(e.target.value)} placeholder="Contraseña del WebUI" autoComplete="new-password" />
+                  <label htmlFor="setup-campo-15" className="form-label">Contraseña</label>
+                  <input id="setup-campo-15" type="password" className="form-input" value={qbitPass} onChange={e => setQbitPass(e.target.value)} placeholder="Contraseña del WebUI" autoComplete="new-password" />
                 </div>
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="setup-fila-prueba">
                 <button className="btn btn-secondary btn-sm" onClick={handleTestQbit} disabled={qbitTesting || loading || !qbitUrl.trim()} type="button">
                   {qbitTesting ? 'Probando…' : 'Probar conexión'}
@@ -846,7 +859,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 )}
               </div>
               {!qbitUrl.trim() && (
-                <div className="alert alert-error setup-mt-10">
+                <div role="alert" className="alert alert-error setup-mt-10">
                   Sin qBittorrent configurado, los torrents no se añadirán automáticamente a su cola tras
                   subir: tendrás que hacerlo a mano. Podrás configurarlo más tarde en Configuración.
                 </div>
@@ -870,7 +883,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 icono para reconocerlo de un vistazo.
               </div>
               <ProviderPriorityPicker order={nomProviderOrder} onChange={handleNomProviderOrderChange} linkIcons={false} />
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleProviders} disabled={loading}>
@@ -936,7 +949,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   renderRow={(id, _idx, { handleProps }) => fila(id, handleProps)} />
                 {resto.map(h => <div key={h.id}>{fila(h.id)}</div>)}
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleImghosts} disabled={loading}>
@@ -958,7 +971,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 desde Configuración. Si has añadido instancias Radarr/Sonarr, la primera sincronización se
                 ejecutará desde el dashboard.
               </div>
-              {error && <div className="alert alert-error setup-mt-14">{error}</div>}
+              {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleComplete} disabled={loading}>

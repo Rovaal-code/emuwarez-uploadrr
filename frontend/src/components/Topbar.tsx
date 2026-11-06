@@ -1,11 +1,11 @@
-import { logout } from '../api/auth'
+import { cerrarSesion } from '../utils/cerrarSesion'
 import type { CurrentUserResponse } from '../types/api'
 import { NotificationBell } from './NotificationBell'
 import { SyncProgressBanner } from './SyncProgressBanner'
 import { useTour } from '../context/TourContext'
-import { TOUR_STEPS } from '../tour/steps'
+import { pasosDelTour } from '../tour/steps'
 import { useTooltip } from './Tooltip'
-import { IconoCampana, IconoCorreo, IconoUsuario } from './Iconos'
+import { IconoAyuda, IconoBuscar, IconoCampana, IconoCorreo, IconoOjo, IconoSalir, IconoUsuario } from './Iconos'
 import { ServiceIcon } from './ServiceIcon'
 import { tapar, usePerfilEmu } from '../context/PerfilEmuContext'
 import { enlacesCuentaEmu } from '../utils/cuentaEmu'
@@ -16,32 +16,31 @@ interface TopbarProps {
   user: CurrentUserResponse | null
   pageTitle: string
   onLogout: () => void
-  menu: Pick<ReturnType<typeof useMenuMovil>, 'abierto' | 'alternar' | 'botonRef'>
+  onBuscar: () => void
+  menu: Pick<ReturnType<typeof useMenuMovil>, 'abierto' | 'alternar' | 'botonRef' | 'movil'>
 }
 
-export function Topbar({ user, pageTitle, onLogout, menu }: TopbarProps) {
+// ⌘ K en Mac, Ctrl K en el resto: es lo que se lee en el botón de búsqueda.
+function textoDelAtajo(): string {
+  return /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘\u00A0K' : 'Ctrl\u00A0K'
+}
+
+export function Topbar({ user, pageTitle, onLogout, onBuscar, menu }: TopbarProps) {
   const { start: startTour } = useTour()
   const { perfil, ocultarNombre: hideName, setOcultarNombre: setHideName } = usePerfilEmu()
   const tourTip = useTooltip('Ver el tour guiado')
+  const buscarTip = useTooltip('Buscar secciones y títulos de la Biblioteca')
   const eyeTip = useTooltip(hideName ? 'Mostrar usuario' : 'Ocultar usuario')
   const logoutTip = useTooltip('Cerrar sesión')
   const mensajesTip = useTooltip('Mensajes en eMuwarez')
   const notificacionesTip = useTooltip('Notificaciones en eMuwarez')
   const cuentaEmu = perfil?.username ? enlacesCuentaEmu(perfil.username) : null
 
-  async function handleLogout() {
-    try {
-      await logout()
-    } finally {
-      onLogout()
-    }
-  }
-
   return (
     <header className="topbar">
       <div className="topbar-left">
         <BotonMenu abierto={menu.abierto} onAlternar={menu.alternar} botonRef={menu.botonRef} />
-        <span className="topbar-title">{pageTitle}</span>
+        <h1 className="topbar-title">{pageTitle}</h1>
       </div>
       {/* Center slot for live sync status — same row as the page title, so
           it never changes the topbar's height whether a sync is running or
@@ -51,22 +50,33 @@ export function Topbar({ user, pageTitle, onLogout, menu }: TopbarProps) {
         <SyncProgressBanner />
       </div>
       <div className="topbar-right" data-tour="topbar-buttons">
-        {/* Guided tour — relaunch any time */}
+        {/* Búsqueda (la misma paleta que Ctrl+K): en el móvil es el único camino, no hay teclado */}
+        <button
+          type="button"
+          className="topbar-btn topbar-buscar"
+          aria-label="Buscar"
+          aria-haspopup="dialog"
+          aria-keyshortcuts="Control+K Meta+K"
+          onClick={onBuscar}
+          {...buscarTip.triggerProps}
+        >
+          <IconoBuscar size={16} />
+          <kbd className="topbar-atajo">{textoDelAtajo()}</kbd>
+          {buscarTip.tooltipNode}
+        </button>
+        {/* Guided tour — relaunch any time (en el móvil está en el cajón) */}
         <button
           type="button"
           className="topbar-btn topbar-tour"
           aria-label="Ver el tour guiado"
-          onClick={() => startTour(TOUR_STEPS)}
+          onClick={() => startTour(pasosDelTour(menu.movil))}
           {...tourTip.triggerProps}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M9.1 9a2.9 2.9 0 0 1 5.7 1c0 1.9-2.7 2-2.8 3.8" />
-            <circle cx="12" cy="17.2" r="0.85" fill="currentColor" stroke="none" />
-          </svg>
+          <IconoAyuda size={16} />
           {tourTip.tooltipNode}
         </button>
-        {/* Mensajes y notificaciones de eMuwarez, con su logo delante para no confundirlos con la campana de la app */}
+        {/* Mensajes y notificaciones de eMuwarez, con su logo delante para no confundirlos con la campana de la app
+            (en el móvil están en el cajón) */}
         {cuentaEmu && (
           <div className="topbar-emu" role="group" aria-label="Tu cuenta en eMuwarez">
             <ServiceIcon type="emu" size={16} />
@@ -84,7 +94,7 @@ export function Topbar({ user, pageTitle, onLogout, menu }: TopbarProps) {
         )}
         {/* Notifications */}
         <NotificationBell />
-        {/* User info — username only, with a toggle to obfuscate it */}
+        {/* User info — username only, with a toggle to obfuscate it (en el móvil, en el cajón) */}
         {user && (
           <div className="topbar-user">
             <IconoUsuario size={15} />
@@ -98,28 +108,14 @@ export function Topbar({ user, pageTitle, onLogout, menu }: TopbarProps) {
               aria-label={hideName ? 'Mostrar usuario' : 'Ocultar usuario'}
               {...eyeTip.triggerProps}
             >
-              {hideName ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              )}
+              <IconoOjo tachado={hideName} size={15} />
               {eyeTip.tooltipNode}
             </button>
           </div>
         )}
-        {/* Logout */}
-        <button className="topbar-btn" onClick={handleLogout} aria-label="Cerrar sesión" {...logoutTip.triggerProps}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16,17 21,12 16,7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
+        {/* Logout (en el móvil, en el cajón) */}
+        <button type="button" className="topbar-btn topbar-salir" onClick={() => cerrarSesion(onLogout)} aria-label="Cerrar sesión" {...logoutTip.triggerProps}>
+          <IconoSalir size={16} />
           {logoutTip.tooltipNode}
         </button>
       </div>

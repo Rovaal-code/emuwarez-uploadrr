@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { login } from '../api/auth'
 import { ApiClientError } from '../api/client'
 import { ServiceIcon } from '../components/ServiceIcon'
@@ -13,10 +13,18 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const usuarioRef = useRef<HTMLInputElement>(null)
+  const claveRef = useRef<HTMLInputElement>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!username.trim() || !password) return
+    // El botón no se apaga con los campos vacíos (parecería roto): se dice qué falta y el foco va al primero vacío.
+    if (!username.trim() || !password) {
+      const falta = !username.trim() ? usuarioRef : claveRef
+      setError(!username.trim() ? 'Escribe tu usuario.' : 'Escribe tu contraseña.')
+      falta.current?.focus()
+      return
+    }
     setError(null)
     setLoading(true)
     try {
@@ -55,21 +63,25 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
       <div className="login-card">
         <div className="login-logo">
           <ServiceIcon type="emu" size={40} />
-          <div className="login-title login-titulo-mt">eMuwarez Uploadrr</div>
+          <h1 className="login-title login-titulo-mt" translate="no">eMuwarez Uploadrr</h1>
           <div className="login-sub">Inicia sesión para continuar</div>
         </div>
-        <form onSubmit={handleSubmit} className="login-fields" autoComplete="on">
+        <form onSubmit={handleSubmit} className="login-fields" autoComplete="on" noValidate>
           <div className="form-group">
             <label className="form-label" htmlFor="username">Usuario</label>
             <input
               id="username"
+              ref={usuarioRef}
               className="form-input"
               type="text"
-              placeholder="admin"
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              required
+              aria-describedby={error ? 'login-error' : undefined}
+              aria-invalid={error ? true : undefined}
               disabled={loading}
             />
           </div>
@@ -77,24 +89,26 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
             <label className="form-label" htmlFor="password">Contraseña</label>
             <input
               id="password"
+              ref={claveRef}
               className="form-input"
               type="password"
-              placeholder="••••••••••••"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
+              aria-describedby={error ? 'login-error' : undefined}
+              aria-invalid={error ? true : undefined}
               disabled={loading}
             />
           </div>
           <label className="checkbox-label">
             <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} disabled={loading} /> Recordarme
           </label>
-          {error && <div className="alert alert-error">{error}</div>}
+          {error && <div className="alert alert-error" role="alert" id="login-error">{error}</div>}
           <button
             type="submit"
             className="btn btn-primary login-submit"
-            disabled={loading || !username.trim() || !password}
+            disabled={loading}
+            aria-busy={loading}
           >
             {loading ? <><span className="spinner login-spinner" /> Iniciando…</> : 'Iniciar sesión'}
           </button>

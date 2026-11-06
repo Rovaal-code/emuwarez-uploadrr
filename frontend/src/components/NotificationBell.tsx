@@ -238,6 +238,8 @@ export function NotificationBell() {
   const [items, setItems] = useState<NotificationItem[]>([])
   const [unread, setUnread] = useState(0)
   const [loading, setLoading] = useState(false)
+  // «Borrar todo» pide una segunda pulsación (no hay deshacer); se desarma solo a los 4 s o al cerrar el panel.
+  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const botonRef = useRef<HTMLButtonElement>(null)
   const bellTip = useTooltip('Notificaciones')
@@ -260,10 +262,19 @@ export function NotificationBell() {
     cadaConCanal: 120_000,
   })
 
+  useEffect(() => {
+    if (!confirmandoBorrado) return
+    const t = setTimeout(() => setConfirmandoBorrado(false), 4000)
+    return () => clearTimeout(t)
+  }, [confirmandoBorrado])
+
   // Close on outside click / Escape.
   useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
+    if (!open) {
+      setConfirmandoBorrado(false)
+      return
+    }
+    const onDown = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
     // Escape devuelve el foco a la campana: si no, se queda en un aviso que acaba de desaparecer.
@@ -272,10 +283,10 @@ export function NotificationBell() {
       setOpen(false)
       botonRef.current?.focus()
     }
-    document.addEventListener('mousedown', onDown)
+    document.addEventListener('pointerdown', onDown)
     document.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('pointerdown', onDown)
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
@@ -325,7 +336,7 @@ export function NotificationBell() {
       <button
         ref={botonRef}
         className="topbar-btn"
-        aria-label="Notificaciones"
+        aria-label={unread > 0 ? `Notificaciones (${unread} sin leer)` : 'Notificaciones'}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={toggle}
@@ -348,8 +359,23 @@ export function NotificationBell() {
                 <button className="notif-markall" onClick={handleMarkAll}>Marcar todo como leído</button>
               )}
               {items.length > 0 && (
-                <button className="notif-markall notif-clearall" onClick={handleDeleteAll}>Borrar todo</button>
+                <button
+                  type="button"
+                  className={`notif-markall notif-clearall${confirmandoBorrado ? ' notif-clearall-confirmar' : ''}`}
+                  onClick={() => {
+                    if (!confirmandoBorrado) { setConfirmandoBorrado(true); return }
+                    setConfirmandoBorrado(false)
+                    handleDeleteAll()
+                  }}
+                >
+                  {confirmandoBorrado ? '¿Seguro? Borrar todo' : 'Borrar todo'}
+                </button>
               )}
+              {/* Región viva siempre presente (una que aparece ya con texto no se anuncia). La confirmación no se desarma al
+                  perder el foco: con lector de pantalla o en Safari/iOS el foco se mueve solo; caduca a los 4 s o al cerrar. */}
+              <span className="solo-lector" role="status">
+                {confirmandoBorrado ? 'Pulsa de nuevo para borrar todas las notificaciones.' : ''}
+              </span>
             </span>
           </div>
           <div className="notif-list">

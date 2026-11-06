@@ -109,13 +109,17 @@
   border-radius: 8px;
   padding: 10px 12px;
   background: var(--bg-input);
+  /* Es un <button role="radio">: hereda la letra y el color de la tarjeta en vez de los del navegador. */
+  font: inherit;
+  color: inherit;
+  text-align: left;
 }
 .setup-tipo.setup-tipo-activo {
   border-color: var(--text-accent);
   background: var(--bg-card-hover);
 }
-.setup-tipo-nombre { font-size: 13px; font-weight: 600; }
-.setup-tipo-sub { font-size: 11px; color: var(--text-muted); }
+.setup-tipo-nombre { display: block; font-size: 13px; font-weight: 600; }
+.setup-tipo-sub { display: block; font-size: 11px; color: var(--text-muted); }
 .setup-checks {
   display: flex;
   gap: 16px;
@@ -167,4 +171,14 @@
   margin-left: auto;
   font-size: 11px;
   padding: 2px 8px;
+}
+
+/* En pantallas estrechas: la tarjeta con menos relleno, los puntos fuertes de la bienvenida sin recortar (se cortaban con «…»)
+   y los campos en una columna. */
+@media (max-width: 480px) {
+  .setup-wizard-wrap { align-items: flex-start; padding: 16px; }
+  .wizard-card { padding: 20px 16px; }
+  .wizard-feature-text { white-space: normal; overflow: visible; text-overflow: clip; }
+  .setup-dos-col { grid-template-columns: 1fr; }
+  .wizard-actions .btn { min-height: var(--tap-min); }
 }

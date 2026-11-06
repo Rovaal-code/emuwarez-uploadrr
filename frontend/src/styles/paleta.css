@@ -1,9 +1,10 @@
 /* Paleta de búsqueda Ctrl+K (CommandPalette). Prefijo paleta-. Se importa el último en main.tsx. */
-.modal-panel.paleta-modal { max-width: 560px; }
-.form-input.paleta-entrada { width: 100%; }
+.modal-panel.paleta-modal { max-width: 560px; padding-bottom: 16px; }
+/* El campo y la lista van a la misma sangría que el título del modal (20 px); las filas llevan su propio relleno de 12. */
+.form-input.paleta-entrada { width: calc(100% - 40px); margin: 0 20px; }
 .paleta-lista {
   list-style: none;
-  margin: 12px 0 0;
+  margin: 12px 8px 0;
   padding: 0;
   max-height: 340px;
   overflow-y: auto;
@@ -21,4 +22,28 @@
 .paleta-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .paleta-etiqueta { flex-shrink: 0; font-size: 12px; color: var(--text-muted); }
 .paleta-vacio { padding: 8px 12px; color: var(--text-muted); }
-.paleta-ayuda { margin: 12px 0 0; font-size: 12px; color: var(--text-muted); }
+.paleta-ayuda { margin: 12px 20px 0; font-size: 12px; color: var(--text-muted); }
+
+/* En el móvil la paleta se ancla arriba: con el teclado en pantalla, un diálogo centrado quedaba debajo de él. Las filas son
+   objetivos de 44 px, y la ayuda de teclas (flechas, Intro) sobra sin teclado. */
+@media (max-width: 768px) {
+  .modal-overlay:has(.paleta-modal) {
+    align-items: flex-start;
+    padding-top: 8px;
+  }
+  .modal-panel.paleta-modal {
+    max-height: calc(var(--vh100) - 16px);
+  }
+  .paleta-lista {
+    max-height: calc(var(--vh100) - 190px);
+    overscroll-behavior: contain;
+  }
+}
+@media (pointer: coarse) {
+  .paleta-opcion {
+    min-height: var(--tap-min);
+  }
+  .paleta-ayuda {
+    display: none;
+  }
+}

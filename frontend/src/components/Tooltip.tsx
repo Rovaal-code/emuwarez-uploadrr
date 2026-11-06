@@ -74,6 +74,9 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   }, [])
   const track = useCallback((e: React.MouseEvent) => setPt(punto(e)), [])
   const open = useCallback((e: React.MouseEvent) => {
+    // Sin ratón (móvil, tableta) un toque genera un «mouseenter» que nadie retira: el tooltip se quedaba pegado en
+    // pantalla hasta tocar en otro sitio. Ahí solo se muestra con el foco del teclado.
+    if (window.matchMedia?.('(hover: none)').matches) return
     hover.current = true
     if (foco.current) return
     setPt(punto(e))

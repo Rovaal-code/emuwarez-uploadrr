@@ -164,6 +164,18 @@
      vh/vw a pelo. */
   --vh100: calc(100vh / var(--ui-scale));
   --vw100: calc(100vw / var(--ui-scale));
+
+  /* Objetivo táctil mínimo (WCAG 2.5.8 pide 24, las guías de Apple y Google 44). Lo usan los controles del marco
+     en pantallas táctiles y estrechas; el escritorio mantiene sus 34 px. */
+  --tap-min: 44px;
+}
+
+/* En el móvil, 100vh es el alto de la ventana con la barra de direcciones ya recogida: con ella a la vista, el pie de
+   la aplicación quedaba tapado. 100dvh es el alto visible de verdad (si el navegador no lo conoce, vale el de arriba). */
+@supports (height: 100dvh) {
+  :root {
+    --vh100: calc(100dvh / var(--ui-scale));
+  }
 }
 
 *, *::before, *::after {

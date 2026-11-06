@@ -82,8 +82,11 @@ export function CommandPalette({ secciones, onSeccion, onElemento, onClose }: {
         className="form-input paleta-entrada"
         type="text"
         autoFocus
+        autoComplete="off"
+        spellCheck={false}
+        enterKeyHint="go"
         value={consulta}
-        placeholder="Ir a una sección o buscar en la Biblioteca…"
+        placeholder="Sección o título de la Biblioteca…"
         aria-label="Buscar"
         role="combobox"
         aria-expanded="true"

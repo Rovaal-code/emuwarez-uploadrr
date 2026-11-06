@@ -174,6 +174,10 @@
   border-radius: var(--radius-card);
   box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px color-mix(in srgb, var(--overlay-dark) 70%, transparent);
 }
+/* Lo mismo para los modales (y con ellos la paleta Ctrl+K): flotan sobre un velo del 55 % y la página se transparentaba. */
+.hud-app .modal-panel {
+  background-color: var(--hud-panel-solid);
+}
 .hud-app .modal-header,
 .hud-app .modal-title {
   border-color: color-mix(in srgb, var(--hud-blue) 40%, transparent);
@@ -212,6 +216,9 @@
   background:
     radial-gradient(120px 90px at 100% 0%, color-mix(in srgb, var(--hud-cyan) 10%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
+  /* Fondo opaco debajo del degradado: la campana flota sobre la página y, con el degradado solo (82 % de opacidad),
+     el texto de detrás se leía a través de ella. */
+  background-color: var(--hud-panel-solid);
   border: 1px solid var(--hud-line);
   border-radius: var(--radius-card);
   box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px color-mix(in srgb, var(--overlay-dark) 80%, transparent);

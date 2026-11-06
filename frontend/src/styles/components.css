@@ -239,6 +239,14 @@
   cursor: not-allowed;
 }
 
+/* Con el dedo: iOS acerca la página al enfocar un campo de menos de 16 px y ya no la devuelve; y los botones, más altos
+   para acertar (40 y 36 px: las barras de herramientas densas de las pantallas siguen cabiendo en 390 px). */
+@media (pointer: coarse) {
+  .form-input { font-size: 16px; }
+  .btn { min-height: 40px; }
+  .btn-sm { min-height: 36px; }
+}
+
 /* No custom appearance/chevron here on purpose: a hand-drawn SVG chevron
    (tried previously) always rendered fainter than the browser's own native
    <select> arrow, no matter the stroke color — the native arrow (kept via
@@ -817,6 +825,33 @@ optgroup {
 .modal-close:hover {
   color: var(--text-primary);
   background: color-mix(in srgb, var(--overlay-light) 6%, transparent);
+}
+
+/* La X del modal con el dedo: un objetivo de 44 px (a la derecha del título, sin crecer el encabezado). */
+@media (pointer: coarse) {
+  .modal-close {
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+    align-items: center;
+    justify-content: center;
+    margin: -10px -12px -10px 0;
+  }
+}
+
+/* Modales en ventanas estrechas: casi todo el ancho y el alto visible, con el scroll dentro del panel sin arrastrar la
+   página de detrás. */
+@media (max-width: 768px) {
+  .modal-overlay {
+    overscroll-behavior: contain;
+  }
+  .modal-panel {
+    width: calc(100% - 16px);
+    max-height: calc(var(--vh100) - 16px);
+    overscroll-behavior: contain;
+  }
+  .modal-header {
+    padding: 12px 16px;
+  }
 }
 
 .modal-actions {

@@ -105,14 +105,15 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'sidebar-gauges',
     selector: '[data-tour="sidebar-gauges"]',
+    soloEscritorio: true,
     title: 'CPU, RAM y disco',
     description: 'El consumo de recursos del propio contenedor, siempre visible en la barra lateral.',
   },
   {
     id: 'topbar-buttons',
     selector: '[data-tour="topbar-buttons"]',
-    title: 'Notificaciones y cuenta',
-    description: 'La campana de notificaciones, tu usuario, y cerrar sesión: siempre a mano desde cualquier pestaña.',
+    title: 'Búsqueda y notificaciones',
+    description: 'La búsqueda (también con Ctrl+K) lleva a cualquier sección o a un título de la Biblioteca; la campana avisa de lo que pasa con tus subidas y peticiones. Tu usuario y cerrar sesión están al lado (en el móvil, dentro del menú).',
   },
   {
     id: 'end',
@@ -122,3 +123,8 @@ export const TOUR_STEPS: TourStep[] = [
     description: 'Ya conoces la app entera. ¡A sincronizar y subir contenido!',
   },
 ]
+
+/** Los pasos que valen para esta pantalla: en el móvil la barra lateral es un cajón cerrado y sus pasos no tienen nada que resaltar. */
+export function pasosDelTour(movil: boolean): TourStep[] {
+  return movil ? TOUR_STEPS.filter(s => !s.soloEscritorio) : TOUR_STEPS
+}

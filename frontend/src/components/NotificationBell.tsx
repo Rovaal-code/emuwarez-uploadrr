@@ -325,7 +325,7 @@ export function NotificationBell() {
       <button
         ref={botonRef}
         className="topbar-btn"
-        aria-label="Notificaciones"
+        aria-label={unread > 0 ? `Notificaciones (${unread} sin leer)` : 'Notificaciones'}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={toggle}

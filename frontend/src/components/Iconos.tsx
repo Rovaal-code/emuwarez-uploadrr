@@ -119,3 +119,25 @@ export function IconoOrden({ sentido, ...props }: IconoProps & { sentido: 'asc' 
 export function IconoDesplegar({ abierto, ...props }: IconoProps & { abierto: boolean }) {
   return <Svg {...props} style={{ transform: abierto ? 'rotate(90deg)' : undefined, ...props.style }}><path d="m9 6 6 6-6 6" /></Svg>
 }
+
+/** La lupa del botón de búsqueda (Ctrl+K). */
+export function IconoBuscar(props: IconoProps) {
+  return <Svg {...props}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Svg>
+}
+
+/** Cerrar sesión: la flecha sale de la puerta. */
+export function IconoSalir(props: IconoProps) {
+  return <Svg {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5M21 12H9" /></Svg>
+}
+
+/** El ojo del interruptor «ocultar usuario»: abierto muestra el nombre, tachado lo tapa. */
+export function IconoOjo({ tachado, ...props }: IconoProps & { tachado?: boolean }) {
+  return tachado
+    ? <Svg {...props}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22" /></Svg>
+    : <Svg {...props}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></Svg>
+}
+
+/** La interrogación del botón del tour guiado. */
+export function IconoAyuda(props: IconoProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="10" /><path d="M9.1 9a2.9 2.9 0 0 1 5.7 1c0 1.9-2.7 2-2.8 3.8M12 17.2h.01" /></Svg>
+}

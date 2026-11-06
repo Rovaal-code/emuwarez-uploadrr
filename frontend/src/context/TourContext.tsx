@@ -15,6 +15,8 @@ export interface TourStep {
   // target's edge — needed when the target is (near) the whole page, since
   // there's no room above/below it that wouldn't cover the page's own title.
   placement?: 'top-center'
+  // El objetivo vive en la barra lateral, que en el móvil es un cajón cerrado: el paso se salta (ver `pasosDelTour`).
+  soloEscritorio?: boolean
 }
 
 interface StartOptions {

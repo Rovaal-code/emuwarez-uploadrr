@@ -158,10 +158,11 @@ export function CarrilListo({ recomendaciones, error, onReintentar, onSubir, onV
         )
       ) : (
         <ul className="panel-lista">
-          {peticiones.map(item => (
+          {/* Un solo botón principal: el de la primera, la que más paga (la lista va por recompensa). */}
+          {peticiones.map((item, i) => (
             <Fila key={item.rec_request_id ?? item.id} item={item} onVerFicha={onVerFicha} seleccion={seleccion}
               verPeticion={item.rec_request_id != null ? () => onVerPeticion(item) : undefined}
-              accion={<button type="button" className="btn btn-primary btn-sm" onClick={() => onSubir(item)}>Subir</button>} />
+              accion={<button type="button" className={`btn ${i === 0 ? 'btn-primary' : 'btn-secondary'} btn-sm`} onClick={() => onSubir(item)}>Subir</button>} />
           ))}
         </ul>
       )}

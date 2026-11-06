@@ -92,7 +92,7 @@ describe('EstadisticasPage', () => {
     expect(plot.querySelector('[aria-live]')!.textContent).toBe('02/10/2026: Subido 1,0 TB, Bajado sin dato.')
   })
 
-  it('arriba lleva las diez tarjetas que tenía el Panel, con las mismas cifras', async () => {
+  it('arriba lleva las diez tarjetas que tenía el Panel, con las mismas cifras y los nombres de la franja', async () => {
     pedir.mockResolvedValue({ dias: 90, puntos: [punto('2026-10-01')] })
     await montar(<EstadisticasPage />)
     await esperar(() => document.querySelector('.stat-card'))
@@ -100,12 +100,12 @@ describe('EstadisticasPage', () => {
     const tarjetas = new Map([...document.querySelectorAll('.stat-card')].map(t => [
       t.querySelector('.stat-card-label')!.textContent, t.querySelector('.stat-card-value')!.textContent]))
     expect(tarjetas.size).toBe(10)
-    expect(tarjetas.get('Biblioteca sincronizada')).toBe('51.372')
-    expect(tarjetas.get('Disponibles')).toBe('15.861')
+    expect(tarjetas.get('En biblioteca')).toBe('51.372')
+    expect(tarjetas.get('En disco')).toBe('15.861')
     expect(tarjetas.get('Faltantes')).toBe('57')
-    expect(tarjetas.get('Contenido único')).toBe('283')
+    expect(tarjetas.get('Únicos sin subir')).toBe('283')
     expect(tarjetas.get('Tus subidas')).toBe('14')
-    expect(tarjetas.get('Peticiones eMuwarez')).toBe('322')
+    expect(tarjetas.get('Peticiones abiertas')).toBe('322')
     expect(tarjetas.get('Peticiones compatibles')).toBe('15')
     expect(tarjetas.get('Peticiones parciales')).toBe('2')
     expect(tarjetas.get('Peticiones reclamadas')).toBe('4')

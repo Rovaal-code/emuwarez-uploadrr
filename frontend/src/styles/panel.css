@@ -363,10 +363,11 @@
   border-width: 2px;
   flex-shrink: 0;
 }
-/* Por qué falló una subida reciente: una línea, recortada (el texto entero, en el detalle y en el title). */
+/* Por qué falló una subida reciente: una línea, recortada (el texto entero, en el detalle y en el title). El rojo lo
+   lleva la chapa «Fallido»; el motivo en rojo, fila tras fila, era una pared roja. */
 .panel-fila-motivo {
   font-size: 12px;
-  color: var(--color-error);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

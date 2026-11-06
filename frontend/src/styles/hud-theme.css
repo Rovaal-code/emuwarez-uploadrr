@@ -146,7 +146,8 @@
 /* ---- material común de los paneles del HUD: borde fino, esquinas redondeadas y brillo discreto ---- */
 .hud-app .stat-card,
 .hud-app .activity-section,
-.hud-app .upload-panel {
+.hud-app .upload-panel,
+.hud-app .est-grafico {
   background:
     radial-gradient(120px 90px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 5%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);

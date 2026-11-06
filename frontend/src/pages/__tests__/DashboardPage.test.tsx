@@ -513,6 +513,17 @@ describe('Panel', () => {
     })
   })
 
+  it('un solo botón principal en «Listo para subir»: el «Subir» de la primera petición (la que más paga)', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
+      rec({ id: 5, rec_request_id: 77, rec_points: 500 }),
+      rec({ id: 6, rec_request_id: 78, rec_points: 400 }),
+    ] })
+    await pagina()
+    expect(filas('Listo para subir').map(f => botonDe(f, 'Subir')!.className)).toEqual([
+      'btn btn-primary btn-sm', 'btn btn-secondary btn-sm',
+    ])
+  })
+
   it('«Subir» abre el asistente sobre la temporada de la petición, con su selección y la petición', async () => {
     vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [
       rec({ id: 5, library_target_id: 55, item_type: 'season', season_number: 2, episode_number: null, rec_request_id: 77, rec_points: 500, content_name: 'Serie (2016) - Temporada 2' }),

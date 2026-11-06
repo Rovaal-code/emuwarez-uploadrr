@@ -11,7 +11,7 @@ export function SyncCard() {
   return (
     <div className="sync-card" data-tour="dashboard-sync-buttons">
       <Tooltip content="Sincroniza una tras otra la biblioteca (Radarr/Sonarr), lo nuevo del catálogo de eMuwarez y las peticiones. Lo que eMuwarez limita a una vez por hora y aún no toca se salta. El catálogo completo se lanza desde Biblioteca.">
-        <button type="button" className="btn btn-primary btn-sm" onClick={startAllSync} disabled={ocupado}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={startAllSync} disabled={ocupado}>
           {ocupado
             ? <><span className="spinner emusync-spinner" /> Sincronizando…</>
             : '↻ Sincronizar todo'}

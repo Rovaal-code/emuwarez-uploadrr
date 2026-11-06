@@ -155,6 +155,10 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   // Los grupos marcados en Configuración como Personal release / anónimos: dan el valor de las casillas del Resumen.
   const [gruposPersonalRelease, setGruposPersonalRelease] = useState<string[]>([])
   const [gruposAnonimos, setGruposAnonimos] = useState<string[]>([])
+  // Anónimo / Personal release: lo cambiado a mano en el Resumen (null mientras no se toque: entonces manda el grupo,
+  // aquí para enseñarlo y en el servidor para cada subida, también las de una tanda con grupos distintos). Otra
+  // selección lo vuelve a null (elegirSeleccion).
+  const [opcionesTracker, setOpcionesTracker] = useState<OpcionesTracker>({ anonimo: null, personalRelease: null })
   useEffect(() => {
     fetchSettings().then(s => {
       setGruposDeSubida(s.upload_tags ?? [])
@@ -346,6 +350,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     setSelError(null)
     if (!mismaSeleccion(seleccion, nueva)) {
       setSeleccion(nueva)
+      setOpcionesTracker({ anonimo: null, personalRelease: null })
       setAjustesPorId(new Map())
       setProveedorElegido(new Map())
       setEpisodeFieldsById(new Map())
@@ -918,9 +923,6 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     if (!esTanda(seleccion)) runChecks()
   }
 
-  // Anónimo / Personal release: lo cambiado a mano en el Resumen (null mientras no se toque: entonces manda el grupo,
-  // aquí para enseñarlo y en el servidor para cada subida, también las de una tanda con grupos distintos).
-  const [opcionesTracker, setOpcionesTracker] = useState<OpcionesTracker>({ anonimo: null, personalRelease: null })
   const tagActual = (fields.tag ?? '').trim().toLowerCase()
   const enGrupo = (lista: string[]) => !!tagActual && lista.some(g => g.trim().toLowerCase() === tagActual)
   const anonimoMarcado = opcionesTracker.anonimo ?? enGrupo(gruposAnonimos)

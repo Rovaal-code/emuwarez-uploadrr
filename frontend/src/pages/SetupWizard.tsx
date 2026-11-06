@@ -262,16 +262,25 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [imgKeys, setImgKeys] = useState<Record<string, string>>({})
   const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
   const [imgTesting, setImgTesting] = useState<string | null>(null)
+  // «Continuar» guarda imgEnabled tal cual: hasta tener la lista de verdad, guardaría una vacía sin que nadie la
+  // vaciara. Se espera a la carga, y si falla se puede reintentar.
+  const [imgCarga, setImgCarga] = useState<'cargando' | 'lista' | 'error'>('cargando')
+  const [imgIntento, setImgIntento] = useState(0)
 
   useEffect(() => {
-    if (step === 'imagehosts' && imgAvailable.length === 0) {
-      // Con la lista que ya hay (en una instalación nueva, Pixhost): el usuario la cambia o la deja.
-      fetchSettings().then(s => {
-        setImgAvailable(s.image_hosts_available)
-        setImgEnabled(s.image_hosts_enabled ?? [])
-      }).catch(() => { /* ignore */ })
-    }
-  }, [step, imgAvailable.length])
+    if (step !== 'imagehosts' || imgCarga === 'lista') return
+    let activo = true
+    setImgCarga('cargando')
+    // Con la lista que ya hay (en una instalación nueva, Pixhost): el usuario la cambia o la deja.
+    fetchSettings().then(s => {
+      if (!activo) return
+      setImgAvailable(s.image_hosts_available)
+      setImgEnabled(s.image_hosts_enabled ?? [])
+      setImgCarga('lista')
+    }).catch(() => { if (activo) setImgCarga('error') })
+    return () => { activo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- imgCarga solo decide si hay que cargar
+  }, [step, imgIntento])
 
   // Providers step: load the same real, persisted order Configuración
   // reads (falls back to the backend's own default when nothing was ever
@@ -988,10 +997,17 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   renderRow={(id, _idx, { handleProps, botones }) => fila(id, handleProps, botones)} />
                 {resto.map(h => <div key={h.id}>{fila(h.id)}</div>)}
               </div>
+              {imgCarga === 'cargando' && <p className="setup-t13 text-muted" role="status">Cargando los proveedores…</p>}
+              {imgCarga === 'error' && (
+                <div role="alert" className="alert alert-error setup-mt-14">
+                  No se pudieron cargar los proveedores de imágenes.{' '}
+                  <button className="btn btn-secondary btn-sm" type="button" onClick={() => setImgIntento(n => n + 1)}>Reintentar</button>
+                </div>
+              )}
               {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
               <div className="wizard-actions">
                 {atras}
-                <button className="btn btn-primary" onClick={handleImghosts} disabled={loading}>
+                <button className="btn btn-primary" onClick={handleImghosts} disabled={loading || imgCarga !== 'lista'}>
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
               </div>

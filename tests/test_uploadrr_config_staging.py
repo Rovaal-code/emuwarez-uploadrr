@@ -393,6 +393,27 @@ def test_stage_uploadrr_config_screenshots_only_the_first_episode_unless_asked(t
     assert get_block_key(read_config_lines(config), "SCREENS", "per_episode") == "3"
 
 
+def test_stage_uploadrr_config_no_lanza_sin_proveedores_de_imagenes(tmp_path, monkeypatch):
+    """Si el usuario quita todos los proveedores entre la comprobación previa y el lanzamiento, Uploadrr no arranca
+    con los de su propio config.yaml: el trabajo falla con el motivo."""
+    import pytest
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.upload_execution import config as ue
+    from emuwarez_uploadrr.services.image_hosts import set_config
+    config = tmp_path / "Uploadrr" / "data" / "config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text("DEFAULT:\n  tmdb: ''\nSCREENS:\n  img_hosts: [imgbox]\n", encoding="utf-8")
+    monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
+    conn = connect()
+    init_db(conn)
+    set_config(conn, [], {})
+    conn.commit()
+    conn.close()
+    with pytest.raises(ue.ConfigNoPreparada, match="proveedor de imágenes"):
+        ue._stage_uploadrr_config(1, str(tmp_path / "Uploadrr"))
+    assert "img_hosts: [imgbox]" in config.read_text(encoding="utf-8")
+
+
 def test_every_host_that_needs_a_key_gets_it_staged():
     """La lista de claves que se escriben en el config del fork estaba puesta a
     mano y se quedó en cinco: hamster e imghost.dev también necesitan clave y

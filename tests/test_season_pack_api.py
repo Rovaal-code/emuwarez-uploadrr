@@ -230,3 +230,33 @@ def test_las_comprobaciones_reciben_el_proveedor(client, auth_headers, isolated_
     assert visto["provider_override"] == "NF"
     client.post("/api/library/1/upload/checks", headers=auth_headers)
     assert visto["provider_override"] is None
+
+
+def test_las_comprobaciones_reciben_lo_editado_a_mano(client, auth_headers, isolated_db, tmp_path, monkeypatch):
+    """Source, Tag, Título e idiomas del asistente llegan como `ajustes`; sin ellos no se manda nada (compatibilidad)."""
+    from emuwarez_uploadrr.services import upload_checks
+    visto = {}
+
+    def falso(conn, item_id, *, scope="all", provider_override=None, ajustes=None):
+        visto["ajustes"] = ajustes
+        return {"checks": [], "ready": True}
+
+    monkeypatch.setattr(upload_checks, "run_upload_checks", falso)
+    client.post(
+        "/api/library/1/upload/checks?scope=content&source=BluRay&tag=MYTAG&title=Un%20t%C3%ADtulo"
+        "&idiomas=%7B%222%22%3A%22spa%22%7D", headers=auth_headers)
+    assert visto["ajustes"] == {"source": "BluRay", "tag": "MYTAG", "title": "Un título", "idiomas": {"2": "spa"}}
+    # Vacíos o un JSON roto cuentan como nada elegido.
+    client.post("/api/library/1/upload/checks?source=&tag=%20&idiomas=%7Broto", headers=auth_headers)
+    assert visto["ajustes"] is None
+
+
+def test_el_nombre_de_las_comprobaciones_lleva_lo_editado_a_mano(client, auth_headers, isolated_db, tmp_path):
+    """El `nombre` del pack (lo que enseña el Resumen de una tanda) es el que saldrá, no el de antes de editar."""
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    base = client.post(f"/api/library/{season_id}/upload/checks?scope=content", headers=auth_headers).json()
+    editado = client.post(
+        f"/api/library/{season_id}/upload/checks?scope=content&tag=MYTAG&source=BluRay", headers=auth_headers).json()
+    assert base["nombre"] and not base["nombre"].endswith("-MYTAG")
+    assert editado["nombre"].endswith("-MYTAG")
+    assert "BluRay" in editado["nombre"]

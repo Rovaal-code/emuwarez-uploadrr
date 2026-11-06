@@ -88,8 +88,12 @@ def _se_puede_leer(ruta: str | None) -> bool:
 
 
 def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "all",
-                      provider_override: str | None = None) -> dict:
-    """`scope`:
+                      provider_override: str | None = None, ajustes: dict | None = None) -> dict:
+    """`ajustes` (solo una temporada): lo que el asistente editó a mano para el pack, con las claves de la cola
+    (`source`, `tag`, `title`, `idiomas`), para que el plan y su `nombre` sean los que saldrán de verdad. El
+    Proveedor va aparte, en `provider_override`.
+
+    `scope`:
 
     - "all" (por defecto): contenido + entorno, el comportamiento de siempre,
       que es lo que usa una subida de un solo elemento.
@@ -172,7 +176,11 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         from .season_pack import build_season_pack_plan
         # El Proveedor elegido en el asistente, el mismo que el plan y la cola:
         # sin él, un pack con proveedores distintos seguía bloqueado aquí.
-        plan = build_season_pack_plan(item_id, conn=conn, provider_override=provider_override)
+        aj = ajustes or {}
+        plan = build_season_pack_plan(
+            item_id, conn=conn, provider_override=provider_override,
+            source_override=aj.get("source") or None, tag_override=aj.get("tag") or None,
+            title_override=aj.get("title") or None, idiomas_audio=aj.get("idiomas") or None)
         ok = plan["status"] == "valid"
         if ok:
             nombre = plan.get("season_pack_title") or None

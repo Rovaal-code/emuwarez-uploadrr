@@ -234,6 +234,13 @@ export interface UploadChecksResult {
   sin_idioma?: boolean
 }
 
+export interface AjustesComprobacion {
+  source?: string | null
+  tag?: string | null
+  title?: string | null
+  idiomas?: Record<number, string>
+}
+
 // `scope` parte la pasada para una selección de varias temporadas o
 // capítulos: 'content' son las del elemento (una por elemento) y
 // 'environment' las compartidas (una sola vez para toda la tanda). Sin
@@ -243,10 +250,17 @@ export async function runUploadChecks(
   scope?: 'content' | 'environment',
   // Temporada: el Proveedor elegido (utils/origenProveedor.ts::proveedorParaServidor), el mismo que la vista previa y la cola.
   provider?: string,
+  // Temporada: lo editado a mano en el asistente (Source, Tag, Título e idiomas de las pistas sin idioma), para que el
+  // `nombre` del pack sea el que saldrá. Sin nada, no viaja nada.
+  ajustes?: AjustesComprobacion,
 ): Promise<UploadChecksResult> {
   const qs = new URLSearchParams()
   if (scope) qs.set('scope', scope)
   if (provider !== undefined) qs.set('provider', provider)
+  if (ajustes?.source) qs.set('source', ajustes.source)
+  if (ajustes?.tag) qs.set('tag', ajustes.tag)
+  if (ajustes?.title) qs.set('title', ajustes.title)
+  if (ajustes?.idiomas && Object.keys(ajustes.idiomas).length) qs.set('idiomas', JSON.stringify(ajustes.idiomas))
   const query = qs.toString()
   return api.post<UploadChecksResult>(`/library/${itemId}/upload/checks${query ? `?${query}` : ''}`, {})
 }

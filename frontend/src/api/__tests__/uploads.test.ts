@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('../client', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
 
 import { api } from '../client'
-import { borrarLote, cancelarLote, countUploads, getLote, getUploadJobLogs, getUploads, queueLote, queueUpload, reintentarLote } from '../uploads'
+import { borrarLote, cancelarLote, countUploads, getLote, getUploadJobLogs, getUploads, queueLote, queueUpload, reintentarLote, runUploadChecks } from '../uploads'
 
 const get = vi.mocked(api.get)
 const post = vi.mocked(api.post)
@@ -108,5 +108,25 @@ describe('«Subir por lotes»', () => {
     ]
     expect((await queueLote(elementos)).encolados).toBe(2)
     expect(post).toHaveBeenCalledWith('/uploads/lote', { elementos })
+  })
+})
+
+describe('las comprobaciones previas', () => {
+  it('sin ajustes piden lo de siempre', async () => {
+    await runUploadChecks(31, 'content', 'NF')
+    expect(post).toHaveBeenCalledWith('/library/31/upload/checks?scope=content&provider=NF', {})
+    await runUploadChecks(10)
+    expect(post).toHaveBeenLastCalledWith('/library/10/upload/checks', {})
+  })
+
+  it('un pack lleva lo editado a mano en el asistente, para que su nombre sea el real', async () => {
+    await runUploadChecks(31, 'content', undefined, { source: 'BluRay', tag: 'OTRO', title: 'Una serie', idiomas: { 2: 'spa' } })
+    expect(post).toHaveBeenCalledWith(
+      `/library/31/upload/checks?scope=content&source=BluRay&tag=OTRO&title=Una+serie&idiomas=${encodeURIComponent('{"2":"spa"}')}`, {})
+  })
+
+  it('lo vacío no viaja', async () => {
+    await runUploadChecks(31, 'content', undefined, { source: null, tag: '', idiomas: {} })
+    expect(post).toHaveBeenCalledWith('/library/31/upload/checks?scope=content', {})
   })
 })

@@ -269,6 +269,10 @@ def upload_checks(
     item_id: int,
     scope: str = Query(default="all", pattern="^(all|content|environment)$"),
     provider: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
+    title: str | None = Query(default=None),
+    idiomas: str | None = Query(default=None),
     current_user: dict = Depends(require_auth),
 ) -> dict:
     """Run the pre-upload checks (fail-fast, eMuwarez last) for the 'Subida a
@@ -281,12 +285,23 @@ def upload_checks(
     "environment" son las compartidas (directorio de salida, qBittorrent,
     hosts de imágenes, eMuwarez) y se piden UNA vez para toda la tanda, que
     con 30 capítulos es la diferencia entre 4 comprobaciones de red y 120.
-    "all" (por defecto) las hace todas, que es lo que usa un solo elemento."""
+    "all" (por defecto) las hace todas, que es lo que usa un solo elemento.
+
+    Una temporada acepta además lo que el asistente editó a mano para el pack (`source`, `tag`, `title` e
+    `idiomas`, un JSON {"2": "spa"}): así el `nombre` que devuelve es el que saldrá. Sin ellos, todo igual."""
     from emuwarez_uploadrr.services.upload_checks import run_upload_checks
+    try:
+        elegidos = json.loads(idiomas) if idiomas else None
+    except ValueError:
+        elegidos = None
+    ajustes = {k: v.strip() for k, v in (("source", source), ("tag", tag), ("title", title)) if v and v.strip()}
+    if isinstance(elegidos, dict) and elegidos:
+        ajustes["idiomas"] = elegidos
     with _get_conn() as conn:
         # `provider` de una temporada: el elegido en el asistente ("" = Sin proveedor).
         return run_upload_checks(conn, item_id, scope=scope,
-                                 provider_override=None if provider is None else provider.strip())
+                                 provider_override=None if provider is None else provider.strip(),
+                                 **({"ajustes": ajustes} if ajustes else {}))
 
 
 @router.get("/library/{item_id}/upload/checks/progress")

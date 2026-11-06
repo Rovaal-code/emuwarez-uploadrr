@@ -82,7 +82,7 @@ function tipoOf(category: string | null): { icon: React.ReactNode; label: string
 function RequestPoster({ url, category, size = 'sm' }: { url: string | null; category: string | null; size?: 'sm' | 'lg' }) {
   const dims = size === 'lg'
     ? { width: 120, height: 180, radius: 8, font: 44 }
-    : { width: 36, height: 54, radius: 5, font: 17 }
+    : { width: 28, height: 42, radius: 4, font: 14 }
   const t = tipoOf(category)
   return (
     <div className="poster-thumb pet-poster" style={{ width: dims.width, height: dims.height, borderRadius: dims.radius }}>
@@ -365,7 +365,6 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
   // What a link out of this request should open: the season's own row for a
   // season request, the matched row otherwise.
   const libraryTargetId = m?.library_target_id ?? libId
-  const titleLinkTip = useTooltip('Ver en la biblioteca')
   const t = tipoOf(item.category)
   // External IDs: prefer the request's own, fall back to the matched library
   // item. TVDB only ever comes from the library item (Radarr/Sonarr); MAL
@@ -396,8 +395,9 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
           <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a peticiones</button>
         </div>
         <div className="pet-grupo pet-no-encoge">
+          {/* Secundario: la acción principal de la ficha es «Subir a eMuwarez», y solo ella brilla. */}
           <a
-            className="btn btn-primary btn-sm pet-sin-subrayado"
+            className="btn btn-secondary btn-sm pet-sin-subrayado"
             href={item.url || EMU_REQUESTS_FALLBACK_URL}
             target="_blank"
             rel="noreferrer"
@@ -435,14 +435,10 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
             series instead of the season you clicked. */}
         <DetailTitle>
           {libraryTargetId ? (
-            <span
-              className="lib-title-link"
-              onClick={() => onOpenLibraryItem?.(libraryTargetId)}
-              {...titleLinkTip.triggerProps}
-            >
+            // HoverTitle con onClick es un enlace de teclado (Tab e Intro), como el título de cada fila de la lista.
+            <HoverTitle as="span" className="lib-title-link" onClick={() => onOpenLibraryItem?.(libraryTargetId)} tip="Ver en la biblioteca">
               <DetailTitleText title={item.display_title || requestDisplayTitle(item)} />
-              {titleLinkTip.tooltipNode}
-            </span>
+            </HoverTitle>
           ) : (
             <DetailTitleText title={item.display_title || requestDisplayTitle(item)} />
           )}
@@ -642,6 +638,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   // (ver AppShell). Esto solo corre la PRIMERA vez que se entra.
   const [items, setItems] = useState<RequestItemResponse[]>([])
   const [total, setTotal] = useState(0)
+  // Cuántas hay sin filtro: con un filtro puesto el subtítulo dice «3 de 141», también con 0 resultados.
+  const [totalSinFiltro, setTotalSinFiltro] = useState<number | null>(null)
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   // The input stays bound to `search` for instant typing feedback; loadItems
@@ -788,8 +786,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       setOffset(off)
       if (isUnfiltered && off === 0) {
         setFacets(computeFacets(res.items))
-        if (sortBy === 'created_desc') {
-        }
+        setTotalSinFiltro(res.total)
       }
     } catch (e: unknown) {
       if (esta === ultimaCarga.current) setError(e instanceof Error ? e.message : 'Error cargando peticiones')
@@ -807,6 +804,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     try {
       const res = await getRequests({ sort: 'created_desc', limit: PAGE_SIZE, offset: 0 })
       setFacets(computeFacets(res.items))
+      setTotalSinFiltro(res.total)
     } catch { /* optional */ }
   }, [])
 
@@ -1003,12 +1001,15 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       <td>
         <div className="pet-titulo-fila">
           {/* La casilla va dentro de la celda Título, no en una columna nueva: `columnas` cuenta las de la tabla. */}
-          {modoSeleccion && peticionSeleccionableEnLote(item) && (
+          {modoSeleccion && (peticionSeleccionableEnLote(item) ? (
             <CasillaLote
               item={item} titulo={requestDisplayTitle(item)} seleccionado={seleccion.has(item.id)}
               bloqueada={loteLleno} onAlternar={alternarLote}
             />
-          )}
+          ) : (
+            // El hueco de la casilla, para que los títulos sigan alineados: esta no se puede subir en lote.
+            <span className="pet-casilla-hueco" aria-hidden="true" />
+          ))}
           <RequestPoster url={item.poster_url} category={item.category} />
           <div className="pet-min-0">
             <HoverTitle
@@ -1064,7 +1065,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <div>
             <div className="page-title">Peticiones</div>
             <div className="page-subtitle">
-              {total > 0 ? `${total} peticiones` : 'Peticiones activas cruzadas con tu biblioteca local'}
+              {!isUnfiltered && totalSinFiltro != null
+                ? `${total} de ${totalSinFiltro} peticiones`
+                : total > 0 ? `${total} peticiones` : 'Peticiones activas cruzadas con tu biblioteca local'}
             </div>
           </div>
           <div className="pet-fila">

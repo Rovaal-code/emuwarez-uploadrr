@@ -4,6 +4,7 @@ import type { SeedingEstado } from '../hooks/useSeeding'
 import { formatDateTimeSeconds, formatNumero } from '../utils/format'
 import { copiarTexto } from '../utils/portapapeles'
 import { ExternalLinkButtonIcon } from './DetailCard'
+import { useTooltip } from './Tooltip'
 import { SIN_DATOS_QBIT, claseSeeding, resumenSeeding, seedingDe, textoSubido } from '../utils/seeding'
 
 // Solo la subida completada tiene ya su torrent sembrando; las demás no llegaron a subir o están en ello.
@@ -12,11 +13,23 @@ const tieneTorrent = (job: UploadJob) => job.status === 'completed'
 // La columna «Seeding» de la lista de Subidas.
 export function SeedingCelda({ job, seeding }: { job: UploadJob; seeding: SeedingEstado }) {
   if (!tieneTorrent(job)) return <span className="sub-muted">—</span>
-  if (!seeding.datos) return <span className="sub-muted sub-t11">{seeding.cargando ? 'Cargando…' : SIN_DATOS_QBIT}</span>
-  if (!seeding.datos.disponible) return <span className="sub-muted sub-t11">{SIN_DATOS_QBIT}</span>
+  if (seeding.cargando && !seeding.datos) return <span className="sub-muted sub-t11">Cargando…</span>
+  if (!seeding.datos?.disponible) return <SinDatosQbit />
   const i = seedingDe(seeding.datos, job.id)
   if (!i) return <span className="sub-muted">—</span>
   return <span className={claseSeeding(i.estado)}>{resumenSeeding(i)}</span>
+}
+
+// Sin qBittorrent, un guion: «Sin datos de qBittorrent» repetido en cada fila completada no decía nada nuevo. El
+// texto va en el tooltip y para el lector de pantalla, y el detalle de la subida lo explica.
+function SinDatosQbit() {
+  const { triggerProps, tooltipNode } = useTooltip(SIN_DATOS_QBIT)
+  return (
+    <span className="sub-muted" {...triggerProps}>
+      <span aria-hidden="true">—</span><span className="solo-lector">{SIN_DATOS_QBIT}</span>
+      {tooltipNode}
+    </span>
+  )
 }
 
 // El nombre del torrent en qBittorrent: lo último de la ruta preparada, que es la que se le entregó como ruta de guardado.

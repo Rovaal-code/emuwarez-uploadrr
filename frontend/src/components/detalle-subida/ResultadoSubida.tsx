@@ -34,6 +34,29 @@ function Espera() {
   return <span className="spinner dsub-spinner-14" />
 }
 
+// Una consulta (nomenclatura, pistas, verificación): con datos abre su detalle. Sin datos, mientras la subida sigue
+// viva está «Pendiente»; terminada ya no lo estará nunca, así que dice «Sin datos» (o «No se llegó» si falló antes) y
+// no es un botón que abre un recuadro vacío.
+function ConsultaDato({ hayDatos, texto, sinDatos, titulo, espera, alerta = false, onAbrir }: {
+  hayDatos: boolean
+  texto: string
+  sinDatos: string | null
+  titulo: string
+  espera: boolean
+  alerta?: boolean
+  onAbrir: () => void
+}) {
+  if (!hayDatos && sinDatos) {
+    return <ValueChip><span className="txt dsub-sin-datos">{sinDatos}</span></ValueChip>
+  }
+  return (
+    <ValueChip as="button" linkable onClick={onAbrir} title={titulo}>
+      {espera && <Espera />}
+      <span className={alerta ? 'txt dsub-dato-alerta' : 'txt'}>{hayDatos ? texto : 'Pendiente'}</span>
+    </ValueChip>
+  )
+}
+
 // Lo primero del detalle de una subida: cómo acabó (o cómo va), por qué, los datos clave y qué se puede hacer.
 // Las acciones y las consultas viven aquí; el resto de la página es el detalle de lo que pasó.
 export function ResultadoSubida({ job, seeding, retryError, pasos, onStart, onRetry, onCancel, onDelete, onOpenLibraryItem, onConsulta }: {
@@ -57,8 +80,8 @@ export function ResultadoSubida({ job, seeding, retryError, pasos, onStart, onRe
   const puedeBorrar = job.status === 'failed' || job.status === 'cancelled'
   const checksListos = job.checks_snapshot?.ready
   const checksFallan = job.checks_snapshot != null && checksListos === false
-  const etiquetaChecks = !job.checks_snapshot ? 'Pendiente' : checksListos ? 'OK' : 'Error'
   const terminada = ['completed', 'failed', 'cancelled'].includes(job.status)
+  const sinDatos = !terminada ? null : job.status === 'failed' ? 'No se llegó' : 'Sin datos'
   const globalPct = job.progress?.global_pct ?? 0
   const reintentos = job.retry_count ?? 0
 
@@ -151,24 +174,19 @@ export function ResultadoSubida({ job, seeding, retryError, pasos, onStart, onRe
       {/* Lo que se hizo con los ficheros: cada consulta abre su detalle. */}
       <dl className="dsub-datos dsub-consultas">
         <Dato etiqueta="Nomenclatura" ayuda={AYUDA_NOMENCLATURA}>
-          <ValueChip as="button" linkable onClick={() => onConsulta('nomenclatura')} title="Ver nomenclatura">
-            {preparando && job.stage === 'nomenclature' && <Espera />}
-            <span className="txt">{job.nomenclature_snapshot ? 'Ver' : 'Pendiente'}</span>
-          </ValueChip>
+          <ConsultaDato hayDatos={!!job.nomenclature_snapshot} texto="Ver" sinDatos={sinDatos} titulo="Ver nomenclatura"
+            espera={preparando && job.stage === 'nomenclature'} onAbrir={() => onConsulta('nomenclatura')} />
         </Dato>
         <Dato etiqueta="Pistas" ayuda={AYUDA_PISTAS}>
-          <ValueChip as="button" linkable onClick={() => onConsulta('remux')} title="Ver reordenación de pistas">
-            {preparando && job.stage === 'remux' && <Espera />}
-            <span className="txt">
-              {job.remux_snapshot?.omitida ? `Omitidas (${job.remux_snapshot.omitida})` : job.remux_snapshot ? 'Ver' : 'Pendiente'}
-            </span>
-          </ValueChip>
+          <ConsultaDato hayDatos={!!job.remux_snapshot}
+            texto={job.remux_snapshot?.omitida ? `Omitidas (${job.remux_snapshot.omitida})` : 'Ver'}
+            sinDatos={sinDatos} titulo="Ver reordenación de pistas"
+            espera={preparando && job.stage === 'remux'} onAbrir={() => onConsulta('remux')} />
         </Dato>
         <Dato etiqueta="Verificación" ayuda={AYUDA_VERIFICACION}>
-          <ValueChip as="button" linkable onClick={() => onConsulta('checks')} title="Ver verificación pre-subida">
-            {preparando && job.stage === 'checks' && <Espera />}
-            <span className={checksFallan ? 'txt dsub-dato-alerta' : 'txt'}>{etiquetaChecks}</span>
-          </ValueChip>
+          <ConsultaDato hayDatos={!!job.checks_snapshot} texto={checksListos ? 'OK' : 'Error'} sinDatos={sinDatos}
+            titulo="Ver verificación pre-subida" espera={preparando && job.stage === 'checks'} alerta={checksFallan}
+            onAbrir={() => onConsulta('checks')} />
         </Dato>
       </dl>
     </section>

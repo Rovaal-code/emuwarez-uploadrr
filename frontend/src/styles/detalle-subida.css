@@ -34,7 +34,6 @@ a.btn.dsub-sin-subrayado { text-decoration: none; }
   cursor: pointer;
 }
 .dsub-lote-ver:hover { text-decoration: underline; }
-.dsub-en-vivo { font-size: 11px; color: var(--color-available); }
 .dsub-cuerpo { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
 .dsub-h1 { font: inherit; letter-spacing: inherit; }
 .dsub-columna { flex: 1; min-width: 300px; }
@@ -334,3 +333,6 @@ pre.dsub-log {
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* Una consulta sin datos en una subida terminada: texto atenuado, sin aspecto de botón. */
+.value-chip .txt.dsub-sin-datos { color: var(--text-muted); }

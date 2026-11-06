@@ -15,7 +15,7 @@ import { RellenarPeticion } from '../components/RellenarPeticion'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { CancelButtonIcon, RetryButtonIcon, DeleteButtonIcon, ExternalLinkButtonIcon, ValueChip, PlainValue, TypeValueIcon } from '../components/DetailCard'
 import { HoverTitle, useTooltip } from '../components/Tooltip'
-import { formatDateTimeSeconds } from '../utils/format'
+import { formatDateTimeSeconds, timeAgo } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { hayMasPorCargar } from '../utils/paginarSubidas'
@@ -52,6 +52,8 @@ const RETRYABLE_STATUSES = new Set(['failed', 'cancelled'])
 const DELETABLE_STATUSES = new Set(['failed', 'cancelled', 'completed'])
 
 const CONFIRMATION_TOKEN = 'INICIAR_UPLOADRR'
+// Las columnas de la tabla (para las filas que ocupan el ancho entero).
+const COLUMNAS = 9
 
 // Only real upload states — a job now only exists once the user uploads, so
 // the preparatory "ready"/"blocked" states no longer appear here. 'preparing'
@@ -132,11 +134,22 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
   )
 }
 
-// «06/11/2026, 04:31:26» en dos líneas (el día y la hora), para que la columna no ensanche la tabla.
-function Fecha({ valor }: { valor: string | null | undefined }) {
-  if (!valor) return <span className="sub-muted">—</span>
-  const [dia, hora] = formatDateTimeSeconds(valor).split(', ')
-  return <span className="sub-fecha"><span>{dia}</span>{hora && <span className="sub-fecha-hora">{hora}</span>}</span>
+// Una sola columna «Fecha»: cuándo terminó o, si no ha terminado, cuándo se creó, en relativo («hace 2 h») como en
+// Peticiones; las dos fechas exactas van en el tooltip. Con Creado y Finalizado en dos columnas de fecha y hora la
+// tabla se desbordaba a 1280 px y el título se quedaba en 70 px.
+function FechaDeFila({ job }: { job: UploadJob }) {
+  const exactas = [
+    job.created_at ? `Creada: ${formatDateTimeSeconds(job.created_at)}` : null,
+    job.finished_at ? `Finalizada: ${formatDateTimeSeconds(job.finished_at)}` : null,
+  ].filter(Boolean).join(' · ')
+  const { triggerProps, tooltipNode } = useTooltip(exactas || null)
+  const valor = job.finished_at ?? job.created_at
+  return (
+    <td className="sub-nowrap sub-sec sub-fecha" {...triggerProps}>
+      {valor ? timeAgo(valor) : <span className="sub-muted">—</span>}
+      {tooltipNode}
+    </td>
+  )
 }
 
 // El primer renglón de un error: la lista no es sitio para la pila entera (el motivo completo está en el detalle).
@@ -306,8 +319,7 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
         <EstadoDeFila job={job} />
       </td>
       <td className="sub-nowrap sub-sec"><SeedingCelda job={job} seeding={seeding} /></td>
-      <td className="sub-nowrap sub-sec"><Fecha valor={job.created_at} /></td>
-      <td className="sub-nowrap sub-sec"><Fecha valor={job.finished_at} /></td>
+      <FechaDeFila job={job} />
       <td className="col-actions">
         <div className="sub-acciones-fila">
           <RellenarPeticion job={job} compacto />
@@ -358,14 +370,18 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [limite, setLimite] = useState(PAGINA)
   const [total, setTotal] = useState<number | null>(null)
   const [cargado, setCargado] = useState(false)
+  // Por qué no se pudo reintentar: se enseña en el detalle y, si se pulsó en la lista, sobre la tabla.
+  const [retryError, setRetryError] = useState<string | null>(null)
 
   // Keeps /uploads/:id in sync with whichever job's detail page is open.
   function openUpload(id: number) {
     pushDetailPath('uploads', id)
+    setRetryError(null)
     setSelectedJobId(id)
   }
   function closeUpload() {
     closeDetailPath('uploads')
+    setRetryError(null)
     setSelectedJobId(null)
   }
   const [startJob, setStartJob] = useState<UploadJob | null>(null)
@@ -550,16 +566,26 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     if (job?.status === 'preparing') { setConfirmCancel(job); return }
     await doCancel(jobId)
   }
+  // Si cancelar falla se dice sobre la tabla: antes se tragaba el error y el botón parecía no hacer nada.
+  const [cancelError, setCancelError] = useState<string | null>(null)
   const doCancel = async (jobId: number) => {
     setConfirmCancel(null)
-    try { await cancelUploadJob(jobId); await load() } catch { /* ignore */ }
+    setCancelError(null)
+    const titulo = jobs.find(j => j.id === jobId)?.title
+    try {
+      await cancelUploadJob(jobId)
+    } catch (e: unknown) {
+      const motivo = e instanceof Error ? e.message : 'error desconocido'
+      setCancelError(titulo ? `No se pudo cancelar «${titulo}»: ${motivo}` : `No se pudo cancelar la subida: ${motivo}`)
+      return
+    }
+    await load()
   }
 
   // Sin confirmación: reintentar solo crea un trabajo nuevo en cola (el mismo camino que
   // «Subir a eMuwarez») y no toca el original, fallido o cancelado. Salta a la ficha del
   // trabajo nuevo para ver su progreso en el momento. Los errores se enseñan, no se tragan:
   // un fallo silencioso aquí parecía un botón que no hacía nada.
-  const [retryError, setRetryError] = useState<string | null>(null)
   const handleRetryQueued = async (job: UploadJob, desdeElPrincipio = false) => {
     setRetryError(null)
     try {
@@ -739,7 +765,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </div>
         </div>
         <div className="sub-fila">
-          {hasLiveJob && <span className="sub-muted sub-t11">● actualizando en vivo</span>}
+          {hasLiveJob && <span className="sub-en-vivo"><span aria-hidden="true">●</span> actualizando en vivo</span>}
         </div>
       </div>
 
@@ -762,7 +788,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         </select>
       </div>
 
-      {loteFiltro && (
+      {/* Con la lista sin cargar, las acciones del lote no tienen sobre qué actuar. */}
+      {loteFiltro && !error && (
         <BannerLote
           key={loteFiltro}
           loteId={loteFiltro}
@@ -776,9 +803,20 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
       {/* Ver RequestsPage: solo bloquea si no hay nada que enseñar todavía. */}
       {loading && jobs.length === 0 && !filtrando ? <LoadingState label="Cargando Subidas…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 && !filtrando ? (
-        <EmptyState icon={<IconoSubida />} title="No hay trabajos de subida." body="Usa el botón 'Subir' desde Biblioteca para generar un preflight." />
+        <EmptyState
+          icon={<IconoSubida />}
+          title="Sin subidas"
+          body="Sube algo desde Biblioteca o desde una petición lista."
+          action={onNavigate && <button className="btn btn-primary btn-sm" onClick={() => onNavigate('library')}>Ir a Biblioteca</button>}
+        />
       ) : (
         <div className="activity-section sub-seccion">
+          {(retryError || cancelError) && (
+            <div className="sub-error-accion" role="alert">
+              <span>{retryError ?? cancelError}</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRetryError(null); setCancelError(null) }}>Cerrar</button>
+            </div>
+          )}
           <div className="sub-scroll">
             <table className="data-table">
               <thead>
@@ -794,14 +832,13 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     { value: '', label: 'Todos' }, ...STATUS_OPTIONS.filter(Boolean).map(s => ({ value: s, label: statusLabel(s) })),
                   ]} /></th>
                   <th className="sub-sec">Seeding</th>
-                  <th className="sub-sec">Creado</th>
-                  <th className="sub-sec">Finalizado</th>
+                  <th className="sub-sec">Fecha</th>
                   <th className="col-actions sub-th-acciones">Acciones</th>
                 </tr>
               </thead>
               {visibleJobs.length === 0 && loteVacio && (
                 <FilaVacia
-                  columnas={10}
+                  columnas={COLUMNAS}
                   icon={<IconoSubida />}
                   title="Este lote ya no tiene subidas"
                   body="Se borraron todas las que lo formaban."
@@ -810,7 +847,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
               )}
               {visibleJobs.length === 0 && filtrando && !loteVacio && (
                 <FilaVacia
-                  columnas={10}
+                  columnas={COLUMNAS}
                   icon={<IconoSubida />}
                   title="Sin resultados"
                   body={hayMas

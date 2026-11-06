@@ -223,9 +223,9 @@
 }
 
 .sub-poster {
-  width: 36px;
-  height: 54px;
-  border-radius: 5px;
+  width: 28px;
+  height: 42px;
+  border-radius: 4px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -256,6 +256,41 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+/* Por debajo de 1400 px el título baja a dos líneas en vez de cortarse en una: a 1280 se quedaba en «El orfana…». */
+.ui-estrecha .sub-titulo {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.ui-estrecha .sub-titulo-texto {
+  align-items: center;
+}
+
+/* Lo vivo lleva el cian, en la lista y en el detalle de una subida. */
+.sub-en-vivo {
+  font-size: 11px;
+  color: var(--text-accent);
+}
+
+/* Reintentar o cancelar desde la lista no salió: se dice encima de la tabla hasta que se cierra o se vuelve a probar. */
+.sub-error-accion {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 12px;
+  padding: 6px 6px 6px 12px;
+  border-radius: var(--radius-small);
+  border: 1px solid color-mix(in srgb, var(--color-error) 35%, transparent);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  font-size: 12.5px;
+  color: var(--color-error-pale);
 }
 
 .sub-enlace-emu {
@@ -317,17 +352,11 @@
   color: var(--color-error-pale);
 }
 
-/* Fechas: el día y, debajo, la hora. */
-.sub-fecha {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+/* Fecha: «hace 2 h»; las fechas exactas, en el tooltip. */
+.data-table td.sub-fecha {
   font-size: 12px;
-}
-
-.sub-fecha-hora {
-  color: var(--text-muted);
-  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Chip de los intentos anteriores, junto al título: pulsarlo despliega la cadena. */

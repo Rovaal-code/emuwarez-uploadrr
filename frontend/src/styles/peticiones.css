@@ -58,6 +58,12 @@
   min-width: 0;
 }
 
+/* En modo Seleccionar, la fila que no se puede marcar guarda el sitio de la casilla (15 px y su margen por defecto). */
+.pet-casilla-hueco {
+  flex-shrink: 0;
+  width: 22px;
+}
+
 .pet-paginacion {
   display: flex;
   gap: 8px;
@@ -481,6 +487,11 @@
 @media (max-width: 640px) {
   .ficha-poster {
     width: 132px;
+  }
+
+  /* Sin imagen, el marcador vacío dejaba el veredicto por debajo del pliegue (en la ficha de petición y de subida). */
+  .ficha-poster:has(.ficha-poster-vacio) {
+    display: none;
   }
 
   .detail-card.pet-veredicto {

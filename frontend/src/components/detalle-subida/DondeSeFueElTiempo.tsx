@@ -3,10 +3,11 @@ import { lineaDeTiempo } from '../../utils/lineaDeTiempo'
 import { formatSecondsHM } from '../../utils/uploadStatus'
 
 // Cuánto tardó cada fase de una subida terminada. La barra es proporcional al total y el tiempo va siempre en
-// texto, así que no depende del color. Una fase sin marcas de tiempo enseña solo su estado.
+// texto, así que no depende del color. Una fase sin marcas de tiempo enseña solo su estado. Sin fases no sale: el
+// recuadro quedaba vacío con solo el total, que ya da la tarjeta del resultado.
 export function DondeSeFueElTiempo({ job }: { job: UploadJob }) {
   const { tramos, totalSegundos } = lineaDeTiempo(job)
-  if (tramos.length === 0 && totalSegundos == null) return null
+  if (tramos.length === 0) return null
   const mayor = tramos.reduce<number | null>((m, t) => (t.segundos != null && t.segundos > 0 && (m == null || t.segundos > m) ? t.segundos : m), null)
   return (
     <section className="dsub-panel dsub-tiempo" aria-labelledby="dsub-tiempo-titulo">

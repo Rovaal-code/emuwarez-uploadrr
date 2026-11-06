@@ -99,6 +99,22 @@ describe('detalle de una subida completada', () => {
     expect([...document.querySelectorAll('.dsub-dato dt')].map(dt => dt.textContent)).not.toContain('Grupo')
   })
 
+  it('sin datos de la preparación no dice «Pendiente» en una terminada ni abre un recuadro vacío', async () => {
+    await montar(pagina({ ...completada, remux_snapshot: null, nomenclature_snapshot: null, checks_snapshot: null }))
+    const consultas = document.querySelector('.dsub-consultas')!
+    expect(consultas.textContent).not.toContain('Pendiente')
+    expect([...consultas.querySelectorAll('dd')].map(dd => dd.textContent)).toEqual(['Sin datos', 'Sin datos', 'Sin datos'])
+    expect(consultas.querySelector('dd button')).toBeNull()
+    await desmontar()
+    await montar(pagina({ ...fallida, remux_snapshot: null, nomenclature_snapshot: null, checks_snapshot: null }))
+    expect([...document.querySelectorAll('.dsub-consultas dd')].map(dd => dd.textContent)).toEqual(['No se llegó', 'No se llegó', 'No se llegó'])
+  })
+
+  it('con el total pero sin fases, «Dónde se fue el tiempo» no sale vacío', async () => {
+    await montar(pagina({ ...completada, progress: { global_pct: 100, phases: [] } }))
+    expect(document.querySelector('.dsub-tiempo')).toBeNull()
+  })
+
   it('sin petición no hay «Rellenar petición»', async () => {
     await montar(pagina({ ...completada, request_title: null, request_url: null }))
     expect(texto()).not.toContain('Rellenar petición')

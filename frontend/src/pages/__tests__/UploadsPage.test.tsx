@@ -20,7 +20,8 @@ vi.mock('../../api/eventos', () => ({
 }))
 
 import {
-  borrarLote, cancelarLote, countUploads, deleteUploadJob, getLote, getUploadJob, getUploads, reintentarLote,
+  borrarLote, cancelarLote, cancelUploadJob, countUploads, deleteUploadJob, getLote, getUploadJob, getUploads, reintentarLote,
+  retryUploadJobQueued,
 } from '../../api/uploads'
 import { ApiClientError } from '../../api/client'
 import { SeccionVisible } from '../../context/SeccionVisible'
@@ -311,6 +312,61 @@ describe('una cadena de reintentos', () => {
     vi.mocked(countUploads).mockResolvedValue(1)
     await pagina()
     expect(filaDe('Rota').querySelector('.sub-estado-error')?.textContent).toBe('Uploadrr falló')
+  })
+})
+
+describe('las acciones de la lista que fallan', () => {
+  const ROTA = trabajo({ id: 21, status: 'failed', title: 'Rota', media_type: 'movie' })
+  const VIVA = trabajo({ id: 22, status: 'running', title: 'Viva', media_type: 'movie' })
+  beforeEach(() => {
+    vi.mocked(getUploads).mockResolvedValue([ROTA, VIVA])
+    vi.mocked(countUploads).mockResolvedValue(2)
+  })
+  const aviso = () => document.querySelector('.sub-seccion [role="alert"]')
+
+  it('si reintentar falla, lo dice sobre la tabla y se puede cerrar', async () => {
+    vi.mocked(retryUploadJobQueued).mockRejectedValue(new Error('Ya hay una subida activa para este elemento'))
+    await pagina()
+    expect(aviso()).toBeNull()
+    await pulsar(filaDe('Rota').querySelector('button[aria-label="Reintentar"]')!)
+    await esperar(() => aviso())
+    expect(aviso()!.textContent).toContain('Ya hay una subida activa para este elemento')
+    await pulsar(boton('Cerrar'))
+    expect(aviso()).toBeNull()
+  })
+
+  it('si cancelar falla, lo dice con el título de la subida', async () => {
+    vi.mocked(cancelUploadJob).mockRejectedValue(new Error('El trabajo ya terminó'))
+    await pagina()
+    await pulsar(filaDe('Viva').querySelector('button[aria-label="Cancelar"]')!)
+    await esperar(() => aviso())
+    expect(aviso()!.textContent).toContain('No se pudo cancelar «Viva»: El trabajo ya terminó')
+  })
+})
+
+describe('las columnas', () => {
+  it('una sola columna Fecha, relativa, con las dos fechas exactas aparte', async () => {
+    await pagina()
+    const cab = [...document.querySelectorAll('thead th')].map(th => th.textContent?.trim())
+    expect(cab).toContain('Fecha')
+    expect(cab).not.toContain('Creado')
+    expect(cab).not.toContain('Finalizado')
+    expect(filaDe('Película suelta').querySelector('td.sub-fecha')!.textContent).toMatch(/^hace /)
+  })
+
+  it('sin ninguna subida, el vacío lleva a Biblioteca', async () => {
+    vi.mocked(getUploads).mockResolvedValue([])
+    vi.mocked(countUploads).mockResolvedValue(0)
+    const navegar = vi.fn()
+    await montar(
+      <SyncContext.Provider value={{ lastInvalidatedAt: 0, startAllSync: vi.fn(), isAnySyncing: false, todoPendiente: false } as never}>
+        <SeccionVisible visible><UploadsPage onNavigate={navegar} /></SeccionVisible>
+      </SyncContext.Provider>,
+    )
+    await esperar(() => boton('Ir a Biblioteca'))
+    expect(texto()).not.toContain('preflight')
+    await pulsar(boton('Ir a Biblioteca'))
+    expect(navegar).toHaveBeenCalledWith('library')
   })
 })
 

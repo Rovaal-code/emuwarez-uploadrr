@@ -303,7 +303,7 @@ function IdField({ label, id, href }: { label: string; id: string | null; href: 
 function CreatedAtCell({ createdAt }: { createdAt: string | null | undefined }) {
   const { triggerProps, tooltipNode } = useTooltip(createdAt ? formatDate(createdAt) : null)
   return (
-    <td className="pet-creada" {...triggerProps}>
+    <td className="pet-creada pet-sec" {...triggerProps}>
       {timeAgo(createdAt)}
       {tooltipNode}
     </td>
@@ -1020,19 +1020,19 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           </div>
         </div>
       </td>
-      <td className="pet-nowrap">
+      <td className="pet-nowrap pet-tipo">
         <PlainValue icon={<TypeValueIcon />}>{tipoOf(item.category).label}</PlainValue>
       </td>
-      <td className="pet-nowrap"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
+      <td className="pet-nowrap pet-sec"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
       <td>
         <CompatibilityBadge status={item.compatibility_status} reclamada={item.reclamada_por} />
         {motivoDeLaPreparacion(item) && <div className="pet-motivo">{motivoDeLaPreparacion(item)}</div>}
       </td>
-      <td className="pet-t12 pet-nowrap"><AuthorCell author={item.author} isMine={item.is_mine} /></td>
-      <td className="pet-nowrap"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
-      <td className="pet-nowrap"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
-      {hayVotos && <td className="pet-centro pet-t12">{item.votes ?? '—'}</td>}
-      {hayComentarios && <td className="pet-centro pet-t12">{item.comments ?? '—'}</td>}
+      <td className="pet-t12 pet-nowrap pet-sec"><AuthorCell author={item.author} isMine={item.is_mine} /></td>
+      <td className="pet-nowrap pet-sec"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
+      <td className="pet-nowrap pet-sec"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
+      {hayVotos && <td className="pet-centro pet-t12 pet-sec">{item.votes ?? '—'}</td>}
+      {hayComentarios && <td className="pet-centro pet-t12 pet-sec">{item.comments ?? '—'}</td>}
       <td className="pet-puntos">{item.points != null ? <><IconoPuntos />{fmtNum(item.points)}</> : <span className="pet-muted">—</span>}</td>
       <CreatedAtCell createdAt={item.created_at} />
     </tr>
@@ -1082,12 +1082,14 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <input
             className="form-input pet-buscar"
             type="search"
+            aria-label="Buscar peticiones por título"
+            autoComplete="off"
             placeholder="Buscar por título…"
             value={search}
             onChange={e => setSearch(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && loadItems(0)}
           />
-          <select className="form-input form-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <select className="form-input form-select" aria-label="Ordenar peticiones" value={sortBy} onChange={e => setSortBy(e.target.value)}>
             {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
           {(haySeleccionables || modoSeleccion) && (
@@ -1134,16 +1136,16 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
           <div className="activity-section pet-seccion">
             <div className="pet-scroll">
-              <table className="data-table">
+              <table className="data-table pet-tabla">
                 <thead>
                   <tr>
                     <th>Título</th>
-                    <th><HeaderFilter label="Tipo" value={categoryFilter} onChange={setCategoryFilter} options={[
+                    <th className="pet-tipo"><HeaderFilter label="Tipo" value={categoryFilter} onChange={setCategoryFilter} options={[
                       // Same label the Tipo column shows, or the filter would
                       // offer "TV" for a column that says "Serie".
                       { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: tipoOf(c).label })),
                     ]} /></th>
-                    <th><HeaderFilter label="Origen" value={instanceFilter} onChange={setInstanceFilter} options={[
+                    <th className="pet-sec"><HeaderFilter label="Origen" value={instanceFilter} onChange={setInstanceFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.instances,
                     ]} /></th>
                     <th><HeaderFilter label="Compatibilidad" value={statusFilter} onChange={setStatusFilter} options={[
@@ -1151,17 +1153,17 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                       // "No disponible" for a column that says "Faltante".
                       { value: '', label: 'Todas' }, ...facets.statuses.map(s => ({ value: s, label: getRequestStatusInfo(s).label })),
                     ]} /></th>
-                    <th><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
+                    <th className="pet-sec"><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.authors.map(a => ({ value: a, label: a })),
                     ]} /></th>
-                    <th><HeaderFilter label="Resolución" value={resolutionFilter} onChange={setResolutionFilter} options={[
+                    <th className="pet-sec"><HeaderFilter label="Resolución" value={resolutionFilter} onChange={setResolutionFilter} options={[
                       { value: '', label: 'Todas' }, ...facets.resolutions.map(r => ({ value: r, label: r })),
                     ]} /></th>
-                    <th><HeaderFilter label="Source" value={sourceFilter} onChange={setSourceFilter} options={[
+                    <th className="pet-sec"><HeaderFilter label="Source" value={sourceFilter} onChange={setSourceFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.sources.map(s => ({ value: s, label: s })),
                     ]} /></th>
-                    {hayVotos && <th className="pet-centro" {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>}
-                    {hayComentarios && <th className="pet-centro" {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>}
+                    {hayVotos && <th className="pet-centro pet-sec" {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>}
+                    {hayComentarios && <th className="pet-centro pet-sec" {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>}
                     <HeaderSort label={<IconoPuntos />} nombre="Puntos / recompensa" desc="points_desc" asc="points_asc" sortBy={sortBy} onSort={setSortBy} align="center" />
                     <HeaderSort label="Creada" desc="created_desc" asc="created_asc" sortBy={sortBy} onSort={setSortBy} />
                   </tr>

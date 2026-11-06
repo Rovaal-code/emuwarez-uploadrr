@@ -37,6 +37,8 @@
 }
 
 .pet-scroll {
+  /* Lo que queda bajo las cabeceras pegadas (columnas y grupo) no tapa la fila a la que se llega con Tab. */
+  scroll-padding-top: 76px;
   overflow: auto;
   flex: 1;
   min-height: 0;
@@ -158,6 +160,11 @@
   cursor: pointer;
 }
 
+.pet-grupo-boton:focus-visible,
+.pet-resumen-chip:focus-visible {
+  outline-offset: -2px;
+}
+
 .pet-grupo-boton:hover .pet-grupo-titulo {
   color: var(--text-accent);
 }
@@ -189,6 +196,35 @@
 
 .pet-grupo-ayuda {
   font-weight: 400;
+}
+
+/* Margen horizontal de celda algo menor que el de otras tablas: con once columnas, a 1280 px la fila entera cabe sin
+   desplazar. El título conserva el suyo. */
+.data-table.pet-tabla td {
+  padding-inline: 6px;
+}
+
+.data-table.pet-tabla .hf-trigger {
+  padding-inline: 8px;
+}
+
+.data-table.pet-tabla td:first-child {
+  padding-inline: 12px;
+}
+
+/* Con poca anchura (móvil) la lista se queda con lo esencial: título, tipo, compatibilidad y puntos. El resto de
+   los datos está en la ficha de cada petición, y los filtros de esas columnas dejan de verse con ellas. */
+@media (max-width: 760px) {
+  .data-table.pet-tabla .pet-sec,
+  .data-table.pet-tabla .pet-tipo,
+  .data-table.pet-tabla thead th:last-child,
+  .data-table.pet-tabla td.pet-creada {
+    display: none;
+  }
+
+  .pet-grupo-ayuda {
+    display: none;
+  }
 }
 
 /* Celdas y cabeceras: `.data-table th { text-align }` y `.data-table td { color }` */
@@ -241,6 +277,11 @@
   height: 13px;
   margin-right: 5px;
   vertical-align: -2px;
+}
+
+.data-table.pet-tabla .value-chip {
+  padding: 3px 8px;
+  font-size: 12.5px;
 }
 
 .pet-nombre {
@@ -495,6 +536,7 @@
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.25;
+  text-wrap: balance;
 }
 
 .pet-veredicto-ayuda {

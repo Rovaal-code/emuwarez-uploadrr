@@ -14,7 +14,7 @@ import { PeticionDeSubida } from '../components/PeticionDeSubida'
 import { RellenarPeticion } from '../components/RellenarPeticion'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { CancelButtonIcon, RetryButtonIcon, DeleteButtonIcon, ExternalLinkButtonIcon, ValueChip, PlainValue, TypeValueIcon } from '../components/DetailCard'
-import { useTooltip } from '../components/Tooltip'
+import { HoverTitle, useTooltip } from '../components/Tooltip'
 import { formatDateTimeSeconds } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
@@ -210,7 +210,6 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
   // Un intento anterior de una cadena ya se reintentó: el servidor solo acepta reintentar el último.
   const canRetry = !indent && RETRYABLE_STATUSES.has(job.status)
   const deepLink = buildDeepLink(job, instances)
-  const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Ver progreso / detalle')
   const { triggerProps: emuTip, tooltipNode: emuTooltip } = useTooltip(job.result_url ? 'Ver en eMuwarez' : null)
   const { triggerProps: originTip, tooltipNode: originTooltip } = useTooltip(deepLink ? `Abrir en ${job.instance_name ?? job.instance_type}` : null)
   const retryToggleTip = useTooltip(retryToggle ? (retryToggle.expanded ? 'Ocultar intentos anteriores' : 'Ver intentos anteriores') : null)
@@ -239,14 +238,9 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
           </div>
           <div className="sub-titulo-texto">
             {indent && <span className="sub-muted sub-no-encoge">↳</span>}
-            <span
-              className="lib-title-link sub-titulo"
-              onClick={onOpen}
-              {...titleTip}
-            >
+            <HoverTitle as="span" className="lib-title-link sub-titulo" onClick={onOpen} tip="Ver progreso / detalle">
               {job.title || '—'}
-              {titleTooltip}
-            </span>
+            </HoverTitle>
             {job.year ? <span className="sub-muted sub-t11 sub-no-encoge">({job.year})</span> : null}
             {loteId && onFiltrarLote && (
               <button
@@ -288,12 +282,12 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
           </div>
         </div>
       </td>
-      <td className="sub-nowrap">
+      <td className="sub-nowrap sub-sec">
         {job.media_type
           ? <PlainValue icon={<TypeValueIcon />}>{UPLOAD_TYPE_LABEL[job.media_type] ?? job.media_type}</PlainValue>
           : <span className="sub-muted">—</span>}
       </td>
-      <td className="sub-nowrap">
+      <td className="sub-nowrap sub-sec">
         {job.instance_type
           ? (
             deepLink
@@ -311,9 +305,9 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
       <td className="sub-celda-estado">
         <EstadoDeFila job={job} />
       </td>
-      <td className="sub-nowrap"><SeedingCelda job={job} seeding={seeding} /></td>
-      <td className="sub-nowrap"><Fecha valor={job.created_at} /></td>
-      <td className="sub-nowrap"><Fecha valor={job.finished_at} /></td>
+      <td className="sub-nowrap sub-sec"><SeedingCelda job={job} seeding={seeding} /></td>
+      <td className="sub-nowrap sub-sec"><Fecha valor={job.created_at} /></td>
+      <td className="sub-nowrap sub-sec"><Fecha valor={job.finished_at} /></td>
       <td className="col-actions">
         <div className="sub-acciones-fila">
           <RellenarPeticion job={job} compacto />
@@ -745,11 +739,14 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       <div className="filters-bar sub-no-encoge">
         <input
           className="form-input sub-buscar"
+          type="search"
+          aria-label="Buscar subidas por título"
+          autoComplete="off"
           placeholder="Buscar título…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <select className="form-input form-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+        <select className="form-input form-select" aria-label="Ordenar subidas" value={sortBy} onChange={e => setSortBy(e.target.value)}>
           <option value="created_desc">Orden: Reciente primero</option>
           <option value="created_asc">Orden: Antiguo primero</option>
           <option value="title">Orden: Título (A-Z)</option>
@@ -779,18 +776,18 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
               <thead>
                 <tr>
                   <th className="sub-th-titulo">Título</th>
-                  <th><HeaderFilter label="Tipo" value={typeFilter} onChange={setTypeFilter} options={[
+                  <th className="sub-sec"><HeaderFilter label="Tipo" value={typeFilter} onChange={setTypeFilter} options={[
                     { value: '', label: 'Todos' }, { value: 'movie', label: 'Película' }, { value: 'series', label: 'Serie' }, { value: 'season', label: 'Temporada' }, { value: 'episode', label: 'Episodio' },
                   ]} /></th>
-                  <th>Origen</th>
+                  <th className="sub-sec">Origen</th>
                   <th className="col-prioridad-baja">Grupo</th>
                   <th className="col-prioridad-baja">Petición</th>
                   <th><HeaderFilter label="Estado" value={statusFilter} onChange={setStatusFilter} options={[
                     { value: '', label: 'Todos' }, ...STATUS_OPTIONS.filter(Boolean).map(s => ({ value: s, label: statusLabel(s) })),
                   ]} /></th>
-                  <th>Seeding</th>
-                  <th>Creado</th>
-                  <th>Finalizado</th>
+                  <th className="sub-sec">Seeding</th>
+                  <th className="sub-sec">Creado</th>
+                  <th className="sub-sec">Finalizado</th>
                   <th className="col-actions sub-th-acciones">Acciones</th>
                 </tr>
               </thead>

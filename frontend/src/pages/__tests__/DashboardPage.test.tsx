@@ -190,8 +190,10 @@ describe('Panel', () => {
     expect(tarjetas.map(c => c.querySelectorAll('.stat-card-icon svg').length)).toEqual([1, 1, 1, 1, 1])
     expect(tarjetas.map(c => c.getAttribute('aria-label')))
       .toEqual(['En biblioteca: 51.372', 'En disco: 15.861', 'Únicos sin subir: 283', 'Peticiones abiertas: 322', 'Tus subidas: 14'])
-    expect(tarjetas.map(c => (c.querySelector('.stat-card-value') as HTMLElement).style.color))
+    // El color de estado va en el icono; la cifra, en el color del texto.
+    expect(tarjetas.map(c => (c.querySelector('.stat-card-icon') as HTMLElement).style.color))
       .toEqual(['', 'var(--color-available)', '', '', ''])
+    expect(tarjetas.map(c => (c.querySelector('.stat-card-value') as HTMLElement).style.color)).toEqual(['', '', '', '', ''])
   })
 
   it('vacío: la franja sigue con sus cinco tarjetas, a cero', async () => {

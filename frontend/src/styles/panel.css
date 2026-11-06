@@ -275,7 +275,7 @@
 }
 .panel-franja .stat-card { align-items: center; gap: 10px; padding: 8px 12px; }
 .panel-franja .stat-card-icon { width: 32px; height: 32px; }
-.panel-franja .stat-card-value { font-size: 20px; text-shadow: none; }
+.panel-franja .stat-card-value { font-size: 20px; }
 .panel-franja .stat-card-label { overflow-wrap: anywhere; }
 
 /* Subidas en curso y recientes */

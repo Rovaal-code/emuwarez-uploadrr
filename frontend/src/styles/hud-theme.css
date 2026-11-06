@@ -69,7 +69,6 @@
 .hud-app .sidebar-logo-text {
   font-family: var(--hud-font);
   letter-spacing: .04em;
-  text-shadow: 0 0 10px color-mix(in srgb, var(--hud-cyan) 50%, transparent);
 }
 .hud-app .nav-item {
   font-family: var(--hud-font);
@@ -116,7 +115,6 @@
 .hud-app .topbar-eye {
   border-color: color-mix(in srgb, var(--hud-blue) 50%, transparent);
   background: color-mix(in srgb, var(--hud-deep) 60%, transparent);
-  box-shadow: 0 0 8px -4px color-mix(in srgb, var(--hud-cyan) 50%, transparent);
 }
 .hud-app .topbar-btn:hover,
 .hud-app .topbar-eye:hover {
@@ -143,7 +141,6 @@
   font-family: var(--font-display);
   letter-spacing: .1em;
   text-transform: uppercase;
-  text-shadow: 0 0 22px color-mix(in srgb, var(--hud-cyan) 45%, transparent);
 }
 
 /* ---- material común de los paneles del HUD: borde fino, esquinas redondeadas y brillo discreto ---- */
@@ -186,7 +183,6 @@
 .hud-app .wizard-logo-title {
   font-family: var(--hud-font);
   letter-spacing: .04em;
-  text-shadow: 0 0 10px color-mix(in srgb, var(--hud-cyan) 50%, transparent);
 }
 .hud-app .wizard-step-dot.active {
   background: var(--hud-cyan);
@@ -290,7 +286,6 @@
 .hud-app .instance-card-name {
   font-family: var(--hud-font);
   letter-spacing: .03em;
-  text-shadow: 0 0 8px color-mix(in srgb, var(--hud-cyan) 30%, transparent);
 }
 
 /* ---- stat cards: big icon badge + text stack ---- */
@@ -324,7 +319,6 @@
 .hud-app .stat-card-value {
   font-family: var(--hud-font);
   font-size: 22px;
-  text-shadow: 0 0 10px currentColor;
 }
 
 /* ---- section headers ---- */
@@ -336,7 +330,6 @@
   font-family: var(--hud-font);
   font-size: 14px;
   color: var(--hud-ice);
-  text-shadow: 0 0 8px color-mix(in srgb, var(--hud-cyan) 40%, transparent);
   position: relative;
   padding-bottom: 10px;
   width: 100%;

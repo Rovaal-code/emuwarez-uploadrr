@@ -160,9 +160,7 @@ _REPO_ROOT = Path(__file__).parent.parent.parent
 _FRONTEND_DIST = _REPO_ROOT / "frontend" / "dist"
 
 
-# Lo de /assets lleva un hash del contenido en el nombre (lo pone Vite): un cambio es otro fichero, así que el
-# navegador puede quedárselo un año sin volver a preguntar. Sin cabecera decidía él por heurística y revalidaba (304)
-# el JS, el CSS y las fuentes. index.html, que es quien apunta a los nombres nuevos, va con no-cache (abajo).
+# /assets lleva el hash del contenido en el nombre: se cachea un año sin revalidar (index.html va con no-cache).
 CACHE_DE_ASSETS = "public, max-age=31536000, immutable"
 
 

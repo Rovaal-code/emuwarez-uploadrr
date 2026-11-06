@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { lazyConReintento } from './utils/lazyConReintento'
 import { getSetupStatus } from './api/setup'
 import { getMe } from './api/auth'
 import { getToken, clearToken, esSesionCaducada, setUnauthorizedHandler } from './api/client'
@@ -9,8 +10,8 @@ import { LoadingState } from './components/LoadingState'
 
 // El acceso y el asistente de configuración solo se ven sin sesión o la primera vez: van en su propio chunk, fuera del
 // que se carga en cada arranque.
-const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })))
-const SetupWizard = lazy(() => import('./pages/SetupWizard').then(m => ({ default: m.SetupWizard })))
+const LoginPage = lazyConReintento(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })))
+const SetupWizard = lazyConReintento(() => import('./pages/SetupWizard').then(m => ({ default: m.SetupWizard })))
 import { SyncProvider } from './context/SyncContext'
 import { PerfilEmuProvider } from './context/PerfilEmuContext'
 import { TourProvider } from './context/TourContext'

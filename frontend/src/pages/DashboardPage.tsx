@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { lazyConReintento } from '../utils/lazyConReintento'
 import { getDashboardSummary, getDashboardRecommendations, type DashboardRecommendationItem } from '../api/dashboard'
 import { getUploadJob, getUploads } from '../api/uploads'
 import { ACTIVE_JOB_STATUSES, fundirPorId } from '../utils/uploadStatus'
@@ -15,8 +16,8 @@ import { ErrorState } from '../components/ErrorState'
 import { RequestFormModal } from '../components/RequestFormModal'
 // El asistente y «Subir por lotes» solo se abren al pulsar: en su chunk, fuera del arranque. Biblioteca y Peticiones,
 // que también los usan, se premontan a los 2 s, así que al abrirlos desde el Panel ya suelen estar descargados.
-const UploadWizardModal = lazy(() => import('../components/UploadWizardModal').then(m => ({ default: m.UploadWizardModal })))
-const SubidaPorLotesModal = lazy(() => import('../components/lote/SubidaPorLotesModal').then(m => ({ default: m.SubidaPorLotesModal })))
+const UploadWizardModal = lazyConReintento(() => import('../components/UploadWizardModal').then(m => ({ default: m.UploadWizardModal })))
+const SubidaPorLotesModal = lazyConReintento(() => import('../components/lote/SubidaPorLotesModal').then(m => ({ default: m.SubidaPorLotesModal })))
 import { CarrilListo, type SeleccionCarril } from '../components/hoy/CarrilListo'
 import { useSeleccionLote } from '../hooks/useSeleccionLote'
 import { MAX_ELEMENTOS_LOTE, claveDelPanel, entradaDelPanel, type EntradaLote } from '../utils/lote'

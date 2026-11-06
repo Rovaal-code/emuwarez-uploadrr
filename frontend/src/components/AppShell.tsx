@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef, useLayoutEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, useLayoutEffect, Suspense } from 'react'
+import { lazyConReintento } from '../utils/lazyConReintento'
 import { Sidebar } from './Sidebar'
 import { SeccionVisible } from '../context/SeccionVisible'
 import { Topbar } from './Topbar'
@@ -39,15 +40,15 @@ const CARGAR_PAGINA = {
   logs:      () => import('../pages/LogsPage').then(m => ({ default: m.LogsPage })),
   settings:  () => import('../pages/SettingsPage').then(m => ({ default: m.SettingsPage })),
 }
-const LibraryPage = lazy(CARGAR_PAGINA.library)
-const RequestsPage = lazy(CARGAR_PAGINA.requests)
-const UploadsPage = lazy(CARGAR_PAGINA.uploads)
-const EstadisticasPage = lazy(CARGAR_PAGINA.stats)
-const GuidePage = lazy(CARGAR_PAGINA.guide)
-const TasksPage = lazy(CARGAR_PAGINA.tasks)
-const InstancesPage = lazy(CARGAR_PAGINA.instances)
-const LogsPage = lazy(CARGAR_PAGINA.logs)
-const SettingsPage = lazy(CARGAR_PAGINA.settings)
+const LibraryPage = lazyConReintento(CARGAR_PAGINA.library)
+const RequestsPage = lazyConReintento(CARGAR_PAGINA.requests)
+const UploadsPage = lazyConReintento(CARGAR_PAGINA.uploads)
+const EstadisticasPage = lazyConReintento(CARGAR_PAGINA.stats)
+const GuidePage = lazyConReintento(CARGAR_PAGINA.guide)
+const TasksPage = lazyConReintento(CARGAR_PAGINA.tasks)
+const InstancesPage = lazyConReintento(CARGAR_PAGINA.instances)
+const LogsPage = lazyConReintento(CARGAR_PAGINA.logs)
+const SettingsPage = lazyConReintento(CARGAR_PAGINA.settings)
 
 interface AppShellProps {
   user: CurrentUserResponse | null

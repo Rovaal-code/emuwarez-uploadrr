@@ -65,7 +65,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
             </select>
           )}
         </Campo>
-        <Campo etiqueta="Máximo de subidas en paralelo" info={<InfoIcon text="Cuántas subidas pueden estar en curso a la vez, de principio a fin (verificación previa, nomenclatura, remux, hasheo del torrent y transferencia a eMuwarez). No es solo una cola visual: las demás no dan ni un paso hasta que se libera un hueco. Sin límite las deja correr todas a la vez. El botón «Ver Máximo» estima cuántas puede aguantar este equipo según su RAM y CPU disponibles." />}>
+        <Campo etiqueta="Máximo de subidas en paralelo" info={<InfoIcon text="Cuántas subidas pueden estar en curso a la vez, de principio a fin (verificación previa, nomenclatura, remux, hasheo del torrent y transferencia a eMuwarez). No es solo una cola visual: las demás no dan ni un paso hasta que se libera un hueco. Sin límite las deja correr todas a la vez. El botón «Ver máximo» estima cuántas puede aguantar este equipo según su RAM y CPU disponibles." />}>
           {c => (
             <div className="aj-fila-campo">
               <select {...c} className="form-input form-select" value={uploadMaxConcurrent} onChange={e => setUploadMaxConcurrent(Number(e.target.value))}>
@@ -78,7 +78,7 @@ export function OtrosCard({ form }: { form: ConfigForm }) {
                 onClick={handleTestConcurrency}
                 disabled={testingConcurrency}
               >
-                {testingConcurrency ? 'Consultando…' : 'Ver Máximo'}
+                {testingConcurrency ? 'Consultando…' : 'Ver máximo'}
               </button>
             </div>
           )}

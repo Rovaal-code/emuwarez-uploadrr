@@ -1288,6 +1288,40 @@ optgroup {
   color: var(--text-accent) !important;
 }
 
+/* Subir y bajar de cada fila de SortableList: el camino con el dedo, donde el
+   arrastre nativo no llega a empezar. Solo con (pointer: coarse); ahí la asa
+   se esconde y estos dos ocupan su sitio. */
+.sortable-mover { display: none; }
+.sortable-pista-dedo { display: none; }
+@media (pointer: coarse) {
+  .sortable-pista-raton { display: none; }
+  .sortable-pista-dedo { display: inline; }
+  span.drag-handle[data-asa] { display: none; }
+  .sortable-mover {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .sortable-mover__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-accent);
+    cursor: pointer;
+  }
+  .sortable-mover__btn:disabled {
+    color: var(--text-muted);
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
 /* Hero banner behind a dedicated page's header + poster/cards row, using the
    content's own fanart/backdrop (see components/DetailCard.tsx::DetailHero,
    used identically by Biblioteca/Subidas/Peticiones). The image sits behind

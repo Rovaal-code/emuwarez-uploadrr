@@ -20,7 +20,7 @@ vi.mock('../../api/integrationTests', () => ({
 
 import { setupEmu } from '../../api/setup'
 import { fetchSettings, updateSettings } from '../../api/settings'
-import { testEmuwarezConnection } from '../../api/integrationTests'
+import { testArrConnection, testEmuwarezConnection } from '../../api/integrationTests'
 import { SetupWizard } from '../SetupWizard'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -123,6 +123,41 @@ describe('Asistente de primera configuración', () => {
     expect(contenedor.querySelector<HTMLInputElement>('#setup-campo-4')!.value).toBe('clave-123')
     // La prueba ya hecha sigue valiendo: se puede continuar sin repetirla.
     expect(boton('Continuar')!.disabled).toBe(false)
+  })
+
+  it('«Entiendo, continuar sin añadir instancias» habilita Continuar y se queda para poder desmarcarla', async () => {
+    await montar({ ...ESTADO, emu_configured: true, next_step: 'instances' })
+    expect(titulo()).toContain('Instancias')
+    expect(boton('Continuar')!.disabled).toBe(true)
+    const casilla = () => [...contenedor.querySelectorAll('label')]
+      .find(l => l.textContent?.includes('continuar sin añadir instancias'))?.querySelector('input')
+    await pulsar(casilla()!)
+    expect(boton('Continuar')!.disabled).toBe(false)
+    expect(casilla()?.checked).toBe(true)
+    await pulsar(casilla()!)
+    expect(boton('Continuar')!.disabled).toBe(true)
+  })
+
+  it('al añadir una instancia, cada error sale en su campo, marcado como inválido', async () => {
+    await montar({ ...ESTADO, emu_configured: true, next_step: 'instances' })
+    await escribir(contenedor.querySelector<HTMLInputElement>('#setup-campo-8')!, 'ftp://mal')
+    await pulsar(boton('+ Añadir instancia')!)
+    const nombre = contenedor.querySelector<HTMLInputElement>('#setup-campo-7')!
+    const url = contenedor.querySelector<HTMLInputElement>('#setup-campo-8')!
+    expect(nombre.getAttribute('aria-invalid')).toBe('true')
+    expect(nombre.closest('.form-group')?.textContent).toContain('Escribe un nombre.')
+    expect(url.closest('.form-group')?.textContent).toContain('La URL debe empezar por http://')
+    expect(contenedor.querySelector<HTMLInputElement>('#setup-campo-9')!.getAttribute('aria-invalid')).toBe('true')
+    expect(testArrConnection).not.toHaveBeenCalled()
+  })
+
+  it('probar la key de eMuwarez vacía no saca la alerta roja: el resultado ya dice «Sin configurar»', async () => {
+    vi.mocked(testEmuwarezConnection).mockResolvedValue({ ok: false, service: 'emuwarez', status: 'not_configured', message: '' })
+    await montar()
+    await pulsar(boton('Probar conexión')!)
+    expect(contenedor.textContent).toContain('Sin configurar')
+    expect(alertas().join(' ')).not.toContain('La key no ha pasado la prueba.')
+    expect(contenedor.textContent).toContain('Pulsa «Probar conexión»: hace falta una key de eMuwarez válida para seguir.')
   })
 
   it('tras recargar en un paso posterior no ofrece volver a uno sin su prueba hecha', async () => {

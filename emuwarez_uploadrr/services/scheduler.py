@@ -232,8 +232,20 @@ def _run_library_sync(conn: sqlite3.Connection) -> tuple[str, str]:
         return "skipped", "Ya hay una sincronización de biblioteca en marcha"
     summary = f"{result['imported']} elementos importados, {result['missing']} no disponibles"
     if result.get("errors"):
-        summary += f" ({len(result['errors'])} instancia(s) con error)"
+        n = len(result["errors"])
+        summary += f" ({n} {'instancia' if n == 1 else 'instancias'} con error)"
     return result.get("status", "completed"), summary
+
+
+def _tamano_legible(n_bytes: int) -> str:
+    """El tamaño como lo enseña la interfaz (formatBytes del frontend): unidad adaptada y coma decimal, «37,2 KB»."""
+    valor = float(n_bytes)
+    unidades = ["B", "KB", "MB", "GB", "TB"]
+    i = 0
+    while valor >= 1024 and i < len(unidades) - 1:
+        valor /= 1024
+        i += 1
+    return f"{valor:.1f}".replace(".", ",") + f"\u00a0{unidades[i]}"
 
 
 def _run_emu_sync(conn: sqlite3.Connection) -> tuple[str, str]:
@@ -337,11 +349,12 @@ def _run_backup(conn: sqlite3.Connection) -> tuple[str, str]:
         )
         if not r["ok"]:
             return "failed", r["error"]
-        resumen = f"Copia {r['archive_name']} ({r['size_bytes'] / 1_048_576:.1f} MB)"
+        resumen = f"Copia {r['archive_name']} ({_tamano_legible(r['size_bytes'])})"
         if r["include_secrets"]:
             resumen += " con claves"
         if r["retiradas"]:
-            resumen += f"; {len(r['retiradas'])} automática(s) antigua(s) retirada(s)"
+            n = len(r["retiradas"])
+            resumen += f"; {n} {'automática antigua retirada' if n == 1 else 'automáticas antiguas retiradas'}"
         return "completed", resumen
 
     return _con_registro(conn, TASK_BACKUP, trabajo)

@@ -268,10 +268,12 @@
 .setup-wizard-wrap {
   min-height: var(--vh100);
   display: flex;
-  align-items: center;
+  /* Arriba y no centrado: el logo y la barra de pasos se quedan quietos de un
+     paso a otro, y solo crece la tarjeta. */
+  align-items: flex-start;
   justify-content: center;
   background: var(--bg-base);
-  padding: 20px;
+  padding: clamp(24px, 8vh, 72px) 20px 20px;
 }
 
 .setup-wizard {
@@ -406,10 +408,12 @@
 .login-wrap {
   min-height: var(--vh100);
   display: flex;
-  align-items: center;
+  /* Arriba y no centrado: el logo y la barra de pasos se quedan quietos de un
+     paso a otro, y solo crece la tarjeta. */
+  align-items: flex-start;
   justify-content: center;
   background: var(--bg-base);
-  padding: 20px;
+  padding: clamp(24px, 8vh, 72px) 20px 20px;
 }
 
 /* Fondo, borde, esquinas y sombra de la tarjeta los pone `.hud-app .login-card` (hud-theme.css). */
@@ -532,9 +536,6 @@
 }
 
 /* Tarjeta «Widget para Homepage» de Configuración. */
-.widget-nota {
-  margin: 0 0 12px;
-}
 .widget-clave {
   display: flex;
   flex-wrap: wrap;
@@ -569,7 +570,8 @@
   min-height: 0;
   overflow-y: visible;
 }
-.settings-config-grid .provider-card__add-btn {
+.settings-config-grid .provider-card__add-btn,
+.wizard-card .provider-card__add-btn {
   margin-top: 10px;
 }
 

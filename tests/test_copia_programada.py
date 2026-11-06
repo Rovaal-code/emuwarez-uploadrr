@@ -5,6 +5,7 @@ N18 de la revisión de 2026-10-31.
 from __future__ import annotations
 
 import os
+import re
 import stat
 import tarfile
 from pathlib import Path
@@ -38,7 +39,9 @@ def test_la_tarea_programada_crea_la_copia_y_aplica_la_retencion(isolated_db):
         run = run_scheduled_task(conn, TASK_BACKUP, manual=True)
 
         assert run["status"] == "completed"
-        assert "emuwarez_config_auto_" in run["summary"] and "3 automática(s) antigua(s) retirada(s)" in run["summary"]
+        assert "emuwarez_config_auto_" in run["summary"] and "3 automáticas antiguas retiradas" in run["summary"]
+        # El tamaño como en Backup: coma decimal y unidad adaptada, no «0.0 MB» para una copia de unos KB.
+        assert re.search(r"\(\d+,\d\u00a0(B|KB|MB)\)", run["summary"]), run["summary"]
         assert len(list(carpeta.glob("emuwarez_config_auto_*"))) == 7
         assert get_scheduled_task(conn, TASK_BACKUP)["run_at"] == "03:30"
         assert conn.execute("SELECT status FROM task_runs WHERE name = ?", (TASK_BACKUP,)).fetchone()[0] == "completed"

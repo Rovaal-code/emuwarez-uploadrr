@@ -22,7 +22,7 @@ const TAREA: ScheduledTask = {
   interval_minutes: 60, min_interval_minutes: 60, run_at: null, timezone: 'Europe/Madrid',
   opciones: [{ clave: 'dias', etiqueta: 'Días que se conservan', valor: 7, minimo: 1, maximo: 30, nota: '' }],
   manual_allowed: false, enabled: true, last_run_at: null, last_status: 'failed',
-  last_summary: 'No hay API Key de eMuwarez configurada', next_run_at: null,
+  last_summary: 'No hay API key de eMuwarez configurada', next_run_at: null,
 }
 
 let raiz: Root

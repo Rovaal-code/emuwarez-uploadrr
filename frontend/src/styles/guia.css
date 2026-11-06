@@ -200,7 +200,9 @@
 .guia-veredicto-blocked { color: var(--color-error); }
 .guia-veredicto-warn { color: var(--color-warning); }
 
-/* Con menos de 1100px no cabe la lista al lado: las secciones pasan a una fila que se desplaza. */
+/* Con menos de 1100px no cabe la lista al lado: las secciones pasan arriba, en filas (las seis caben en dos, como
+   el índice de Configuración). Solo en el móvil van en una fila que se desplaza, con el borde desvanecido que
+   avisa de que hay más. */
 @media (max-width: 1099px) {
   .guia-cuerpo {
     grid-template-columns: minmax(0, 1fr);
@@ -210,10 +212,8 @@
   .guia-pestanas {
     position: static;
     flex-direction: row;
+    flex-wrap: wrap;
     gap: 6px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    scrollbar-width: thin;
   }
   .btn.guia-pestana,
   .guia-pestana {
@@ -225,6 +225,17 @@
     padding: 7px 14px;
   }
   }
+
+@media (max-width: 768px) {
+  .guia-pestanas {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent);
+    mask-image: linear-gradient(to right, black 85%, transparent);
+  }
+}
 
 @media (max-width: 520px) {
   .detail-card.guia-panel { padding: 16px 14px; }

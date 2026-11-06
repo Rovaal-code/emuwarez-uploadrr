@@ -10,7 +10,7 @@ import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testQbit
 import { ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
-import { SortableList, DragHandleIcon, type DragHandleProps } from '../components/SortableList'
+import { SortableList, DragHandleIcon, PistaReordenar, type DragHandleProps } from '../components/SortableList'
 import { InfoIcon } from '../components/InfoIcon'
 import { ExternalLinkButtonIcon } from '../components/DetailCard'
 import { REGION_OPTIONS } from '../constants/regionLanguage'
@@ -19,11 +19,12 @@ import type { SetupStep } from '../types/domain'
 import type { SetupStatusResponse } from '../types/api'
 import { emuTestCooldownSeconds } from '../utils/integrationResult'
 import { isValidHttpUrl } from '../utils/validation'
+import { validarInstancia, type ErroresDeCampo } from '../utils/instancias'
 import { useCooldown } from '../hooks/useCooldown'
 import { HoverTitle } from '../components/Tooltip'
 import { EMU_URL } from '../constants/emu'
-import { IconoOjo, IconoUsuario } from '../components/Iconos'
-import { ResultadoPrueba } from './ajustes/Campo'
+import { IconoAviso, IconoCerrar, IconoOjo, IconoUsuario } from '../components/Iconos'
+import { Campo, ResultadoPrueba, enfocarPrimerError } from './ajustes/Campo'
 
 // Mirrors validate_password_strength() in web/security.py exactly (same
 // regexes) so the checklist never drifts from what the backend enforces.
@@ -303,6 +304,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [instancesGuardadas, setInstancesGuardadas] = useState(0)
   const [instDraft, setInstDraft] = useState<Partial<InstanceDraft>>({ type: 'radarr', is_4k: false, is_anime: false })
   const [instError, setInstError] = useState<string | null>(null)
+  // Los errores de cada campo, en su propio campo (los mismos que en Instancias).
+  const [instErrores, setInstErrores] = useState<ErroresDeCampo>({})
   const [instAckSkip, setInstAckSkip] = useState(false)
   const [instPathAckSkip, setInstPathAckSkip] = useState(false)
 
@@ -417,10 +420,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   async function addInstance() {
     setInstError(null)
-    if (!instDraft.name?.trim()) { setInstError('El nombre es obligatorio'); return }
-    if (!instDraft.url?.trim()) { setInstError('La URL es obligatoria'); return }
-    if (!isValidHttpUrl(instDraft.url)) { setInstError('La URL debe empezar por http:// o https:// e incluir un host válido'); return }
-    if (!instDraft.api_key?.trim()) { setInstError('La API key es obligatoria'); return }
+    const errores = validarInstancia(instDraft, true)
+    setInstErrores(errores)
+    if (Object.keys(errores).length > 0) { enfocarPrimerError('.setup-caja'); return }
     // Always re-test right before adding (not just when "Probar conexión" was
     // clicked separately) — otherwise a well-formed but unreachable/wrong
     // instance got added silently, only failing much later when a sync ran.
@@ -527,8 +529,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   // eMuwarez-dependent feature (sync, requests, catalog) silently can't work.
   const emuCanContinue = Boolean(emuTestResult?.ok)
   // Las ya guardadas cuentan: al volver atrás a este paso salen del borrador, pero existen.
-  const instancesCanContinue = instances.length > 0 || instancesGuardadas > 0
-    || setupStatus.radarr_instances + setupStatus.sonarr_instances > 0 || instAckSkip
+  const hayInstancias = instances.length > 0 || instancesGuardadas > 0
+    || setupStatus.radarr_instances + setupStatus.sonarr_instances > 0
+  // El aviso depende solo de si hay instancias: «Entiendo» habilita Continuar, pero
+  // el aviso y su casilla se quedan, para poder desmarcarla.
+  const instancesCanContinue = hayInstancias || instAckSkip
   const tmdbCanContinue = Boolean(tmdbTestResult?.ok)
 
   return (
@@ -650,8 +655,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </button>
                 <ResultadoPrueba resultado={emuTestResult} />
               </div>
-              {/* Antes de probar es una indicación, no un error: el usuario aún no ha hecho nada mal. */}
-              {!emuCanContinue && (emuTestResult?.ok === false ? (
+              {/* Antes de probar es una indicación, no un error: el usuario aún no ha hecho nada mal. Probar con la
+                  key vacía tampoco lo es: el resultado ya dice «Sin configurar» en ámbar. */}
+              {!emuCanContinue && (emuTestResult?.ok === false && emuTestResult.status !== 'not_configured' ? (
                 <div role="alert" className="alert alert-error setup-mt-10">
                   La key no ha pasado la prueba. Sin una key de eMuwarez válida no se puede continuar: revísala y
                   vuelve a pulsar «Probar conexión».
@@ -690,7 +696,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                         className="btn btn-ghost btn-sm"
                         aria-label={`Quitar ${inst.name}`}
                         onClick={() => setInstances(prev => prev.filter(i => i.id !== inst.id))}
-                      >✕</button>
+                      ><IconoCerrar size={14} /></button>
                     </div>
                   ))}
                 </div>
@@ -718,18 +724,15 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   ))}
                 </div>
                 <div className="setup-dos-col">
-                  <div className="form-group">
-                    <label htmlFor="setup-campo-7" className="form-label">Nombre</label>
-                    <input id="setup-campo-7" className="form-input" autoComplete="off" placeholder={instDraft.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={instDraft.name ?? ''} onChange={e => setInstDraft(p => ({ ...p, name: e.target.value }))} />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="setup-campo-8" className="form-label">URL</label>
-                    <input id="setup-campo-8" className="form-input" type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder={instDraft.type === 'sonarr' ? 'http://192.168.1.100:8989' : 'http://192.168.1.100:7878'} value={instDraft.url ?? ''} onChange={e => setInstDraft(p => ({ ...p, url: e.target.value }))} />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="setup-campo-9" className="form-label">API key</label>
-                    <input id="setup-campo-9" className="form-input" type="password" autoComplete="off" placeholder="API key" value={instDraft.api_key ?? ''} onChange={e => setInstDraft(p => ({ ...p, api_key: e.target.value }))} />
-                  </div>
+                  <Campo id="setup-campo-7" etiqueta="Nombre" error={instErrores.name}>
+                    {c => <input {...c} className="form-input" autoComplete="off" placeholder={instDraft.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={instDraft.name ?? ''} onChange={e => setInstDraft(p => ({ ...p, name: e.target.value }))} />}
+                  </Campo>
+                  <Campo id="setup-campo-8" etiqueta="URL" error={instErrores.url}>
+                    {c => <input {...c} className="form-input" type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder={instDraft.type === 'sonarr' ? 'http://192.168.1.100:8989' : 'http://192.168.1.100:7878'} value={instDraft.url ?? ''} onChange={e => setInstDraft(p => ({ ...p, url: e.target.value }))} />}
+                  </Campo>
+                  <Campo id="setup-campo-9" etiqueta="API key" error={instErrores.api_key}>
+                    {c => <input {...c} className="form-input" type="password" autoComplete="off" placeholder="API key" value={instDraft.api_key ?? ''} onChange={e => setInstDraft(p => ({ ...p, api_key: e.target.value }))} />}
+                  </Campo>
                 </div>
                 <div className="setup-checks">
                   <label className="checkbox-label">
@@ -739,7 +742,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                     <input type="checkbox" checked={instDraft.is_anime ?? false} onChange={e => setInstDraft(p => ({ ...p, is_anime: e.target.checked }))} /> Anime
                   </label>
                 </div>
-                {instError && <div className="form-error setup-mt-8">{instError}</div>}
+                {instError && <div role="alert" className="form-error setup-mt-8">{instError}</div>}
                 <div className="setup-fila-acciones">
                   <button className="btn btn-secondary btn-sm" onClick={addInstance} disabled={instTesting} type="button">
                     {instTesting ? 'Comprobando…' : '+ Añadir instancia'}
@@ -751,7 +754,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </div>
                 {instTestResult?.ok && instTestResult.details?.content_visible === false && (
                   <div role="alert" className="alert alert-error setup-mt-10">
-                    ⚠ La conexión funciona, pero eMuwarez Uploadrr <strong>no puede ver el contenido</strong> de
+                    <IconoAviso /> La conexión funciona, pero eMuwarez Uploadrr <strong>no puede ver el contenido</strong> de
                     esta instancia: sus carpetas raíz no están accesibles desde aquí (probablemente el volumen de
                     medios no está montado igual que en Radarr/Sonarr).
                     {Array.isArray(instTestResult.details?.root_folders) && (
@@ -771,7 +774,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 )}
               </div>
               {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
-              {!instancesCanContinue && (
+              {!hayInstancias && (
                 <div className="alert alert-warning setup-mt-10">
                   Todavía no has añadido ninguna instancia. Si continúas sin añadir ninguna, la biblioteca
                   no tendrá contenido que cruzar hasta que la corrijas más tarde en Configuración.
@@ -819,7 +822,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <CampoClave id="setup-campo-10" value={tmdbKey} onChange={v => { setTmdbKey(v); setTmdbTestResult(null) }} placeholder="API key de TMDb" />
                   <div className="setup-enlace-fila">
                     <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer" className="hover-link setup-t115">
-                      Cómo obtener una API KEY en TMDB
+                      Cómo obtener una API key en TMDb
                     </a>
                     <InfoIcon text="1. Crea una cuenta gratuita en themoviedb.org. 2. Ve a Configuración → API (el enlace de arriba). 3. Solicita una key de tipo 'Developer' rellenando el formulario (uso personal/no comercial). 4. Copia la 'Clave de API (v3 auth)' y pégala aquí." />
                   </div>
@@ -841,7 +844,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </button>
                 <ResultadoPrueba resultado={tmdbTestResult} />
               </div>
-              {!tmdbCanContinue && (tmdbTestResult?.ok === false ? (
+              {!tmdbCanContinue && (tmdbTestResult?.ok === false && tmdbTestResult.status !== 'not_configured' ? (
                 <div role="alert" className="alert alert-error setup-mt-10">
                   La key no ha pasado la prueba. TMDb es obligatorio, así que este paso no se puede saltar: revísala
                   y vuelve a pulsar «Probar conexión».
@@ -911,8 +914,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
             <>
               <div className="wizard-step-desc">
                 Cuando el mismo contenido está disponible en varias plataformas de streaming (Amazon,
-                Netflix, Disney+...), esta prioridad decide cuál recomendar automáticamente para la subida.
-                Arrastra para reordenar (o usa las flechas desde el asa de cada fila): los de arriba tienen preferencia. Cada proveedor tiene su propio
+                Netflix, Disney+...), esta prioridad decide cuál recomendar automáticamente para la subida.{' '}
+                <PistaReordenar raton="Arrastra para reordenar (o usa las flechas desde el asa de cada fila):" dedo="Reordena con las flechas de cada fila:" /> los de arriba tienen preferencia. Cada proveedor tiene su propio
                 icono para reconocerlo de un vistazo.
               </div>
               <ProviderPriorityPicker order={nomProviderOrder} onChange={handleNomProviderOrderChange} linkIcons={false} />
@@ -932,7 +935,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
             const activos = imgEnabled.filter(id => id !== 'imgbox' && imgAvailable.some(h => h.id === id))
             const resto = imgAvailable.filter(h => !activos.includes(h.id))
               .sort((a, b) => Number(b.id === 'imgbox') - Number(a.id === 'imgbox'))
-            const fila = (id: string, asa?: DragHandleProps) => {
+            const fila = (id: string, asa?: DragHandleProps, botones?: React.ReactNode) => {
               const h = imgAvailable.find(x => x.id === id); if (!h) return null
               const enabled = imgEnabled.includes(h.id)
               const isDefault = h.id === 'imgbox'
@@ -949,10 +952,14 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                         style={asa.style}
                       ><DragHandleIcon /></HoverTitle>
                     ) : <span className="setup-hueco" />}
-                    <input type="checkbox" aria-label={`Usar ${h.label}`} checked={enabled || isDefault} disabled={isDefault}
-                      onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [h.id, ...p])} />
-                    <Favicon domain={domainOf(h.url)} size={14} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={14} />} />
-                    <span className="setup-t13">{h.label}</span>
+                    {botones}
+                    {/* Casilla, icono y nombre en una etiqueta: tocar el nombre marca la casilla. */}
+                    <label className="setup-host-etiqueta">
+                      <input type="checkbox" aria-label={`Usar ${h.label}`} checked={enabled || isDefault} disabled={isDefault}
+                        onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [h.id, ...p])} />
+                      <Favicon domain={domainOf(h.url)} size={14} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={14} />} />
+                      <span className="setup-t13">{h.label}</span>
+                    </label>
                     {isDefault && <span className="badge status-available">por defecto</span>}
                     {h.needs_key && <span className="badge nom-na">API key</span>}
                     {(enabled || isDefault) && (
@@ -974,11 +981,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
             return (
             <>
               <div className="wizard-step-desc">
-                Dónde suben las capturas que acompañan al torrent. Se prueban en este orden: arrastra los activos para reordenarlos, o usa las flechas desde su asa. <strong>imgbox</strong>, sin key, va siempre el último.
+                Dónde suben las capturas que acompañan al torrent. Se prueban en este orden: <PistaReordenar raton="arrastra los activos para reordenarlos, o usa las flechas desde su asa." dedo="reordena los activos con las flechas de cada fila." /> <strong>imgbox</strong>, sin key, va siempre el último.
               </div>
               <div className="wizard-fields setup-gap-8">
                 <SortableList etiqueta={id => imgAvailable.find(h => h.id === id)?.label ?? id} ids={activos} onChange={setImgEnabled} gap={8}
-                  renderRow={(id, _idx, { handleProps }) => fila(id, handleProps)} />
+                  renderRow={(id, _idx, { handleProps, botones }) => fila(id, handleProps, botones)} />
                 {resto.map(h => <div key={h.id}>{fila(h.id)}</div>)}
               </div>
               {error && <div role="alert" className="alert alert-error setup-mt-14">{error}</div>}
@@ -999,7 +1006,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 Haz clic en Completar para inicializar la aplicación y entrar al dashboard.
               </div>
               <div className="alert alert-info">
-                Cualquier paso que hayas saltado (Instancias, TMDb, qBittorent...) se puede configurar más tarde
+                Cualquier paso que hayas saltado (Instancias, qBittorrent, proveedores…) se puede configurar más tarde
                 desde Configuración. Si has añadido instancias Radarr/Sonarr, la primera sincronización se
                 ejecutará desde el dashboard.
               </div>

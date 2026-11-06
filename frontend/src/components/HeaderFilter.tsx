@@ -110,7 +110,7 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
 
   useEffect(() => {
     if (!open) return
-    const onDoc = (e: MouseEvent) => {
+    const onDoc = (e: PointerEvent) => {
       const t = e.target as Node
       if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return
       setOpen(false)
@@ -118,10 +118,10 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
     // Escape devuelve el foco a la cabecera: si no, quien usa el teclado se
     // queda con el foco en una casilla que acaba de desaparecer.
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrar(true) }
-    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('pointerdown', onDoc)
     document.addEventListener('keydown', onEsc)
     return () => {
-      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('pointerdown', onDoc)
       document.removeEventListener('keydown', onEsc)
     }
   }, [open])

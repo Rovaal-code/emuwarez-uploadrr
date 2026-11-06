@@ -9,7 +9,7 @@ import { ProviderTag } from './ProviderIcon'
 import { GrupoDeLaFila, LineaDeCalidad } from './LineaDeCalidad'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import { useTooltip } from './Tooltip'
-import { ValueChip, ValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
+import { ValueChip, PlainValue, ResolutionValueIcon, SourceValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
 import { estadoCastellano, CASTELLANO_INFO } from '../utils/castellano'
 import { IconoDesplegar, IconoTipo } from './Iconos'
 import { CasillaLote } from './lote/CasillaLote'
@@ -182,10 +182,17 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
 
   const indent = depth * 20
   const colSpan = compact ? 11 : 12
+  // Las filas hijas (temporadas y capítulos de una serie abierta) se leen como un nivel más adentro; la marcada
+  // para el lote y la abierta se distinguen sin tocar el alto de la fila.
+  const clasesFila = ['bib-fila', canExpand && 'clickable', depth > 0 && 'bib-fila-hija', expanded && 'bib-fila-abierta', seleccionado && 'bib-fila-marcada']
+    .filter(Boolean).join(' ')
+  // Un capítulo (o una fila anidada) sin póster no reserva el hueco de la carátula: son las filas más numerosas y
+  // sin ella caben el doble en pantalla.
+  const sinMiniatura = !item.poster_url && (item.item_type === 'episode' || depth > 0)
 
   return (
     <>
-      <tr className={canExpand ? 'clickable bib-fila' : 'bib-fila'} onClick={canExpand ? toggle : undefined}>
+      <tr className={clasesFila} onClick={canExpand ? toggle : undefined}>
         <td className="bib-celda-titulo">
           {/* La sangría depende de la profundidad: se queda en línea. */}
           <div className="bib-titulo-fila" style={{ paddingLeft: indent }}>
@@ -216,11 +223,13 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
               // quedar un nivel más adentro que su padre.
               <span className="bib-hueco-triangulo" />
             ) : null}
-            <div className="poster-thumb bib-miniatura">
+            {!sinMiniatura && <div className="poster-thumb bib-miniatura">
               {item.poster_url ? (
                 <img
                   src={posterUrl(item.poster_url, 'w154')}
                   alt=""
+                  width={44}
+                  height={66}
                   loading={priority ? 'eager' : 'lazy'}
                   fetchPriority={priority ? 'high' : 'auto'}
                   className="bib-tarjeta-img"
@@ -231,16 +240,24 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                   <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
                 </span>
               )}
-            </div>
+            </div>}
             <div className="bib-titulo-caja">
-              <div
+              {/* Un enlace de verdad (a /library/:id, la misma ruta que abre la ficha): se llega con el teclado y
+                  se puede abrir en otra pestaña. El clic normal sigue por la ficha de la aplicación. */}
+              <a
+                href={`/library/${item.id}`}
                 className="lib-title-link bib-titulo-enlace"
-                onClick={e => { e.stopPropagation(); onSelect(item) }}
+                onClick={e => {
+                  e.stopPropagation()
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+                  e.preventDefault()
+                  onSelect(item)
+                }}
                 {...titleTip}
               >
                 <DetailTitleText title={listDisplayTitle(item)} />
                 {titleTooltip}
-              </div>
+              </a>
               <LineaDeCalidad item={item} />
             </div>
           </div>
@@ -257,10 +274,16 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
             : <span className="bib-guion">—</span>}
         </td>
         <td><StatusBadge status={item.local_status} type="local" /></td>
-        <td><StatusBadge status={item.request_status} type="request" /></td>
+        <td className="bib-nowrap">
+          {/* «Sin petición» es lo normal y llenaba la columna de insignias grises: se queda en un guion, y la
+              insignia solo sale cuando hay algo que mirar. */}
+          {item.request_status === 'Sin petición'
+            ? <span className="bib-guion" role="img" aria-label="Sin petición" title="Sin petición">—</span>
+            : <StatusBadge status={item.request_status} type="request" />}
+        </td>
         <td className="bib-nowrap">
           {item.resolution
-            ? <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.resolution}</span></ValueChip>
+            ? <PlainValue icon={<ResolutionValueIcon />}>{item.resolution}</PlainValue>
             : <span className="bib-guion">—</span>}
         </td>
         <td className="bib-nowrap">
@@ -270,7 +293,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         </td>
         <td className="bib-nowrap">
           {item.source
-            ? <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source}</span></ValueChip>
+            ? <PlainValue icon={<SourceValueIcon />}>{item.source}</PlainValue>
             : <span className="bib-guion">—</span>}
         </td>
         <td className="bib-nowrap"><GrupoDeLaFila item={item} /></td>
@@ -278,7 +301,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         <td className="bib-nowrap"><EmuStatusCell item={item} /></td>
         <td className="bib-nowrap">
           {item.size_bytes
-            ? <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
+            ? <PlainValue icon={<SizeValueIcon />}>{formatBytes(item.size_bytes)}</PlainValue>
             : <span className="bib-guion">—</span>}
         </td>
         {!compact && (

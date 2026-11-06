@@ -6,6 +6,7 @@ import type { LibraryItemResponse } from '../../types/api'
 import { formatNumero } from '../../utils/format'
 import { listDisplayTitle } from '../../utils/libraryItem'
 import { MAX_ELEMENTOS_LOTE, razonNoSubible } from '../../utils/lote'
+import { IconoAviso } from '../Iconos'
 
 const calidad = (item: LibraryItemResponse) => [item.resolution, item.source].filter(Boolean).join(' ')
 
@@ -69,7 +70,7 @@ export function PasoContenidoLote({
                 <span className="lote-fila-titulo">{listDisplayTitle(item)}</span>
               </label>
               <span className="lote-fila-tipo">{TIPO[item.item_type] ?? item.item_type}</span>
-              {calidad(item) && <span className="lote-fila-calidad">{calidad(item)}</span>}
+              <span className="lote-fila-calidad">{calidad(item)}</span>
               {suyas.length === 1 && <span className="lote-fila-peticion">Petición #{suyas[0]}</span>}
               {suyas.length > 1 && (
                 <select
@@ -81,7 +82,7 @@ export function PasoContenidoLote({
                   {suyas.map(p => <option key={p} value={p}>Petición #{p}</option>)}
                 </select>
               )}
-              {razon && <span className="lote-motivo">{razon}</span>}
+              {razon && <span className="lote-motivo"><IconoAviso /> {razon}</span>}
             </li>
           )
         })}

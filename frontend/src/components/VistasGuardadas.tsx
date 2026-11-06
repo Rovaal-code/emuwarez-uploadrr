@@ -41,7 +41,9 @@ export function VistasGuardadas({ vistas, actual, onAplicar, onGuardar, onQuitar
         <form className="bib-vista-nueva" onSubmit={e => { e.preventDefault(); guardar() }}>
           <input
             className="form-input bib-vista-nombre-campo"
-            placeholder="Nombre de la vista"
+            name="nombre-vista"
+            autoComplete="off"
+            placeholder="Ej.: Sin subir en 1080p…"
             aria-label="Nombre de la vista"
             maxLength={MAX_NOMBRE_VISTA}
             value={nombre}

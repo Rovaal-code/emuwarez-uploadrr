@@ -44,7 +44,8 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
   return (
     <div className="hijos-seccion">
       <div className="hijos-titulo">
-        {title}
+        <h2 className="hijos-nombre">{title}</h2>
+        {!loading && children.length > 0 && <span className="hijos-cuenta">{children.length}</span>}
         {/* La flecha apunta a donde va a ir la tabla: arriba para comerse el
             hueco de la ficha, abajo para devolvérselo. Mismo .tree-expander
             que el desplegable de las filas en la lista, para que se lea como

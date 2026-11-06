@@ -11,7 +11,7 @@ export function especificaciones(item: LibraryItemResponse): string[] {
 export function GrupoDeLaFila({ item }: { item: LibraryItemResponse }) {
   const grupos = gruposDeRelease(item)
   return grupos.length > 0
-    ? <GruposDeRelease grupos={grupos} junto />
+    ? <GruposDeRelease grupos={grupos} junto plano />
     : <span className="bib-rg-ninguno">sin grupo</span>
 }
 

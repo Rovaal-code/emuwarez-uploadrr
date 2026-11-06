@@ -193,6 +193,8 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
           {buscador && (
             <input
               type="search"
+              name="buscar-valor"
+              autoComplete="off"
               className="form-input hf-search"
               placeholder="Buscar…"
               aria-label={`Buscar en ${label}`}

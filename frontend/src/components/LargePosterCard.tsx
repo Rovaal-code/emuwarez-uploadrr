@@ -2,6 +2,7 @@ import { memo } from 'react'
 import type { LibraryItemResponse } from '../types/api'
 import { PosterStatusIcon } from './PosterStatusIcon'
 import { posterUrl } from '../utils/libraryItem'
+import { formatBytes, formatItemType } from '../utils/format'
 import { IconoTipo } from './Iconos'
 import { CasillaLote } from './lote/CasillaLote'
 import { seleccionableEnLote } from '../utils/lote'
@@ -32,7 +33,9 @@ export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, p
         {item.poster_url ? (
           <img
             src={posterUrl(item.poster_url, 'w342')}
-            alt={item.title}
+            alt=""
+            width={342}
+            height={513}
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
             className="poster-grande-img"
@@ -43,6 +46,8 @@ export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, p
             <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
           </div>
         )}
+        {/* El botón de verdad que abre la ficha: se llega con el teclado y el lector dice qué es. */}
+        <button type="button" className="poster-grande-abrir" aria-label={`Abrir la ficha de ${item.year ? `${item.title} (${item.year})` : item.title}`} />
         {onToggle && seleccionableEnLote(item) && (
           <CasillaLote item={item} seleccionado={seleccionado} bloqueada={loteLleno} onAlternar={onToggle} className="lote-casilla-poster" />
         )}
@@ -52,7 +57,8 @@ export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, p
         <div className="poster-grande-pie">
           <div className="poster-grande-titulo">{item.title}</div>
           <div className="poster-grande-anio">
-            {item.year ?? '—'}
+            {[formatItemType(item.item_type), item.year, item.resolution, item.size_bytes ? formatBytes(item.size_bytes) : null]
+              .filter(Boolean).join(' · ')}
           </div>
         </div>
       </div>

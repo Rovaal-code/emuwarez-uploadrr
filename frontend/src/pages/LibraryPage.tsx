@@ -21,6 +21,7 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { HeaderSort } from '../components/HeaderSort'
 import { FilasVirtuales, RejillaVirtual } from '../components/FilasVirtuales'
 import { posterUrl } from '../utils/libraryItem'
+import { formatItemType } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { hayAlgunFiltro, necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
 import { hayMasQueCargar, textoDeResultados, unirPagina } from '../utils/paginacionBiblioteca'
@@ -30,6 +31,7 @@ import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { IconoLibros, IconoTipo } from '../components/Iconos'
 import { formatNumero } from '../utils/format'
 import { VistasGuardadas } from '../components/VistasGuardadas'
+import { SelectorDeVista, type ModoDeVista } from '../components/SelectorDeVista'
 import { BarraLote } from '../components/lote/BarraLote'
 import { CasillaLote } from '../components/lote/CasillaLote'
 import { SubidaPorLotesModal } from '../components/lote/SubidaPorLotesModal'
@@ -51,7 +53,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
 
-type ViewMode = 'grid' | 'grid-lg' | 'list'
+type ViewMode = ModoDeVista
 
 function loadViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
@@ -73,6 +75,9 @@ const LIST_ROW_HEIGHT = 77
 const LIST_COLUMNS = 12
 const claveDeItem = (it: LibraryItemResponse) => it.id
 
+// Lo que dice el lector de pantalla de una tarjeta: «Título (año)».
+const tituloDeTarjeta = (it: LibraryItemResponse) => (it.year ? `${it.title} (${it.year})` : it.title)
+
 // Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
 // new function identity every render, defeating memo — so this takes a
 // stable onSelect (openDetail, itself wrapping setSelected) and calls it with `item` internally.
@@ -86,28 +91,41 @@ const PosterCard = memo(function PosterCard({ item, onSelect, priority, seleccio
   loteLleno?: boolean
   onToggle?: (item: LibraryItemResponse) => void
 }) {
+  const nombre = tituloDeTarjeta(item)
   return (
     <div
       className={seleccionado ? 'clickable bib-tarjeta lote-marcada' : 'clickable bib-tarjeta'}
       onClick={() => onSelect(item)}
     >
       <div className="bib-tarjeta-marco">
-        {onToggle && seleccionableEnLote(item) && (
-          <CasillaLote item={item} seleccionado={seleccionado} bloqueada={loteLleno} onAlternar={onToggle} className="lote-casilla-poster" />
-        )}
         {item.poster_url ? (
           <img
             src={posterUrl(item.poster_url, 'w342')}
-            alt={item.title}
+            alt=""
+            width={342}
+            height={513}
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
             className="bib-tarjeta-img"
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
+          // Sin póster la tarjeta diría solo «un icono»: el nombre sale siempre.
           <div className="bib-tarjeta-sin-img">
             <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
+            <span className="bib-tarjeta-sin-nombre">{item.title}</span>
           </div>
+        )}
+        {/* El botón de verdad es el que abre la ficha: con teclado se llega a él y el lector dice qué es. El nombre
+            sale al pasar el ratón o al enfocar (y siempre en una pantalla táctil). */}
+        <button type="button" className="bib-tarjeta-abrir" aria-label={`Abrir la ficha de ${nombre}`}>
+          <span className="bib-tarjeta-pie">
+            <span className="bib-tarjeta-titulo">{item.title}</span>
+            <span className="bib-tarjeta-anio">{[formatItemType(item.item_type), item.year].filter(Boolean).join(' · ')}</span>
+          </span>
+        </button>
+        {onToggle && seleccionableEnLote(item) && (
+          <CasillaLote item={item} seleccionado={seleccionado} bloqueada={loteLleno} onAlternar={onToggle} className="lote-casilla-poster" />
         )}
         <div className="bib-tarjeta-estado">
           <PosterStatusIcon status={item.local_status} />
@@ -754,13 +772,17 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       {/* Search by title + filters + view modes, all on one line */}
       <div className="filters-bar">
         <input
+          type="search"
+          name="buscar"
+          autoComplete="off"
+          aria-label="Buscar título"
           className="form-input bib-buscar"
           placeholder="Buscar título…"
           value={search}
           onChange={e => { setSearch(e.target.value); if (!e.target.value) { setOffset(0) } }}
           onKeyDown={e => e.key === 'Enter' && applyFilters()}
         />
-        <select className="form-input form-select bib-orden" value={sortBy} onChange={e => { setSortBy(e.target.value); setOffset(0) }}>
+        <select className="form-input form-select bib-orden" aria-label="Orden" value={sortBy} onChange={e => { setSortBy(e.target.value); setOffset(0) }}>
           <option value="title_asc">Orden: Título (A-Z)</option>
           <option value="title_desc">Orden: Título (Z-A)</option>
           <option value="updated_desc">Orden: RR (Reciente)</option>
@@ -793,35 +815,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </button>
         )}
         {fallaMas && <span className="text-muted">No se pudieron cargar más filas</span>}
-        <div className="bib-vistas">
-          <Tooltip content="Vista de pósters">
-            <button
-              className={`btn btn-primary btn-sm${viewMode === 'grid' ? '' : ' bib-vista-apagada'}`}
-              onClick={() => setViewMode('grid')}
-              aria-label="Vista de pósters"
-            >
-              ▦
-            </button>
-          </Tooltip>
-          <Tooltip content="Vista de pósters grandes">
-            <button
-              className={`btn btn-primary btn-sm${viewMode === 'grid-lg' ? '' : ' bib-vista-apagada'}`}
-              onClick={() => setViewMode('grid-lg')}
-              aria-label="Vista de pósters grandes"
-            >
-              ▦▦
-            </button>
-          </Tooltip>
-          <Tooltip content="Vista de lista">
-            <button
-              className={`btn btn-primary btn-sm${viewMode === 'list' ? '' : ' bib-vista-apagada'}`}
-              onClick={() => setViewMode('list')}
-              aria-label="Vista de lista"
-            >
-              ☰
-            </button>
-          </Tooltip>
-        </div>
+        <SelectorDeVista modo={viewMode} onCambiar={setViewMode} />
       </div>
 
       {(loading || isPending) && !items.length ? (

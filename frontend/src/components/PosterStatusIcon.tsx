@@ -13,6 +13,7 @@ export function PosterStatusIcon({ status }: { status: string }) {
   const { triggerProps, tooltipNode } = useTooltip(status)
   return (
     <span
+      role="img"
       aria-label={status}
       className="menores-poster-estado"
       style={{ background: color }}

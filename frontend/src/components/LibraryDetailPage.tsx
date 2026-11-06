@@ -15,7 +15,7 @@ import { GruposDeRelease, gruposDeRelease } from './GruposDeRelease'
 import { ServiceLabel } from './ServiceIcon'
 import { useTooltip } from './Tooltip'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle, DetailTitleText,
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DetailHero, DetailTitle, DetailTitleText,
   StatusCardIcon, TechInfoCardIcon, ExternalIdsCardIcon,
   TypeValueIcon, ResolutionValueIcon, SourceValueIcon, VideoCodecValueIcon,
   AudioCodecValueIcon, LanguageValueIcon, SubtitleValueIcon, SizeValueIcon,
@@ -28,6 +28,19 @@ import { Modal } from './Modal'
 // modal and the large card. Rendered in place of the library list, with a
 // back button, a compact header (title + actions, fixed-size poster) and the
 // item's fields grouped into semantic cards instead of one long grid.
+
+// El alto del póster y de las tarjetas de la ficha de Biblioteca. Más bajo que el estándar de las otras fichas
+// (DETAIL_CARD_HEIGHT, 480): las tres tarjetas caben en esto sin hueco debajo, y la tabla de temporadas o capítulos
+// sube a la vista en vez de quedar por debajo del pliegue.
+const ALTO_FICHA = 420
+// Relleno, separación entre filas y bajo el título de cada tarjeta (los de Card, algo más ceñidos).
+const TARJETA = { padding: '17px 18px', gap: 8, titleGap: 11 }
+
+// Un dato técnico: en su ficha con el icono, o un guion si no se sabe. Una ficha vacía («▭ —») pesaba más que el dato.
+function DatoTecnico({ icono, valor, titulo }: { icono: React.ReactNode; valor: string | null | undefined; titulo?: string }) {
+  if (!valor) return <span className="muted">—</span>
+  return <ValueChip title={titulo}><ValueIcon>{icono}</ValueIcon><span className="txt">{valor}</span></ValueChip>
+}
 
 export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction, onOpenRequest }: {
   item: LibraryItemResponse
@@ -108,18 +121,18 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction,
             <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeries)}>Volver a la serie</button>
           )}
         </div>
+      </div>
+
+      {/* El nombre y lo que se hace con él, en la misma línea: las acciones estaban en otra fila, lejos de lo que actúan. */}
+      <div className="bibdet-titulo">
+        <DetailTitle><DetailTitleText title={item.display_title || item.title} /></DetailTitle>
         <div className="bibdet-acciones">
           <LibraryActionButtons
             item={item}
             onAction={onAction}
             title={isRollup ? 'Ver season pack' : undefined}
-           
           />
         </div>
-      </div>
-
-      <div className="bibdet-titulo">
-        <DetailTitle><DetailTitleText title={item.display_title || item.title} /></DetailTitle>
       </div>
 
       {/* Lo que se pliega con la flecha del título de Temporadas/Capítulos: el
@@ -129,13 +142,15 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction,
         <DetailPoster
           url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null}
           alt={item.title}
+          alto={ALTO_FICHA}
           fallbackIcon={<IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />}
         />
 
         <div className="bibdet-tarjetas">
           {/* minHeight sale de DETAIL_CARD_HEIGHT (constante compartida): en línea. */}
-          <div className="bibdet-rejilla" style={{ minHeight: DETAIL_CARD_HEIGHT }}>
-            <Card title="Estado de la biblioteca" icon={<StatusCardIcon />}>
+          {/* El alto mínimo va en una variable para que el CSS lo quite en una pantalla estrecha. */}
+          <div className="bibdet-rejilla" style={{ '--alto-ficha': `${ALTO_FICHA}px` } as React.CSSProperties}>
+            <Card title="Estado de la biblioteca" icon={<StatusCardIcon />} {...TARJETA}>
               <FieldRow label="Tipo">
                 <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{formatItemType(item.item_type)}</span></ValueChip>
               </FieldRow>
@@ -176,9 +191,9 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction,
                 usa la regla del pack. Para enseñar es pobre (una temporada
                 con x264 y x265 salía con un guion), así que la ficha usa la
                 suma de lo que hay debajo: "x264, x265". */}
-            <Card title="Información técnica" icon={<TechInfoCardIcon />}>
+            <Card title="Información técnica" icon={<TechInfoCardIcon />} {...TARJETA}>
               <FieldRow label="Resolución" help={rollupHelp}>
-                <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.resolution || item.resolution || '—'}</span></ValueChip>
+                <DatoTecnico icono={<ResolutionValueIcon />} valor={item.rollup_all?.resolution || item.resolution} />
               </FieldRow>
               <FieldRow label="Proveedor" help={rollupHelp}>
                 {/* Con varios proveedores bajo una temporada se pinta uno por
@@ -195,38 +210,36 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction,
                   : <span className="muted">—</span>}
               </FieldRow>
               <FieldRow label="Source" help={rollupHelp}>
-                <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.source || item.source || '—'}</span></ValueChip>
+                <DatoTecnico icono={<SourceValueIcon />} valor={item.rollup_all?.source || item.source} />
               </FieldRow>
               {/* No lleva `help`: a diferencia del resto, aquí salen los de todos los capítulos, no solo si coinciden. */}
               <FieldRow label="Grupo">
                 <GruposDeRelease grupos={gruposDeRelease(item)} />
               </FieldRow>
               <FieldRow label="Códec de vídeo" help={rollupHelp}>
-                <ValueChip><ValueIcon><VideoCodecValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.video_codec || item.video_codec || '—'}</span></ValueChip>
+                <DatoTecnico icono={<VideoCodecValueIcon />} valor={item.rollup_all?.video_codec || item.video_codec} />
               </FieldRow>
               <FieldRow label="Códec de audio" help={rollupHelp}>
-                <ValueChip><ValueIcon><AudioCodecValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.audio_codec || item.audio_codec || '—'}</span></ValueChip>
+                <DatoTecnico icono={<AudioCodecValueIcon />} valor={item.rollup_all?.audio_codec || item.audio_codec} />
               </FieldRow>
               {/* These two are the only fields that can carry a dozen values
                   (a multi-language release), so they're the ones the card's
                   width truncates — the tooltip is where the full list stays
                   reachable. */}
               <FieldRow label="Idiomas de audio" help={rollupHelp}>
-                <ValueChip title={item.rollup_all?.audio_languages || item.audio_languages || undefined}>
-                  <ValueIcon><LanguageValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.audio_languages || item.audio_languages || '—'}</span>
-                </ValueChip>
+                <DatoTecnico icono={<LanguageValueIcon />} valor={item.rollup_all?.audio_languages || item.audio_languages}
+                  titulo={item.rollup_all?.audio_languages || item.audio_languages || undefined} />
               </FieldRow>
               <FieldRow label="Subtítulos" help={rollupHelp}>
-                <ValueChip title={item.rollup_all?.subtitle_languages || item.subtitle_languages || undefined}>
-                  <ValueIcon><SubtitleValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.subtitle_languages || item.subtitle_languages || '—'}</span>
-                </ValueChip>
+                <DatoTecnico icono={<SubtitleValueIcon />} valor={item.rollup_all?.subtitle_languages || item.subtitle_languages}
+                  titulo={item.rollup_all?.subtitle_languages || item.subtitle_languages || undefined} />
               </FieldRow>
               <FieldRow label="Tamaño">
                 <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
               </FieldRow>
             </Card>
 
-            <Card title="Identificadores externos" icon={<ExternalIdsCardIcon />}>
+            <Card title="Identificadores externos" icon={<ExternalIdsCardIcon />} {...TARJETA}>
               <FieldRow label="TMDb">
                 {item.tmdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('tmdb', item.tmdb_id, isTv))}><ExternalIdLink id={item.tmdb_id} href={idVerifyUrl('tmdb', item.tmdb_id, isTv)} label="TMDb" /></ValueChip> : <span className="muted">—</span>}
               </FieldRow>

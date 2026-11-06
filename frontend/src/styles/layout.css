@@ -157,8 +157,8 @@
   justify-content: space-between;
   padding: 0 24px;
   backdrop-filter: blur(8px);
-  /* Safari < 18 solo entiende el prefijo; sin él la cabecera no ancla el panel fijo de la campana. */
-  -webkit-backdrop-filter: blur(8px);
+  /* Sin `-webkit-backdrop-filter` a mano: lightningcss (el minificador de Vite) ya lo añade para Safari < 18, y si lo
+     escribimos nosotros descarta la propiedad sin prefijo (Chrome y Firefox se quedarían sin desenfoque ni ancla). */
   flex-shrink: 0;
   /* backdrop-filter alone creates a new stacking context for .topbar — so
      without an explicit z-index here, the notif-dropdown's own z-index

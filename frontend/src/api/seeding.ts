@@ -20,6 +20,8 @@ export interface SeedingResponse {
   mensaje: string | null
   actualizado: string | null
   items: SeedingItem[]
+  // La URL con la que el usuario abre la WebUI de qBittorrent (ajuste opcional), ya validada; null si no hay.
+  url_publica?: string | null
 }
 
 // `refresh` se salta la caché de ~60 s del servidor.

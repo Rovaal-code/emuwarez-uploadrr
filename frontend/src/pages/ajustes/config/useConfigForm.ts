@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useUnsavedGuard } from '../../../utils/unsavedGuard'
 import { fetchSettings, updateSettings, type SettingsData } from '../../../api/settings'
 import { usePerfilEmu } from '../../../context/PerfilEmuContext'
-import { isValidHttpUrl } from '../../../utils/validation'
+import { isValidHttpUrl, isValidPublicUrl } from '../../../utils/validation'
 import { MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../../../utils/modoPistas'
 import { useSettingsMessageAdapter } from '../mensajes'
 import { enfocarPrimerError } from '../Campo'
@@ -15,19 +15,20 @@ import { enfocarPrimerError } from '../Campo'
 function configSignature(v: {
   tags: string[]; providerOrder: string[]; region: string
   emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; capturasPorCapitulo: boolean; modoDePistas: ModoPistas; sinCopiasReflink: boolean; sincronizarAlVolver: boolean
-  recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
+  recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitPublicUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string; qbitQui?: string; quitarQui?: boolean; quitarQbitPass?: boolean
 }): Record<string, string> {
   const campos: Record<string, unknown> = {
     tags: v.tags, providerOrder: v.providerOrder, region: v.region, emuUsername: v.emuUsername,
-    ignoreSpecials: v.ignoreSpecials, sourceEngine: v.sourceEngine, addLogo: v.addLogo, capturasPorCapitulo: v.capturasPorCapitulo, modoDePistas: v.modoDePistas, sinCopiasReflink: v.sinCopiasReflink, sincronizarAlVolver: v.sincronizarAlVolver, recentLimit: v.recentLimit, uploadMaxConcurrent: v.uploadMaxConcurrent, qbitUrl: v.qbitUrl, qbitTag: v.qbitTag, qbitUser: v.qbitUser, imgEnabled: v.imgEnabled, allowedRoots: v.allowedRoots,
+    ignoreSpecials: v.ignoreSpecials, sourceEngine: v.sourceEngine, addLogo: v.addLogo, capturasPorCapitulo: v.capturasPorCapitulo, modoDePistas: v.modoDePistas, sinCopiasReflink: v.sinCopiasReflink, sincronizarAlVolver: v.sincronizarAlVolver, recentLimit: v.recentLimit, uploadMaxConcurrent: v.uploadMaxConcurrent, qbitUrl: v.qbitUrl, qbitPublicUrl: v.qbitPublicUrl, qbitTag: v.qbitTag, qbitUser: v.qbitUser, imgEnabled: v.imgEnabled, allowedRoots: v.allowedRoots,
     newKey: v.newKey ?? '', newEmuKey: v.newEmuKey ?? '', qbitPass: v.qbitPass ?? '', qbitQui: v.qbitQui ?? '', quitarQui: v.quitarQui ?? false, quitarQbitPass: v.quitarQbitPass ?? false,
   }
   return Object.fromEntries(Object.entries(campos).map(([k, x]) => [k, JSON.stringify(x)]))
 }
 
 const ERROR_URL_QBIT = 'La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido'
+const ERROR_URL_PUBLICA = 'La URL pública debe empezar por http:// o https://, incluir un host válido y no llevar usuario ni contraseña'
 const ERROR_URL_QUI = 'La URL del proxy de qui debe empezar por http:// o https:// e incluir un host válido'
 
 // Cuántos campos difieren de lo cargado.
@@ -70,6 +71,8 @@ export function useConfigForm() {
   const [recentLimit, setRecentLimit] = useState(100)
   const [uploadMaxConcurrent, setUploadMaxConcurrent] = useState(1)
   const [qbitUrl, setQbitUrl] = useState('')
+  // Cómo abre el usuario la WebUI en su navegador (opcional): solo sirve para el enlace «Abrir en qBittorrent».
+  const [qbitPublicUrl, setQbitPublicUrl] = useState('')
   const [qbitTag, setQbitTag] = useState('')
   const [qbitUser, setQbitUser] = useState('')
   const [qbitPass, setQbitPass] = useState('')
@@ -90,15 +93,16 @@ export function useConfigForm() {
   const tagsAGuardar = borrador && !tags.includes(borrador) ? [...tags, borrador] : tags
   const currentSig = configSignature({
     tags: tagsAGuardar, providerOrder, region, emuUsername,
-    ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, sinCopiasReflink, sincronizarAlVolver, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
+    ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, sinCopiasReflink, sincronizarAlVolver, recentLimit, uploadMaxConcurrent, qbitUrl, qbitPublicUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass, qbitQui, quitarQui, quitarQbitPass,
   })
   const cambios = baseline ? contarCambios(baseline, currentSig) : 0
   // Validación en el sitio: un campo con una URL mal escrita lo dice al salir de él o al intentar guardar.
-  const [tocados, setTocados] = useState<ReadonlySet<'qbitUrl' | 'qbitQui'>>(new Set())
-  const marcarTocado = (campo: 'qbitUrl' | 'qbitQui') => setTocados(t => (t.has(campo) ? t : new Set(t).add(campo)))
+  const [tocados, setTocados] = useState<ReadonlySet<'qbitUrl' | 'qbitQui' | 'qbitPublicUrl'>>(new Set())
+  const marcarTocado = (campo: 'qbitUrl' | 'qbitQui' | 'qbitPublicUrl') => setTocados(t => (t.has(campo) ? t : new Set(t).add(campo)))
   const errores = {
     qbitUrl: tocados.has('qbitUrl') && qbitUrl.trim() && !isValidHttpUrl(qbitUrl) ? ERROR_URL_QBIT : null,
+    qbitPublicUrl: tocados.has('qbitPublicUrl') && qbitPublicUrl.trim() && !isValidPublicUrl(qbitPublicUrl) ? ERROR_URL_PUBLICA : null,
     qbitQui: tocados.has('qbitQui') && qbitQui.trim() && !isValidHttpUrl(qbitQui) ? ERROR_URL_QUI : null,
   }
   const dirty = cambios > 0
@@ -124,6 +128,7 @@ export function useConfigForm() {
         setRecentLimit(s.recent_activity_limit ?? 100)
         setUploadMaxConcurrent(s.upload_max_concurrent ?? 1)
         setQbitUrl(s.qbit_url ?? '')
+        setQbitPublicUrl(s.qbit_public_url ?? '')
         setQbitTag(s.qbit_tag ?? '')
         setQbitUser(s.qbit_username ?? '')
         setImgEnabled(s.image_hosts_enabled ?? [])
@@ -135,7 +140,7 @@ export function useConfigForm() {
           ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, capturasPorCapitulo: s.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(s.remux_track_mode), sinCopiasReflink: s.remux_no_reflink_copies ?? false, sincronizarAlVolver: s.sincronizar_al_volver_instancia ?? true,
           recentLimit: s.recent_activity_limit ?? 100,
           uploadMaxConcurrent: s.upload_max_concurrent ?? 1,
-          qbitUrl: s.qbit_url ?? '', qbitTag: s.qbit_tag ?? '', qbitUser: s.qbit_username ?? '',
+          qbitUrl: s.qbit_url ?? '', qbitPublicUrl: s.qbit_public_url ?? '', qbitTag: s.qbit_tag ?? '', qbitUser: s.qbit_username ?? '',
           imgEnabled: s.image_hosts_enabled ?? [],
           allowedRoots: (s.uploadrr_allowed_roots ?? []).join(', '),
         }))
@@ -173,10 +178,11 @@ export function useConfigForm() {
   async function handleSave() {
     if (!settings) return
     const urlMala = qbitUrl.trim() && !isValidHttpUrl(qbitUrl)
+    const publicaMala = qbitPublicUrl.trim() && !isValidPublicUrl(qbitPublicUrl)
     const quiMala = qbitQui.trim() && !isValidHttpUrl(qbitQui)
-    if (urlMala || quiMala) {
-      setTocados(new Set(['qbitUrl', 'qbitQui']))
-      setMsg({ ok: false, text: urlMala ? ERROR_URL_QBIT : ERROR_URL_QUI })
+    if (urlMala || publicaMala || quiMala) {
+      setTocados(new Set(['qbitUrl', 'qbitPublicUrl', 'qbitQui']))
+      setMsg({ ok: false, text: urlMala ? ERROR_URL_QBIT : publicaMala ? ERROR_URL_PUBLICA : ERROR_URL_QUI })
       enfocarPrimerError('.aj-config')
       return
     }
@@ -202,6 +208,7 @@ export function useConfigForm() {
         recent_activity_limit: recentLimit,
         upload_max_concurrent: uploadMaxConcurrent,
         qbit_url: qbitUrl.trim(),
+        qbit_public_url: qbitPublicUrl.trim(),
         qbit_tag: qbitTag.trim(),
         qbit_username: qbitUser.trim(),
         image_hosts_enabled: imgEnabled,
@@ -229,6 +236,7 @@ export function useConfigForm() {
       setRecentLimit(updated.recent_activity_limit ?? 100)
       setUploadMaxConcurrent(updated.upload_max_concurrent ?? 1)
       setQbitUrl(updated.qbit_url ?? '')
+      setQbitPublicUrl(updated.qbit_public_url ?? '')
       setQbitTag(updated.qbit_tag ?? '')
       setQbitUser(updated.qbit_username ?? '')
       setQbitPass('')
@@ -246,7 +254,7 @@ export function useConfigForm() {
         ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, capturasPorCapitulo: updated.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(updated.remux_track_mode), sinCopiasReflink: updated.remux_no_reflink_copies ?? false, sincronizarAlVolver: updated.sincronizar_al_volver_instancia ?? true,
         recentLimit: updated.recent_activity_limit ?? 100,
         uploadMaxConcurrent: updated.upload_max_concurrent ?? 1,
-        qbitUrl: updated.qbit_url ?? '', qbitTag: updated.qbit_tag ?? '', qbitUser: updated.qbit_username ?? '',
+        qbitUrl: updated.qbit_url ?? '', qbitPublicUrl: updated.qbit_public_url ?? '', qbitTag: updated.qbit_tag ?? '', qbitUser: updated.qbit_username ?? '',
         imgEnabled: updated.image_hosts_enabled ?? [],
         allowedRoots: (updated.uploadrr_allowed_roots ?? []).join(', '),
       }))
@@ -266,7 +274,7 @@ export function useConfigForm() {
     capturasPorCapitulo, setCapturasPorCapitulo, modoDePistas, setModoDePistas,
     sinCopiasReflink, setSinCopiasReflink, sincronizarAlVolver, setSincronizarAlVolver, recentLimit, setRecentLimit,
     uploadMaxConcurrent, setUploadMaxConcurrent,
-    qbitUrl, setQbitUrl, qbitTag, setQbitTag, qbitUser, setQbitUser, qbitPass, setQbitPass,
+    qbitUrl, setQbitUrl, qbitPublicUrl, setQbitPublicUrl, qbitTag, setQbitTag, qbitUser, setQbitUser, qbitPass, setQbitPass,
     quitarQbitPass, setQuitarQbitPass, qbitQui, setQbitQui, quitarQui, setQuitarQui,
     imgEnabled, setImgEnabled, allowedRoots, setAllowedRoots,
   }

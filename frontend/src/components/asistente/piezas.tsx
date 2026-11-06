@@ -87,6 +87,7 @@ export function BotonComparacionSource({ comparison, representativo, onClick }: 
       <button
         type="button"
         onClick={onClick}
+        aria-label="Comparar el source: nombre del archivo, Radarr/Sonarr y MediaInfo"
         className="asist-boton-source"
       >
         <span

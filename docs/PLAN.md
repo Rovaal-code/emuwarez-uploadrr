@@ -536,10 +536,10 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     botón de verdad; su medida sigue fijada solo por `aspect-ratio` (medido con scroll rápido, sin el aviso de `RejillaVirtual`). El título
     de la lista es un enlace real `/library/:id`. La ficha mide 420 px (`DetailPoster` admite `alto`; las otras fichas siguen en 480), pone
     las acciones en la línea del título y pasa las tarjetas a dos columnas por debajo de 1000 px. «Subir por lotes» alinea el paso 1,
-    abre el paso 2 con el recuento (se subirán, se saltarán, por comprobar) y en móvil enseña «Incluir» en cada bloque. **Después, la
-    «petición heredada» en la lista:** una temporada o capítulo sin petición propia que cubre la de su serie o temporada dice «de la
-    serie» / «de la temporada» en la celda (texto atenuado, sin insignia); el estado guardado y el filtro (SQL,
-    `listado._build_library_filter`) no cambian. `requests.peticiones_heredadas` lo resuelve con una consulta por página y `_cubre`. **Sin ver:** `EmuComparisonSection` y `SourceComparisonModal`, el
+    abre el paso 2 con el recuento (se subirán, se saltarán, por comprobar) y en móvil enseña «Incluir» en cada bloque. **Aplazado, la
+    «petición heredada» en la lista:** el filtro es SQL (`listado._build_library_filter`), una serie pedida entera marcaría todos sus
+    capítulos «Compatible» y mostrarla solo en la celda desajusta columna y filtro; si se quiere, una etiqueta «de la serie» solo en la
+    celda, con una consulta por lote de antepasados reutilizando `_cubre`. **Sin ver:** `EmuComparisonSection` y `SourceComparisonModal`, el
     paso 2 del lote con comprobaciones en verde, el contraste AA medido y el lector de pantalla.
   - Asistente de subida, P5 completo (#232): el panel es una columna y solo el cuerpo del paso hace scroll; el pie (Volver, Continuar,
     Subir) queda fijo a 1280×800, 1440×900 y 390×844 (cerrado el detalle del pie cortado de «Siguiente») y el veredicto de las
@@ -580,10 +580,8 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   subidas, salud de *Arr, pruebas de conexión, seeding, manifiesto de versión). Además, una fábrica de `LogRecord` global
   (`web/logging_setup.py`) tapa mensaje, traceback y stack de cualquier registro (app.log, consola, `/api/logs`). `tests/test_errores_sin_claves.py`.
   **Limitaciones:** la fábrica es global al proceso; un secreto sin forma reconocible (ni `clave=valor`, ni cabecera, ni URL) solo se tapa si el
-  sitio le pasa la clave configurada. Suite completa sobre la rama: 4248 pasan, 69 omitidas. **Después:**
-  `tests/test_errores_por_texto_de_error.py` (ast) cierra la puerta: en web/ y services/ el nombre de un `except … as X` no acaba en
-  `str(X)`, `repr(X)`, f-string, `%`, `.format` ni concatenado sin `texto_de_error` (los argumentos de `logger.*` no cuentan, los tapa la
-  fábrica); quedaron 4 sitios permitidos por fichero y función, con su motivo, y se arreglaron los 33 restantes.
+  sitio le pasa la clave configurada; **no hay un test de arquitectura que obligue a usar `texto_de_error` en sitios nuevos**, el siguiente
+  paso si se quiere cerrar la puerta. Suite completa sobre la rama: 4248 pasan, 69 omitidas.
 - **Oleada 4, limpieza tras el rediseño (#236):** fuera `NomenclatureModal`, `NomenclatureFieldsModal` y `UploadPreflightModal` (nada los abría; los
   sustituyó el asistente) con `styles/nomenclatura.css`, las funciones y tipos de `api/` que solo ellos usaban y el CSS huérfano (`.settings-tab`,
   `.fields-grid`, `.preview-*`, fondos de `.login-card`/`.wizard-card` que el HUD pisaba); `test_copias_frontend` ya no exige los tokens de
@@ -591,12 +589,8 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `pointerdown` (iOS). `formatBytes` usa espacio duro. Tras «Borrar lote» con todo borrado, Subidas dice «Este lote ya no tiene subidas» y ofrece
   «Quitar filtro del lote». La franja de cuenta del Panel pierde Mensajes y Notificaciones (están en la barra superior y el cajón) y queda «Mis
   subidas», solo con icono entre 769 y 1400 px para ir en una fila. Los modales ya eran opacos tras #229. **Pendiente:** `--color-tab-active`
-  (globals.css); `pages/ajustes/formatBytes.ts` sigue con espacio
+  (globals.css) y los endpoints de nomenclatura y preflight del backend, sin uso desde la interfaz; `pages/ajustes/formatBytes.ts` sigue con espacio
   normal y otra precisión; `viewport-fit=cover` espera a que el marco trate las safe areas; tablet táctil a 769–1400 px sin probar.
-  **Después:** fuera los endpoints sin uso desde la interfaz: `GET /library/{id}/nomenclature`, `POST …/nomenclature/preview`,
-  `POST …/adapt-nomenclature`, `GET …/nomenclature/operations`, `POST …/upload/preflight` y `GET`/`POST …/nomenclature-check`, con sus
-  modelos, `list_filesystem_operations`, sus tests y `getNomenclatureCheckInfo`/`runNomenclatureCheck` del frontend. Los servicios siguen
-  (la CLI usa propuesta, renombrado y preflight); `nomenclature_check.check_item`/`count_pending` ya solo los llaman los tests.
 
 ## Siguiente
 
@@ -624,12 +618,15 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
 
 ## Aplazado / ideas
 
-- Que el filtro «Petición» de Biblioteca cuente la petición heredada (la celda ya dice «de la serie», ver la entrada de
-  Biblioteca, #230): `request_id` guarda una petición por fila, la que se escribe donde la petición pide.
+- Que la columna «Petición» de la lista de Biblioteca (y su filtro) cuente la petición heredada: hoy la temporada de
+  una serie pedida entera dice «Sin petición» en la lista aunque su ficha enseñe la de la serie. `request_id` guarda
+  una petición por fila, la que se escribe donde la petición pide. Propuesta y razones en la entrada de Biblioteca (#230).
 - `window.confirm` del widget de Homepage (`WidgetCard.tsx`) → `Modal`; virtualizar las listas de Peticiones y Subidas de más de 50 filas;
   una tarjeta por fila en móvil para esas listas; `HoverTitle` es un `div role="link"`; `h1` en el resto de pantallas; `/impeccable init`
   (`PRODUCT.md`/`DESIGN.md`).
 - Recuperar solo el añadido a qBittorrent de una subida que ya estaba en eMuwarez (necesita un cambio en Uploadrr-EMU, otro repo).
+- Una prueba de arquitectura que obligue a pasar por `integrations.base.texto_de_error` el texto de una excepción antes de devolverlo, guardarlo o
+  notificarlo (hoy lo cubren la fábrica de logs y los arreglos de #237, pero un sitio nuevo puede olvidarlo).
 - Probar en el NAS (`:edge`): el límite compartido entre CLI y servidor (`flock` sobre el volumen de `CONFIG_DIR`), el campo y el enlace de
   qBittorrent, y la subida por lotes (ver «Siguiente»).
 

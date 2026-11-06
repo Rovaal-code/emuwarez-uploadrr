@@ -16,13 +16,13 @@ const comparacion = (matches: EmuComparison['matches'], available = true): EmuCo
 
 describe('ficheros', () => {
   it('un fichero con su tamaño', () => {
-    expect(textoFicheros({ bytes: 4_500_000_000 })).toBe('1 fichero · 4,2 GB')
+    expect(textoFicheros({ bytes: 4_500_000_000 })).toBe('1 fichero · 4,2 GB')
   })
   it('sin tamaño no lo inventa', () => {
     expect(textoFicheros({ bytes: null })).toBe('1 fichero')
   })
   it('un pack dice cuántos capítulos y que van en una carpeta', () => {
-    expect(textoFicheros({ esPack: true, capitulosEnPack: 10, bytes: 28_000_000_000 })).toBe('10 capítulos en una carpeta · 26,1 GB')
+    expect(textoFicheros({ esPack: true, capitulosEnPack: 10, bytes: 28_000_000_000 })).toBe('10 capítulos en una carpeta · 26,1 GB')
     expect(textoFicheros({ esPack: true, capitulosEnPack: 1, bytes: null })).toBe('1 capítulo en una carpeta')
     expect(textoFicheros({ esPack: true, bytes: null })).toBe('Pack de temporada en una carpeta')
   })

@@ -32,5 +32,5 @@ export function resumenSeeding(i: SeedingItem): string {
 // formatBytes enseña la raya con 0 bytes; aquí 0 es un dato y la raya es no saberlo.
 export function textoSubido(i: SeedingItem): string {
   if (i.subido == null) return '—'
-  return i.subido === 0 ? '0 B' : formatBytes(i.subido)
+  return i.subido === 0 ? '0\u00A0B' : formatBytes(i.subido)
 }

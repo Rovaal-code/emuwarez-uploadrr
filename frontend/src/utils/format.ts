@@ -21,7 +21,8 @@ export function formatBytes(bytes: number | null | undefined): string {
     value /= 1024
     unit++
   }
-  return `${formatNumero(value, 1)} ${units[unit]}`
+  // Espacio duro (U+00A0): la cifra y la unidad no se separan en dos líneas.
+  return `${formatNumero(value, 1)}\u00A0${units[unit]}`
 }
 
 // Backend timestamps are UTC. Some carry a 'Z'/offset (ISO), others are naive

@@ -51,7 +51,7 @@ describe('la línea de especificaciones', () => {
     const l = lineaDeEspecificaciones(rec({
       resolution: '1080p', source: 'WEB-DL', has_spanish_audio: 1, has_spanish_subs: 1, size_bytes: 6 * 1024 ** 3,
     }))
-    expect(l).toBe('Película · 1080p WEB-DL · castellano · 6,0 GB')
+    expect(l).toBe('Película · 1080p WEB-DL · castellano · 6,0 GB')
   })
 
   it('dice dónde está el castellano cuando solo está en un lado', () => {

@@ -45,7 +45,7 @@ describe('SaludSeeding', () => {
     await esperar(() => texto().includes('Ratio'))
     expect(document.querySelector('[data-testid="celda"]')!.textContent).toBe('Sembrando · ratio 1,50')
     const bloque = document.querySelector('[data-testid="seeding-bloque"]')!.textContent!
-    expect(bloque).toContain('3,0 GB')
+    expect(bloque).toContain('3,0 GB')
     expect(bloque).toContain('100,0 %')
     expect(bloque).toContain('12 / 3')
     expect(bloque).toContain('Leído')

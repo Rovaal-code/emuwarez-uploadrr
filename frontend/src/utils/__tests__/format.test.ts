@@ -11,17 +11,17 @@ import { describe, it, expect } from 'vitest'
 import { formatBytes, formatNumero, parseServerDate, formatDate, timeAgo } from '../format'
 
 describe('tamaños', () => {
-  it('un tamaño vacío o cero es una raya, no "0 B"', () => {
+  it('un tamaño vacío o cero es una raya, no "0 B"', () => {
     expect(formatBytes(null)).toBe('—')
     expect(formatBytes(undefined)).toBe('—')
     expect(formatBytes(0)).toBe('—')
   })
 
   it('escala hasta terabytes', () => {
-    expect(formatBytes(500)).toBe('500,0 B')
-    expect(formatBytes(1024)).toBe('1,0 KB')
-    expect(formatBytes(1024 ** 3)).toBe('1,0 GB')
-    expect(formatBytes(1024 ** 4)).toBe('1,0 TB')
+    expect(formatBytes(500)).toBe('500,0 B')
+    expect(formatBytes(1024)).toBe('1,0 KB')
+    expect(formatBytes(1024 ** 3)).toBe('1,0 GB')
+    expect(formatBytes(1024 ** 4)).toBe('1,0 TB')
   })
 
   it('no se pasa de la unidad más grande', () => {
@@ -29,11 +29,11 @@ describe('tamaños', () => {
   })
 
   it('un tamaño típico de película', () => {
-    expect(formatBytes(8_589_934_592)).toBe('8,0 GB')
+    expect(formatBytes(8_589_934_592)).toBe('8,0 GB')
   })
 
   it('el decimal va con coma, como el resto de cifras de la app', () => {
-    expect(formatBytes(1.5 * 1024 ** 3)).toBe('1,5 GB')
+    expect(formatBytes(1.5 * 1024 ** 3)).toBe('1,5 GB')
   })
 })
 

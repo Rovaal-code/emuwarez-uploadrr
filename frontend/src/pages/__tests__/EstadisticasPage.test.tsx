@@ -48,7 +48,7 @@ describe('EstadisticasPage', () => {
     const graficos = [...document.querySelectorAll('svg[role="img"]')]
     expect(graficos).toHaveLength(3)
     // «Subido y bajado» va primero (ocupa toda la fila), luego Ratio y Bonus.
-    expect(graficos[0].getAttribute('aria-label')).toContain('Subido: de 1,0 TB')
+    expect(graficos[0].getAttribute('aria-label')).toContain('Subido: de 1,0 TB')
     expect(graficos[1].getAttribute('aria-label')).toContain('Ratio: de 4,10 el 01/10/2026 a 4,25 el 02/10/2026')
     expect(graficos.every(g => g.querySelector('title'))).toBe(true)
 
@@ -89,7 +89,7 @@ describe('EstadisticasPage', () => {
     await esperar(() => document.querySelector('.est-plot'))
     const plot = document.querySelector('.est-plot')!
     await act(async () => { plot.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })) })
-    expect(plot.querySelector('[aria-live]')!.textContent).toBe('02/10/2026: Subido 1,0 TB, Bajado sin dato.')
+    expect(plot.querySelector('[aria-live]')!.textContent).toBe('02/10/2026: Subido 1,0 TB, Bajado sin dato.')
   })
 
   it('arriba lleva las diez tarjetas que tenía el Panel, con las mismas cifras', async () => {

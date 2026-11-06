@@ -10,9 +10,7 @@ import { Tooltip } from './Tooltip'
 const AVISO_RATIO = 'Con ratio por debajo de 1, eMuwarez desactiva la API key: la app deja de poder sincronizar y subir.'
 const OTRA_PESTANA = <span className="solo-lector"> (se abre en otra pestaña)</span>
 
-// Tu cuenta de eMuwarez en la cabecera del Panel: quién eres, tus cifras y el
-// enlace a «Mis subidas», que la API no da. Mensajes y notificaciones no se
-// repiten aquí: ya están en la barra superior (y en el cajón del móvil).
+// Tu cuenta y el enlace a «Mis subidas» (la API no lo da); mensajes y notificaciones están en la barra superior y el cajón móvil.
 export function CuentaEmu() {
   const { perfil, actualizar, ocultarNombre } = usePerfilEmu()
   const espera = useCooldown()

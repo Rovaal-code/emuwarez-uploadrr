@@ -592,7 +592,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `--color-tab-active` y los endpoints sin uso; `formatBytes` es uno solo (`utils/format.ts`); `viewport-fit=cover` se descartó (ver la entrada
   de la revisión con `impeccable`). Sigue sin probar la tablet táctil a 769–1400 px.
 
-- **Oleada 4, revisión con `impeccable` de verdad (06/11, #239-#244):** la del 06/11 (#227-#232) fue solo detector y crítica inline,
+- **Oleada 4, revisión con `impeccable` de verdad (06/11, #239-#244, #246):** la del 06/11 (#227-#232) fue solo detector y crítica inline,
   hecha por quien diseñaba. Esta vez:
   - `PRODUCT.md` (`/impeccable init`, entrevista de dos rondas con Gabriel: lo usan él y unos pocos, escritorio manda, voz directa y técnica,
     buenas prácticas de accesibilidad y cuatro restricciones firmes) y `DESIGN.md` (`/impeccable document`, tokens extraídos de `styles/`;
@@ -623,6 +623,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     filas** (`UMBRAL_VIRTUAL`, `utils/ventana.ts`; en Peticiones las cabeceras de grupo son elementos fijos de la lista y «ir al grupo» las
     encuentra). `CuerpoMedido` va memorizado (afecta también a Biblioteca). Medido con rueda continua (141 peticiones, 80 subidas): nodos de
     la tabla de 6220 a 942 y de 5182 a 995; con CPU ×4, tareas largas de 267 a 16 y de 82 a 7; sin avisos de «Maximum update depth».
+    Tras la revisión (#246): el botón de borrar sigue en la tarjeta móvil y un fallo tardío de Reintentar no tapa el de un Cancelar posterior.
   - Backend (#240): `tests/test_errores_por_texto_de_error.py` obliga a pasar por `texto_de_error` el texto de una excepción en `web/` y
     `services/` (33 usos corregidos, 4 permitidos con su motivo); fuera los endpoints de nomenclatura, preflight y comprobación sin uso
     desde la interfaz; «de la serie» en la celda Petición (ver Biblioteca, #230).

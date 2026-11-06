@@ -356,9 +356,10 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 - **Oleada 4, rediseño P3, P2 y P6, y los retoques del Panel (#207, #208, #209, #204, #205):**
   - Peticiones (#207): agrupada por lo que se puede hacer: «Lista para subir», «Parcial» y «No la tienes», más «Cerradas» (reclamadas,
     llenas o ya subidas, que no se pueden subir y mentirían en ningún otro grupo); dentro de cada grupo, por recompensa. Elegir otra
-    ordenación (selector o cabecera) deja la lista plana. La columna Autor está oculta por defecto (casilla «Mostrar autor», en
-    localStorage). «Temporada 0» ya estaba arreglado (8510288).
-  - Biblioteca (#208): las columnas pasan de 13 a 7. Tipo, origen, resolución, proveedor, source y grupo se pliegan en una línea de
+    ordenación (selector o cabecera) deja la lista plana. La columna Autor se pensó oculta por defecto (casilla «Mostrar autor»), pero
+    07f7fa2 la dejó siempre visible. «Temporada 0» ya estaba arreglado (8510288).
+  - Biblioteca (#208; **revertido en parte por Gabriel en e4f9910 y #224: cada dato filtrable vuelve a su columna propia, 12 columnas, y los
+    pósters miden 44×66; lo que sigue describe la primera versión**): las columnas pasan de 13 a 7. Tipo, origen, resolución, proveedor, source y grupo se pliegan en una línea de
     especificaciones bajo el título (con el grupo de release a la derecha de la línea del título) y sus seis filtros pasan a la cabecera
     de Título. Filas de 63 a 57 px y sin scroll horizontal a 1280. Vistas guardadas en localStorage (los filtros viven en el estado de
     la página, no en la URL). El desplegable «Orden» se queda: ordena por título, año y reciente, que ninguna cabecera hace.
@@ -479,15 +480,92 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   completada corta la racha. Decide uno solo (un `RLock` del proceso, que también envuelve cada elemento de `encolar_lote`: si la racha llega mientras se encola, el resto sale `blocked`). Con «Una por subida», un
   aviso «Lote parado»; con «Una por lote», una línea en el resumen. El banner del lote lo dice y «Reintentar fallidas» las
   relanza. Sin ver en el navegador.
+- **Oleada 4, límite de «Subidas en paralelo» compartido entre el CLI y el servidor (#226):** la puerta de cada proceso sigue repartiendo
+  turnos por id a sus hilos y, antes de admitir, toma una plaza compartida (`services/upload_execution/plazas_compartidas.py`): 64
+  ficheros `<CONFIG_DIR>/plazas/plaza-N` con `flock` exclusivo y un `mutex` para contar y tomar en un paso. Se eligió el fichero y no una
+  tabla porque el núcleo suelta el `flock` al morir el proceso (también con kill -9): ni PIDs, ni latidos, ni limpieza, ni migración.
+  0 = sin límite: toma plaza pero nunca espera. El límite se lee como antes (caché de 1 s, olvidada al vaciarse la cola); cancelar o retirar
+  se comprueba en cada vuelta (3 s) y tras tomar plaza. Sin `fcntl` (Windows) o con el directorio inservible, aviso y límite solo del
+  proceso. Un recorrido que falla a mitad cierra la plaza ya tomada. **Sin ver:** no hay cola ni orden entre procesos (gana el primero que
+  llega a una plaza libre en su vuelta; el «puesto en la cola» sigue siendo solo del servidor); un servidor que muere con un Uploadrr-EMU
+  huérfano subiendo libera su plaza; solo probado en Linux y python 3.13, no en Docker; `flock` sobre NFS/SMB podría no funcionar
+  (`CONFIG_DIR` suele ser local).
+- **Oleada 4, pasada de diseño con `frontend-design`, `impeccable` y las guías web de Vercel (06/11, #227-#232):** cada pantalla se rehízo
+  dentro del lenguaje HUD existente (sin tokens, fuentes ni librerías nuevas) y pasó por dos pasadas: primero `frontend-design`, después
+  una revisión con `impeccable` (su detector de «slop» sin red: franjas laterales de acento, fuente sobreusada) y con las guías de Vercel
+  (`web-interface-guidelines`: nombres accesibles, `div onClick`, medidas de imagen, `overscroll-behavior`, `touch-action`…). **La
+  revisión con `impeccable` fue degradada:** los agentes no tenían herramienta de subagentes, así que `critique`/`audit`/`polish` los
+  hicieron en un solo contexto, con el detector y sin `PRODUCT.md`/`DESIGN.md` (queda pendiente `/impeccable init`). Se descartó lo que
+  choca con el criterio de Gabriel («más audaz», cambiar de tipografía: Inter se queda). Criterio del 06/11: esquinas redondeadas firmes,
+  densidad flexible. **Lección:** `node_modules/` con barra no ignora el symlink `frontend/node_modules` de un worktree y se coló en un PR;
+  `.gitignore` ya lleva `frontend/node_modules` sin barra (#227).
+  - Marco y móvil, P7 (#229): el cajón a ≤768 px y el paso «Configuración» del tour **ya estaban hechos** (5166cd8, c3f6dd5, d3aab6d; se
+    verificaron en navegador). Nuevo: botón de búsqueda en la cabecera (en móvil no se podía abrir Ctrl+K), la cuenta (usuario, enlaces de
+    eMuwarez, cerrar sesión) al pie del cajón (`CuentaDelCajon`), la campana como panel de ancho completo, fondo opaco en campana, modales
+    y paleta, y objetivos táctiles de 44 px solo con puntero táctil (`--tap-min`, compensado por la escala de la interfaz; `.btn` 40 px
+    y campos a 16 px). El tour es un diálogo accesible (foco atrapado, Escape, retorno del foco) y en móvil salta el paso de la barra
+    lateral. «Saltar al contenido», `document.title` y `h1` por sección, el velo del modal cierra al pulsar *y* soltar (iOS), «Borrar todo»
+    de la campana pide dos pulsaciones y se anuncia, login que explica qué falta, `role="alert"` en los errores del asistente de primera
+    configuración. Guía para el resto de pantallas: `.page-container` es el único scroll (usar `--vh100`, nunca `100vh`), nada depende del
+    hover, `Modal` siempre, tablas anchas con scroll propio, tooltips que no cuentan en táctil. **Sin ver:** iOS/móvil real, el cajón con
+    el perfil de eMuwarez cargado, la cabecera con una sincronización en curso a 390 px, los pasos 3 a 9 del asistente de primera
+    configuración a 390 px y el tour completo con perfil.
+  - Panel y Estadísticas (#227): cabecera con la cuenta en su propia franja, carriles de 360 px mínimo con scroll de página en ventanas
+    bajas (cabe a 1280×800), «Necesita atención» con el título a la izquierda. «Listo para subir» dice «No se pudo cargar» con «Reintentar»
+    (antes enseñaba «Ninguna petición lista», falso) y, si una recarga falla con datos previos, los deja bajo un aviso; las fallidas
+    de «En curso» dicen su motivo. `GraficoLinea` se dibuja a su ancho real (el texto de los ejes deja de encogerse en móvil), enseña
+    el último valor y la variación del rango, y se lee día a día con ratón, dedo o teclado (`aria-live`); «Subido y bajado» ocupa la
+    fila, las diez tarjetas van en dos grupos y la tabla alternativa tiene scroll interno. `h1` en ambas pantallas (el resto siguen con
+    `div`), insignia del rol con el contraste corregido (2,1:1). **Anotado, no hecho:** `HoverTitle` (en `Tooltip.tsx`) es un
+    `div role="link"`. **Sin ver:** lector de pantalla, el Panel a 2000 px, la banda con más de cuatro instancias caídas con el tour abierto.
+  - Peticiones, Subidas y detalle de subida (#228): Peticiones lleva un resumen por grupo (cada chip salta a su grupo y lo despliega),
+    grupos plegables con cabecera pegada (se recuerda en `localStorage`, `emuwarez_pet_grupos_plegados`), el motivo por el que una petición
+    aún no está lista (`motivoDeLaPreparacion`) y los puntos con su moneda; a 1280 px cabe sin desplazar y por debajo de 760 px se queda con
+    título, compatibilidad y puntos. La ficha abre con el veredicto y la recompensa (`FichaPoster` de 230 px). Subidas junta Estado y
+    Progreso en una celda (de 13 a 10 columnas sin plegar ningún dato filtrable), los intentos anteriores pasan a un chip, las acciones son
+    iconos y solo las posibles, las fallidas dejan de parpadear y el banner del lote suma una barra por estado. En el detalle, el recorrido
+    de pasos va dentro del recuadro de resultado, con los subpasos de Uploadrr colgando del paso 4. **Ya estaba hecho:** la columna Autor
+    siempre visible (07f7fa2), la agrupación de Peticiones (#207) y el detalle «por el resultado» (#195). **Aplazado:** virtualizar las
+    listas de más de 50 filas (`FilasVirtuales`; Peticiones pide hasta 2000 a la vez), una tarjeta por fila en móvil, y el texto del estado
+    vacío cuando un lote se queda sin subidas tras «Borrar lote».
+  - Biblioteca, su ficha y «Subir por lotes» (#230, solo frontend): los datos de las columnas pasan a texto atenuado sin caja (los
+    enlaces de origen y proveedor conservan su ficha), «Sin petición» es un guion, el título queda fijo a la izquierda al desplazarse (las
+    12 columnas necesitan ~1380 px), los capítulos sin póster no reservan el hueco de la carátula (de 77 a ~50 px), las filas hijas, la
+    abierta y la marcada para el lote se distinguen por tinte, y la vista es un solo control con iconos; ≤760 px la tabla enseña título,
+    estado y acciones. La tarjeta de póster enseña título, tipo y año al pasar el ratón o al enfocarla (siempre en táctil) y lleva un
+    botón de verdad; su medida sigue fijada solo por `aspect-ratio` (medido con scroll rápido, sin el aviso de `RejillaVirtual`). El título
+    de la lista es un enlace real `/library/:id`. La ficha mide 420 px (`DetailPoster` admite `alto`; las otras fichas siguen en 480), pone
+    las acciones en la línea del título y pasa las tarjetas a dos columnas por debajo de 1000 px. «Subir por lotes» alinea el paso 1,
+    abre el paso 2 con el recuento (se subirán, se saltarán, por comprobar) y en móvil enseña «Incluir» en cada bloque. **Aplazado, la
+    «petición heredada» en la lista:** el filtro es SQL (`listado._build_library_filter`), una serie pedida entera marcaría todos sus
+    capítulos «Compatible» y mostrarla solo en la celda desajusta columna y filtro; si se quiere, una etiqueta «de la serie» solo en la
+    celda, con una consulta por lote de antepasados reutilizando `_cubre`. **Sin ver:** `EmuComparisonSection` y `SourceComparisonModal`, el
+    paso 2 del lote con comprobaciones en verde, el contraste AA medido y el lector de pantalla.
+  - Asistente de subida, P5 completo (#232): el panel es una columna y solo el cuerpo del paso hace scroll; el pie (Volver, Continuar,
+    Subir) queda fijo a 1280×800, 1440×900 y 390×844 (cerrado el detalle del pie cortado de «Siguiente») y el veredicto de las
+    comprobaciones va en el pie. Nomenclatura, Pistas y MediaInfo pasan de modales a pestañas del paso 2 (`role="tablist"`, flechas,
+    Inicio y Fin; `pestana` sustituye a `showMiCard`/`showRemuxCard` en `useAsistente`, así que cambiar de pestaña no pierde lo editado;
+    «Pistas» avisa de cuántas no tienen idioma). El Resumen de una tanda lista el nombre de cada torrent: en packs, el `nombre` de
+    `run_upload_checks`, que ahora lleva lo editado a mano (backend compatible hacia atrás: `source`, `tag`, `title` e `idiomas` opcionales
+    en `POST /library/{id}/upload/checks`; la caché de la tanda se invalida por Proveedor y ajustes); en capítulos, la vista previa de la
+    nomenclatura (`useNombresTanda`). Arreglado de paso: el nombre del torrent pintaba `x265` como `×265` (ligadura de Inter). **Sin ver:**
+    tour abierto, lector de pantalla, contraste medido y una subida real (la API de nomenclatura, pistas y MediaInfo se simuló: la máquina de
+    pruebas no tiene mediainfo ni mkvmerge).
+  - Configuración, Tareas, Instancias, Logs y Guía (#231): Configuración con cabecera común por tarjeta, campos con `<label for>` (`Campo`),
+    las claves solo como estado («Configurada»/«Sin configurar», nunca el valor), interruptores `role="switch"`, validación de las URL de
+    qBittorrent y qui en el propio campo con foco en el primer error, y barra de guardado con «Descartar» (Notificaciones la comparte);
+    el índice sticky con buscador y «Avanzado» ya estaban (#209). Tareas en dos columnas con estado y error a la vista y un solo reloj
+    compartido (sigue en `TasksPage`, en `RELOJES`); Instancias dice si responde cada una sin afirmar «en marcha» sin base y elimina con
+    `Modal` (no `window.confirm`), y una recarga silenciosa que falla conserva la lista; Logs ocupa la pantalla, resalta lo buscado, copia
+    líneas y no se repinta sin novedades; la Guía lleva lista lateral con saltos a subtítulos. `etiquetaIntervalo(90)` da «1h 30 min».
+    **Aplazado:** el `window.confirm` de regenerar o quitar la clave del widget (`WidgetCard.tsx`) → `Modal`; la pestaña Backup sigue
+    llamándose «Backup». **Sin ver:** una instancia en «Prueba correcta», subir o restaurar un backup real, «Probar conexión» real,
+    Configuración con el tour abierto y touch real.
+
 ## Siguiente
 
-Sin pendientes de la oleada 3 ni de la primera tanda de la oleada 4: lo que quedaba por ver se comprobó el 03/11 (ver en
-«Hecho»). Los tres detalles que salieron de esa comprobación (ninguno por los estilos):
-- ~~el paso «Configuración» del tour no resalta nada si Configuración se dejó en otra pestaña~~: ya estaba arreglado
-  (d3aab6d, `data-tour="settings-content"` está en el marco de la página y vale en cualquier pestaña);
-- a 1280×800 el pie del asistente de subida queda cortado y el cuerpo del modal hace scroll por dentro: se retoma en la
-  tanda de rediseño del 06/11 (ver «Oleada 4»);
-- ~~a 390 px el sidebar no se pliega~~: ya estaba arreglado (5166cd8, con 768 px o menos es un cajón: `useMenuMovil`).
+Sin pendientes de la oleada 3 ni de la oleada 4 de funciones. Los tres detalles que salieron de la comprobación del 03/11 están
+cerrados: el paso «Configuración» del tour (d3aab6d), el cajón a ≤768 px (5166cd8) y el pie del asistente a 1280×800 (#232).
 
 Subida por lotes: hecha (PR 1-10, ver «Hecho» y `docs/PLAN_SUBIDA_POR_LOTES.md` §6 «PR 7 en adelante»). Falta que Gabriel la
 pruebe en `:edge` (duplicado real en Uploadrr-EMU, 50 hilos en el NAS, la rejilla con 200 seleccionadas) y que decida, al
@@ -502,18 +580,21 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
   - ~~«Mejoras posibles»~~ (hecho, ver «Hecho»);
   - ~~estadísticas del tracker por subida~~ (hecho, ver «Hecho»).
 - Rediseño de la interfaz, un PR por pantalla y en este orden (maqueta en el informe de hallazgos): P1 Panel, P4 detalle de subida, P5 asistente con Resumen,
-  P2 Biblioteca, P3 Peticiones y P6 Configuración (todos hechos). Queda P7 móvil, pendiente de decidir. Las funciones que
+  P2 Biblioteca, P3 Peticiones, P6 Configuración y P7 móvil (todos hechos; el 06/11 pasaron también por `frontend-design`, `impeccable` y
+  las guías de Vercel, ver «Hecho»). Queda, de P7, una tarjeta por fila en móvil para las listas largas. Las funciones que
   tocan Biblioteca, Panel y el asistente van junto a su pantalla. Criterio de Gabriel: le gusta el diseño original y solo quiere mejoras para ver mejor el contenido nuevo;
   esquinas redondeadas (la esquina cortada, demasiado contrastada, no); algo compacto pero solo un poco y sin regla fija
   (si dar aire mejora la lectura, se da; Tracearr era solo una inspiración); y pasar cada pantalla por la skill `frontend-design`.
 
 ## Aplazado / ideas
 
-- Límite de concurrencia compartido entre el CLI y el servidor (hoy cada proceso tiene el suyo, en memoria). Hace
-  falta un cerrojo en fichero o en la base.
 - Que la columna «Petición» de la lista de Biblioteca (y su filtro) cuente la petición heredada: hoy la temporada de
   una serie pedida entera dice «Sin petición» en la lista aunque su ficha enseñe la de la serie. `request_id` guarda
-  una petición por fila, la que se escribe donde la petición pide.
+  una petición por fila, la que se escribe donde la petición pide. Propuesta y razones en la entrada de Biblioteca (#230).
+- `window.confirm` del widget de Homepage (`WidgetCard.tsx`) → `Modal`; virtualizar las listas de Peticiones y Subidas de más de 50 filas;
+  una tarjeta por fila en móvil para esas listas; `HoverTitle` es un `div role="link"`; `h1` en el resto de pantallas; `/impeccable init`
+  (`PRODUCT.md`/`DESIGN.md`).
+- Recuperar solo el añadido a qBittorrent de una subida que ya estaba en eMuwarez (necesita un cambio en Uploadrr-EMU, otro repo).
 
 ## Datos útiles
 

@@ -3,8 +3,9 @@ import { testEmuwarezConnection, type IntegrationTestResult } from '../../../api
 import { useCooldown } from '../../../hooks/useCooldown'
 import { ServiceIcon } from '../../../components/ServiceIcon'
 import { InfoIcon } from '../../../components/InfoIcon'
-import { CheckStatusIcon } from '../../../components/DetailCard'
-import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../../../utils/integrationResult'
+import { emuTestCooldownSeconds } from '../../../utils/integrationResult'
+import { Campo, EstadoSecreto, ResultadoPrueba } from '../Campo'
+import { CabeceraTarjeta } from '../CabeceraTarjeta'
 import type { ConfigForm } from './useConfigForm'
 
 export function EmuwarezCard({ form }: { form: ConfigForm }) {
@@ -39,30 +40,29 @@ export function EmuwarezCard({ form }: { form: ConfigForm }) {
 
   return (
     <div className="placeholder-card">
-      <h3 className="aj-card-titulo aj-mb-14">
-        <ServiceIcon type="emu" size={18} /> eMuwarez
-      </h3>
-      <div className="form-group aj-mb-12">
-        <label className="form-label">Estado de la API key</label>
-        <div className="aj-fs-13">
-          {settings?.emu_api_key_configured
-            ? <><span className="aj-ok"><CheckStatusIcon status="ok" /> Configurada</span>{settings.emu_api_key_masked && <code className="aj-code-mascara">{settings.emu_api_key_masked}</code>}</>
-            : <span className="aj-err">✗ No configurada</span>}
-        </div>
-      </div>
-      <div className="form-group aj-mb-12">
-        <label className="form-label">Nueva API key <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
-        <input
-          type="password"
-          className="form-input"
-          value={newEmuKey}
-          onChange={e => setNewEmuKey(e.target.value)}
-          placeholder="API key de eMuwarez"
-          autoComplete="new-password"
-        />
-        <span className="form-hint">Usada para leer el catálogo y las peticiones de eMuwarez.</span>
-      </div>
-      <div>
+      <CabeceraTarjeta
+        icono={<ServiceIcon type="emu" size={18} />}
+        titulo="eMuwarez"
+        lateral={<EstadoSecreto configurado={settings?.emu_api_key_configured} enmascarado={settings?.emu_api_key_masked} />}
+      />
+      <Campo
+        etiqueta="Nueva API key"
+        nota="dejar vacío para mantener la actual"
+        ayuda="Usada para leer el catálogo y las peticiones de eMuwarez."
+      >
+        {c => (
+          <input
+            {...c}
+            type="password"
+            className="form-input"
+            value={newEmuKey}
+            onChange={e => setNewEmuKey(e.target.value)}
+            placeholder="API key de eMuwarez"
+            autoComplete="new-password"
+          />
+        )}
+      </Campo>
+      <div className="aj-acciones">
         <button
           className="btn btn-secondary btn-sm"
           onClick={handleTestEmu}
@@ -71,51 +71,52 @@ export function EmuwarezCard({ form }: { form: ConfigForm }) {
         >
           {testingEmu ? 'Probando…' : emuCooldown.active ? `Espera ${emuCooldown.remaining}s` : 'Probar conexión'}
         </button>
-        {emuTestResult && (
-          <span className="aj-res-12" style={{ color: testResultColor(emuTestResult) }}>
-            {testResultLabel(emuTestResult)}
-          </span>
+        <ResultadoPrueba resultado={emuTestResult} />
+      </div>
+      <Campo
+        etiqueta="Mi usuario de eMuwarez"
+        info={<InfoIcon text="Tu nombre de usuario en eMuwarez. Se usa para reconocer cuáles de todas las peticiones descargadas las has creado tú, y así poder mostrártelas en 'Mis peticiones'." />}
+      >
+        {c => (
+          <input
+            {...c}
+            className="form-input"
+            value={emuUsername}
+            onChange={e => setEmuUsername(e.target.value)}
+            placeholder="Tu nombre de usuario en eMuwarez"
+          />
         )}
-      </div>
-      <div className="form-group aj-mt-14">
-        <label className="form-label aj-flex-c-6">
-          Mi usuario de eMuwarez
-          <InfoIcon text="Tu nombre de usuario en eMuwarez. Se usa para reconocer cuáles de todas las peticiones descargadas las has creado tú, y así poder mostrártelas en 'Mis peticiones'." />
-        </label>
-        <input
-          className="form-input"
-          value={emuUsername}
-          onChange={e => setEmuUsername(e.target.value)}
-          placeholder="Tu nombre de usuario en eMuwarez"
-        />
-      </div>
-      <div className="form-group aj-mt-14">
-        <label className="form-label aj-flex-c-6" htmlFor="nuevo-grupo-de-subida">
-          Grupos de subida
-          <InfoIcon text="El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario). El primero es el que sale por defecto al subir; los demás se eligen en el asistente." />
-        </label>
-        <div className="aj-col-6 aj-mb-8">
-          {tags.map((t, i) => (
-            <div key={t} className="aj-flex-c-8">
-              <span className="aj-ellipsis-13">{t}</span>
-              {i === 0
-                ? <span className="badge status-available">por defecto</span>
-                : <button type="button" className="btn-icon" title="Usar por defecto" aria-label={`Usar ${t} por defecto`}
-                    onClick={() => setTags([t, ...tags.filter(x => x !== t)])}>☆</button>}
-              {tags.length > 1 && (
-                <button type="button" className="btn-icon" aria-label={`Quitar ${t}`}
-                  onClick={() => { setTags(tags.filter(x => x !== t)); if (borrador === t) setNuevoTag('') }}>✕</button>
-              )}
+      </Campo>
+      <Campo
+        etiqueta="Grupos de subida"
+        info={<InfoIcon text="El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario). El primero es el que sale por defecto al subir; los demás se eligen en el asistente." />}
+      >
+        {c => (
+          <>
+            <ul className="aj-grupos" aria-label="Grupos guardados">
+              {tags.map((t, i) => (
+                <li key={t} className="aj-grupos__fila">
+                  <span className="aj-grupos__nombre">{t}</span>
+                  {i === 0
+                    ? <span className="badge status-available">por defecto</span>
+                    : <button type="button" className="btn-icon" title="Usar por defecto" aria-label={`Usar ${t} por defecto`}
+                        onClick={() => setTags([t, ...tags.filter(x => x !== t)])}>☆</button>}
+                  {tags.length > 1 && (
+                    <button type="button" className="btn-icon" aria-label={`Quitar ${t}`}
+                      onClick={() => { setTags(tags.filter(x => x !== t)); if (borrador === t) setNuevoTag('') }}>✕</button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div className="aj-fila-campo">
+              <input {...c} className="form-input" value={nuevoTag} onChange={e => setNuevoTag(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); anadirTag() } }}
+                placeholder="Añadir otro grupo" />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={anadirTag} disabled={!nuevoTag.trim()}>Añadir</button>
             </div>
-          ))}
-        </div>
-        <div className="aj-flex-8">
-          <input id="nuevo-grupo-de-subida" className="form-input" value={nuevoTag} onChange={e => setNuevoTag(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); anadirTag() } }}
-            placeholder="Añadir otro grupo" />
-          <button type="button" className="btn btn-secondary" onClick={anadirTag} disabled={!nuevoTag.trim()}>Añadir</button>
-        </div>
-      </div>
+          </>
+        )}
+      </Campo>
     </div>
   )
 }

@@ -134,7 +134,12 @@ function ConfigFormulario({ form }: { form: ConfigForm }) {
         ))}
       </div>
       {(form.cambios > 0 || form.saving) && (
-        <BarraGuardado cambios={form.cambios} guardando={form.saving} onGuardar={form.handleSave} />
+        <BarraGuardado
+          resumen={form.cambios === 1 ? '1 campo ha cambiado' : `${form.cambios} campos han cambiado`}
+          guardando={form.saving}
+          onGuardar={form.handleSave}
+          onDescartar={form.descartar}
+        />
       )}
     </div>
   )

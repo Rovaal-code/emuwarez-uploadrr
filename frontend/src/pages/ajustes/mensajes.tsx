@@ -48,34 +48,28 @@ export function useSettingsMessageAdapter() {
   )
 }
 
-// El aviso ocupa el hueco que sobra a la derecha de las pestañas y se recorta
-// con puntos suspensivos: un error de backup puede ser una frase larga y no
-// puede desmontar la fila. El texto completo sale al pasar el ratón.
+// El aviso ocupa el hueco que sobra a la derecha de las pestañas y se recorta a dos líneas: un error de backup puede
+// ser una frase larga y no puede desmontar la fila. El texto completo sale al pasar el ratón. Los errores se anuncian
+// como alerta y el resto como estado, para que el lector de pantalla los lea sin que haya que ir a buscarlos.
 export function SettingsMessageSlot({ msg }: { msg: SettingsMsg }) {
+  // El texto recortado va en un span propio: el relleno del aviso no puede dejar ver la tercera línea.
   const ref = useRef<HTMLSpanElement>(null)
   const [recortado, setRecortado] = useState(false)
   // El tooltip solo tiene sentido si falta texto por ver: repetir un aviso que
   // ya se lee entero solo estorba.
   useEffect(() => {
     const el = ref.current
-    setRecortado(!!el && el.scrollWidth > el.clientWidth)
+    setRecortado(!!el && el.scrollHeight > el.clientHeight + 1)
   }, [msg?.text])
   const { triggerProps, tooltipNode } = useTooltip(recortado ? msg?.text ?? null : null)
   if (!msg) return null
-  const colores: Record<TonoMensaje, { texto: string; fondo: string; borde: string }> = {
-    ok: { texto: 'var(--color-available)', fondo: 'color-mix(in srgb, var(--color-available) 10%, transparent)', borde: 'color-mix(in srgb, var(--color-available) 30%, transparent)' },
-    error: { texto: 'var(--color-error)', fondo: 'color-mix(in srgb, var(--color-error) 10%, transparent)', borde: 'color-mix(in srgb, var(--color-error) 30%, transparent)' },
-    aviso: { texto: 'var(--color-warning)', fondo: 'color-mix(in srgb, var(--color-warning) 10%, transparent)', borde: 'color-mix(in srgb, var(--color-warning) 30%, transparent)' },
-  }
-  const c = colores[msg.tono]
   return (
     <span
-      ref={ref}
-      className="aj-mensaje"
-      style={{ background: c.fondo, border: `1px solid ${c.borde}`, color: c.texto }}
+      role={msg.tono === 'error' ? 'alert' : 'status'}
+      className={`aj-mensaje aj-mensaje--${msg.tono}`}
       {...triggerProps}
     >
-      {msg.text}
+      <span ref={ref} className="aj-mensaje__texto">{msg.text}</span>
       {tooltipNode}
     </span>
   )

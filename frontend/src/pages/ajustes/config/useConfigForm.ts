@@ -5,6 +5,7 @@ import { usePerfilEmu } from '../../../context/PerfilEmuContext'
 import { isValidHttpUrl } from '../../../utils/validation'
 import { MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../../../utils/modoPistas'
 import { useSettingsMessageAdapter } from '../mensajes'
+import { enfocarPrimerError } from '../Campo'
 
 // El estado del formulario de la pestaña Configuración, compartido por todas sus tarjetas: se carga, se
 // compara con lo cargado para saber cuántos campos han cambiado y se guarda de una vez desde la barra de
@@ -25,6 +26,9 @@ function configSignature(v: {
   }
   return Object.fromEntries(Object.entries(campos).map(([k, x]) => [k, JSON.stringify(x)]))
 }
+
+const ERROR_URL_QBIT = 'La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido'
+const ERROR_URL_QUI = 'La URL del proxy de qui debe empezar por http:// o https:// e incluir un host válido'
 
 // Cuántos campos difieren de lo cargado.
 function contarCambios(base: Record<string, string>, actual: Record<string, string>): number {
@@ -90,6 +94,13 @@ export function useConfigForm() {
     newKey, newEmuKey, qbitPass, qbitQui, quitarQui, quitarQbitPass,
   })
   const cambios = baseline ? contarCambios(baseline, currentSig) : 0
+  // Validación en el sitio: un campo con una URL mal escrita lo dice al salir de él o al intentar guardar.
+  const [tocados, setTocados] = useState<ReadonlySet<'qbitUrl' | 'qbitQui'>>(new Set())
+  const marcarTocado = (campo: 'qbitUrl' | 'qbitQui') => setTocados(t => (t.has(campo) ? t : new Set(t).add(campo)))
+  const errores = {
+    qbitUrl: tocados.has('qbitUrl') && qbitUrl.trim() && !isValidHttpUrl(qbitUrl) ? ERROR_URL_QBIT : null,
+    qbitQui: tocados.has('qbitQui') && qbitQui.trim() && !isValidHttpUrl(qbitQui) ? ERROR_URL_QUI : null,
+  }
   const dirty = cambios > 0
   useUnsavedGuard('config', dirty)
 
@@ -140,6 +151,19 @@ export function useConfigForm() {
     return () => { activo = false }
   }, [intento])
 
+  // Vuelve a lo guardado: se lee otra vez, sin pasar por la pantalla de carga para no desmontar el formulario.
+  function descartar() {
+    setTocados(new Set())
+    setNuevoTag('')
+    setNewKey('')
+    setNewEmuKey('')
+    setQbitPass('')
+    setQuitarQbitPass(false)
+    setQbitQui('')
+    setQuitarQui(false)
+    setIntento(n => n + 1)
+  }
+
   function reintentar() {
     setErrorCarga(null)
     setLoading(true)
@@ -148,12 +172,12 @@ export function useConfigForm() {
 
   async function handleSave() {
     if (!settings) return
-    if (qbitUrl.trim() && !isValidHttpUrl(qbitUrl)) {
-      setMsg({ ok: false, text: 'La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido' })
-      return
-    }
-    if (qbitQui.trim() && !isValidHttpUrl(qbitQui)) {
-      setMsg({ ok: false, text: 'La URL del proxy de qui debe empezar por http:// o https:// e incluir un host válido' })
+    const urlMala = qbitUrl.trim() && !isValidHttpUrl(qbitUrl)
+    const quiMala = qbitQui.trim() && !isValidHttpUrl(qbitQui)
+    if (urlMala || quiMala) {
+      setTocados(new Set(['qbitUrl', 'qbitQui']))
+      setMsg({ ok: false, text: urlMala ? ERROR_URL_QBIT : ERROR_URL_QUI })
+      enfocarPrimerError('.aj-config')
       return
     }
     setSaving(true)
@@ -234,7 +258,7 @@ export function useConfigForm() {
     }
   }
   return {
-    settings, setSettings, loading, errorCarga, reintentar, saving, handleSave, cambios,
+    settings, setSettings, loading, errorCarga, reintentar, descartar, saving, handleSave, cambios, errores, marcarTocado,
     tags, setTags, nuevoTag, setNuevoTag, borrador,
     providerOrder, setProviderOrder, region, setRegion,
     newKey, setNewKey, newEmuKey, setNewEmuKey, emuUsername, setEmuUsername,

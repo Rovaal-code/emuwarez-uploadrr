@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getVersionInfo, type VersionInfo } from '../../../api/maintenance'
 import { HoverTitle } from '../../../components/Tooltip'
 import { useSettingsMessage } from '../mensajes'
+import { CabeceraTarjeta } from '../CabeceraTarjeta'
 
 export function VersionCard() {
   const [info, setInfo] = useState<VersionInfo | null>(null)
@@ -54,13 +55,15 @@ export function VersionCard() {
 
   return (
     <div className="placeholder-card">
-      <div className="aj-entre-12">
-        <h3 className="aj-m-0">Versión</h3>
-        <button className="btn btn-secondary btn-sm" type="button"
-                onClick={() => cargar(true)} disabled={comprobando}>
-          {comprobando ? 'Comprobando…' : 'Comprobar ahora'}
-        </button>
-      </div>
+      <CabeceraTarjeta
+        titulo="Versión"
+        lateral={(
+          <button className="btn btn-secondary btn-sm" type="button"
+                  onClick={() => cargar(true)} disabled={comprobando}>
+            {comprobando ? 'Comprobando…' : 'Comprobar ahora'}
+          </button>
+        )}
+      />
       {!info && <p className="aj-sec-13">Cargando…</p>}
       {info && (
         <>

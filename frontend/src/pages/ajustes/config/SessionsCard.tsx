@@ -3,7 +3,9 @@ import { getSessions, closeOtherSessions, type SesionAbierta } from '../../../ap
 import { timeAgo, formatDate } from '../../../utils/format'
 import { descripcionDeSesion } from '../../../utils/sesiones'
 import { useAlEntrar } from '../../../context/SeccionVisible'
+import { IconoUsuario } from '../../../components/Iconos'
 import { useSettingsMessageAdapter } from '../mensajes'
+import { CabeceraTarjeta } from '../CabeceraTarjeta'
 
 // ---------- Sesiones abiertas ----------
 // Caducan a los 30 días sin usarse. «Cerrar las demás» deja solo esta: sirve tras un
@@ -33,14 +35,15 @@ export function SessionsCard() {
 
   return (
     <div className="placeholder-card">
-      <h3>Sesiones abiertas</h3>
+      <CabeceraTarjeta
+        icono={<IconoUsuario size={18} />}
+        titulo="Sesiones abiertas"
+        descripcion={datos ? `Los navegadores donde has iniciado sesión. Una sesión se cierra sola a los ${datos.inactive_days} días sin usarse.` : undefined}
+      />
       {datos === null ? (
         <p className="form-hint">Cargando…</p>
       ) : (
         <>
-          <p className="form-hint sesiones-nota">
-            Los navegadores donde has iniciado sesión. Una sesión se cierra sola a los {datos.inactive_days} días sin usarse.
-          </p>
           <div className="sesiones-lista">
             {datos.sessions.map(s => (
               <div key={s.id}>

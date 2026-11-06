@@ -10,6 +10,7 @@ import {
 } from '../../api/maintenance'
 import { formatBytes } from './formatBytes'
 import { useSettingsMessage } from './mensajes'
+import { CabeceraTarjeta } from './CabeceraTarjeta'
 
 const TIPO_COPIA: Record<BackupInfo['tipo'], string> = { manual: 'Manual', automatica: 'Automática', subida: 'Subida' }
 
@@ -93,19 +94,21 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
   return (
     <div className="aj-col-16">
       <div className="placeholder-card">
-        <h3>Crear backup</h3>
-        <p className="aj-sec-13 aj-m-0-12">
-          Crea un archivo <code>.tar.gz</code> del directorio de configuración, sin las claves: las API keys, la
-          contraseña de qBittorrent, el webhook de Discord y el token de Telegram van vacíos, y no entran
-          el <code>config.yaml</code> ni las cookies de Uploadrr-EMU.
-        </p>
+        <CabeceraTarjeta
+          titulo="Crear backup"
+          descripcion={<>
+            Crea un archivo <code>.tar.gz</code> del directorio de configuración, sin las claves: las API keys, la
+            contraseña de qBittorrent, el webhook de Discord y el token de Telegram van vacíos, y no entran
+            el <code>config.yaml</code> ni las cookies de Uploadrr-EMU.
+          </>}
+        />
         <button className="btn btn-primary" onClick={handleBackup} disabled={busy}>
           {busy ? 'Creando…' : 'Crear backup ahora'}
         </button>
       </div>
 
       <div className="placeholder-card">
-        <h3>Backups existentes ({status?.backups_count ?? backups.length})</h3>
+        <CabeceraTarjeta titulo={`Backups existentes (${status?.backups_count ?? backups.length})`} />
         {backupDir && (
           <p className="aj-sec-12 aj-m-0-10">
             Ubicación: <code>{backupDir}</code>
@@ -121,9 +124,10 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
           <table className="aj-tabla aj-fs-12">
             <thead>
               <tr>
-                {['Nombre', 'Tipo', 'Tamaño', 'Fecha', ''].map(h => (
+                {['Nombre', 'Tipo', 'Tamaño', 'Fecha'].map(h => (
                   <th key={h} className="aj-th">{h}</th>
                 ))}
+                <th className="aj-th"><span className="solo-lector">Acciones</span></th>
               </tr>
             </thead>
             <tbody>
@@ -134,7 +138,7 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
                   <td className="aj-td-5">{formatBytes(b.size_bytes)}</td>
                   <td className="aj-td-5">{b.created_at.slice(0, 16).replace('T', ' ')}</td>
                   <td className="aj-td-5 aj-der">
-                    <button className="btn btn-secondary btn-sm" onClick={() => handleDownload(b)}>Descargar</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleDownload(b)} aria-label={`Descargar ${b.name}`}>Descargar</button>
                   </td>
                 </tr>
               ))}
@@ -156,12 +160,15 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
       </div>
 
       <div className="placeholder-card">
-        <h3>Restaurar backup</h3>
-        <p className="aj-sec-13 aj-m-0-10">
-          Elige uno de los backups existentes en <code>{backupDir || '…'}</code>. Las claves que el backup no
-          lleve se quedan como las tienes ahora.
-        </p>
+        <CabeceraTarjeta
+          titulo="Restaurar backup"
+          descripcion={<>
+            Elige uno de los backups existentes en <code>{backupDir || '…'}</code>. Las claves que el backup no
+            lleve se quedan como las tienes ahora.
+          </>}
+        />
         <select
+          aria-label="Backup que restaurar"
           className="form-input form-select aj-w-100 aj-mb-8"
           value={restoreName}
           onChange={e => setRestoreName(e.target.value)}
@@ -173,6 +180,8 @@ export function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | n
         </select>
         <input
           type="text"
+          aria-label="Confirmación de la restauración"
+          autoComplete="off"
           placeholder="Confirmación: RESTAURAR_CONFIG (solo para restauración real)"
           value={restoreConfirm}
           onChange={e => setRestoreConfirm(e.target.value)}

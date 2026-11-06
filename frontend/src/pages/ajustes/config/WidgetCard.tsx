@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { getWidgetKeyStatus, generateWidgetKey, removeWidgetKey } from '../../../api/widget'
 import { useAlEntrar } from '../../../context/SeccionVisible'
 import { useSettingsMessageAdapter } from '../mensajes'
+import { CabeceraTarjeta } from '../CabeceraTarjeta'
 
 // ---------- Widget para Homepage ----------
 // La clave solo abre GET /api/widget (contadores de solo lectura). Se ve entera al generarla;
@@ -59,7 +60,21 @@ export function WidgetCard() {
 
   return (
     <div className="placeholder-card">
-      <h3>Widget para Homepage</h3>
+      <CabeceraTarjeta
+        icono={(
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+            <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
+          </svg>
+        )}
+        titulo="Widget para Homepage"
+        lateral={configurada === null ? undefined : (
+          <span className={`aj-estado aj-estado--${configurada ? 'ok' : 'falta'}`}>
+            <span className="aj-estado__punto" aria-hidden />
+            {configurada ? 'Clave puesta' : 'Sin clave'}
+          </span>
+        )}
+      />
       {configurada === null ? (
         errorCarga ? (
           <p className="form-hint">
@@ -83,7 +98,7 @@ export function WidgetCard() {
               <p className="form-hint">Guárdala ahora: no se vuelve a mostrar.</p>
             </div>
           )}
-          {!nueva && <p className="form-hint">{configurada ? 'Clave puesta.' : 'Sin clave: el widget está desactivado.'}</p>}
+          {!nueva && !configurada && <p className="form-hint widget-nota">Sin clave: el widget está desactivado.</p>}
           <div className="widget-botones">
             <button className="btn btn-secondary btn-sm" type="button" onClick={generar} disabled={ocupado}>
               {configurada ? 'Regenerar clave' : 'Generar clave'}

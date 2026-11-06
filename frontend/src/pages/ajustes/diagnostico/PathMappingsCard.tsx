@@ -3,6 +3,7 @@ import { useUnsavedGuard } from '../../../utils/unsavedGuard'
 import { fetchSettings, updateSettings } from '../../../api/settings'
 import { useTooltip } from '../../../components/Tooltip'
 import { useSettingsMessageAdapter } from '../mensajes'
+import { CabeceraTarjeta } from '../CabeceraTarjeta'
 import { ErrorDeCarga } from '../ErrorDeCarga'
 
 function RemoveMappingRuleButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
@@ -65,12 +66,10 @@ export function PathMappingsCard() {
 
   return (
     <div className="placeholder-card">
-      <h3 className="aj-mt-0 aj-mb-6">Mapeo de rutas (biblioteca remota)</h3>
-      <p className="form-hint aj-mt-0 aj-mb-12">
-        Traduce la ruta que reporta Radarr/Sonarr a la ruta donde la app alcanza el archivo
-        (monta la biblioteca por SSHFS/NFS/SMB donde quieras). Se aplica al leer MediaInfo,
-        verificar y subir. Sin reglas, no cambia nada.
-      </p>
+      <CabeceraTarjeta
+        titulo="Mapeo de rutas (biblioteca remota)"
+        descripcion="Traduce la ruta que reporta Radarr/Sonarr a la ruta donde la app alcanza el archivo (monta la biblioteca por SSHFS/NFS/SMB donde quieras). Se aplica al leer MediaInfo, verificar y subir. Sin reglas, no cambia nada."
+      />
       {loading ? (
         <p className="aj-muted-13">Cargando…</p>
       ) : errorCarga ? (
@@ -85,12 +84,14 @@ export function PathMappingsCard() {
               <div key={i} className="aj-flex-c-8 aj-wrap">
                 <input
                   className="form-input aj-campo-ruta"
+                  aria-label={`Regla ${i + 1}: ruta de Radarr/Sonarr`}
                   value={m.from} disabled={saving} placeholder="Ruta de Radarr/Sonarr: /data/media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, from: e.target.value } : x))}
                 />
-                <span className="aj-muted">→</span>
+                <span className="aj-muted" aria-hidden>→</span>
                 <input
                   className="form-input aj-campo-ruta"
+                  aria-label={`Regla ${i + 1}: ruta local`}
                   value={m.to} disabled={saving} placeholder="Ruta local: /home/alvaro/mnt/emu-media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, to: e.target.value } : x))}
                 />

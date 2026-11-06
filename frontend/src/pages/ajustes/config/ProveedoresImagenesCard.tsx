@@ -7,14 +7,15 @@ import { Favicon, domainOf } from '../../../components/Favicon'
 import { SortableList, DragHandleIcon, type DragHandleProps } from '../../../components/SortableList'
 import { useTooltip, HoverTitle } from '../../../components/Tooltip'
 import { Modal } from '../../../components/Modal'
-import { testResultLabel, testResultColor } from '../../../utils/integrationResult'
+import { ResultadoPrueba } from '../Campo'
+import { CabeceraTarjeta } from '../CabeceraTarjeta'
 import type { ConfigForm } from './useConfigForm'
 
-function RemoveImgHostButton({ onClick }: { onClick: () => void }) {
+function RemoveImgHostButton({ onClick, nombre }: { onClick: () => void; nombre: string }) {
   const { triggerProps, tooltipNode } = useTooltip('Quitar')
   return (
-    <button className="btn btn-ghost btn-sm aj-ghost-muted"
-      onClick={onClick} type="button" {...triggerProps}>✕{tooltipNode}</button>
+    <button className="btn btn-ghost btn-sm aj-ghost-muted" aria-label={`Quitar ${nombre}`}
+      onClick={onClick} type="button" {...triggerProps}><span aria-hidden>✕</span>{tooltipNode}</button>
   )
 }
 
@@ -58,13 +59,12 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
 
   return (
     <div className="placeholder-card provider-card">
-      <h3 className="aj-card-titulo aj-mb-6">
-        <ServiceIcon type="imghost" size={18} /> Proveedores de imágenes
-      </h3>
-      <span className="form-hint aj-block aj-mb-12">
-        Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; arrastra para reordenar, o usa las flechas desde el asa de cada fila. <strong>imgbox</strong>, sin API key, va siempre el último.
-      </span>
-      <label className="form-label aj-block aj-mb-8">Prioridad de proveedores</label>
+      <CabeceraTarjeta
+        icono={<ServiceIcon type="imghost" size={18} />}
+        titulo="Proveedores de imágenes"
+        descripcion={<>Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; arrastra para reordenar, o usa las flechas desde el asa de cada fila. <strong>imgbox</strong>, sin API key, va siempre el último.</>}
+      />
+      <span className="form-label">Prioridad de proveedores</span>
       {(() => {
         const avail = settings?.image_hosts_available ?? []
         // imgbox no se ordena: la subida siempre lo prueba el último (fallback_order).
@@ -128,13 +128,13 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                     </button>
                   )}
                   {!isDefault && (
-                    <RemoveImgHostButton onClick={() => toggleImgHost(id)} />
+                    <RemoveImgHostButton onClick={() => toggleImgHost(id)} nombre={h.label} />
                   )}
                 </div>
               </div>
               {/* Solo para los que no tienen tarjeta: los demás ya lo
                   enseñan ahí y salía dos veces. */}
-              {!h.needs_key && t && <div className="aj-res-11" style={{ color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+              {!h.needs_key && t && <div className="aj-res-11"><ResultadoPrueba resultado={t} /></div>}
             </div>
           )
         }
@@ -190,6 +190,7 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                     <div className="aj-flex-8 aj-stretch">
                       <input
                         type="password" className="form-input aj-flex-1" autoComplete="new-password"
+                        aria-label={`API key de ${host?.label ?? keyModalHost}`}
                         value={keyDraft} onChange={e => setKeyDraft(e.target.value)}
                         placeholder={guardada ? '•••••••• (hay una guardada)' : `API key de ${host?.label ?? ''}`}
                         autoFocus
@@ -202,8 +203,8 @@ export function ProveedoresImagenesCard({ form }: { form: ConfigForm }) {
                         {imgTesting === keyModalHost ? 'Probando…' : 'Probar'}
                       </button>
                     </div>
-                    {t && <div className="aj-res-modal" style={{ color: testResultColor(t) }}>{testResultLabel(t)}</div>}
-                    {keyError && <div className="text-error aj-fs-12 aj-mt-8">✗ {keyError}</div>}
+                    {t && <div className="aj-res-modal"><ResultadoPrueba resultado={t} /></div>}
+                    {keyError && <div className="text-error aj-fs-12 aj-mt-8" role="alert">✗ {keyError}</div>}
                     <p className="aj-nota-115">
                       La clave se comprueba contra el proveedor, sin subir ninguna imagen. Guardar la
                       comprueba también: si no vale, no se guarda.

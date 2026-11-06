@@ -4,10 +4,11 @@ import { fetchSettings, updateSettings, type SettingsData } from '../../api/sett
 import { type IntegrationTestResult } from '../../api/integrationTests'
 import { testDiscordNotification, testTelegramNotification } from '../../api/notifications'
 import { ServiceIcon } from '../../components/ServiceIcon'
-import { CheckStatusIcon } from '../../components/DetailCard'
 import { InfoIcon } from '../../components/InfoIcon'
 import { MODOS_AVISO_LOTE, MODO_AVISO_LOTE_POR_DEFECTO, conAvisoDeLote, type ModoAvisoLote } from '../../utils/lote'
 import { useSettingsMessageAdapter } from './mensajes'
+import { Campo, EstadoSecreto, Interruptor } from './Campo'
+import { CabeceraTarjeta } from './CabeceraTarjeta'
 import type { SaveExpose } from './tipos'
 
 // Per-channel checkbox list: which event types this channel forwards.
@@ -20,8 +21,8 @@ function EventPicker({ title, eventTypes, selected, disabled, onToggle }: {
 }) {
   if (eventTypes.length === 0) return null
   return (
-    <div className={disabled ? 'aj-grupo-eventos aj-desactivado' : 'aj-grupo-eventos'}>
-      <div className="aj-titulo-grupo">{title}</div>
+    <fieldset className={disabled ? 'aj-grupo-eventos aj-desactivado' : 'aj-grupo-eventos'} disabled={disabled}>
+      <legend className="aj-titulo-grupo">{title}</legend>
       <div className="aj-col-6">
         {eventTypes.map(ev => (
           <label key={ev.code} className="checkbox-label aj-fs-13">
@@ -34,7 +35,7 @@ function EventPicker({ title, eventTypes, selected, disabled, onToggle }: {
           </label>
         ))}
       </div>
-    </div>
+    </fieldset>
   )
 }
 
@@ -227,19 +228,19 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
 
   if (loading) return <p className="aj-cargando">Cargando…</p>
 
+  const estadoWebhook = settings?.notify_discord_webhook_configured
+  const estadoToken = settings?.notify_telegram_bot_token_configured
+
   return (
     <div className="aj-col-16">
       <div className="aj-rejilla-4">
       <div className="placeholder-card">
-        <h3 className="aj-card-titulo aj-mb-14">
-          <ServiceIcon type="emu" size={20} /> Notificaciones UI
-        </h3>
-        <label className="checkbox-label aj-mb-12">
-          <input type="checkbox" checked={uiEnabled} onChange={e => setUiEnabled(e.target.checked)} /> Mostrar avisos en la campana
-        </label>
-        <p className="aj-muted-12 aj-mt-0">
-          Avisos dentro de la propia app (icono de la campana en la barra superior).
-        </p>
+        <CabeceraTarjeta
+          icono={<ServiceIcon type="emu" size={20} />}
+          titulo="Notificaciones UI"
+          descripcion="Avisos dentro de la propia app (icono de la campana en la barra superior)."
+        />
+        <Interruptor etiqueta="Mostrar avisos en la campana" marcado={uiEnabled} onCambio={setUiEnabled} />
         <EventPicker
           title="Qué mostrar en la campana"
           eventTypes={eventTypes}
@@ -250,37 +251,40 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
       </div>
 
       <div className="placeholder-card">
-        <h3 className="aj-card-titulo aj-mb-14">
-          <ServiceIcon type="discord" size={20} /> Discord
-        </h3>
-        <label className="checkbox-label aj-mb-12 aj-block">
-          <input type="checkbox" checked={discordEnabled} onChange={e => setDiscordEnabled(e.target.checked)} /> Activar notificaciones por Discord
-        </label>
-        <div className="form-group aj-mb-12">
-          <label className="form-label">Webhook URL</label>
-          <div className="aj-fs-13 aj-mb-6">
-            {settings?.notify_discord_webhook_configured
-              ? <><span className="aj-ok"><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_discord_webhook_masked && <code className="aj-code-mascara">{settings.notify_discord_webhook_masked}</code>}</>
-              : <span className="aj-err">✗ No configurado</span>}
-          </div>
-          <input
-            type="password"
-            className="form-input"
-            value={discordWebhook}
-            onChange={e => { setDiscordWebhook(e.target.value); setQuitarDiscord(false) }}
-            placeholder={quitarDiscord ? 'Se quitará al guardar' : 'https://discord.com/api/webhooks/… (dejar vacío para mantener el actual)'}
-            autoComplete="new-password"
-          />
-          {settings?.notify_discord_webhook_configured && !discordWebhook && (
-            <button type="button" className="btn btn-secondary btn-sm aj-mt-6" onClick={() => setQuitarDiscord(q => !q)}>
-              {quitarDiscord ? 'No quitarlo' : 'Quitar el webhook'}
-            </button>
+        <CabeceraTarjeta
+          icono={<ServiceIcon type="discord" size={20} />}
+          titulo="Discord"
+          lateral={<EstadoSecreto configurado={estadoWebhook} genero="m" />}
+        />
+        <Interruptor etiqueta="Activar notificaciones por Discord" marcado={discordEnabled} onCambio={setDiscordEnabled} />
+        <Campo
+          etiqueta="Webhook URL"
+          ayuda={estadoWebhook && settings?.notify_discord_webhook_masked ? <>Guardado: <code>{settings.notify_discord_webhook_masked}</code></> : undefined}
+        >
+          {c => (
+            <>
+              <input
+                {...c}
+                type="password"
+                className="form-input"
+                value={discordWebhook}
+                onChange={e => { setDiscordWebhook(e.target.value); setQuitarDiscord(false) }}
+                placeholder={quitarDiscord ? 'Se quitará al guardar' : 'https://discord.com/api/webhooks/… (dejar vacío para mantener el actual)'}
+                autoComplete="new-password"
+              />
+              {estadoWebhook && !discordWebhook && (
+                <button type="button" className="btn btn-secondary btn-sm aj-self-start" onClick={() => setQuitarDiscord(q => !q)}>
+                  {quitarDiscord ? 'No quitarlo' : 'Quitar el webhook'}
+                </button>
+              )}
+            </>
           )}
+        </Campo>
+        <div className="aj-acciones">
+          <button className="btn btn-secondary btn-sm" onClick={handleTestDiscord} disabled={testingDiscord} type="button">
+            {testingDiscord ? 'Enviando…' : 'Probar notificación'}
+          </button>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={handleTestDiscord} disabled={testingDiscord} type="button">
-          {testingDiscord ? 'Enviando…' : 'Probar notificación'}
-        </button>
-        
         <EventPicker
           title="Qué notificar por Discord"
           eventTypes={eventTypes}
@@ -291,41 +295,43 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
       </div>
 
       <div className="placeholder-card">
-        <h3 className="aj-card-titulo aj-mb-14">
-          <ServiceIcon type="telegram" size={20} /> Telegram
-        </h3>
-        <label className="checkbox-label aj-mb-12 aj-block">
-          <input type="checkbox" checked={telegramEnabled} onChange={e => setTelegramEnabled(e.target.checked)} /> Activar notificaciones por Telegram
-        </label>
-        <div className="form-group aj-mb-12">
-          <label className="form-label">Bot token</label>
-          <div className="aj-fs-13 aj-mb-6">
-            {settings?.notify_telegram_bot_token_configured
-              ? <><span className="aj-ok"><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_telegram_bot_token_masked && <code className="aj-code-mascara">{settings.notify_telegram_bot_token_masked}</code>}</>
-              : <span className="aj-err">✗ No configurado</span>}
-          </div>
-          <input
-            type="password"
-            className="form-input"
-            value={telegramToken}
-            onChange={e => { setTelegramToken(e.target.value); setQuitarTelegram(false) }}
-            placeholder={quitarTelegram ? 'Se quitará al guardar' : '123456:ABC-DEF… (dejar vacío para mantener el actual)'}
-            autoComplete="new-password"
-          />
-          {settings?.notify_telegram_bot_token_configured && !telegramToken && (
-            <button type="button" className="btn btn-secondary btn-sm aj-mt-6" onClick={() => setQuitarTelegram(q => !q)}>
-              {quitarTelegram ? 'No quitarlo' : 'Quitar el token'}
-            </button>
+        <CabeceraTarjeta
+          icono={<ServiceIcon type="telegram" size={20} />}
+          titulo="Telegram"
+          lateral={<EstadoSecreto configurado={estadoToken} genero="m" />}
+        />
+        <Interruptor etiqueta="Activar notificaciones por Telegram" marcado={telegramEnabled} onCambio={setTelegramEnabled} />
+        <Campo
+          etiqueta="Bot token"
+          ayuda={estadoToken && settings?.notify_telegram_bot_token_masked ? <>Guardado: <code>{settings.notify_telegram_bot_token_masked}</code></> : undefined}
+        >
+          {c => (
+            <>
+              <input
+                {...c}
+                type="password"
+                className="form-input"
+                value={telegramToken}
+                onChange={e => { setTelegramToken(e.target.value); setQuitarTelegram(false) }}
+                placeholder={quitarTelegram ? 'Se quitará al guardar' : '123456:ABC-DEF… (dejar vacío para mantener el actual)'}
+                autoComplete="new-password"
+              />
+              {estadoToken && !telegramToken && (
+                <button type="button" className="btn btn-secondary btn-sm aj-self-start" onClick={() => setQuitarTelegram(q => !q)}>
+                  {quitarTelegram ? 'No quitarlo' : 'Quitar el token'}
+                </button>
+              )}
+            </>
           )}
+        </Campo>
+        <Campo etiqueta="Chat ID">
+          {c => <input {...c} className="form-input" value={telegramChatId} onChange={e => setTelegramChatId(e.target.value)} placeholder="-100123456789" autoComplete="off" />}
+        </Campo>
+        <div className="aj-acciones">
+          <button className="btn btn-secondary btn-sm" onClick={handleTestTelegram} disabled={testingTelegram} type="button">
+            {testingTelegram ? 'Enviando…' : 'Probar notificación'}
+          </button>
         </div>
-        <div className="form-group aj-mb-12">
-          <label className="form-label">Chat ID</label>
-          <input className="form-input" value={telegramChatId} onChange={e => setTelegramChatId(e.target.value)} placeholder="-100123456789" />
-        </div>
-        <button className="btn btn-secondary btn-sm" onClick={handleTestTelegram} disabled={testingTelegram} type="button">
-          {testingTelegram ? 'Enviando…' : 'Probar notificación'}
-        </button>
-        
         <EventPicker
           title="Qué notificar por Telegram"
           eventTypes={eventTypes}
@@ -336,27 +342,29 @@ export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpos
       </div>
 
       <div className="placeholder-card">
-        <h3 className="aj-card-titulo aj-mb-14">
-          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M12 3 3 7.5l9 4.5 9-4.5L12 3z" /><path d="m3 12 9 4.5 9-4.5" /><path d="m3 16.5 9 4.5 9-4.5" />
-          </svg>
-          Subidas por lotes
-        </h3>
-        <div className="form-group aj-mb-12">
-          <label className="form-label aj-flex-c-6" htmlFor="aviso-lote">
-            Notificaciones de un lote
-            <InfoIcon text="Cómo avisan las subidas lanzadas juntas (un lote o una tanda del asistente). Una por subida: cada una avisa al completarse o fallar, como una suelta. Una por lote: no avisa ninguna por separado y, cuando termina la última, llega un solo aviso con el resumen (cuántas se completaron, fallaron o se cancelaron). Si luego reintentas las fallidas, al terminar los reintentos llega otro resumen. Las subidas sueltas avisan siempre una a una." />
-          </label>
-          <select id="aviso-lote" className="form-input form-select" value={loteModo}
-                  onChange={e => cambiarModoLote(e.target.value as ModoAvisoLote)}>
-            {MODOS_AVISO_LOTE.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
-        </div>
-        <p className="aj-muted-12 aj-mt-0">
-          {loteModo === 'por_lote'
+        <CabeceraTarjeta
+          icono={(
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M12 3 3 7.5l9 4.5 9-4.5L12 3z" /><path d="m3 12 9 4.5 9-4.5" /><path d="m3 16.5 9 4.5 9-4.5" />
+            </svg>
+          )}
+          titulo="Subidas por lotes"
+        />
+        <Campo
+          id="aviso-lote"
+          etiqueta="Notificaciones de un lote"
+          info={<InfoIcon text="Cómo avisan las subidas lanzadas juntas (un lote o una tanda del asistente). Una por subida: cada una avisa al completarse o fallar, como una suelta. Una por lote: no avisa ninguna por separado y, cuando termina la última, llega un solo aviso con el resumen (cuántas se completaron, fallaron o se cancelaron). Si luego reintentas las fallidas, al terminar los reintentos llega otro resumen. Las subidas sueltas avisan siempre una a una." />}
+          ayuda={loteModo === 'por_lote'
             ? 'El aviso del lote sale por los canales que tengan marcado «Lote de subidas terminado».'
             : 'Cada subida de un lote avisa por su cuenta, con «Subida completada» o «Subida fallida».'}
-        </p>
+        >
+          {c => (
+            <select {...c} className="form-input form-select" value={loteModo}
+                    onChange={e => cambiarModoLote(e.target.value as ModoAvisoLote)}>
+              {MODOS_AVISO_LOTE.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          )}
+        </Campo>
       </div>
       </div>
     </div>

@@ -270,14 +270,6 @@
   color: var(--color-warning);
 }
 
-.aj-tabs {
-  display: flex;
-  gap: 2px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
 .aj-cuerpo {
   flex: 1;
   min-height: 0;
@@ -369,7 +361,7 @@
 
 .aj-ojo {
   position: absolute;
-  right: 8px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
@@ -377,7 +369,7 @@
   color: var(--text-muted);
   cursor: pointer;
   display: flex;
-  padding: 2px;
+  padding: 6px;
 }
 
 .aj-titulo-grupo {
@@ -388,9 +380,9 @@
 
 .aj-rejilla-4 {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .aj-code-mascara {
@@ -466,19 +458,6 @@
 .aj-campo-ruta {
   flex: 1;
   min-width: 200px;
-}
-
-.aj-mensaje {
-  margin-left: auto;
-  align-self: center;
-  min-width: 0;
-  padding: 4px 10px;
-  margin-bottom: 6px;
-  border-radius: 6px;
-  font-size: 12.5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Para ganar a `.hud-app .btn-ghost { color }` */
@@ -641,28 +620,6 @@
   margin-top: 12px;
 }
 
-.aj-guardado {
-  grid-column: 1 / -1;
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 4px;
-  padding: 10px 16px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-hover);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-}
-
-.aj-guardado__cuenta {
-  font-size: 13px;
-  color: var(--color-warning-soft);
-}
-
 /* Sin sitio para el índice al lado: pasa a una fila sobre las tarjetas, sin fijar para no tapar el destino al saltar. */
 @media (max-width: 1099px) {
   .aj-config {
@@ -685,9 +642,587 @@
   }
 }
 
-/* Las cuatro pestañas no caben en una fila: pasan a dos. */
+/* ===== Rediseño de Configuración =====
+   Se apoya en los tokens de siempre (--hud-*, --radius-*, --text-*, --color-*); las clases propias (aj-) no
+   dependen de las hojas globales, y donde una regla global de igual peso las pisaría, el selector lleva el contenedor. */
+
+/* Pestañas: una fila subrayada, con el aviso a la derecha. La altura se reserva para dos líneas de aviso, así
+   que aparecer o desaparecer un mensaje no mueve nada. */
+.aj-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  min-height: 46px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.aj-tabs__lista {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.hud-app .aj-tab {
+  position: relative;
+  margin-bottom: -1px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-small) var(--radius-small) 0 0;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+}
+
+.hud-app .aj-tab:hover:not(.active) {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--hud-cyan, var(--color-focus)) 6%, transparent);
+}
+
+.hud-app .aj-tab.active {
+  color: var(--text-primary);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--hud-cyan, var(--color-focus)) 8%, transparent);
+  border-bottom-color: var(--hud-cyan, var(--color-focus));
+}
+
+.hud-app .aj-tab:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+/* El aviso de la pantalla: hasta dos líneas, con el color de su tono. */
+.aj-mensaje {
+  flex: 1;
+  min-width: 0;
+  max-width: 560px;
+  margin: 0 0 6px auto;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.aj-mensaje__texto {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.aj-mensaje--ok {
+  color: var(--color-available-soft);
+  background: color-mix(in srgb, var(--color-available) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-available) 30%, transparent);
+}
+
+.aj-mensaje--error {
+  color: var(--color-error-soft);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 32%, transparent);
+}
+
+.aj-mensaje--aviso {
+  color: var(--color-warning-soft);
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-warning) 32%, transparent);
+}
+
+/* El cuerpo reserva el hueco de la barra de desplazamiento para que no se mueva al aparecer. */
+.aj-cuerpo {
+  scrollbar-gutter: stable;
+  /* La barra de guardado, pegada abajo, no tapa el campo que recibe el foco. */
+  scroll-padding-bottom: 80px;
+}
+
+/* La tarjeta: cabecera con icono, título y estado, y los campos debajo con el mismo ritmo en todas. */
+.aj-cuerpo .placeholder-card {
+  padding: 20px 22px 22px;
+}
+
+.aj-cab {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.aj-cab__fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+}
+
+.placeholder-card .aj-cab__titulo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.aj-cab__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-small);
+  color: var(--text-accent);
+  background: color-mix(in srgb, var(--hud-cyan, var(--color-focus)) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hud-cyan, var(--color-focus)) 18%, transparent);
+}
+
+.aj-cab__lateral {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aj-cab__desc {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  max-width: 70ch;
+}
+
+/* Campos: etiqueta, control, error y ayuda, con la misma separación en todas las tarjetas. */
+.aj-campo {
+  margin-bottom: 16px;
+}
+
+.aj-campo:last-child {
+  margin-bottom: 0;
+}
+
+.aj-campo__etiqueta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  font-size: 12.5px;
+}
+
+.aj-campo__error {
+  display: block;
+}
+
+.aj-campo .form-hint {
+  line-height: 1.5;
+}
+
+.aj-campo input[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+
+.aj-con-ojo {
+  position: relative;
+}
+
+.aj-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.aj-acciones:last-child {
+  margin-bottom: 0;
+}
+
+.aj-fila-campo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aj-fila-campo > .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Grupos de subida (eMuwarez): la lista de lo guardado encima del campo para añadir. */
+.aj-grupos {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aj-grupos__fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--overlay-light) 3%, transparent);
+}
+
+.aj-grupos__nombre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Estado de una clave o secreto guardado, y resultado de una prueba de conexión. */
+.aj-estado-secreto {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.aj-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.aj-estado__punto {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.aj-estado--ok {
+  color: var(--color-available-soft);
+  background: color-mix(in srgb, var(--color-available) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-available) 28%, transparent);
+}
+
+.aj-estado--falta {
+  color: var(--color-error-soft);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 26%, transparent);
+}
+
+.aj-resultado {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.aj-resultado--ok { color: var(--color-available-soft); }
+.aj-resultado--aviso { color: var(--color-warning-soft); }
+.aj-resultado--error { color: var(--color-error-soft); }
+
+.aj-estado-secreto .aj-code-mascara {
+  margin-left: 0;
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Interruptor: la etiqueta a la izquierda y el control a la derecha, en una fila que se puede pulsar entera. */
+.aj-interruptor {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.aj-interruptor__etiqueta {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.aj-interruptor__control {
+  appearance: none;
+  flex-shrink: 0;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--overlay-light) 12%, transparent);
+  border: 1px solid var(--border-input);
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.aj-interruptor__control::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: transform 0.15s, background-color 0.15s;
+}
+
+.aj-interruptor__control:checked {
+  background: color-mix(in srgb, var(--hud-cyan, var(--color-focus)) 30%, transparent);
+  border-color: var(--hud-cyan, var(--color-focus));
+}
+
+.aj-interruptor__control:checked::after {
+  transform: translateX(14px);
+  background: var(--text-on-color);
+}
+
+/* Subgrupos de una tarjeta larga (Otros). */
+.aj-grupo {
+  margin-top: 8px;
+}
+
+.aj-grupo + .aj-grupo {
+  margin-top: 22px;
+}
+
+.aj-grupo__titulo {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-accent);
+}
+
+.aj-grupo__titulo .form-hint {
+  font-weight: 400;
+}
+
+/* Eventos de un canal de notificaciones. */
+fieldset.aj-grupo-eventos {
+  margin: 16px 0 0;
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+
+.aj-grupo-eventos .aj-titulo-grupo {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* El contenido de Configuración: tarjetas en columnas, con el índice al lado. */
+.aj-config {
+  column-gap: 24px;
+}
+
+.aj-config .settings-config-grid {
+  column-gap: 20px;
+}
+
+.aj-seccion {
+  margin-bottom: 20px;
+}
+
+/* El índice: el apartado actual lleva fondo, borde y más peso. */
+.aj-indice {
+  top: 4px;
+  gap: 12px;
+}
+
+.aj-indice__enlace {
+  position: relative;
+  padding: 7px 12px;
+}
+
+.aj-indice__enlace.activa {
+  font-weight: 600;
+}
+
+/* Avanzado: la cabecera es una tarjeta más, con su resumen a la derecha. */
+.aj-avanzado__cabecera {
+  padding: 12px 18px;
+}
+
+.aj-avanzado__cabecera .form-hint {
+  margin-left: auto;
+  font-weight: 400;
+}
+
+/* Barra de guardado: flotante, con la cuenta a la izquierda y las acciones a la derecha. */
+.aj-guardado {
+  grid-column: 1 / -1;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 0;
+  padding: 10px 14px 10px 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--hud-cyan, var(--border-hover));
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card), 0 0 18px -8px var(--hud-cyan, var(--color-focus));
+  flex-shrink: 0;
+}
+
+.aj-guardado__cuenta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-warning-soft);
+}
+
+.aj-guardado__cuenta::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-warning);
+}
+
+.aj-guardado__acciones {
+  display: flex;
+  gap: 8px;
+}
+
+/* Tablas de datos (versión, base de datos, backups). */
+.aj-tabla {
+  font-size: 13px;
+}
+
+.aj-tabla .aj-th {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.aj-tabla td {
+  vertical-align: top;
+}
+
+.aj-td-etq-150,
+.aj-td-etq-130 {
+  padding-left: 0;
+}
+
+.aj-fila-borde:last-child {
+  border-bottom: 0;
+}
+
+/* Pantallas estrechas: las pestañas pasan a una fila que se desplaza y el aviso, a una línea propia. */
 @media (max-width: 768px) {
   .aj-tabs {
     flex-wrap: wrap;
+    gap: 6px;
+    min-height: 0;
   }
+  .aj-tabs__lista {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* Se desvanece por la derecha: avisa de que hay más pestañas al desplazar. */
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent);
+    mask-image: linear-gradient(to right, black 85%, transparent);
+  }
+  .hud-app .aj-tab {
+    flex-shrink: 0;
+    padding: 10px 14px;
+  }
+  .aj-mensaje {
+    flex-basis: 100%;
+    max-width: none;
+    margin: 0 0 8px;
+  }
+  .aj-indice__lista {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .aj-indice__enlace {
+    white-space: nowrap;
+  }
+  .aj-guardado {
+    flex-wrap: wrap;
+  }
+  .aj-guardado__acciones {
+    margin-left: auto;
+  }
+  .aj-cuerpo .placeholder-card {
+    padding: 16px;
+  }
+}
+
+/* Con muchas sesiones abiertas la lista se desplaza dentro de su tarjeta en vez de alargarla. */
+.aj-cuerpo .sesiones-lista {
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Ajustes tras la primera revisión */
+@media (min-width: 1100px) {
+  .aj-config {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+}
+
+.aj-interruptor + .aj-campo {
+  margin-top: 14px;
+}
+
+fieldset.aj-grupo-eventos {
+  margin-top: 14px;
+  padding: 0;
+  border: 0;
+}
+
+.aj-grupo-eventos .aj-titulo-grupo {
+  float: left;
+  width: 100%;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.aj-grupo-eventos .aj-titulo-grupo + * {
+  clear: both;
+}
+
+/* Sin la espera del doble toque en pantallas táctiles. */
+.aj-tab,
+.aj-indice__enlace,
+.aj-avanzado__cabecera,
+.aj-interruptor__control,
+.aj-interruptor__etiqueta {
+  touch-action: manipulation;
 }

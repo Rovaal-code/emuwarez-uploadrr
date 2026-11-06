@@ -38,16 +38,17 @@ function ProviderIcon({ domain, size = 16, link = true }: { domain?: string | nu
 // Its own component (not inlined in renderRow below) so useTooltip's hook
 // call is legal — renderRow is a plain callback invoked once per row, not a
 // separate component instance.
-function RemoveProviderButton({ onClick }: { onClick: () => void }) {
+function RemoveProviderButton({ onClick, nombre }: { onClick: () => void; nombre: string }) {
   const { triggerProps, tooltipNode } = useTooltip('Quitar')
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-label={`Quitar ${nombre}`}
       className="provprio-quitar"
       {...triggerProps}
     >
-      ✕
+      <span aria-hidden>✕</span>
       {tooltipNode}
     </button>
   )
@@ -126,7 +127,7 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
                 <span className="provprio-nombre">
                   {opt?.label ?? code} <span className="provprio-codigo">({code})</span>
                 </span>
-                <RemoveProviderButton onClick={() => disable(code)} />
+                <RemoveProviderButton onClick={() => disable(code)} nombre={opt?.label ?? code} />
               </div>
             )
           }} />

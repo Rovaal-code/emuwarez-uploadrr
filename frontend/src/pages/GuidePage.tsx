@@ -5,7 +5,7 @@
 // generated name looks the way it does. Purely informational, no state
 // beyond which section's modal is currently open.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CheckStatusIcon } from '../components/DetailCard'
 
 function Mono({ children }: { children: React.ReactNode }) {
@@ -258,29 +258,29 @@ function TechSpecsContent() {
         (o el dato de Radarr/Sonarr cuando el archivo no es accesible).
       </p>
 
-      <p className="guia-subtitulo">Resolución</p>
+      <h3 className="guia-subtitulo">Resolución</h3>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={RESOLUTION_ROWS} />
 
-      <p className="guia-subtitulo">Formato (Source)</p>
+      <h3 className="guia-subtitulo">Formato (Source)</h3>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={SOURCE_ROWS} />
 
-      <p className="guia-subtitulo">Códec de vídeo</p>
+      <h3 className="guia-subtitulo">Códec de vídeo</h3>
       <p className="guia-nota">
         Ojo: H264→AVC y x264→x264 son distintos (códec genérico vs. encoder concreto). Igual con H265→HEVC vs. x265→x265.
       </p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={VIDEO_CODEC_ROWS} />
 
-      <p className="guia-subtitulo">Dolby Vision / HDR</p>
+      <h3 className="guia-subtitulo">Dolby Vision / HDR</h3>
       <p className="guia-nota">Se coloca delante del códec de vídeo.</p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={HDR_ROWS} />
 
-      <p className="guia-subtitulo">Idioma de audio</p>
+      <h3 className="guia-subtitulo">Idioma de audio</h3>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={LANGUAGE_ROWS} />
 
-      <p className="guia-subtitulo">Códec de audio</p>
+      <h3 className="guia-subtitulo">Códec de audio</h3>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={AUDIO_CODEC_ROWS} />
 
-      <p className="guia-subtitulo">Prioridad de audio</p>
+      <h3 className="guia-subtitulo">Prioridad de audio</h3>
       <p className="guia-nota">
         Cuando un mismo idioma viene en varias pistas, el nombre se queda con una sola: la de mejor calidad.
         El nombre dice qué vas a oír, no cuántas pistas trae el archivo. La ficha técnica sí las sigue
@@ -306,7 +306,7 @@ function TechSpecsContent() {
         </div>
       </div>
 
-      <p className="guia-subtitulo">Canales de audio</p>
+      <h3 className="guia-subtitulo">Canales de audio</h3>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={CHANNEL_ROWS} />
 
       <p className="guia-texto guia-texto-pie">
@@ -513,7 +513,7 @@ function VerdictCell({ verdict, label }: { verdict: Verdict; label?: string }) {
 function UploadConditionsContent() {
   return (
     <>
-      <h4 className="guia-h4">Castellano</h4>
+      <h3 className="guia-h4">Castellano</h3>
       <p className="guia-texto guia-texto-inicio">
         eMuwarez exige castellano, pero no importa por dónde venga. Si el audio está en castellano,
         la condición ya se cumple y los subtítulos no se piden. Si el audio no está en castellano,
@@ -548,7 +548,7 @@ function UploadConditionsContent() {
         con el audio.
       </p>
 
-      <h4 className="guia-h4 guia-h4-sep">Otras condiciones que bloquean</h4>
+      <h3 className="guia-h4 guia-h4-sep">Otras condiciones que bloquean</h3>
       <div className="guia-desborde-x">
         <table className="data-table guia-tabla">
           <thead>
@@ -567,7 +567,7 @@ function UploadConditionsContent() {
         </table>
       </div>
 
-      <h4 className="guia-h4 guia-h4-sep">El audio de un pack: cuándo aparece CUSTOM</h4>
+      <h3 className="guia-h4 guia-h4-sep">El audio de un pack: cuándo aparece CUSTOM</h3>
       <p className="guia-texto guia-texto-inicio">
         El nombre de un pack solo puede anunciar una pista que <strong>tengan todos los
         capítulos</strong>. Esa es toda la regla, y de ahí sale el resto:
@@ -633,7 +633,7 @@ function UploadConditionsContent() {
         así que ahí no se usan: los idiomas se escriben uno a uno.
       </p>
 
-      <h4 className="guia-h4 guia-h4-sep">Una temporada con datos mezclados</h4>
+      <h3 className="guia-h4 guia-h4-sep">Una temporada con datos mezclados</h3>
       <p className="guia-texto guia-texto-inicio">
         Como el source, el códec de audio y los idiomas ya no tienen que coincidir, una temporada
         puede tener <strong>varios valores</strong> en esos campos. La ficha te los enseña todos
@@ -692,9 +692,52 @@ const SECTIONS: GuideSection[] = [
   { id: 'upload', label: 'Condiciones de subida', title: 'Condiciones de subida', render: UploadConditionsContent },
 ]
 
+// Los subtítulos de la sección abierta, para saltar a ellos: se leen del propio contenido, así que no hay que
+// mantener una lista aparte cuando se añade una tabla.
+function useSubtitulos(cuerpo: React.RefObject<HTMLElement | null>, seccion: string) {
+  const [subtitulos, setSubtitulos] = useState<{ id: string; texto: string }[]>([])
+  useEffect(() => {
+    const el = cuerpo.current
+    if (!el) return
+    const lista = [...el.querySelectorAll<HTMLElement>('h3')].map((h, i) => {
+      if (!h.id) h.id = `guia-${seccion}-${i}`
+      return { id: h.id, texto: h.textContent ?? '' }
+    })
+    setSubtitulos(lista)
+  }, [cuerpo, seccion])
+  return subtitulos
+}
+
 export function GuidePage() {
   const [openId, setOpenId] = useState<string>('formula')
   const openSection = SECTIONS.find(s => s.id === openId) ?? SECTIONS[0]
+  const listaPestanas = useRef<HTMLDivElement>(null)
+  const cuerpo = useRef<HTMLDivElement>(null)
+  const subtitulos = useSubtitulos(cuerpo, openId)
+
+  function elegir(id: string) {
+    setOpenId(id)
+    cuerpo.current?.scrollTo({ top: 0 })
+  }
+
+  // Flechas (arriba/abajo o izquierda/derecha según la disposición), Inicio y Fin: el foco y la sección van juntos.
+  function alTeclear(e: React.KeyboardEvent<HTMLDivElement>) {
+    const i = SECTIONS.findIndex(s => s.id === openId)
+    const sig = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? (i + 1) % SECTIONS.length
+      : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? (i - 1 + SECTIONS.length) % SECTIONS.length
+      : e.key === 'Home' ? 0
+      : e.key === 'End' ? SECTIONS.length - 1
+      : -1
+    if (sig < 0) return
+    e.preventDefault()
+    elegir(SECTIONS[sig].id)
+    listaPestanas.current?.querySelectorAll<HTMLElement>('[role="tab"]')[sig]?.focus()
+  }
+
+  function saltarA(id: string) {
+    const reducido = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    document.getElementById(id)?.scrollIntoView({ behavior: reducido ? 'auto' : 'smooth', block: 'start' })
+  }
 
   return (
     <div data-tour="guide-content" className="guia-pagina">
@@ -707,42 +750,53 @@ export function GuidePage() {
         </div>
       </div>
 
-      {/* One row, one column per section — click any to select it, marking
-          that column as active and showing its content in the panel below
-          (inline, not a modal). Fórmula del nombre is selected by default. */}
-      <div className="detail-card guia-tira">
-        <table className="data-table guia-tira-tabla">
-          <tbody>
-            <tr>
-              {SECTIONS.map(s => {
-                const active = s.id === openId
-                return (
-                  <td key={s.id} className="guia-tira-celda">
-                    <button
-                      type="button"
-                      onClick={() => setOpenId(s.id)}
-                      className={`btn btn-ghost guia-pestana${active ? ' guia-pestana-activa' : ''}`}
-                    >
-                      {s.label}
-                    </button>
-                  </td>
-                )
-              })}
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <div className="guia-cuerpo">
+        {/* Las secciones: una lista a la izquierda con pantalla ancha y una fila que se desplaza con poca. La
+            sección elegida se enseña debajo (o al lado), no en un modal. Fórmula del nombre es la de partida. */}
+        <div
+          className="guia-pestanas"
+          role="tablist"
+          aria-label="Secciones de la guía"
+          aria-orientation="vertical"
+          ref={listaPestanas}
+          onKeyDown={alTeclear}
+        >
+          {SECTIONS.map(s => {
+            const active = s.id === openId
+            return (
+              <button
+                key={s.id}
+                id={`guia-pestana-${s.id}`}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                aria-controls="guia-panel"
+                tabIndex={active ? 0 : -1}
+                onClick={() => elegir(s.id)}
+                className={`guia-pestana${active ? ' guia-pestana-activa' : ''}`}
+              >
+                {s.label}
+              </button>
+            )
+          })}
+        </div>
 
-      {/* Fills the remaining vertical space and scrolls internally — same
-          fill+internal-scroll pattern as Biblioteca's Temporadas/Capítulos
-          and Subidas' "Progreso de la subida", so long content (like the
-          técnicas tables) never grows the page past the usual bottom margin. */}
-      <div className="detail-card guia-panel">
-        <h3 className="guia-panel-titulo">
-          {openSection.title}
-        </h3>
-        <div className="guia-panel-cuerpo">
-          {openSection.render()}
+        {/* Fills the remaining vertical space and scrolls internally — same
+            fill+internal-scroll pattern as Biblioteca's Temporadas/Capítulos
+            and Subidas' "Progreso de la subida", so long content (like the
+            técnicas tables) never grows the page past the usual bottom margin. */}
+        <div className="detail-card guia-panel" id="guia-panel" role="tabpanel" aria-labelledby={`guia-pestana-${openId}`}>
+          <h2 className="guia-panel-titulo">{openSection.title}</h2>
+          {subtitulos.length >= 3 && (
+            <nav className="guia-saltos" aria-label="En esta sección">
+              {subtitulos.map(t => (
+                <button key={t.id} type="button" className="guia-salto" onClick={() => saltarA(t.id)}>{t.texto}</button>
+              ))}
+            </nav>
+          )}
+          <div className="guia-panel-cuerpo" ref={cuerpo} tabIndex={0} aria-label={`Contenido de «${openSection.title}»`}>
+            {openSection.render()}
+          </div>
         </div>
       </div>
     </div>

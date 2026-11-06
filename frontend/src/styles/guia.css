@@ -1,10 +1,7 @@
-/* Guía (GuidePage): estilos que antes iban en línea. Prefijo guia-.
-   Se importa el último en main.tsx. Las reglas que retocan una celda de
-   `.data-table` o el `.btn.btn-ghost` de las pestañas llevan el selector tan
-   específico como la regla base (`.data-table td`, `.hud-app .btn-ghost` y su
-   :hover ganarían a una clase suelta). */
+/* Guía (GuidePage). Prefijo guia-. Se importa el último en main.tsx. Las reglas que retocan una celda de
+   `.data-table` llevan el selector tan específico como la regla base (`.data-table td` ganaría a una clase suelta). */
 
-/* Página */
+/* Página: la cabecera arriba y, debajo, las secciones y el contenido repartiéndose lo que queda de pantalla. */
 .guia-pagina {
   height: 100%;
   min-height: 0;
@@ -13,68 +10,74 @@
 }
 .guia-cabecera { flex-shrink: 0; }
 .guia-resumen {
-  font-size: 12.5px;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
   margin: 4px 0 0;
 }
 
-/* Fila de pestañas: una celda por sección */
-.detail-card.guia-tira {
-  border-radius: var(--radius-card);
-  overflow-x: auto;
-  margin-top: 20px;
-  flex-shrink: 0;
+.guia-cuerpo {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
 }
-.data-table.guia-tira-tabla {
-  table-layout: fixed;
-  width: 100%;
-}
-.data-table td.guia-tira-celda {
-  padding: 0;
-  text-align: center;
-  vertical-align: middle;
-}
-.btn.guia-pestana {
-  width: 100%;
-  height: 100%;
-  min-height: 64px;
-  border-radius: 0;
+
+/* Las secciones, en una lista a la izquierda: el título entero, sin recortar. */
+.guia-pestanas {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-  padding: 12px 14px;
-  white-space: normal;
-  border-bottom: 2px solid transparent;
+  flex-direction: column;
+  gap: 2px;
+  align-self: start;
+  position: sticky;
+  top: 0;
 }
-/* El :hover de `.hud-app .btn-ghost` repinta todo el borde: se repite aquí
-   para que la raya inferior no cambie al pasar el ratón. */
-.btn.guia-pestana:hover:not(:disabled) { border-bottom-color: transparent; }
-.btn.guia-pestana.guia-pestana-activa,
-.btn.guia-pestana.guia-pestana-activa:hover:not(:disabled) {
-  font-weight: 700;
+
+.btn.guia-pestana,
+.guia-pestana {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 9px 12px 9px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+.guia-pestana:hover {
+  color: var(--text-primary);
   background: var(--bg-card);
-  color: var(--text-accent);
-  border-bottom-color: var(--text-accent);
+}
+.guia-pestana.guia-pestana-activa,
+.guia-pestana.guia-pestana-activa:hover {
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
 }
 
 /* Panel con el contenido de la sección */
 .detail-card.guia-panel {
   border-radius: var(--radius-card);
-  margin-top: 16px;
-  padding: 16px 18px;
-  flex: 1;
+  padding: 20px 24px;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 .guia-panel-titulo {
-  margin: 0 0 14px;
-  font-size: 13px;
+  margin: 0 0 12px;
+  font-size: 16px;
   font-weight: 700;
+  line-height: 1.3;
   color: var(--text-primary);
   flex-shrink: 0;
 }
@@ -82,59 +85,105 @@
   overflow: auto;
   flex: 1;
   min-height: 0;
+  /* La barra de desplazamiento no se come el borde derecho del contenido. */
+  padding-right: 6px;
+}
+.guia-panel-cuerpo:focus-visible { outline-offset: 4px; }
+
+/* Saltos a los subtítulos de la sección. */
+.guia-saltos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+  flex-shrink: 0;
+}
+.guia-salto {
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+.guia-salto:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+  background: var(--bg-card);
 }
 
-/* Contenido de las secciones */
+/* Contenido de las secciones: la prosa no pasa de unos 80 caracteres por línea; las tablas, sí a lo ancho. */
 .guia-mono-bloque {
   font-family: var(--font-mono);
   font-size: 12.5px;
+  line-height: 1.6;
   background: color-mix(in srgb, var(--overlay-dark) 20%, transparent);
   padding: 10px 12px;
-  border-radius: 6px;
-  overflow-x: auto;
-  white-space: pre;
+  border-radius: var(--radius-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .guia-desborde-x { overflow-x: auto; }
-.data-table.guia-tabla { font-size: 12.5px; }
+.data-table.guia-tabla { font-size: 13px; }
+.data-table.guia-tabla td { line-height: 1.5; }
+/* Las tablas de tres columnas o más (con un «por qué» largo) no se estrechan: se desplazan de lado. */
+.data-table.guia-tabla:has(th:nth-child(3)) { min-width: 760px; }
+.data-table.guia-tabla:has(th:nth-child(3)) td:last-child { min-width: 280px; }
 .guia-mono { font-family: var(--font-mono); }
 .guia-nowrap { white-space: nowrap; }
 .guia-campo { font-weight: 600; white-space: nowrap; }
-.guia-rejilla { display: grid; gap: 6px; }
+.guia-rejilla { display: grid; gap: 8px; }
 
-.guia-texto { font-size: 12.5px; }
+.guia-texto {
+  font-size: 13px;
+  line-height: 1.65;
+  max-width: 82ch;
+}
 .guia-texto-inicio { margin-top: 0; }
-.guia-texto-tras-bloque { margin-top: 10px; margin-bottom: 0; }
+.guia-texto + .guia-desborde-x { margin-top: 12px; }
+.guia-texto-tras-bloque { margin-top: 12px; margin-bottom: 0; }
 .guia-texto-pie { margin-top: 18px; margin-bottom: 0; }
 .guia-subtitulo {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-top: 18px;
-  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-accent);
+  margin: 22px 0 8px;
+  scroll-margin-top: 4px;
 }
 .guia-nota {
-  font-size: 11.5px;
+  font-size: 12.5px;
+  line-height: 1.55;
   color: var(--text-muted);
+  max-width: 82ch;
   margin-top: 0;
   margin-bottom: 8px;
 }
-.guia-h4 { font-size: 13px; margin: 0 0 6px; }
-.guia-h4-sep { margin-top: 18px; }
+.guia-h4 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  scroll-margin-top: 4px;
+}
+.guia-h4-sep { margin-top: 24px; }
 .guia-lista {
-  font-size: 12.5px;
+  font-size: 13px;
+  line-height: 1.65;
+  max-width: 82ch;
   margin-top: 0;
   padding-left: 18px;
 }
 .guia-lista-reglas {
   margin: 0;
-  line-height: 1.8;
+  line-height: 1.9;
 }
 .guia-ejemplos-audio {
-  font-size: 12px;
-  margin-top: 10px;
+  font-size: 13px;
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* Veredicto de una condición de subida */
@@ -148,3 +197,53 @@
 .guia-veredicto-ok { color: var(--color-available); }
 .guia-veredicto-blocked { color: var(--color-error); }
 .guia-veredicto-warn { color: var(--color-warning); }
+
+/* Con menos de 1100px no cabe la lista al lado: las secciones pasan a una fila que se desplaza. */
+@media (max-width: 1099px) {
+  .guia-cuerpo {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 14px;
+  }
+  .guia-pestanas {
+    position: static;
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .btn.guia-pestana,
+  .guia-pestana {
+    flex-shrink: 0;
+    width: auto;
+    white-space: nowrap;
+    border-color: var(--border);
+    border-radius: 999px;
+    padding: 7px 14px;
+  }
+  }
+
+@media (max-width: 520px) {
+  .detail-card.guia-panel { padding: 16px 14px; }
+}
+
+.guia-pestana,
+.guia-salto {
+  touch-action: manipulation;
+}
+
+/* Con un dedo, objetivos de 44 px como mínimo; con ratón el aspecto no cambia. Va después de las reglas base y de
+   las de pantalla estrecha para ganarles; en la lista vertical el texto sigue a la izquierda. */
+@media (pointer: coarse) {
+  .btn.guia-pestana,
+  .guia-pestana,
+  .guia-salto {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 44px;
+  }
+  .guia-pestanas { gap: 4px; }
+  .guia-saltos { gap: 8px; }
+}

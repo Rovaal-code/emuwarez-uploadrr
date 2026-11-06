@@ -486,6 +486,41 @@ describe('Configuración: índice, buscador, barra de guardado y Avanzado', () =
     expect(visibles()).toEqual(['avanzado'])
     expect(cabecera.getAttribute('aria-expanded')).toBe('true')
   })
+
+  it('«Descartar» vuelve a lo guardado: el campo recupera su valor y la barra desaparece', async () => {
+    await montar()
+    await escribir(campo('Tag'), 'Nuevo')
+    await escribir(porPlaceholder('API key de TMDb'), 'k')
+    expect(cambios()).toBe('2 campos han cambiado')
+    await pulsar(boton('Descartar'))
+    expect(campo('Tag').value).toBe('Subidas')
+    expect(porPlaceholder('API key de TMDb').value).toBe('')
+    expect(cambios()).toBeUndefined()
+    expect(updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('una URL mala se marca en su campo al salir de él, y se limpia al corregirla', async () => {
+    await montar()
+    const url = campo('URL del WebUI')
+    expect(url.getAttribute('aria-invalid')).toBeNull()
+    await escribir(url, 'qbit.local')
+    expect(url.getAttribute('aria-invalid')).toBeNull()
+    await act(async () => { url.dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })
+    expect(url.getAttribute('aria-invalid')).toBe('true')
+    const error = document.getElementById(url.getAttribute('aria-describedby')!.split(' ')[0])!
+    expect(error.getAttribute('role')).toBe('alert')
+    expect(error.textContent).toContain('debe empezar por http://')
+    await escribir(url, 'http://qbit:8080')
+    expect(url.getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('las etiquetas de los campos están ligadas a su control', async () => {
+    await montar()
+    for (const texto of ['URL del WebUI', 'Tag', 'Rutas permitidas']) {
+      const etiqueta = [...document.querySelectorAll('label')].find(l => l.textContent?.trim().startsWith(texto))!
+      expect(document.getElementById(etiqueta.htmlFor)).toBe(campo(texto))
+    }
+  })
 })
 
 describe('Configuración: cuenta y sesiones', () => {
@@ -533,7 +568,7 @@ describe('Configuración: widget para Homepage', () => {
     vi.mocked(getWidgetKeyStatus).mockResolvedValue({ configurada: true })
     await montar()
     expect(document.querySelector('input[aria-label="Clave del widget"]')).toBeNull()
-    expect(texto()).toContain('Clave puesta.')
+    expect(texto()).toContain('Clave puesta')
     expect(texto()).not.toContain('emuw_clave-de-prueba')
   })
 
@@ -543,7 +578,7 @@ describe('Configuración: widget para Homepage', () => {
     expect(texto()).toContain('No se pudo cargar el estado de la clave.')
     expect(texto()).not.toContain('Cargando…')
     await pulsar(boton('Reintentar'))
-    expect(texto()).toContain('Clave puesta.')
+    expect(texto()).toContain('Clave puesta')
   })
 
   it('regenerar y quitar piden confirmación', async () => {

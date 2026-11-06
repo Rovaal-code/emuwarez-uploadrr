@@ -709,12 +709,13 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       return new Set(Array.isArray(guardado) ? guardado.filter((g): g is GrupoPeticion => typeof g === 'string') : [])
     } catch { return new Set() }
   })
-  const alternarGrupo = (id: GrupoPeticion, plegar?: boolean) => setPlegados(prev => {
-    const sig = new Set(prev)
+  // El actualizador de estado debe ser puro: el siguiente conjunto se calcula aquí y se guarda aparte.
+  const alternarGrupo = (id: GrupoPeticion, plegar?: boolean) => {
+    const sig = new Set(plegados)
     if (plegar ?? !sig.has(id)) sig.add(id); else sig.delete(id)
+    setPlegados(sig)
     try { localStorage.setItem(CLAVE_GRUPOS_PLEGADOS, JSON.stringify([...sig])) } catch { /* ignore */ }
-    return sig
-  })
+  }
   // «Ir a»: despliega el grupo y lleva la vista a su cabecera.
   const irAlGrupo = (id: GrupoPeticion) => {
     alternarGrupo(id, false)

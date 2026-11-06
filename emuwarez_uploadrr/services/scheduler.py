@@ -27,6 +27,7 @@ from datetime import datetime, time, timedelta, timezone, tzinfo
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from ..integrations.base import texto_de_error
 from .eventos import EVENTO_TAREA, publicar
 
 TASK_LIBRARY_SYNC = "sync-library"
@@ -274,7 +275,7 @@ def _run_check_version(conn: sqlite3.Connection) -> tuple[str, str]:
     try:
         estado, resumen = _comprobar_version(conn)
     except Exception as exc:
-        finish_task(conn, run_id, "failed", str(exc))
+        finish_task(conn, run_id, "failed", texto_de_error(exc))
         raise
     finish_task(conn, run_id, estado, resumen)
     return estado, resumen
@@ -319,7 +320,7 @@ def _con_registro(conn: sqlite3.Connection, task_key: str, trabajo: Callable[[],
     try:
         estado, resumen = trabajo()
     except Exception as exc:
-        finish_task(conn, run_id, "failed", str(exc))
+        finish_task(conn, run_id, "failed", texto_de_error(exc))
         raise
     finish_task(conn, run_id, estado, resumen)
     return estado, resumen
@@ -381,7 +382,7 @@ def run_scheduled_task(conn: sqlite3.Connection, task_key: str, *, manual: bool 
     try:
         status, summary = executor(conn)
     except Exception as exc:
-        status, summary = "failed", str(exc)
+        status, summary = "failed", texto_de_error(exc)
 
     task = get_scheduled_task(conn, task_key) or task  # el horario pudo cambiar mientras corría
     next_run_at = _proxima_ejecucion(task, _now()).isoformat()
@@ -439,7 +440,7 @@ def tick_due_tasks() -> list[dict]:
             try:
                 results.append(run_scheduled_task(conn, task_key, manual=False))
             except Exception as exc:
-                results.append({"task_key": task_key, "status": "failed", "summary": str(exc), "next_run_at": None})
+                results.append({"task_key": task_key, "status": "failed", "summary": texto_de_error(exc), "next_run_at": None})
     finally:
         conn.close()
     return results

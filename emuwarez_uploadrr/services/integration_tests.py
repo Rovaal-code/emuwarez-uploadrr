@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 from ..constants import EMU_BASE_URL
 from ..integrations import http_cliente
+from ..integrations.base import tapar_claves, texto_de_error, url_sin_claves
 
 _TIMEOUT = 10  # seconds — short timeout for connection probes
 _CABECERAS_PRUEBA = {"Accept": "application/json", "User-Agent": "emuwarez-uploadrr/3"}
@@ -166,7 +167,7 @@ def test_tmdb_connection(
     except http_cliente.ErrorConexion as exc:
         if exc.tiempo_agotado:
             return _fail("tmdb", "timeout", "Timeout al conectar con TMDb")
-        return _fail("tmdb", "connection_error", f"No se pudo conectar con TMDb: {exc.motivo}")
+        return _fail("tmdb", "connection_error", f"No se pudo conectar con TMDb: {tapar_claves(exc.motivo, _key)}")
     except Exception as exc:
         return _fail("tmdb", "unexpected_error", f"Error inesperado: {type(exc).__name__}")
 
@@ -210,7 +211,7 @@ def test_emuwarez_connection(
 
     # Validate URL shape before hitting network
     if not _base.startswith(("http://", "https://")):
-        return _fail("emuwarez", "invalid_url", f"URL de eMuwarez inválida: {_base}")
+        return _fail("emuwarez", "invalid_url", f"URL de eMuwarez inválida: {url_sin_claves(_base)}")
 
     # La clave viaja en la query: por http se vería en claro (o iría a un proxy del entorno). Solo https.
     try:
@@ -248,12 +249,12 @@ def test_emuwarez_connection(
     try:
         emu_limitador.esperar_turno(_key, interactiva=True)
     except IntegrationError as exc:
-        return _fail("emuwarez", "rate_limited", str(exc))
+        return _fail("emuwarez", "rate_limited", texto_de_error(exc, _key))
 
     url = f"{_base}/api/torrents/filter?api_token={urllib.parse.quote(_key)}&perPage=1"
     try:
         resp = http_cliente.pedir("GET", url, cabeceras=_CABECERAS_PRUEBA, timeout=_TIMEOUT, solo_seguras=True)
-        return _ok("emuwarez", details={"base_url": _base, "http_status": resp.status_code})
+        return _ok("emuwarez", details={"base_url": url_sin_claves(_base), "http_status": resp.status_code})
     except http_cliente.ErrorHTTP as exc:
         if exc.status == 429:
             emu_limitador.penalizar(_key)
@@ -263,7 +264,7 @@ def test_emuwarez_connection(
     except http_cliente.ErrorConexion as exc:
         if exc.tiempo_agotado:
             return _fail("emuwarez", "timeout", "Timeout al conectar con eMuwarez")
-        return _fail("emuwarez", "connection_error", f"No se pudo conectar con eMuwarez ({_base}): {exc.motivo}")
+        return _fail("emuwarez", "connection_error", f"No se pudo conectar con eMuwarez ({url_sin_claves(_base)}): {tapar_claves(exc.motivo, _key)}")
     except Exception as exc:
         return _fail("emuwarez", "unexpected_error", f"Error inesperado: {type(exc).__name__}")
 
@@ -358,12 +359,12 @@ def test_arr_connection(
     except ArrAuthError:
         return _fail(kind, "invalid_key", f"API key de {kind.capitalize()} inválida o permisos insuficientes")
     except ArrConnectionError as exc:
-        reason = str(exc)
+        reason = texto_de_error(exc, api_key)
         if "timeout" in reason.lower() or "timed out" in reason.lower():
             return _fail(kind, "timeout", f"Timeout al conectar con {kind.capitalize()}")
         return _fail(kind, "connection_error", f"No se pudo conectar con {kind.capitalize()}: {reason}")
     except ArrClientError as exc:
-        return _fail(kind, "connection_error", str(exc))
+        return _fail(kind, "connection_error", texto_de_error(exc, api_key))
     except Exception as exc:
         return _fail(kind, "unexpected_error", f"Error inesperado: {type(exc).__name__}")
 

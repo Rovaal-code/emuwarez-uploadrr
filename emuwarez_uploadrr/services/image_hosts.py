@@ -17,6 +17,7 @@ import urllib.parse
 from typing import Any, Optional
 
 from ..integrations import http_cliente
+from ..integrations.base import texto_de_error
 
 # id, label, homepage (for the reachability check), needs_key, favicon (the
 # real <link rel="icon"> the site itself declares — resolved by hand once,
@@ -139,7 +140,7 @@ def validate_image_host_key(host_id: str, api_key: str, *, timeout: int = 10) ->
         body = exc.texto(4096)
         status = exc.status
     except Exception as exc:                        # noqa: BLE001 — red, DNS, timeout
-        return {"ok": False, "error": f"No se pudo comprobar: {exc}", "checked": False}
+        return {"ok": False, "error": f"No se pudo comprobar: {texto_de_error(exc, api_key)}", "checked": False}
 
     try:
         data = json.loads(body)
@@ -196,4 +197,4 @@ def test_image_host(host_id: str, api_key: Optional[str] = None, *, timeout: int
             return {"ok": True, "key_checked": not meta["needs_key"], "key_error": motivo}
         return {"ok": False, "error": f"HTTP {exc.status}"}
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": f"No responde: {exc}"}
+        return {"ok": False, "error": f"No responde: {texto_de_error(exc)}"}

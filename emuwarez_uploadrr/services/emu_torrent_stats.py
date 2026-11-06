@@ -17,7 +17,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from ..integrations.base import IntegrationError
+from ..integrations.base import IntegrationError, texto_de_error
 from ..integrations.emu import emu_get_torrent
 from .settings import get_setting_canonical
 
@@ -79,8 +79,8 @@ def estadisticas_de_la_subida(conn: sqlite3.Connection, job_id: int, *, refresca
         atributos = emu_get_torrent(clave, torrent_id)
         resultado = {"disponible": True, "actualizado": datetime.now(timezone.utc).isoformat(), **_resumir(atributos)}
     except IntegrationError as exc:
-        logger.warning("No se pudieron leer las estadísticas del torrent %s en eMuwarez: %s", torrent_id, exc)
-        resultado = {"disponible": False, "mensaje": str(exc)}
+        logger.warning("No se pudieron leer las estadísticas del torrent %s en eMuwarez: %s", torrent_id, texto_de_error(exc))
+        resultado = {"disponible": False, "mensaje": texto_de_error(exc)}
     with _lock:
         _cache[llave] = (time.monotonic(), resultado)
     return {**base, **resultado}

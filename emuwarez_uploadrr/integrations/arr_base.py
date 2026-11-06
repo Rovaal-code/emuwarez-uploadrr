@@ -16,7 +16,7 @@ import urllib.parse
 from typing import Any, Callable, Optional
 
 from . import http_cliente
-from .base import IntegrationError
+from .base import IntegrationError, tapar_claves, url_sin_claves
 
 _DEFAULT_TIMEOUT = 15
 
@@ -78,6 +78,8 @@ def arr_request(
     if data is not None:
         body = json.dumps(data).encode("utf-8")
         headers["Content-Type"] = "application/json"
+    # Estos mensajes llegan a la interfaz, al log y a la base: sin usuario:clave@ de la URL ni la API key repetida.
+    url_segura = url_sin_claves(url)
     try:
         resp = http_cliente.pedir(method, url, cabeceras=headers, contenido=body, timeout=timeout)
         raw = http_cliente.texto(resp.content)
@@ -86,21 +88,21 @@ def arr_request(
         raw = exc.texto()
         if exc.status in (401, 403):
             raise ArrAuthError(
-                f"Autenticación fallida en {url} (HTTP {exc.status}). Comprueba la API key."
+                f"Autenticación fallida en {url_segura} (HTTP {exc.status}). Comprueba la API key."
             ) from exc
         raise ArrApiError(
-            f"HTTP {exc.status} desde {url}: {raw[:300]}",
+            f"HTTP {exc.status} desde {url_segura}: {tapar_claves(raw[:300], api_key)}",
             status_code=exc.status,
             body=raw,
         ) from exc
     except http_cliente.ErrorConexion as exc:
         if exc.tiempo_agotado:
-            raise ArrConnectionError(f"Timeout conectando con {url}") from exc
+            raise ArrConnectionError(f"Timeout conectando con {url_segura}") from exc
         raise ArrConnectionError(
-            f"No se pudo conectar con {url}: {exc.motivo}"
+            f"No se pudo conectar con {url_segura}: {tapar_claves(exc.motivo, api_key)}"
         ) from exc
     except json.JSONDecodeError as exc:
-        raise ArrApiError(f"Respuesta no-JSON desde {url}") from exc
+        raise ArrApiError(f"Respuesta no-JSON desde {url_segura}") from exc
 
 
 def registros_de(data: Any, que: str) -> list[dict]:

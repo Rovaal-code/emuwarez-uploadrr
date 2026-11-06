@@ -6,6 +6,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ...integrations.base import texto_de_error
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from emuwarez_uploadrr.services.nomenclature import infer_provider_from_item
@@ -292,7 +293,7 @@ def sync_all(
         except SyncAlreadyRunning:
             raise HTTPException(status_code=429, detail="Ya hay una sincronización de biblioteca en marcha")
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Error en sync: {exc}")
+            raise HTTPException(status_code=500, detail=f"Error en sync: {texto_de_error(exc)}")
     return SyncResponse(
         imported=result.get("imported", 0),
         missing=result.get("missing", 0),

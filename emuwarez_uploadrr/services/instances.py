@@ -7,7 +7,7 @@ from typing import Optional
 from ..database import borrar_biblioteca
 from ..integrations import radarr, sonarr
 from ..integrations.arr_base import safe_api_key
-from ..integrations.base import IntegrationError, normalize_base_url
+from ..integrations.base import IntegrationError, normalize_base_url, texto_de_error
 from ..models import InstanceConfig, InstanceType
 
 _VALID_INSTANCE_TYPES = (InstanceType.RADARR.value, InstanceType.SONARR.value)
@@ -207,7 +207,7 @@ def test_connection_params(instance_type: str, url: str, api_key: str, name: str
             return sonarr.sonarr_test_connection(inst_dict)
         return {"ok": False, "error": f"Tipo desconocido: {instance_type}"}
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": texto_de_error(exc, api_key)}
 
 
 def test_instance_safe(instance: InstanceConfig) -> dict:
@@ -221,7 +221,7 @@ def test_instance_safe(instance: InstanceConfig) -> dict:
         else:
             result = {"ok": False, "error": f"Tipo desconocido: {instance.type}"}
     except Exception as exc:
-        result = {"ok": False, "error": str(exc)}
+        result = {"ok": False, "error": texto_de_error(exc, instance.api_key)}
     return {**result, "instance_id": instance.id, "instance_name": instance.name}
 
 

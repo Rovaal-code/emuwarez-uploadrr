@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 
 from ...database import get_setting_canonical
+from ...integrations.base import texto_de_error
 from ..settings import leer_ajuste
 from ..image_hosts import fallback_order, get_host_key
 from ..uploadrr_config_staging import (
@@ -123,7 +124,7 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         return config_path
     except Exception as exc:
         raise ConfigNoPreparada(
-            f"No se pudo preparar el config.yaml de Uploadrr ({exc}). No se lanza la subida: con el config sin preparar fallaría."
+            f"No se pudo preparar el config.yaml de Uploadrr ({texto_de_error(exc)}). No se lanza la subida: con el config sin preparar fallaría."
         ) from exc
 
 

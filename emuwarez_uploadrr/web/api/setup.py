@@ -13,6 +13,7 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from ...integrations.base import texto_de_error
 from ..dependencies import ERRORES_DE_BASE, base_no_disponible, get_db, require_auth
 from ..runtime import _db_path
 from ..schemas import (
@@ -90,7 +91,7 @@ def setup_tmdb(
                         localize_series_titles=body.localize_series_titles)
             conn.commit()
         except SetupError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=texto_de_error(exc, body.api_key))
     return OkResponse(message="API key de TMDb guardada correctamente")
 
 
@@ -137,7 +138,7 @@ def setup_emu(
             _setup_emu(conn, body.api_key, body.endpoint_url)
             conn.commit()
         except SetupError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=texto_de_error(exc, body.api_key))
     return OkResponse(message="Configuración de eMuwarez guardada correctamente")
 
 
@@ -164,7 +165,7 @@ def setup_instances(
             )
             conn.commit()
         except Exception as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=texto_de_error(exc, body.api_key))
     return OkResponse(
         message=f"Instancia {body.type.capitalize()} '{body.name}' añadida con ID {instance_id}"
     )

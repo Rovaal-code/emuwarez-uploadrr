@@ -16,7 +16,7 @@ from .settings import leer_ajuste
 from . import cli_config, emu_catalog
 from .emu_perfil import PERFIL_STATE_KEY
 from ..integrations import emu, tmdb
-from ..integrations.base import IntegrationError
+from ..integrations.base import IntegrationError, texto_de_error
 from ..models import RequestItem, TaskStatus
 from .library import content_display_title, grupos_de_release
 from .request_readiness import _biblioteca, refresh_request_readiness
@@ -233,7 +233,7 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         _set_progress(message=resumen_de_sincronizacion(result), imported=int(result.get("imported", 0)))
         return result
     except Exception as exc:  # noqa: BLE001 — se enseña en la barra y se vuelve a lanzar
-        _set_progress(error=str(exc), phase="Error")
+        _set_progress(error=texto_de_error(exc), phase="Error")
         raise
     finally:
         _set_progress(active=False, done=True)
@@ -265,7 +265,7 @@ def start_requests_sync_background(force: bool = False) -> dict:
             _sincronizar_peticiones(c)  # el candado ya es nuestro
         except Exception as exc:  # noqa: BLE001 — _sincronizar_peticiones ya dejó su error; esto es lo que falle antes
             if not get_request_sync_progress()["error"]:
-                _set_progress(error=str(exc))
+                _set_progress(error=texto_de_error(exc))
         finally:
             c.close()
             _set_progress(active=False, done=True)  # pase lo que pase, la barra no se queda encendida
@@ -376,13 +376,13 @@ def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         return {"status": "ok", "imported": len(items), "matched": matched, "removed": removed}
     except IntegrationError as exc:
         _restore_throttle()
-        finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
-        logger.warning("Sincronización de peticiones fallida: %s", exc)
+        finish_task(conn, task_id, TaskStatus.FAILED.value, texto_de_error(exc))
+        logger.warning("Sincronización de peticiones fallida: %s", texto_de_error(exc))
         raise
     except Exception as exc:
         _restore_throttle()
-        finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
-        logger.error("Sincronización de peticiones fallida: %s", exc)
+        finish_task(conn, task_id, TaskStatus.FAILED.value, texto_de_error(exc))
+        logger.error("Sincronización de peticiones fallida: %s", texto_de_error(exc))
         raise
 
 

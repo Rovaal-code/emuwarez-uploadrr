@@ -22,7 +22,7 @@ from typing import Optional
 from ..database import get_setting_canonical, get_state, set_state, get_json_state, set_json_state
 from .settings import leer_ajuste
 from ..integrations import emu
-from ..integrations.base import IntegrationError
+from ..integrations.base import IntegrationError, texto_de_error
 from .tasks import start_task, finish_task
 from .eventos import EVENTO_SYNC_EMPEZADA, EVENTO_SYNC_TERMINADA, publicar
 
@@ -778,7 +778,7 @@ def start_emu_sync_background(force: bool = False, mode: str = "incremental") ->
         try:
             sync_emu_catalog(c, force=True, mode=mode)  # throttle already recorded above
         except Exception as exc:  # noqa: BLE001 — surface the error to the card
-            _set_progress(error=str(exc), phase="Error")
+            _set_progress(error=texto_de_error(exc), phase="Error")
             # A failed sync shouldn't lock you out — restore the previous
             # throttle timestamp(s).
             try:
@@ -858,7 +858,7 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
         try:
             emu.emu_test_connection(api_key, interactiva=False)  # primer paso del recorrido: espera su turno
         except IntegrationError as exc:
-            raise IntegrationError(f"No se pudo conectar con eMuwarez: {exc}") from exc
+            raise IntegrationError(f"No se pudo conectar con eMuwarez: {texto_de_error(exc)}") from exc
 
         import time
         # Incremental: only fetch torrents newer than the highest id we already have.
@@ -935,5 +935,5 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
                     "nuevos" if incremental else "descargados", total_now, items)
         return {"status": "ok", "torrents": len(rows), "items": items, "incremental": incremental}
     except Exception as exc:
-        finish_task(conn, task_id, "failed", str(exc))
+        finish_task(conn, task_id, "failed", texto_de_error(exc))
         raise

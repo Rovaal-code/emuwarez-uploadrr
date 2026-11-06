@@ -164,11 +164,11 @@ def sync_requests(
     """Arranca la sincronización en segundo plano (el progreso, en /sync-progress): con las pausas entre páginas
     dura minutos, y un proxy inverso corta la respuesta a los 60 s."""
     from emuwarez_uploadrr.services.requests import start_requests_sync_background
-    from emuwarez_uploadrr.integrations.base import IntegrationError
+    from emuwarez_uploadrr.integrations.base import IntegrationError, texto_de_error
     try:
         result = start_requests_sync_background(force=body.force)
     except IntegrationError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail=texto_de_error(exc)) from exc
     if result.get("status") == "throttled":
         wait = int(result.get("wait_seconds", 0))
         mins = wait // 60

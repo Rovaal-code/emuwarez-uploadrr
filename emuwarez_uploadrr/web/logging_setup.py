@@ -15,12 +15,49 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
+from ..integrations.base import tapar_claves
 from .runtime import get_config_dir
 
 _RING_MAX = 5000
 _ring: deque[dict] = deque(maxlen=_RING_MAX)
 
 _LEVEL_ORDER = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+
+def _tapar_registro(record: logging.LogRecord) -> None:
+    """Cambia por *** las credenciales del mensaje y del traceback de un registro (ver `tapar_claves`)."""
+    try:
+        mensaje = record.getMessage()
+        limpio = tapar_claves(mensaje)
+        if limpio != mensaje:
+            record.msg, record.args = limpio, None
+        if record.exc_info and not record.exc_text:
+            record.exc_text = logging.Formatter().formatException(record.exc_info)
+        if record.exc_text:
+            record.exc_text = tapar_claves(record.exc_text)
+        if record.stack_info:
+            record.stack_info = tapar_claves(record.stack_info)
+    except Exception:
+        pass  # un registro raro no debe romper el log
+
+
+def instalar_tapado_de_claves() -> None:
+    """Todo registro nace ya sin credenciales, lo emita quien lo emita y lo recoja el handler que lo recoja.
+
+    Es la red de seguridad de los logs: el texto de una excepción de integración puede repetir la URL pedida, y
+    eMuwarez y TMDb llevan la clave en ella. Los sitios que registran una excepción ya usan `texto_de_error`; esto
+    cubre el resto (el traceback de un 500, las librerías). Idempotente."""
+    anterior = logging.getLogRecordFactory()
+    if getattr(anterior, "tapa_claves", False):
+        return
+
+    def fabrica(*args, **kwargs) -> logging.LogRecord:
+        record = anterior(*args, **kwargs)
+        _tapar_registro(record)
+        return record
+
+    fabrica.tapa_claves = True  # type: ignore[attr-defined]
+    logging.setLogRecordFactory(fabrica)
 
 
 class RingBufferHandler(logging.Handler):
@@ -70,6 +107,8 @@ def setup_app_logging() -> None:
     global _configured
     if _configured:
         return
+
+    instalar_tapado_de_claves()
 
     root = logging.getLogger()
     root.setLevel(logging.INFO)

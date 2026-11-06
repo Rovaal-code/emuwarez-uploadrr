@@ -9,6 +9,7 @@ from .arr_base import (
     arr_request, join_api_path, registros_de, todas_las_paginas,
 )
 from .base import (
+    texto_de_error,
     IntegrationError, build_url, es_lista_de_fichas, extract_backdrop_url, extract_media_info, extract_poster_url,
     extract_release_group, request_json,
 )
@@ -96,9 +97,9 @@ def radarr_test_connection(instance: dict) -> dict:
     except ArrAuthError:
         return {"ok": False, "error": "API key incorrecta o permisos insuficientes"}
     except ArrConnectionError as exc:
-        return {"ok": False, "error": f"No se pudo conectar: {exc}"}
+        return {"ok": False, "error": f"No se pudo conectar: {texto_de_error(exc, instance.get('api_key'))}"}
     except ArrClientError as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": texto_de_error(exc, instance.get("api_key"))}
 
 
 def radarr_get_system_status(instance: dict) -> dict:

@@ -237,6 +237,52 @@ def url_sin_claves(url: str) -> str:
     return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query, safe="*")))
 
 
+# Nombres de parámetro, de campo o de cabecera cuyo valor es una credencial (api_key=…, token=…, password=…).
+_NOMBRES_CLAVE = r"api[_-]?key|api[_-]?token|access[_-]?token|auth[_-]?token|token|password|passwd|pwd|secret|key"
+_RE_PARAMETRO = re.compile(
+    rf"(?<![A-Za-z0-9])((?:{_NOMBRES_CLAVE})\s*=\s*)(?!\*\*\*)[^&\s\"'<>)\]}},;]+", re.IGNORECASE,
+)
+_RE_CAMPO_JSON = re.compile(rf"""((?<![A-Za-z0-9])(?:{_NOMBRES_CLAVE})["']\s*:\s*["'])[^"']+""", re.IGNORECASE)  # "api_key": "…"
+_RE_USUARIO_EN_URL = re.compile(r"(\b[A-Za-z][A-Za-z0-9+.-]*://)[^/?#\s@]+@")
+_RE_CABECERA = re.compile(
+    r"\b(x-api-key|authorization|proxy-authorization)([\"']?\s*[:=]\s*[\"']?)((?:Bearer|Basic|Token)\s+)?[^\s\"',;]+",
+    re.IGNORECASE,
+)
+_RE_BOT_DE_TELEGRAM = re.compile(r"(/bot)\d+:[A-Za-z0-9_-]+")  # api.telegram.org/bot<id>:<token>/sendMessage
+_RE_WEBHOOK_DE_DISCORD = re.compile(r"(/webhooks/\d+/)[A-Za-z0-9._-]+")
+
+
+def tapar_claves(texto: str, *claves: Optional[str]) -> str:
+    """El texto con las credenciales cambiadas por ***, en cualquier sitio donde aparezcan, no solo en una URL entera.
+
+    Tapa cada valor de `claves` (la API key o la contraseña configuradas, tal cual y en sus formas citadas), y por
+    forma: `api_key=…`/`api_token=…`/`token=…`/`password=…` (con cualquier separador alrededor), `usuario:clave@` en
+    una URL, las cabeceras `X-Api-Key`/`Authorization`, el token de un bot de Telegram y el de un webhook de
+    Discord. Para el texto de una excepción antes de devolverlo, registrarlo o guardarlo; no cambia el que no lleva
+    nada de eso."""
+    if not texto:
+        return texto
+    for clave in claves:
+        if not clave or len(clave) < 4:
+            continue
+        variantes = {clave, urllib.parse.quote(clave, safe=""), urllib.parse.quote_plus(clave)}
+        for variante in sorted(variantes, key=len, reverse=True):
+            texto = texto.replace(variante, "***")
+    texto = _RE_USUARIO_EN_URL.sub(r"\1***@", texto)
+    texto = _RE_PARAMETRO.sub(r"\1***", texto)
+    texto = _RE_CAMPO_JSON.sub(r"\1***", texto)
+    texto = _RE_CABECERA.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3) or ''}***", texto)
+    texto = _RE_BOT_DE_TELEGRAM.sub(r"\1***", texto)
+    return _RE_WEBHOOK_DE_DISCORD.sub(r"\1***", texto)
+
+
+def texto_de_error(exc: BaseException, *claves: Optional[str]) -> str:
+    """`str(exc)` con las credenciales tapadas (ver `tapar_claves`): el único camino para que el texto de una
+    excepción llegue a una respuesta HTTP, un log, una notificación o una columna de la base. Una excepción de
+    integración puede llevar la URL pedida, y eMuwarez y TMDb llevan la clave en ella."""
+    return tapar_claves(str(exc), *claves)
+
+
 def build_url(base_url: str, path: str, params: Optional[dict[str, Any]] = None) -> str:
     url = normalize_base_url(base_url) + "/" + path.lstrip("/")
     if params:

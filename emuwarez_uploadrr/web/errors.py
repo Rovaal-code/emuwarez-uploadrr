@@ -6,6 +6,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from ..integrations.base import texto_de_error
+
 
 class AppError(Exception):
     def __init__(self, message: str, status_code: int = 500, detail: str | None = None):
@@ -41,5 +43,5 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 async def generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(
         status_code=500,
-        content={"error": "Internal server error", "detail": str(exc), "status_code": 500},
+        content={"error": "Internal server error", "detail": texto_de_error(exc), "status_code": 500},
     )

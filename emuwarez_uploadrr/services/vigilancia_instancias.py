@@ -18,6 +18,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from ..integrations.arr_base import arr_request, join_api_path
+from ..integrations.base import texto_de_error
 from ..models import InstanceConfig
 from .instances import list_instances
 from .settings import leer_ajuste
@@ -93,8 +94,9 @@ def vigilar_instancias(conn: sqlite3.Connection) -> tuple[str, str]:
         except SincronizacionParcial:
             sincronizadas.append(instancia.name)  # lo demás sí se sincronizó
         except Exception as exc:  # noqa: BLE001 — se cuenta en el resumen; la tarea periódica lo reintenta
-            fallos.append(f"{instancia.name}: {exc}")
-            logger.warning("No se pudo sincronizar «%s» al volver: %s", instancia.name, exc)
+            fallos.append(f"{instancia.name}: {texto_de_error(exc, instancia.api_key)}")
+            logger.warning("No se pudo sincronizar «%s» al volver: %s", instancia.name,
+                           texto_de_error(exc, instancia.api_key))
         else:
             sincronizadas.append(instancia.name)
         _sincronizada[instancia.id] = _ahora()

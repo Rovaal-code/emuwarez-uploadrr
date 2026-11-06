@@ -24,6 +24,7 @@ from typing import Any, Optional
 
 from .. import __version__
 from ..integrations import http_cliente
+from ..integrations.base import texto_de_error
 
 # Dónde vive el manifiesto. Se puede apuntar a otro sitio con una variable de
 # entorno, para probar sin tocar el publicado.
@@ -68,7 +69,7 @@ def _descargar_manifiesto() -> tuple[Optional[dict], Optional[str]]:
     except http_cliente.ErrorConexion as e:
         return None, f"No se pudo consultar el manifiesto: {e.motivo}"
     except Exception as e:                      # JSON roto, timeout, lo que sea
-        return None, f"No se pudo leer el manifiesto: {e}"
+        return None, f"No se pudo leer el manifiesto: {texto_de_error(e)}"
 
 
 def manifiesto(*, forzar: bool = False) -> tuple[Optional[dict], Optional[str]]:

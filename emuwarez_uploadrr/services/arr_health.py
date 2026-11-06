@@ -9,6 +9,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from ..integrations.base import texto_de_error
 from ..integrations.radarr import (
     radarr_get_queue,
     radarr_get_history,
@@ -139,7 +140,7 @@ def collect_instance_health(instance_id: int, conn: sqlite3.Connection) -> dict[
             result["health_status"] = "error"
     except Exception as exc:
         result["ok"] = False
-        result["error"] = str(exc)
+        result["error"] = texto_de_error(exc, row["api_key"])
         result["health_status"] = "error"
 
     return result
@@ -174,7 +175,7 @@ def refresh_arr_queue_diagnostics(
                 updated += mapped
                 queue_items_total += len(queue)
         except Exception as exc:
-            errors.append({"instance": inst.name, "error": str(exc)})
+            errors.append({"instance": inst.name, "error": texto_de_error(exc, inst.api_key)})
 
     conn.commit()
     return {
@@ -214,7 +215,7 @@ def refresh_arr_history_diagnostics(
                 updated += mapped
                 history_total += len(history)
         except Exception as exc:
-            errors.append({"instance": inst.name, "error": str(exc)})
+            errors.append({"instance": inst.name, "error": texto_de_error(exc, inst.api_key)})
 
     conn.commit()
     return {

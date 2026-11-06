@@ -12,7 +12,7 @@ from typing import Iterator, Optional
 
 from ...database import borrar_biblioteca, get_state, set_state
 from ...integrations import radarr, sonarr
-from ...integrations.base import IntegrationError
+from ...integrations.base import IntegrationError, texto_de_error
 from ...models import InstanceConfig, LibraryItem, LocalStatus, MediaKind
 from ..instances import get_instance, list_instances
 from ..tasks import start_task, finish_task
@@ -679,7 +679,7 @@ def sync_instance(
         nonlocal cola_desconocida
         cola_desconocida = True
         logger.warning("No se pudo leer la cola de %s «%s»; lo que se descarga conserva su estado: %s",
-                       instance.type, instance.name, exc)
+                       instance.type, instance.name, texto_de_error(exc, instance.api_key))
 
     from ..anime_lists import ensure_anime_id_map
     if instance.type == "radarr":
@@ -750,8 +750,9 @@ def sync_instance(
             except sqlite3.Error:
                 raise
             except Exception as exc:
-                fallos.append(f"{series.get('title') or series.get('id')}: {exc}")
-                logger.warning("No se pudo sincronizar la serie %s de «%s»: %s", series.get("title"), instance.name, exc)
+                fallos.append(f"{series.get('title') or series.get('id')}: {texto_de_error(exc, instance.api_key)}")
+                logger.warning("No se pudo sincronizar la serie %s de «%s»: %s", series.get("title"), instance.name,
+                               texto_de_error(exc, instance.api_key))
                 _marcar_serie_vista(conn, instance.id, series.get("id"), visto)
 
     # Solo se llega aquí tras recorrer los listados: uno que falla lanza y no se borra nada.
@@ -821,7 +822,7 @@ def _lib_sync_guard() -> Iterator[None]:
     try:
         yield
     except Exception as exc:  # noqa: BLE001 — surfaced to the progress card
-        _set_lib_progress(error=str(exc), phase="Error")
+        _set_lib_progress(error=texto_de_error(exc), phase="Error")
         raise
     finally:
         _set_lib_progress(active=False, done=True)
@@ -945,15 +946,17 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
                 missing += exc.missing
                 sincronizadas += 1
                 _set_lib_progress(imported=total, missing=missing)
-                err = f"{instance.type}:{instance.name}: {exc}"
+                err = f"{instance.type}:{instance.name}: {texto_de_error(exc, instance.api_key)}"
                 errors.append(err)
                 details.append(f"ERROR — {err}")
-                logger.warning("Sincronización parcial de %s «%s»: %s", instance.type, instance.name, exc)
+                logger.warning("Sincronización parcial de %s «%s»: %s", instance.type, instance.name,
+                               texto_de_error(exc, instance.api_key))
             except Exception as exc:
-                err = f"{instance.type}:{instance.name}: {exc}"
+                err = f"{instance.type}:{instance.name}: {texto_de_error(exc, instance.api_key)}"
                 errors.append(err)
                 details.append(f"ERROR — {err}")
-                logger.warning("Error sincronizando %s «%s»: %s", instance.type, instance.name, exc)
+                logger.warning("Error sincronizando %s «%s»: %s", instance.type, instance.name,
+                               texto_de_error(exc, instance.api_key))
         recompute_after_sync(conn)
         summary =f"{total} elementos sincronizados; {missing} no disponibles"
         # Con todas caídas no se ha leído nada: «completada» diría al Panel que la biblioteca está al día.
@@ -967,6 +970,6 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
         return {"imported": total, "missing": missing, "instances": len(list_instances(conn)), "errors": errors,
                 "status": estado}
     except Exception as exc:
-        finish_task(conn, task_id, "failed", str(exc), "\n".join(details))
-        logger.error("Sincronización de biblioteca fallida: %s", exc)
+        finish_task(conn, task_id, "failed", texto_de_error(exc), "\n".join(details))
+        logger.error("Sincronización de biblioteca fallida: %s", texto_de_error(exc))
         raise

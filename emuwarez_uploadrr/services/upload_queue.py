@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..database import connect, row_to_dict
+from ..integrations.base import texto_de_error
 
 logger = logging.getLogger("emuwarez.upload")
 
@@ -1129,7 +1130,7 @@ def _paso_nombre(t: _Trabajo) -> bool:
         try:
             plan_pack = build_season_pack_plan(t.item_id, conn=conn, **_ajustes_de_pack(t.season_overrides))
         except Exception as exc:
-            _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {exc}")
+            _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {texto_de_error(exc)}")
             return False
         if plan_pack.get("status") != "valid":
             reason = "; ".join(plan_pack.get("errors") or []) or "estado desconocido"
@@ -1168,7 +1169,7 @@ def _paso_nombre(t: _Trabajo) -> bool:
         plan_nombre = build_nomenclature_apply_plan(
             t.item_id, proposal_id=t.job.get("nomenclature_proposal_id"), conn=conn)
     except Exception as exc:
-        _fail(job_id, f"Error aplicando la nomenclatura: {exc}")
+        _fail(job_id, f"Error aplicando la nomenclatura: {texto_de_error(exc)}")
         return False
     if plan_nombre.get("status") != "ready":
         reason = "; ".join(plan_nombre.get("errors") or []) or "estado desconocido"
@@ -1451,7 +1452,7 @@ def _run_queued_job(job_id: int) -> None:
         # safety net _run_uploadrr_subprocess() already has; this was the
         # one orchestrator missing it.
         logger.exception("Job %s: excepción inesperada en _run_queued_job", job_id)
-        _fail(job_id, f"Error inesperado: {exc}")
+        _fail(job_id, f"Error inesperado: {texto_de_error(exc)}")
     finally:
         conn.close()
         if not (trabajo and trabajo.puerta_traspasada):

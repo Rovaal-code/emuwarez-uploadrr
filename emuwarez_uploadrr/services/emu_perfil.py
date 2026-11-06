@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ..database import get_json_state, get_setting_canonical, set_json_state
-from ..integrations.base import IntegrationError
+from ..integrations.base import IntegrationError, texto_de_error
 from ..integrations.emu import emu_get_user
 from .perfil_historial import guardar_instantanea
 from .settings import set_setting
@@ -72,8 +72,8 @@ def _pedir(conn: sqlite3.Connection, clave: str, guardado: dict[str, Any]) -> di
     try:
         datos = emu_get_user(clave)
     except IntegrationError as exc:
-        logger.warning("No se pudo leer el perfil de eMuwarez: %s", exc)
-        nuevo["error"] = str(exc)
+        logger.warning("No se pudo leer el perfil de eMuwarez: %s", texto_de_error(exc))
+        nuevo["error"] = texto_de_error(exc)
     else:
         nuevo.update(perfil={campo: datos.get(campo) for campo in CAMPOS}, leido_at=nuevo["intento_at"], error=None)
         # «Mis peticiones» cuenta por este nombre: si no lo has escrito en Ajustes, se pone el de la cuenta.

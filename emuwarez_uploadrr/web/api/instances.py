@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from ...integrations.base import texto_de_error
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..schemas import (
@@ -61,7 +62,7 @@ def create_instance(
                 from ...services.instances import set_instance_flags
                 set_instance_flags(iid, is_4k=body.is_4k, is_anime=body.is_anime, conn=conn)
         except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=texto_de_error(exc, body.api_key))
     return OkResponse(message=f"Instancia '{body.name}' ({body.type}) creada con ID {iid}")
 
 
@@ -91,7 +92,7 @@ def update_instance_endpoint(
                 is_anime=body.is_anime,
             )
         except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=texto_de_error(exc, body.api_key))
         from ...services.instances import aviso_si_cambia_el_destino, get_instance_row
         row = get_instance_row(instance_id, conn)
         aviso = aviso_si_cambia_el_destino(inst, url=body.url, api_key=body.api_key)
@@ -164,11 +165,11 @@ def sync_instance(
         except SincronizacionParcial as exc:
             # Lo demás sí se sincronizó: se cuenta, con el aviso de lo que no.
             return SyncResponse(
-                imported=exc.imported, missing=exc.missing, instances=1, errors=[str(exc)],
-                message=f"Instancia '{inst.name}' sincronizada con errores: {exc}",
+                imported=exc.imported, missing=exc.missing, instances=1, errors=[texto_de_error(exc, inst.api_key)],
+                message=f"Instancia '{inst.name}' sincronizada con errores: {texto_de_error(exc, inst.api_key)}",
             )
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Error en sync: {exc}")
+            raise HTTPException(status_code=500, detail=f"Error en sync: {texto_de_error(exc, inst.api_key)}")
         if resultado is None:
             raise HTTPException(status_code=404, detail="Instancia no encontrada")
         imported, missing = resultado

@@ -15,6 +15,7 @@ import urllib.parse
 from typing import Any
 
 from . import http_cliente
+from .base import texto_de_error
 
 BAD_LOGIN_ERROR = (
     "Usuario o contraseña de qBittorrent incorrectos, o el puerto de la URL no "
@@ -86,7 +87,7 @@ def _iniciar_sesion(base: str, sesion: Any, username: str, password: str, timeou
             return {"ok": False, "error": "qBittorrent rechazó la petición (403). ¿WebUI/host bien?"}
         return {"ok": False, "error": f"HTTP {exc.status} desde qBittorrent"}
     except Exception as exc:  # noqa: BLE001 — timeouts, DNS, connection refused…
-        return {"ok": False, "error": f"No se pudo conectar con qBittorrent: {exc}"}
+        return {"ok": False, "error": f"No se pudo conectar con qBittorrent: {texto_de_error(exc, password)}"}
 
     body = http_cliente.texto(resp.content).strip()
     cookie = resp.headers.get("Set-Cookie", "")

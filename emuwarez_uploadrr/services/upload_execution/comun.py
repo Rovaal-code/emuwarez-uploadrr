@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timezone
 
 from ...database import connect, get_setting_canonical, init_db
+from ...integrations.base import tapar_claves
 
 
 logger = logging.getLogger("emuwarez.upload")
@@ -77,7 +78,7 @@ def redact_secrets(value: str, secrets: list[str]) -> str:
             result = result.replace(secret, "***REDACTED***")
     for pattern in _SECRET_PATTERNS:
         result = pattern.sub(r"\1***REDACTED***", result)
-    return result
+    return tapar_claves(result)  # además: usuario:clave@ en URLs, cabeceras de autenticación, tokens de Telegram/Discord
 
 
 def _get_db_conn():

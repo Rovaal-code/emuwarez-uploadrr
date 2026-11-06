@@ -9,6 +9,7 @@ import time
 from typing import Callable, Optional
 
 from ...integrations import radarr, sonarr
+from ...integrations.base import texto_de_error
 from ...models import LocalStatus
 
 from .listado import get_library_item
@@ -156,8 +157,8 @@ def resync_single_item(conn: sqlite3.Connection, item_id: int) -> dict:
         conn.commit()
         return {"ok": True}
     except Exception as exc:
-        logger.warning("No se pudo resincronizar el item %s tras el renombrado: %s", item_id, exc)
-        return {"ok": False, "message": str(exc)}
+        logger.warning("No se pudo resincronizar el item %s tras el renombrado: %s", item_id, texto_de_error(exc))
+        return {"ok": False, "message": texto_de_error(exc)}
 
 
 def refresh_arr_and_resync(
@@ -215,7 +216,7 @@ def refresh_arr_and_resync(
                         else sonarr.get_command_status(instance.url, instance.api_key, int(command_id))
                     )
                 except Exception as exc:
-                    _log("warning", f"No se pudo consultar el estado del comando en {service}: {exc}")
+                    _log("warning", f"No se pudo consultar el estado del comando en {service}: {texto_de_error(exc)}")
                     break
                 status = (poll or {}).get("status")
                 if status in ("completed", "failed", "cancelled"):
@@ -235,5 +236,5 @@ def refresh_arr_and_resync(
             _log("warning", f"No se pudo sincronizar la ficha: {result.get('message')}")
         return {"ok": True}
     except Exception as exc:
-        _log("warning", f"No se pudo completar la actualización con Radarr/Sonarr tras el renombrado: {exc}")
-        return {"ok": False, "message": str(exc)}
+        _log("warning", f"No se pudo completar la actualización con Radarr/Sonarr tras el renombrado: {texto_de_error(exc)}")
+        return {"ok": False, "message": texto_de_error(exc)}

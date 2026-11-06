@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from ..integrations import http_cliente
+from ..integrations.base import texto_de_error
 from ..integrations.qbittorrent import ErrorQbit, qbit_listar_torrents
 from .ajustes_registro import error_de_url_publica
 from .carpeta_subida import RAIZ_SUBIDAS
@@ -156,7 +157,7 @@ def _torrents(url: str, usuario: str, clave: str, *, refrescar: bool) -> tuple[O
         try:
             lista, motivo = _consultar(url, usuario, clave), ""
         except ErrorQbit as exc:
-            lista, motivo = None, str(exc)
+            lista, motivo = None, texto_de_error(exc, clave)
             # Ni la excepción ni la URL: solo que falló.
             logger.warning("Seeding: no se pudo leer qBittorrent (%s)", motivo)
         _cache = (huella, time.time(), lista, motivo)

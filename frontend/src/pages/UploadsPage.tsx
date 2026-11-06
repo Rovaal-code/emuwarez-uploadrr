@@ -581,13 +581,19 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     if (job?.status === 'preparing') { setConfirmCancel(job); return }
     await doCancel(jobId)
   }
+  // Solo se enseña el fallo de la acción más reciente: cada reintento o cancelación toma un número y un fallo que
+  // llega tarde de una acción anterior se descarta.
+  const ultimaAccion = useRef(0)
   const doCancel = async (jobId: number) => {
     setConfirmCancel(null)
+    const mia = ++ultimaAccion.current
     setCancelError(null)
+    setRetryError(null)
     const titulo = jobs.find(j => j.id === jobId)?.title
     try {
       await cancelUploadJob(jobId)
     } catch (e: unknown) {
+      if (mia !== ultimaAccion.current) return
       const motivo = e instanceof Error ? e.message : 'error desconocido'
       setCancelError(titulo ? `No se pudo cancelar «${titulo}»: ${motivo}` : `No se pudo cancelar la subida: ${motivo}`)
       return
@@ -600,12 +606,16 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // trabajo nuevo para ver su progreso en el momento. Los errores se enseñan, no se tragan:
   // un fallo silencioso aquí parecía un botón que no hacía nada.
   const handleRetryQueued = async (job: UploadJob, desdeElPrincipio = false) => {
+    const mia = ++ultimaAccion.current
     setRetryError(null)
+    setCancelError(null)
     try {
       const r = await retryUploadJobQueued(job.id!, desdeElPrincipio)
       await load()
-      if (r.job?.id != null) openUpload(r.job.id)
+      // Si mientras tanto se pulsó otra acción, abrir esta ficha taparía lo que pasó con aquella.
+      if (r.job?.id != null && mia === ultimaAccion.current) openUpload(r.job.id)
     } catch (e: unknown) {
+      if (mia !== ultimaAccion.current) return
       setRetryError(e instanceof Error ? e.message : 'No se pudo reintentar la subida.')
     }
   }

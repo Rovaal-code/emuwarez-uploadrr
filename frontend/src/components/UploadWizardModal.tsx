@@ -41,7 +41,7 @@ export function UploadWizardModal(props: PropsAsistente) {
     pasoActual.current?.focus()
   }, [step])
   return (
-    <Modal titulo={item.title} onClose={cerrarModal} className="modal-wide asist-modal-ancho">
+    <Modal titulo={item.title} onClose={cerrarModal} className={`modal-wide asist-modal-ancho asist-marco${step === 1 ? ' asist-alto-fijo' : ''}`}>
 
       <nav aria-label="Pasos de la subida" className="asist-pasos">
         <ol>

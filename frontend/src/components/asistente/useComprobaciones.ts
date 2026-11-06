@@ -2,7 +2,7 @@
 // tanda (varias temporadas o capítulos).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  runUploadChecks, getUploadChecksProgress, type UploadChecksResult, type UploadCheck,
+  runUploadChecks, getUploadChecksProgress, type AjustesComprobacion, type UploadChecksResult, type UploadCheck,
 } from '../../api/uploads'
 import { seguirProgreso } from '../../api/eventos'
 import { proveedorParaServidor, type ProveedoresElegidos } from '../../utils/origenProveedor'
@@ -65,11 +65,15 @@ export function useComprobaciones(targetId: number | null, proveedorElegido: Pro
 // `minimo`: desde cuántos elementos se comprueba así. El asistente lo deja en 2
 // (con uno solo usa useComprobaciones); «Subir por lotes» pasa 1, porque un lote
 // de una película también se sube por aquí.
-export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedorElegido, minimo = 2 }: {
+//
+// `ajustesDe`: lo editado a mano de un elemento (Source, Tag, Título, idiomas), que un pack necesita para dar el nombre
+// que saldrá; lo comprobado con otros ajustes ya no vale, como con otro Proveedor.
+export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedorElegido, ajustesDe, minimo = 2 }: {
   step: 0 | 1 | 2
   batchQueue: readonly number[]
   batchPhase: 'idle' | 'processing' | 'done'
   proveedorElegido: ProveedoresElegidos
+  ajustesDe?: (id: number) => AjustesComprobacion | undefined
   minimo?: number
 }) {
   const [batchEnvChecks, setBatchEnvChecks] = useState<UploadChecksResult | null>(null)
@@ -101,9 +105,9 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
   // pedirlas. Solo se pide lo que falta o falló: volver a entrar en el paso 2,
   // o «Volver a comprobar», repite eso y conserva lo que ya pasó, si se
   // comprobó con el Proveedor que tiene ahora (se puede cambiar en el paso 1).
-  const proveedorComprobado = useRef(new Map<number, string | undefined>())
-  const sigueValiendo = (id: number) => !!batchContentChecks.get(id)?.ready
-    && proveedorComprobado.current.get(id) === proveedorParaServidor(proveedorElegido, id)
+  const comprobadoCon = useRef(new Map<number, string>())
+  const clave = (id: number) => JSON.stringify([proveedorParaServidor(proveedorElegido, id) ?? null, ajustesDe?.(id) ?? null])
+  const sigueValiendo = (id: number) => !!batchContentChecks.get(id)?.ready && comprobadoCon.current.get(id) === clave(id)
   useEffect(() => {
     if (step !== 2 || batchQueue.length < minimo || batchPhase !== 'idle') return
     if (batchChecksLoading || (batchEnvChecks?.ready && batchQueue.every(sigueValiendo))) return
@@ -125,11 +129,14 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
           if (acc.has(batchQueue[i])) continue
           setBatchChecksIndex(i)
           const proveedor = proveedorParaServidor(proveedorElegido, batchQueue[i])
-          const resultado = await runUploadChecks(batchQueue[i], 'content', proveedor)
+          const ajustes = ajustesDe?.(batchQueue[i])
+          const resultado = ajustes
+            ? await runUploadChecks(batchQueue[i], 'content', proveedor, ajustes)
+            : await runUploadChecks(batchQueue[i], 'content', proveedor)
           // Una pasada abandonada que responde tarde no pisa a la que la sustituyó.
           if (!alive) return
           acc.set(batchQueue[i], resultado)
-          proveedorComprobado.current.set(batchQueue[i], proveedor)
+          comprobadoCon.current.set(batchQueue[i], clave(batchQueue[i]))
           setBatchContentChecks(new Map(acc))
         }
         if (alive) setBatchViewId(prev => prev ?? batchQueue[0])
@@ -147,7 +154,7 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
   // Otra selección: lo comprobado para la anterior ya no vale.
   const olvidar = () => {
     setBatchEnvChecks(null); setBatchContentChecks(new Map()); setBatchViewId(null); setBatchChecksError(null)
-    proveedorComprobado.current.clear()
+    comprobadoCon.current.clear()
   }
 
   return {

@@ -10,9 +10,10 @@ import { SourceComparisonModal } from '../SourceComparisonModal'
 import { EpisodePicker } from './Capitulos'
 import { FIELD_INFO, INTERNAL_TITLE_LABEL, labelStyle } from './constantes'
 import { MediaInfoTable } from './MediaInfoTable'
-import { AvisoSubidaExistente, BotonComparacionSource, CampoTag, FieldLabel, GeneratingHint, TableLoadingSpinner } from './piezas'
+import { AvisoSubidaExistente, BotonComparacionSource, CampoTag, FieldLabel, GeneratingHint, MarcoPaso, TableLoadingSpinner } from './piezas'
+import { Pestanas, type Pestana } from './Pestanas'
 import { AvisoModoPistas, RemuxTable } from './RemuxTable'
-import type { Asistente } from './useAsistente'
+import type { Asistente, PestanaArchivo } from './useAsistente'
 
 export function PasoTemporada({ a }: { a: Asistente }) {
   const {
@@ -21,7 +22,7 @@ export function PasoTemporada({ a }: { a: Asistente }) {
     fields, setField, sources, providers, opcionesTag, sourceRequiresProvider, avisoSource, audioWarning,
     sourceComparison, setSourceComparison, showSourceCompare, setShowSourceCompare, showEngineDetail, setShowEngineDetail,
     idiomasPackEnVuelo, idiomasPorTemporada, elegirIdiomaPack, recalculandoIdioma,
-    showMiCard, setShowMiCard, showRemuxCard, setShowRemuxCard, detalles,
+    pestana, elegirPestana, detalles,
     cambiarElemento, setStep, goToUpload, preparing,
   } = a
   const {
@@ -88,13 +89,6 @@ export function PasoTemporada({ a }: { a: Asistente }) {
           )}
         </div>
       </label>
-      {showSourceCompare && sourceComparison && (
-        <SourceComparisonModal
-          comparison={sourceComparison}
-          initialShowDetail={showEngineDetail}
-          onClose={() => setShowSourceCompare(false)}
-        />
-      )}
       {avisoSource && (
         <p className="text-warning asist-col-completa asist-t12 asist-m0"><IconoAviso /> {avisoSource}</p>
       )}
@@ -144,42 +138,44 @@ export function PasoTemporada({ a }: { a: Asistente }) {
     </div>
   )
 
-  // Just the single pack torrent name (no per-file "internal title" at
-  // season level, see "Ver nombre de todos los capítulos" instead) plus a
-  // summary of the episodes included.
-  const seasonSummaryBox = (
-    <>
-      <div className="detail-card asist-tarjeta asist-mt-16">
-        {seasonDisplayTitle ? (
-          <FitText min={9} text={seasonDisplayTitle} />
-        ) : (
-          <>
-            <div className="asist-etiqueta">Nombre final del torrent (eMuwarez)</div>
-            <GeneratingHint />
-          </>
-        )}
-      </div>
-      {seasonPlan?.status === 'valid' && (
-        <div className="asist-resumen-temporada">
-          <span>✓ {seasonPlan.episodes.length} capítulo(s) listos, coherentes entre sí</span>
-          <button
-            className="btn btn-secondary btn-sm"
-            type="button"
-            onClick={() => { setShowSeasonNamesCard(true); setSeasonNamesEpisodeId(null); if (!seasonNames && !seasonNamesLoading) loadSeasonNames() }}
-          >
-            Ver nombre de todos los capítulos
-          </button>
-        </div>
-      )}
-    </>
+  // El resumen del pack (la tarjeta del nombre va sobre las pestañas): cuántos capítulos y el nombre de cada uno.
+  const resumenPack = seasonPlan?.status === 'valid' && (
+    <div className="asist-resumen-temporada">
+      <span>✓ {seasonPlan.episodes.length} capítulo(s) listos, coherentes entre sí</span>
+      <button
+        className="btn btn-secondary btn-sm"
+        type="button"
+        onClick={() => { setShowSeasonNamesCard(true); setSeasonNamesEpisodeId(null); if (!seasonNames && !seasonNamesLoading) loadSeasonNames() }}
+      >
+        Ver nombre de todos los capítulos
+      </button>
+    </div>
   )
 
+  const sinIdioma = seasonPlan?.pistas_sin_idioma?.length ?? 0
+  const pestanas: Pestana<PestanaArchivo>[] = [
+    { id: 'nomenclatura', etiqueta: 'Nomenclatura' },
+    { id: 'pistas', etiqueta: 'Pistas', aviso: sinIdioma > 0 ? `${sinIdioma} sin idioma` : undefined },
+    { id: 'mediainfo', etiqueta: 'MediaInfo' },
+  ]
+  const listo = !seasonPlanLoading && !seasonPlanError && !!seasonPlan
+
   return (
-    <div className="modal-body">
+    <MarcoPaso
+      pie={<>
+        {needsSelection
+          ? <button className="btn btn-secondary" type="button" onClick={() => setStep(0)}>Volver a la selección</button>
+          : <span />}
+        <button className="btn btn-primary" type="button" onClick={goToUpload} disabled={!listo || preparing || recalculandoIdioma || seasonPlan?.status !== 'valid' || existingJobBlocking}>
+          {preparing ? 'Preparando…' : 'Continuar'}
+        </button>
+      </>}
+    >
       {seasonQueue.length > 1 && (
         <div className="asist-selector-fila">
           <select
             className="form-input form-select asist-select-auto"
+            aria-label="Temporada"
             value={targetId ?? ''} onChange={e => cambiarElemento(Number(e.target.value))}
             disabled={seasonPlanLoading}
           >
@@ -220,80 +216,33 @@ export function PasoTemporada({ a }: { a: Asistente }) {
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => loadSeasonPlan()}>↻ Reintentar</button>
         </div>
       )}
-      {!seasonPlanLoading && !seasonPlanError && seasonPlan && (
+      {listo && (
         <>
-          <p className="text-muted asist-t12 asist-mb-12">
-            Se sube como un único pack de temporada. Todos los capítulos deben tener el mismo códec
-            de audio/vídeo, los mismos idiomas de audio/subtítulos, la misma resolución y source —
-            estos campos confirman que todos coinciden. Source, Proveedor y Tag se pueden corregir
-            a mano si el detectado no es correcto (se aplica a todos los capítulos por igual).
-          </p>
-          {seasonFieldBox}
-          {avisosDelPlan}
-          {seasonSummaryBox}
-
-          <div className="asist-bloque-mediainfo">
-            <div className="asist-fila-entre">
-              <div>
-                <div className="asist-bloque-titulo">MediaInfo y pistas de los capítulos</div>
-                <div className="text-muted asist-t11 asist-mt-2">
-                  Se elige capítulo con un desplegable, cada uno con su propio detalle de MediaInfo y
-                  su propio plan de reordenación/renombrado de pistas (sin edición manual para temporadas).
-                </div>
-              </div>
-              <div className="asist-botones">
-                <button className="btn btn-primary" onClick={() => { setShowMiCard(true); if (!seasonMi && !seasonMiLoading) loadSeasonMi() }} disabled={targetId == null}>
-                  Ver MediaInfo
-                </button>
-                <button className="btn btn-primary" onClick={() => { setShowRemuxCard(true); if (!seasonRemux && !seasonRemuxLoading) loadSeasonRemux() }} disabled={targetId == null}>
-                  Ver Pistas
-                </button>
-              </div>
-            </div>
+          {/* El nombre del pack, a la vista en las tres pestañas. */}
+          <div className="detail-card asist-tarjeta">
+            <div className="asist-etiqueta">Nombre final del torrent (eMuwarez)</div>
+            {seasonDisplayTitle ? <FitText min={9} text={seasonDisplayTitle} /> : <GeneratingHint />}
           </div>
 
-          {showMiCard && (
-            <Modal titulo="MediaInfo de los capítulos" onClose={() => setShowMiCard(false)} className="modal-wide asist-modal-ancho">
-              <div className="modal-body">
-                {seasonMiLoading && !seasonMi && <TableLoadingSpinner label="Leyendo MediaInfo de cada capítulo…" />}
-                {seasonMiError && !seasonMiLoading && (
-                  <>
-                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10">✗ {seasonMiError}</p>
-                    <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonMi}>↻ Reintentar</button>
-                  </>
-                )}
-                {seasonMi && seasonMi.length > 0 && (() => {
-                  const current = seasonMi.find(e => e.episode_id === miEpisodeId) ?? seasonMi[0]
-                  return (
-                    <>
-                      <EpisodePicker episodes={seasonMi} currentId={current.episode_id} onChange={setMiEpisodeId} />
-                      <MediaInfoTable
-                        report={current.report}
-                        onSourceToolClick={current.source_comparison ? () => {
-                          setShowMiCard(false)
-                          setSourceComparison(current.source_comparison!)
-                          setShowEngineDetail(true)
-                          setShowSourceCompare(true)
-                        } : undefined}
-                      />
-                    </>
-                  )
-                })()}
-              </div>
-            </Modal>
-          )}
+          <Pestanas nombre="Detalle de los capítulos" pestanas={pestanas} activa={pestana} onCambiar={elegirPestana}>
+            {pestana === 'nomenclatura' && (
+              <>
+                <p className="text-muted asist-t12 asist-mt-0 asist-mb-12">
+                  Se sube como un único pack de temporada: todos los capítulos deben tener el mismo códec de
+                  audio y vídeo, los mismos idiomas de audio y subtítulos, la misma resolución y el mismo source.
+                  Source, Proveedor y Tag se pueden corregir a mano y se aplican a todos los capítulos por igual.
+                </p>
+                {seasonFieldBox}
+                {avisosDelPlan}
+                {resumenPack}
+              </>
+            )}
 
-          {showRemuxCard && (
-            <Modal
-              titulo={<>
-                Ordenación y Nombre de las Pistas por Capítulo
-                <AvisoModoPistas plan={seasonRemux?.[0]?.plan} />
-              </>}
-              onClose={() => setShowRemuxCard(false)}
-              className="modal-wide"
-              tituloStyle={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
-            >
-              <div className="modal-body">
+            {pestana === 'pistas' && (
+              <>
+                <div className="asist-fila-titulo-pestana">
+                  <AvisoModoPistas plan={seasonRemux?.[0]?.plan} />
+                </div>
                 {seasonRemuxLoading && !seasonRemux && <TableLoadingSpinner label="Calculando las pistas de cada capítulo…" />}
                 {seasonRemuxError && !seasonRemuxLoading && (
                   <>
@@ -310,59 +259,88 @@ export function PasoTemporada({ a }: { a: Asistente }) {
                     </>
                   )
                 })()}
-              </div>
-            </Modal>
-          )}
+              </>
+            )}
 
-          {showSeasonNamesCard && (
-            <Modal titulo="Nombre de todos los capítulos" onClose={() => setShowSeasonNamesCard(false)} className="modal-wide asist-modal-ancho">
-              <div className="modal-body">
-                {seasonNamesLoading && !seasonNames && <TableLoadingSpinner label="Generando el nombre de cada capítulo…" />}
-                {seasonNames && seasonNames.length > 0 && (() => {
-                  const current = seasonNames.find(e => e.episode_id === seasonNamesEpisodeId) ?? seasonNames[0]
+            {pestana === 'mediainfo' && (
+              <>
+                {seasonMiLoading && !seasonMi && <TableLoadingSpinner label="Leyendo MediaInfo de cada capítulo…" />}
+                {seasonMiError && !seasonMiLoading && (
+                  <>
+                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10">✗ {seasonMiError}</p>
+                    <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonMi}>↻ Reintentar</button>
+                  </>
+                )}
+                {seasonMi && seasonMi.length > 0 && (() => {
+                  const current = seasonMi.find(e => e.episode_id === miEpisodeId) ?? seasonMi[0]
                   return (
                     <>
-                      {seasonNames.length > 1 && (
-                        <div className="asist-selector-fila">
-                          <select
-                            className="form-input form-select asist-select-auto"
-                            value={current.episode_id}
-                            onChange={e => setSeasonNamesEpisodeId(Number(e.target.value))}
-                          >
-                            {seasonNames.map(ep => (
-                              <option key={ep.episode_id} value={ep.episode_id}>{ep.display_title}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                      {current.error ? (
-                        <p className="text-error asist-t12 asist-m0">✗ {current.error}</p>
-                      ) : (
-                        <FitTextPair
-                          min={9}
-                          items={[
-                            { label: 'Nombre del torrent', text: current.torrent_name || '—', labelStyle },
-                            { label: INTERNAL_TITLE_LABEL, text: current.internal_mkv_title || '—', labelStyle },
-                          ]}
-                        />
-                      )}
+                      <EpisodePicker episodes={seasonMi} currentId={current.episode_id} onChange={setMiEpisodeId} />
+                      <MediaInfoTable
+                        report={current.report}
+                        onSourceToolClick={current.source_comparison ? () => {
+                          setSourceComparison(current.source_comparison!)
+                          setShowEngineDetail(true)
+                          setShowSourceCompare(true)
+                        } : undefined}
+                      />
                     </>
                   )
                 })()}
-              </div>
-            </Modal>
-          )}
-
-          <div className="asist-pie">
-            {needsSelection
-              ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
-              : <span />}
-            <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || recalculandoIdioma || seasonPlan.status !== 'valid' || existingJobBlocking}>
-              {preparing ? 'Preparando…' : 'Continuar'}
-            </button>
-          </div>
+              </>
+            )}
+          </Pestanas>
         </>
       )}
-    </div>
+
+      {/* Fuera de las pestañas: se abre igual desde el botón de Source (Nomenclatura) que desde MediaInfo. */}
+      {showSourceCompare && sourceComparison && (
+        <SourceComparisonModal
+          comparison={sourceComparison}
+          initialShowDetail={showEngineDetail}
+          onClose={() => setShowSourceCompare(false)}
+        />
+      )}
+
+      {showSeasonNamesCard && (
+        <Modal titulo="Nombre de todos los capítulos" onClose={() => setShowSeasonNamesCard(false)} className="modal-wide asist-modal-ancho">
+          <div className="modal-body">
+            {seasonNamesLoading && !seasonNames && <TableLoadingSpinner label="Generando el nombre de cada capítulo…" />}
+            {seasonNames && seasonNames.length > 0 && (() => {
+              const current = seasonNames.find(e => e.episode_id === seasonNamesEpisodeId) ?? seasonNames[0]
+              return (
+                <>
+                  {seasonNames.length > 1 && (
+                    <div className="asist-selector-fila">
+                      <select
+                        className="form-input form-select asist-select-auto"
+                        aria-label="Capítulo"
+                        value={current.episode_id}
+                        onChange={e => setSeasonNamesEpisodeId(Number(e.target.value))}
+                      >
+                        {seasonNames.map(ep => (
+                          <option key={ep.episode_id} value={ep.episode_id}>{ep.display_title}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {current.error ? (
+                    <p className="text-error asist-t12 asist-m0">✗ {current.error}</p>
+                  ) : (
+                    <FitTextPair
+                      min={9}
+                      items={[
+                        { label: 'Nombre del torrent', text: current.torrent_name || '—', labelStyle },
+                        { label: INTERNAL_TITLE_LABEL, text: current.internal_mkv_title || '—', labelStyle },
+                      ]}
+                    />
+                  )}
+                </>
+              )
+            })()}
+          </div>
+        </Modal>
+      )}
+    </MarcoPaso>
   )
 }

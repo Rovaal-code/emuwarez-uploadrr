@@ -3,15 +3,15 @@
 import { esTanda } from '../../utils/seleccionSubida'
 import { listDisplayTitle } from '../../utils/libraryItem'
 import { normalizarModo, renombra, tocaElFichero } from '../../utils/modoPistas'
-import { FitTextPair } from '../FitText'
+import { FitText } from '../FitText'
 import { IconoAviso } from '../Iconos'
-import { Modal } from '../Modal'
 import { SourceComparisonModal } from '../SourceComparisonModal'
-import { FIELD_INFO, INTERNAL_TITLE_LABEL, labelStyle } from './constantes'
+import { FIELD_INFO, INTERNAL_TITLE_LABEL } from './constantes'
 import { MediaInfoTable } from './MediaInfoTable'
-import { AvisoSubidaExistente, BotonComparacionSource, CampoTag, FieldLabel, GeneratingHint, TableLoadingSpinner } from './piezas'
+import { AvisoSubidaExistente, BotonComparacionSource, CampoTag, FieldLabel, GeneratingHint, MarcoPaso, TableLoadingSpinner } from './piezas'
+import { Pestanas, type Pestana } from './Pestanas'
 import { AvisoModoPistas, RemuxTable } from './RemuxTable'
-import type { Asistente } from './useAsistente'
+import type { Asistente, PestanaArchivo } from './useAsistente'
 
 export function PasoArchivo({ a }: { a: Asistente }) {
   const {
@@ -20,8 +20,8 @@ export function PasoArchivo({ a }: { a: Asistente }) {
     fields, setField, titleOptions, titleWarning, sources, providers, opcionesTag, detectingProvider,
     sourceRequiresProvider, sourceWarning, avisoSource, audioWarning, preview,
     sourceComparison, showSourceCompare, setShowSourceCompare, showEngineDetail, setShowEngineDetail,
-    showMiCard, setShowMiCard, miReport, miLoading, miError, runMediaInfo,
-    showRemuxCard, setShowRemuxCard, remuxPreview, remuxLoading, remuxError, remuxEdits, runTrackRemux,
+    pestana, elegirPestana, miReport, miLoading, miError, runMediaInfo,
+    remuxPreview, remuxLoading, remuxError, remuxEdits, runTrackRemux,
     setRemuxEdit, elegirIdioma, cambiarElemento, setStep, goToUpload, preparing, recalculandoIdioma,
   } = a
 
@@ -89,13 +89,6 @@ export function PasoArchivo({ a }: { a: Asistente }) {
             <span className="asist-aviso-campo"><IconoAviso /> {avisoSource}</span>
           )}
         </label>
-        {showSourceCompare && sourceComparison && (
-          <SourceComparisonModal
-            comparison={sourceComparison}
-            initialShowDetail={showEngineDetail}
-            onClose={() => setShowSourceCompare(false)}
-          />
-        )}
         {sourceRequiresProvider && (
           <label><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
             {detectingProvider ? (
@@ -124,34 +117,40 @@ export function PasoArchivo({ a }: { a: Asistente }) {
         </label>
         <CampoTag value={fields.tag} opciones={opcionesTag} onChange={t => setField('tag', t)} />
       </div>
-      <div className="detail-card asist-tarjeta asist-mt-16">
-        {preview?.torrent_name && preview?.internal_mkv_title ? (
-          <FitTextPair
-            min={9}
-            items={[
-              { label: 'Nombre final del torrent (eMuwarez)', text: preview.torrent_name, labelStyle },
-              { label: INTERNAL_TITLE_LABEL, text: preview.internal_mkv_title, labelStyle },
-            ]}
-          />
-        ) : (
-          <>
-            <div className="asist-etiqueta">Nombre final del torrent (eMuwarez)</div>
-            <GeneratingHint />
-            <div className="asist-etiqueta asist-mt-10">{INTERNAL_TITLE_LABEL}</div>
-            <GeneratingHint />
-          </>
-        )}
+      <div className="asist-mt-16">
+        <div className="asist-etiqueta">{INTERNAL_TITLE_LABEL}</div>
+        {preview?.internal_mkv_title ? <FitText min={9} text={preview.internal_mkv_title} /> : <GeneratingHint />}
       </div>
     </>
   )
 
 
+  // Las pistas de audio sin idioma esperan una elección: la pestaña lo dice sin abrirla.
+  const sinIdioma = (remuxPreview?.ordered_tracks ?? []).filter(t => t.type === 'audio' && t.sin_idioma && !remuxEdits[t.id]?.language).length
+  const pestanas: Pestana<PestanaArchivo>[] = [
+    { id: 'nomenclatura', etiqueta: 'Nomenclatura' },
+    { id: 'pistas', etiqueta: 'Pistas', aviso: sinIdioma > 0 ? `${sinIdioma} sin idioma` : undefined },
+    { id: 'mediainfo', etiqueta: 'MediaInfo' },
+  ]
+  const listo = !loading && !error && !episodePrepping
+  const enTanda = esTanda(seleccion)
+
   return (
-    <div className="modal-body">
+    <MarcoPaso
+      pie={<>
+        {needsSelection
+          ? <button className="btn btn-secondary" type="button" onClick={() => setStep(0)}>Volver a la selección</button>
+          : <span />}
+        <button className="btn btn-primary" type="button" onClick={goToUpload} disabled={!listo || preparing || recalculandoIdioma || !preview || existingJobBlocking}>
+          {preparing ? 'Preparando…' : 'Continuar'}
+        </button>
+      </>}
+    >
       {episodeQueue.length > 1 && (
         <div className="asist-selector-fila">
           <select
             className="form-input form-select asist-select-auto"
+            aria-label="Capítulo"
             value={targetId ?? ''} onChange={e => cambiarElemento(Number(e.target.value))}
             disabled={episodePrepping}
           >
@@ -190,77 +189,30 @@ export function PasoArchivo({ a }: { a: Asistente }) {
           <button className="btn btn-secondary btn-sm" type="button" onClick={reintentarNomenclatura}>↻ Reintentar</button>
         </div>
       )}
-      {!loading && !error && !episodePrepping && (
+      {listo && (
         <>
-          <p className="text-muted asist-t12 asist-mb-12">
-            Los campos técnicos (audio por pista, códec, HDR/DV) se leen con MediaInfo del archivo
-            real; el título/año vienen de Radarr/Sonarr y el Source/Provider del nombre del archivo.
-            Puedes ajustar cualquier campo, o ver el detalle de MediaInfo abajo.
-          </p>
-          {fieldBox}
-
-          <div className="asist-bloque-mediainfo">
-            <div className="asist-fila-entre">
-              <div>
-                <div className="asist-bloque-titulo">MediaInfo y pistas del archivo</div>
-                <div className="text-muted asist-t11 asist-mt-2">
-                  Ver Pistas: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido{esTanda(seleccion) ? '' : ' (editable)'}.
-                  <br />
-                  Ver MediaInfo: muestra el detalle técnico real del archivo.
-                </div>
-              </div>
-              <div className="asist-botones">
-                <button className="btn btn-primary" onClick={() => { runMediaInfo(); setShowMiCard(true) }} disabled={targetId == null}>
-                  Ver MediaInfo
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => {
-                    setShowRemuxCard(true)
-                    if (!remuxPreview && !remuxLoading) runTrackRemux()
-                  }}
-                  disabled={targetId == null}
-                >
-                  Ver Pistas
-                </button>
-              </div>
-            </div>
+          {/* El nombre que saldrá, a la vista en las tres pestañas: lo que se cambie en cualquiera lo mueve. */}
+          <div className="detail-card asist-tarjeta">
+            <div className="asist-etiqueta">Nombre final del torrent (eMuwarez)</div>
+            {preview?.torrent_name ? <FitText min={9} text={preview.torrent_name} /> : <GeneratingHint />}
           </div>
 
-          {showMiCard && (
-            <Modal titulo="MediaInfo del archivo" onClose={() => setShowMiCard(false)} className="modal-wide asist-modal-ancho">
-              <div className="modal-body">
-                {miLoading && !miReport && <TableLoadingSpinner label="Cargando MediaInfo…" />}
-                {miError && !miLoading && (
-                  <>
-                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10">✗ {miError}</p>
-                    <button className="btn btn-secondary btn-sm" type="button" onClick={runMediaInfo}>↻ Reintentar</button>
-                  </>
-                )}
-                {miReport && (
-                  <MediaInfoTable
-                    report={miReport}
-                    // Closes this card before opening the comparison one — both are
-                    // modal-overlays at the same z-index, so having two open at once
-                    // would bury the newly-opened one behind this still-open card.
-                    onSourceToolClick={sourceComparison ? () => { setShowMiCard(false); setShowEngineDetail(true); setShowSourceCompare(true) } : undefined}
-                  />
-                )}
-              </div>
-            </Modal>
-          )}
+          <Pestanas nombre="Detalle del archivo" pestanas={pestanas} activa={pestana} onCambiar={elegirPestana}>
+            {pestana === 'nomenclatura' && (
+              <>
+                <p className="text-muted asist-t12 asist-mt-0 asist-mb-12">
+                  El título y el año vienen de Radarr/Sonarr, el Source y el Proveedor del nombre del archivo, y el resto
+                  se lee con MediaInfo del archivo real. Puedes ajustar los campos editables.
+                </p>
+                {fieldBox}
+              </>
+            )}
 
-          {showRemuxCard && (
-            <Modal
-              titulo={<>
-                Ordenación y Nombre de las Pistas
-                <AvisoModoPistas plan={remuxPreview} />
-              </>}
-              onClose={() => setShowRemuxCard(false)}
-              className="modal-wide"
-              tituloStyle={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
-            >
-              <div className="modal-body">
+            {pestana === 'pistas' && (
+              <>
+                <div className="asist-fila-titulo-pestana">
+                  <AvisoModoPistas plan={remuxPreview} />
+                </div>
                 {remuxLoading && !remuxPreview && <TableLoadingSpinner label="Cargando pistas del archivo…" />}
                 {remuxError && !remuxLoading && (
                   <>
@@ -278,35 +230,52 @@ export function PasoArchivo({ a }: { a: Asistente }) {
                   <>
                     {/* En una tanda "Subir todos" no lleva las ediciones: se
                         enseñan las pistas pero no se pueden tocar. */}
-                    {esTanda(seleccion) && (
+                    {enTanda && (
                       <p className="text-muted asist-t12 asist-mt-0">
                         Al subir varios capítulos a la vez se aplican los nombres automáticos. Para cambiarlos, sube el capítulo suelto.
                       </p>
                     )}
                     <RemuxTable
                       plan={remuxPreview}
-                      editable={!esTanda(seleccion) && tocaElFichero(normalizarModo(remuxPreview.track_mode))}
-                      nameEditable={!esTanda(seleccion) && renombra(normalizarModo(remuxPreview.track_mode))}
+                      editable={!enTanda && tocaElFichero(normalizarModo(remuxPreview.track_mode))}
+                      nameEditable={!enTanda && renombra(normalizarModo(remuxPreview.track_mode))}
                       edits={remuxEdits}
                       onEdit={setRemuxEdit}
-                      onIdioma={esTanda(seleccion) ? undefined : elegirIdioma}
+                      onIdioma={enTanda ? undefined : elegirIdioma}
                     />
                   </>
                 )}
-              </div>
-            </Modal>
-          )}
+              </>
+            )}
 
-          <div className="asist-pie">
-            {needsSelection
-              ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
-              : <span />}
-            <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || recalculandoIdioma || !preview || existingJobBlocking}>
-              {preparing ? 'Preparando…' : 'Continuar'}
-            </button>
-          </div>
+            {pestana === 'mediainfo' && (
+              <>
+                {miLoading && !miReport && <TableLoadingSpinner label="Cargando MediaInfo…" />}
+                {miError && !miLoading && (
+                  <>
+                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10">✗ {miError}</p>
+                    <button className="btn btn-secondary btn-sm" type="button" onClick={runMediaInfo}>↻ Reintentar</button>
+                  </>
+                )}
+                {miReport && (
+                  <MediaInfoTable
+                    report={miReport}
+                    onSourceToolClick={sourceComparison ? () => { setShowEngineDetail(true); setShowSourceCompare(true) } : undefined}
+                  />
+                )}
+              </>
+            )}
+          </Pestanas>
         </>
       )}
-    </div>
+      {/* Fuera de las pestañas: se abre igual desde el botón de Source (Nomenclatura) que desde MediaInfo. */}
+      {showSourceCompare && sourceComparison && (
+        <SourceComparisonModal
+          comparison={sourceComparison}
+          initialShowDetail={showEngineDetail}
+          onClose={() => setShowSourceCompare(false)}
+        />
+      )}
+    </MarcoPaso>
   )
 }

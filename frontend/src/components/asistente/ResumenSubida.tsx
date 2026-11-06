@@ -17,7 +17,7 @@ export function ResumenSubida({ a }: { a: Asistente }) {
   const {
     item, seasons, episodes, targetId, targetIsSeason, batchQueue, batchIsEpisodes, batchItemTitle,
     preview, seasonDisplayTitle, seasonPlan, fields, remuxPreview, remuxEdits, modoPistasAjuste,
-    checks, batchContentChecks, requestId, preselect,
+    checks, batchContentChecks, nombresTanda, requestId, preselect,
   } = a
   const esTanda = batchQueue.length > 1
   const ids = esTanda ? batchQueue : targetId != null ? [targetId] : []
@@ -47,6 +47,13 @@ export function ResumenSubida({ a }: { a: Asistente }) {
   const copia = textoCopia(enlace, modo)
 
   const nombre = targetIsSeason ? seasonDisplayTitle : preview?.torrent_name
+  // El nombre del torrent de cada elemento de una tanda: el de un pack lo dan sus comprobaciones, el de un capítulo
+  // su nomenclatura. undefined mientras se calcula; null si no hay (comprobación fallida o nomenclatura bloqueada).
+  const nombreDeLaTanda = (id: number): string | null | undefined => {
+    if (batchIsEpisodes) return nombresTanda.get(id)
+    const c = batchContentChecks.get(id)
+    return c ? c.nombre ?? null : undefined
+  }
   const idTitulo = useId()
   const idYaHay = useId()
   return (
@@ -55,7 +62,12 @@ export function ResumenSubida({ a }: { a: Asistente }) {
         <h3 className="asist-panel-titulo" id={idTitulo}>Lo que se sube</h3>
         {esTanda ? (
           <ul className="asist-lista-subida">
-            {batchQueue.map(id => <li key={id}>{batchItemTitle(id)}</li>)}
+            {batchQueue.map(id => (
+              <li key={id}>
+                <span className="asist-lista-titulo">{batchItemTitle(id)}</span>
+                <NombreDeLaTanda nombre={nombreDeLaTanda(id)} />
+              </li>
+            ))}
           </ul>
         ) : (
           <p className="asist-nombre-torrent">{nombre || '—'}</p>
@@ -92,6 +104,13 @@ export function ResumenSubida({ a }: { a: Asistente }) {
       </section>
     </div>
   )
+}
+
+// El nombre del torrent de un elemento de la tanda, bajo su título.
+export function NombreDeLaTanda({ nombre }: { nombre: string | null | undefined }) {
+  if (nombre === undefined) return <span className="asist-lista-nombre asist-lista-espera">Calculando el nombre…</span>
+  if (nombre === null) return <span className="asist-lista-nombre asist-aviso-dato">Sin nombre: este elemento no se podrá subir</span>
+  return <span className="asist-lista-nombre">{nombre}</span>
 }
 
 function YaHayEnEmu({ yaHay }: { yaHay: YaHay }) {

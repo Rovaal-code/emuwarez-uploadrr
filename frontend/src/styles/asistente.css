@@ -4,7 +4,18 @@
 
 /* Marco: pasos y ancho del modal. El paso actual es el único con relleno; los hechos llevan su ✓. */
 .modal-wide.asist-modal-ancho { max-width: 900px; }
-.asist-pasos { padding: 0 20px; margin-top: 12px; }
+/* El asistente no hace scroll entero: el panel es una columna (cabecera, pasos, paso) y solo el cuerpo del paso
+   se desplaza, así el pie (Volver, Continuar, Subir) se ve a cualquier alto de ventana. Va solo en el asistente:
+   los modales que se abren encima (nombres, comparación) siguen haciendo scroll como siempre. */
+.modal-panel.asist-marco {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.asist-marco > .modal-header { flex: none; }
+.asist-seccion { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.asist-cuerpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.asist-pasos { flex: none; padding: 0 20px; margin-top: 12px; }
 .asist-pasos ol { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .asist-paso {
   padding: 4px 12px;
@@ -98,9 +109,20 @@
   backdrop-filter: blur(6px);
   border-top: 1px solid var(--border);
 }
+/* El pie de un paso del asistente va fuera del cuerpo que hace scroll, así que no necesita pegarse. (El de «Subir por
+   lotes», que sigue en un modal que hace scroll entero, conserva el de arriba.) */
+.asist-seccion > .asist-pie {
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 0;
+  position: static;
+  padding: 12px 20px;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--overlay-dark) 18%, transparent);
+}
 .asist-pie-fin { justify-content: flex-end; }
-.asist-bloque-mediainfo { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
-.asist-bloque-titulo { font-size: 13px; font-weight: 600; }
 .asist-bloque-error { padding: 20px 0; }
 .asist-bloque { display: block; }
 .asist-pila { display: flex; flex-direction: column; gap: 8px; }
@@ -372,18 +394,39 @@
 }
 
 /* Paso Resumen: dos paneles (lo que se sube, lo que ya hay) que pasan a una columna si no caben. */
-.asist-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.asist-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 12px; }
 .detail-card.asist-panel { padding: 12px 14px; border-radius: var(--radius-card); min-width: 0; }
 .asist-panel-titulo { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-.asist-nombre-torrent { margin: 0 0 10px; font-size: 14px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.asist-nombre-torrent {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  /* Inter junta «x» y un número en «×»: en un nombre de torrent, x265 tiene que seguir leyéndose x265. */
+  font-feature-settings: "calt" 0;
+}
 .asist-lista-subida {
   margin: 0 0 10px;
-  padding: 0 0 0 18px;
-  max-height: 120px;
+  padding: 0;
+  list-style: none;
+  max-height: 220px;
   overflow-y: auto;
   font-size: 13px;
-  line-height: 1.5;
 }
+.asist-lista-subida > li { padding: 6px 0; border-top: 1px solid var(--border); }
+.asist-lista-subida > li:first-child { border-top: 0; padding-top: 0; }
+.asist-lista-titulo { display: block; font-weight: 600; line-height: 1.4; }
+.asist-lista-nombre {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.asist-lista-espera { color: var(--text-muted); font-family: inherit; }
 .asist-datos { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 12.5px; }
 .asist-datos dt { color: var(--text-muted); }
 .asist-datos dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
@@ -399,3 +442,62 @@
 .asist-veredicto { font-weight: 600; color: var(--text-muted); }
 .asist-veredicto-mejor { color: var(--color-available-soft); }
 .asist-veredicto-peor { color: var(--color-warning-soft); }
+
+/* El veredicto de las comprobaciones, en el pie entre Volver y Subir. */
+.asist-pie-estado { flex: 1 1 200px; min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.35; text-align: right; overflow-wrap: anywhere; }
+
+/* Con pestañas el panel no cambia de alto al pasar de una a otra (Pistas es mucho más corta que Nomenclatura). */
+.modal-panel.asist-marco.asist-alto-fijo { height: min(760px, calc(var(--vh100) * 0.9)); }
+
+/* Pestañas del paso «Nombre y pistas»: Nomenclatura, Pistas y MediaInfo. Subrayado en el acento del HUD. */
+.asist-pestanas { margin-top: 14px; }
+.asist-pestanas-lista {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.asist-pestana {
+  margin-bottom: -1px;
+  padding: 8px 14px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-small) var(--radius-small) 0 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+}
+.asist-pestana:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-accent) 8%, transparent); }
+.asist-pestana-activa,
+.asist-pestana-activa:hover {
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom-color: var(--text-accent);
+}
+.asist-pestana:focus-visible,
+.asist-pestana-panel:focus-visible {
+  outline: 2px solid var(--text-accent);
+  outline-offset: -2px;
+}
+.asist-pestana-aviso { margin-left: 8px; font-size: 11px; font-weight: 500; color: var(--color-warning); }
+.asist-pestana-panel { padding-top: 14px; min-height: 240px; border-radius: var(--radius-small); }
+/* Dentro de una pestaña ya hace scroll el cuerpo del paso: las tablas no llevan el suyo, y su cabecera se pega arriba. */
+.asist-pestana-panel .asist-tabla-caja { max-height: none; overflow: visible; }
+.asist-fila-titulo-pestana { margin-bottom: 10px; }
+.asist-fila-titulo-pestana:empty { display: none; }
+
+@media (max-width: 640px) {
+  .modal-panel.asist-marco { width: 96%; max-height: calc(var(--vh100) * 0.96); }
+  .modal-panel.asist-marco.asist-alto-fijo { height: calc(var(--vh100) * 0.96); }
+  .asist-pie-estado { order: -1; flex-basis: 100%; text-align: left; }
+  .asist-rejilla-campos, .asist-rejilla-modos { grid-template-columns: 1fr; }
+  .asist-pestana { padding: 10px 12px; }
+  .asist-pie { padding: 10px 16px; }
+  .asist-cuerpo.modal-body { padding: 14px 16px; }
+  .asist-pasos { padding: 0 16px; }
+}

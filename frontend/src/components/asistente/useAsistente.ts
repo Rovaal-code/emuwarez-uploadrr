@@ -38,6 +38,10 @@ import { PROVIDER_SOURCES } from './constantes'
 import { mergeRemuxTracks } from './RemuxTable'
 import { useComprobaciones, useComprobacionesTanda } from './useComprobaciones'
 import { useDetallesTemporada } from './useDetallesTemporada'
+import { useNombresTanda } from './useNombresTanda'
+
+// Las pestañas del paso «Nombre y pistas».
+export type PestanaArchivo = 'nomenclatura' | 'pistas' | 'mediainfo'
 
 export interface PropsAsistente {
   item: LibraryItemResponse
@@ -173,11 +177,14 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Step 1 — on-demand MediaInfo report (only runs when the button is clicked)
+  // Step 1 — la pestaña abierta (Nomenclatura, Pistas, MediaInfo). El estado de cada una vive aquí, no en la
+  // pestaña: cambiar de una a otra no pierde lo editado ni lo ya cargado.
+  const [pestana, setPestana] = useState<PestanaArchivo>('nomenclatura')
+
+  // Step 1 — on-demand MediaInfo report (se pide al abrir su pestaña)
   const [miReport, setMiReport] = useState<MediaInfoReport | null>(null)
   const [miLoading, setMiLoading] = useState(false)
   const [miError, setMiError] = useState<string | null>(null)
-  const [showMiCard, setShowMiCard] = useState(false)
 
   // Step 1 — on-demand track remux preview (reorder + rename audio/subs/video),
   // editable by hand; applied automatically as part of "Subir" (see doUpload).
@@ -212,8 +219,6 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     idiomasConfirmados.current = {}
     setIdiomasPackEnVuelo(null)
   }, [targetId])
-  const [showRemuxCard, setShowRemuxCard] = useState(false)
-
   // Step 1 (season target only) — the pack plan: consistency across
   // episodes, completeness, and the single pack torrent name. Built with a
   // live "N de M capítulos" counter (real work per episode server-side).
@@ -295,7 +300,38 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   const {
     batchEnvChecks, batchContentChecks, batchChecksLoading, batchChecksIndex, batchViewId, setBatchViewId,
     batchChecksError, repetir: repetirComprobacionesTanda, mergedChecksFor, olvidar: olvidarComprobacionesTanda,
-  } = useComprobacionesTanda({ step, batchQueue, batchPhase, proveedorElegido })
+  } = useComprobacionesTanda({
+    step, batchQueue, batchPhase, proveedorElegido,
+    // Un pack da su nombre con lo editado a mano (no los capítulos, que lo calculan useNombresTanda).
+    ajustesDe: id => batchIsEpisodes ? undefined : ajustesDeLaTanda(id),
+  })
+  // Lo editado a mano para un elemento de la tanda, tal como lo aplica «Subir todas/todos»: lo de ese elemento (el
+  // activo, lo que hay en `fields`), con el Título, que es de la serie, igual para todos.
+  function ajustesDeLaTanda(id: number): Ajustes | undefined {
+    const propios = conAjustes(ajustesPorId, targetId, camposDe.current, ajustesDeFields()).get(id)
+    const title = sharedTitle ?? fields.title ?? propios?.title
+    const idiomas = idiomasParaServidor(idiomasPorTemporada.get(id))
+    const salida = { source: propios?.source, tag: propios?.tag, title, ...(idiomas ? { idiomas } : {}) }
+    return salida.source || salida.tag || salida.title || salida.idiomas ? salida : undefined
+  }
+  // Los capítulos de una tanda: sus campos con lo editado y el Título común (lo mismo que guarda «Subir todos»).
+  const nombresTanda = useNombresTanda({
+    activo: step === 2 && batchIsEpisodes && batchPhase === 'idle',
+    ids: batchQueue,
+    camposDe: id => {
+      const generado = episodeFieldsById.get(id)
+      if (!generado || generado.blocked) return null
+      const propios = conAjustes(ajustesPorId, targetId, camposDe.current, ajustesDeFields()).get(id)
+      const title = sharedTitle || fields.title || propios?.title || undefined
+      return {
+        ...(generado.fields || {}),
+        ...(propios?.source != null ? { source: propios.source } : {}),
+        ...(propios?.provider != null ? { provider: propios.provider } : {}),
+        ...(propios?.tag ? { tag: propios.tag } : {}),
+        ...(title ? { title } : {}),
+      }
+    },
+  })
 
   // Un único sitio donde cambia lo que se sube. Si es otra cosa que antes se
   // descarta todo lo que colgaba de lo anterior (ajustes, caché de
@@ -596,18 +632,31 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   // Reset all per-target state (both single-file and season) whenever the
   // resolved target changes — a different item means unrelated data.
   useEffect(() => {
-    setMiReport(null); setMiError(null); setShowMiCard(false); setMiLoading(false)
+    setMiReport(null); setMiError(null); setMiLoading(false); setPestana('nomenclatura')
     // Otro contenido, otras pistas: las ediciones a mano no se arrastran, que
     // haría que un capítulo heredara los nombres que escribiste para el
     // anterior sin decírtelo.
-    setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}); setShowRemuxCard(false); setRemuxLoading(false)
+    setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}); setRemuxLoading(false)
     setSeasonPlan(null); setSeasonPlanError(null)
   }, [targetId])
 
   const detalles = useDetallesTemporada({
     targetId, targetIsSeason, objetivoActual, versionDatosPack, fields, proveedorElegido, idiomasPorTemporada,
-    pistasAbiertas: showRemuxCard,
+    pistasAbiertas: pestana === 'pistas',
   })
+
+  // Abrir una pestaña pide lo que aún no tiene: MediaInfo y las pistas se leen del fichero (o de cada capítulo del
+  // pack), que puede tardar. Si ya están cargados, o cargando, no se repite; si fallaron, volver a la pestaña reintenta.
+  const elegirPestana = (p: PestanaArchivo) => {
+    setPestana(p)
+    if (p === 'mediainfo') {
+      if (targetIsSeason) { if (!detalles.seasonMi && !detalles.seasonMiLoading) detalles.loadSeasonMi() }
+      else if (!miReport && !miLoading) void runMediaInfo()
+    } else if (p === 'pistas') {
+      if (targetIsSeason) { if (!detalles.seasonRemux && !detalles.seasonRemuxLoading) detalles.loadSeasonRemux() }
+      else if (!remuxPreview && !remuxLoading) void runTrackRemux()
+    }
+  }
 
   // Auto-detect the provider via TMDB when Source is WEB-DL and none was
   // detected from the filename. Debounced 500ms and fired at most once per
@@ -1039,8 +1088,8 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     fields, setField, titleOptions, titleWarning, sources, providers, opcionesTag, detectingProvider,
     sourceRequiresProvider, sourceWarning, avisoSource, audioWarning, preview,
     sourceComparison, setSourceComparison, showSourceCompare, setShowSourceCompare, showEngineDetail, setShowEngineDetail,
-    showMiCard, setShowMiCard, miReport, miLoading, miError, runMediaInfo,
-    showRemuxCard, setShowRemuxCard, remuxPreview, remuxLoading, remuxError, remuxEdits, runTrackRemux,
+    pestana, elegirPestana, miReport, miLoading, miError, runMediaInfo,
+    remuxPreview, remuxLoading, remuxError, remuxEdits, runTrackRemux,
     setRemuxEdit, elegirIdioma, recalculandoIdioma,
     seasonPlan, seasonPlanLoading, seasonPlanError, seasonProgress, loadSeasonPlan, seasonDisplayTitle,
     idiomasPackEnVuelo, idiomasPorTemporada, elegirIdiomaPack, detalles,
@@ -1049,7 +1098,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     checks, checksLoading, checksError, liveChecks, runChecks, canUpload, uploading, uploadMsg, doUpload,
     batchQueue, batchIsEpisodes, batchItemTitle, batchPhase, batchIndex, batchResults,
     batchViewId, setBatchViewId, batchEnvChecks, batchContentChecks, batchChecksLoading, batchChecksIndex,
-    batchChecksError, repetirComprobacionesTanda, uploadAllSeasons, uploadAllEpisodes,
+    batchChecksError, repetirComprobacionesTanda, uploadAllSeasons, uploadAllEpisodes, nombresTanda,
     // Cerrar
     cerrarModal, confirmandoCierre, setConfirmandoCierre,
   }

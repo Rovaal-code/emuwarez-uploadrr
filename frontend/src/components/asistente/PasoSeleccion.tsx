@@ -4,6 +4,7 @@ import type { LibraryItemResponse } from '../../types/api'
 import { episodeNotReadyReason, isSeasonReady, seasonNotReadyReason } from '../../utils/libraryItem'
 import { IconoAviso } from '../Iconos'
 import { Tooltip } from '../Tooltip'
+import { MarcoPaso } from './piezas'
 import type { Asistente } from './useAsistente'
 
 export function PasoSeleccion({ a }: { a: Asistente }) {
@@ -187,15 +188,9 @@ export function PasoSeleccion({ a }: { a: Asistente }) {
   )
 
   return (
-    <div className="modal-body">
-      <p className="text-muted asist-t12 asist-mb-12">
-        {allowMultiSeason
-          ? <>Elige qué temporada(s) de <strong>{item.title}</strong> subir.</>
-          : <>Elige cómo subir <strong>{item.title}</strong>.</>}
-      </p>
-      {allowMultiSeason ? multiSeasonChecklist : seasonModeSelection}
-      {selError && <p className="text-error asist-mt-10">{selError}</p>}
-      <div className="asist-pie asist-pie-fin">
+    <MarcoPaso
+      finPie
+      pie={
         <button
           className="btn btn-primary"
           disabled={!allowMultiSeason && seasonUploadMode === null}
@@ -205,7 +200,15 @@ export function PasoSeleccion({ a }: { a: Asistente }) {
           }
           type="button"
         >Continuar</button>
-      </div>
-    </div>
+      }
+    >
+      <p className="text-muted asist-t12 asist-mb-12">
+        {allowMultiSeason
+          ? <>Elige qué temporada(s) de <strong>{item.title}</strong> subir.</>
+          : <>Elige cómo subir <strong>{item.title}</strong>.</>}
+      </p>
+      {allowMultiSeason ? multiSeasonChecklist : seasonModeSelection}
+      {selError && <p className="text-error asist-mt-10">{selError}</p>}
+    </MarcoPaso>
   )
 }

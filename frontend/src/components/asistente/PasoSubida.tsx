@@ -2,7 +2,7 @@
 // el botón que encola la subida.
 import { useTooltip } from '../Tooltip'
 import { CHECK_STEP_ORDER, CHECK_STEP_ORDER_SEASON, CHECK_STEP_PENDING_LABEL } from './constantes'
-import { CheckRow } from './piezas'
+import { CheckRow, MarcoPaso } from './piezas'
 import { ResumenSubida } from './ResumenSubida'
 import type { Asistente } from './useAsistente'
 
@@ -11,9 +11,35 @@ export function PasoSubida({ a }: { a: Asistente }) {
     item, targetIsSeason, checks, checksLoading, checksError, liveChecks, runChecks,
     uploadMsg, uploading, canUpload, recalculandoIdioma, setStep, doUpload,
   } = a
+  // Lo que dice el pie: el fallo al encolar, si lo hubo; si no, lo que dijeron las comprobaciones.
+  const veredicto = uploadMsg
+    ? { texto: uploadMsg, clase: uploadMsg.startsWith('✗') ? 'asist-error' : 'asist-ok' }
+    : !checksLoading && checksError
+    ? { texto: `✗ No se pudieron completar las comprobaciones: ${checksError}`, clase: 'asist-error' }
+    : !checksLoading && checks
+    ? checks.ready
+      ? { texto: '✓ Todo listo para subir', clase: 'asist-ok' }
+      : { texto: '✗ La subida no se puede realizar', clase: 'asist-error' }
+    : { texto: '', clase: '' }
   const uploadBtnTip = useTooltip(canUpload ? null : 'Alguna comprobación ha fallado o aún está en curso')
   return (
-    <div className="modal-body">
+    <MarcoPaso
+      pie={<>
+        <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={uploading}>← Volver</button>
+        {/* El veredicto va en el pie, junto al botón que lo obedece: así se ve sin bajar por la lista. La región
+            existe siempre, para que el lector lo anuncie cuando llega (a los ~30 s). */}
+        <div role="status" className={`asist-pie-estado ${veredicto.clase}`}>{veredicto.texto}</div>
+        <button
+          className="btn btn-primary"
+          onClick={doUpload}
+          disabled={!canUpload || uploading || checksLoading || recalculandoIdioma}
+          {...uploadBtnTip.triggerProps}
+        >
+          {uploading ? 'Subiendo…' : 'Subir a eMuwarez'}
+          {uploadBtnTip.tooltipNode}
+        </button>
+      </>}
+    >
       <ResumenSubida a={a} />
 
       {/* Pre-upload checks card */}
@@ -35,19 +61,6 @@ export function PasoSubida({ a }: { a: Asistente }) {
         ) : (
           checks?.checks.map(c => <CheckRow key={c.id} c={c} />)
         )}
-        {/* La región existe siempre: así el lector anuncia el veredicto cuando llega, a los ~30 s. */}
-        <div role="status">
-          {!checksLoading && checks && (
-            <div className={checks.ready ? 'asist-mt-14 asist-negrita asist-ok' : 'asist-mt-14 asist-negrita asist-error'}>
-              {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}
-            </div>
-          )}
-          {!checksLoading && checksError && (
-            <div className="asist-mt-14 asist-negrita asist-error">
-              {`✗ No se pudieron completar las comprobaciones: ${checksError}`}
-            </div>
-          )}
-        </div>
         {!checksLoading && (
           <button className="btn btn-secondary btn-sm asist-mt-12 asist-t12" onClick={runChecks} type="button">
             ↻ Volver a comprobar
@@ -60,22 +73,7 @@ export function PasoSubida({ a }: { a: Asistente }) {
           ¿Seguro que quieres subir <strong>«{item.title}»</strong> a eMuwarez? Se iniciará la subida real.
         </p>
       )}
-      {uploadMsg && (
-        <p className={uploadMsg.startsWith('✗') ? 'asist-msg-subida asist-msg-fallo' : 'asist-msg-subida'}>{uploadMsg}</p>
-      )}
 
-      <div className="asist-pie">
-        <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={uploading}>← Volver</button>
-        <button
-          className="btn btn-primary"
-          onClick={doUpload}
-          disabled={!canUpload || uploading || checksLoading || recalculandoIdioma}
-          {...uploadBtnTip.triggerProps}
-        >
-          {uploading ? 'Subiendo…' : 'Subir a eMuwarez'}
-          {uploadBtnTip.tooltipNode}
-        </button>
-      </div>
-    </div>
+    </MarcoPaso>
   )
 }

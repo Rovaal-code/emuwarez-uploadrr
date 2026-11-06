@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { InfoIcon } from '../InfoIcon'
 import { StatCard } from '../StatCard'
-import { Tooltip } from '../Tooltip'
+import { HoverTitle, Tooltip } from '../Tooltip'
 import { desmontar, montar } from './dom'
 
 function sinHover(valor: boolean) {
@@ -75,5 +75,28 @@ describe('Tooltip con el dedo', () => {
     await montar(<InfoIcon text="Explicación" />)
     await tocar(document.querySelector('.menores-info')!)
     expect(globo()).toBeNull()
+  })
+
+  it('un HoverTitle informativo (sin onClick) se abre al tocarlo: el identificador entero solo está en el tooltip', async () => {
+    sinHover(true)
+    await montar(<HoverTitle as="span" tip="0123456789abcdef0123456789abcdef01234567"><code>0123456</code></HoverTitle>)
+    await tocar(document.querySelector('code')!)
+    expect(globo()?.textContent).toBe('0123456789abcdef0123456789abcdef01234567')
+  })
+
+  it('no se abre en un enlace HoverTitle, en un asa de arrastre ni dentro de una fila que se abre al tocarla', async () => {
+    sinHover(true)
+    const abrir = vi.fn()
+    await montar(
+      <div>
+        <HoverTitle href="/requests/3" onClick={abrir} tip="Abrir ficha">Título</HoverTitle>
+        <HoverTitle as="span" tip="Arrastra para reordenar" role="button" tabIndex={0}>≡</HoverTitle>
+        <table><tbody><tr className="clickable"><td><HoverTitle as="span" tip="Título entero">Títu…</HoverTitle></td></tr></tbody></table>
+      </div>,
+    )
+    for (const sel of ['a', '[role="button"]', 'td span']) {
+      await tocar(document.querySelector(sel)!)
+      expect(globo()).toBeNull()
+    }
   })
 })

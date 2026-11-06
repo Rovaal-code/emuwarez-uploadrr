@@ -120,14 +120,15 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   }, [ocultar])
   // Con el dedo (sin hover) un toque abre y cierra la explicación, anclada bajo el disparador como con el teclado, y se
   // cierra al tocar fuera o con Escape. Solo cuando el toque no es la acción de un control: si lo tocado es un enlace o
-  // un botón, el toque hace lo suyo (su nombre ya lo lleva el aria-label). Una ayuda que es un botón (el «?» de
-  // InfoIcon) lo dice con `data-ayuda`. Se usa pointerup y no click para no pisar el onClick de quien reparte
+  // un botón (también una asa de arrastre, que es role="button"), o va dentro de una fila que se abre al tocarla
+  // (`.clickable`), el toque hace lo suyo. Una ayuda que es un botón (el «?» de InfoIcon) lo dice con `data-ayuda`.
+  // Un disparador informativo (un HoverTitle sin onClick, una tarjeta de cifra) sí se abre. Se usa pointerup y no click para no pisar el onClick de quien reparte
   // triggerProps; un desplazamiento termina en pointercancel, así que deslizar el dedo no lo abre.
   const disparador = useRef<Element | null>(null)
   const porToque = useRef(false)
   const alToque = useCallback((e: React.PointerEvent) => {
     if (e.pointerType === 'mouse' || !window.matchMedia?.('(hover: none)').matches) return
-    const control = (e.target as Element).closest?.('a[href], button, input, select, textarea, summary, label, [role="button"], [role="link"]')
+    const control = (e.target as Element).closest?.('a[href], button, input, select, textarea, summary, label, [role="button"], [role="link"], .clickable')
     if (control && !control.hasAttribute('data-ayuda') && !(control as HTMLButtonElement).disabled) return
     if (show) { ocultar(); return }
     disparador.current = e.currentTarget
@@ -297,10 +298,9 @@ export function HoverTitle({ as = 'div', href, className, style, onClick, onMous
     triggerProps.onKeyDown(e)
     onKeyDown?.(e)
   }
-  // Sin el toque que abre el tooltip: el título suele ir dentro de una fila que se abre al tocarla.
-  const { onPointerUp: _toque, ...eventos } = triggerProps
-  void _toque
-  const comunes = { style, onMouseDown, onMouseUp, ...resto, ...eventos, onKeyDown: teclas }
+  // El toque que abre el tooltip va también aquí: como enlace o botón (con onClick) no hace nada, porque el toque es
+  // su acción, y dentro de una fila `.clickable` tampoco; solo abre el de un HoverTitle informativo.
+  const comunes = { style, onMouseDown, onMouseUp, ...resto, ...triggerProps, onKeyDown: teclas }
   // Con as="div" el enlace ocupa su línea, como el div de antes.
   const bloque = as === 'div' ? ' titulo-bloque' : ''
   if (onClick && href) {

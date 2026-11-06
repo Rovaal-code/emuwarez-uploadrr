@@ -901,10 +901,16 @@
 }
 
 /* Tablet: con el relleno táctil, «Marcar todo como leído» y «Borrar todo» no cabían junto al título en 360 px y se
-   partían en tres líneas. El panel crece un poco y, si aun así no caben, las acciones bajan enteras a su fila. */
+   partían en tres líneas. El panel crece un poco y, si aun así no caben, las acciones bajan enteras a su fila.
+   Se ancla al borde derecho de la cabecera (es `fixed` respecto a ella, como en el móvil) y no pasa de su ancho: colgado
+   de la campana, con poco ancho (769 px con la interfaz al 150 %) se metía bajo la barra lateral. */
 @media (pointer: coarse) and (min-width: 769px) {
   .notif-dropdown {
-    width: 420px;
+    position: fixed;
+    top: calc(100% + 6px);
+    right: 8px;
+    width: min(420px, calc(100% - 16px));
+    max-width: none;
   }
 
   .notif-dropdown-header {

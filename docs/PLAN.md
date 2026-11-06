@@ -591,8 +591,12 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `pointerdown` (iOS). `formatBytes` usa espacio duro. Tras «Borrar lote» con todo borrado, Subidas dice «Este lote ya no tiene subidas» y ofrece
   «Quitar filtro del lote». La franja de cuenta del Panel pierde Mensajes y Notificaciones (están en la barra superior y el cajón) y queda «Mis
   subidas», solo con icono entre 769 y 1400 px para ir en una fila. Los modales ya eran opacos tras #229. **Pendiente:** `--color-tab-active`
-  (globals.css) y los endpoints de nomenclatura y preflight del backend, sin uso desde la interfaz; `pages/ajustes/formatBytes.ts` sigue con espacio
+  (globals.css); `pages/ajustes/formatBytes.ts` sigue con espacio
   normal y otra precisión; `viewport-fit=cover` espera a que el marco trate las safe areas; tablet táctil a 769–1400 px sin probar.
+  **Después:** fuera los endpoints sin uso desde la interfaz: `GET /library/{id}/nomenclature`, `POST …/nomenclature/preview`,
+  `POST …/adapt-nomenclature`, `GET …/nomenclature/operations`, `POST …/upload/preflight` y `GET`/`POST …/nomenclature-check`, con sus
+  modelos, `list_filesystem_operations`, sus tests y `getNomenclatureCheckInfo`/`runNomenclatureCheck` del frontend. Los servicios siguen
+  (la CLI usa propuesta, renombrado y preflight); `nomenclature_check.check_item`/`count_pending` ya solo los llaman los tests.
 
 ## Siguiente
 

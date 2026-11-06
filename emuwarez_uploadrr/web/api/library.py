@@ -1,7 +1,6 @@
 """Real library, missing, and sync endpoints (Phase 4)."""
 from __future__ import annotations
 
-import os
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -514,72 +513,6 @@ def library_mediainfo(
         path = row["path"] if "path" in row.keys() else None
         radarr_source = row["source"] if "source" in row.keys() else None
     return build_mediainfo_report(path, radarr_source=radarr_source)
-
-
-@router.get("/library/{item_id}/nomenclature-check")
-def library_nomenclature_info(
-    item_id: int,
-    current_user: dict = Depends(require_auth),
-) -> dict:
-    """Info for the 'Comprobar Nomenclatura' confirmation + stored result.
-
-    Returns {item_type, status, pending, available, seasons, result} where
-    `result` (only for a checked leaf) is {status, expected, actual, diff} for
-    the 'Ver resultados' view. `pending`/`available`/`seasons` drive the
-    confirmation message (¿Comprobar N capítulos? / N temporadas con X...)."""
-    from emuwarez_uploadrr.services.nomenclature_check import count_pending, compare
-    from emuwarez_uploadrr.services.mkv_title import to_filesystem_name
-    from emuwarez_uploadrr.services.nomenclature import tag_por_defecto
-
-    with _get_conn() as conn:
-        from ...services.library import get_library_item
-        item = get_library_item(conn, item_id)
-        if not item:
-            raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
-        item_type = item.get("item_type")
-        pending, available, seasons = count_pending(conn, item_id, item_type)
-        result = None
-        expected = item.get("nomenclature_expected")
-        path = item.get("path")
-        if item_type in ("movie", "episode") and expected and path:
-            base = os.path.basename(path)
-            matches, diff = compare(base, expected)
-            # Show the item's group tag in the expected name (it is
-            # NOT part of the comparison — the group is always ignored).
-            tag = tag_por_defecto([item.get("release_group")], conn=conn)
-            expected_display = f"{expected}-{tag}" if tag else expected
-            result = {
-                "status": item.get("nomenclature_status"),
-                "expected": expected_display,
-                "actual": to_filesystem_name(os.path.splitext(base)[0]),
-                "diff": diff,
-            }
-        return {
-            "item_type": item_type,
-            "status": item.get("nomenclature_status"),
-            "pending": pending,
-            "available": available,
-            "seasons": seasons,
-            "result": result,
-        }
-
-
-@router.post("/library/{item_id}/nomenclature-check")
-def library_nomenclature_check(
-    item_id: int,
-    force: bool = Query(False),
-    current_user: dict = Depends(require_auth),
-) -> dict:
-    """Run the MediaInfo-based nomenclature check on a leaf/season/series.
-    Only DISPONIBLE + 'No comprobada' files are checked unless force=True.
-    Returns {checked, correct, not_adapted, results}."""
-    from emuwarez_uploadrr.services.nomenclature_check import check_item
-
-    with _get_conn() as conn:
-        result = check_item(conn, item_id, force=force)
-        if result.get("error") == "not found":
-            raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
-        return result
 
 
 @router.get("/library/{item_id}/suggest-provider")

@@ -957,72 +957,6 @@ class OkResponse(BaseModel):
     message: str
 
 
-# ---------------------------------------------------------------------------
-# Nomenclature (Phase 6A)
-# ---------------------------------------------------------------------------
-
-class NomenclatureProposalResponse(BaseModel):
-    id: Optional[int] = None
-    library_item_id: int
-    status: str
-    current_name: Optional[str] = None
-    current_path: Optional[str] = None
-    proposed_title: Optional[str] = None
-    proposed_torrent_name: Optional[str] = None
-    proposed_filename: Optional[str] = None
-    proposed_folder: Optional[str] = None
-    proposed_path: Optional[str] = None
-    media_type: Optional[str] = None
-    tmdb_id: Optional[str] = None
-    imdb_id: Optional[str] = None
-    resolution: Optional[str] = None
-    source: Optional[str] = None
-    provider: Optional[str] = None
-    video_codec: Optional[str] = None
-    audio_summary: Optional[str] = None
-    subtitle_summary: Optional[str] = None
-    release_tag: Optional[str] = None
-    warnings: list[str] = []
-    errors: list[str] = []
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-
-class NomenclatureExistsResponse(BaseModel):
-    exists: bool
-    message: Optional[str] = None
-    proposal: Optional[NomenclatureProposalResponse] = None
-
-
-class NomenclaturePreviewBody(BaseModel):
-    force_refresh: bool = False
-
-
-class AdaptNomenclatureBody(BaseModel):
-    dry_run: bool = True
-    apply: bool = False
-    confirmation: Optional[str] = None
-    proposal_id: Optional[int] = None
-
-
-class NomenclatureApplyResult(BaseModel):
-    dry_run: bool
-    apply: bool
-    status: str
-    source_path: Optional[str] = None
-    destination_path: Optional[str] = None
-    operation_id: Optional[int] = None
-    proposal: Optional["NomenclatureProposalResponse"] = None
-    # Pre-existing gap: apply_nomenclature_proposal() has always returned
-    # these two keys, but this schema never declared them, so they were
-    # silently stripped from the response.
-    warnings: list[str] = []
-    errors: list[str] = []
-    message: Optional[str] = None
-    # Solo se renombra lo que ya está en la carpeta de subidas, nunca la biblioteca.
-    renombrable: bool = True
-
-
 # Phase 6 (Series/Season/Episode hierarchy) — season pack: one release for
 # a whole Temporada, not N independent per-episode jobs.
 
@@ -1094,57 +1028,6 @@ class SeasonPackPlanResponse(BaseModel):
     pistas_sin_idioma: list[dict] = []
     idiomas_audio: Dict[int, str] = {}
     idiomas_elegibles: list[dict] = []
-
-
-# ---------------------------------------------------------------------------
-# Upload preflight (Phase 6A)
-# ---------------------------------------------------------------------------
-
-class UploadPreflightBody(BaseModel):
-    request_id: Optional[int] = None
-
-
-class CommandPreviewResponse(BaseModel):
-    uploadrr_path: Optional[str] = None
-    tracker: Optional[str] = None
-    category: Optional[str] = None
-    title: Optional[str] = None
-    tmdb_id: Optional[str] = None
-    resolution: Optional[str] = None
-    source_path: Optional[str] = None
-    command_preview: Optional[str] = None
-    note: Optional[str] = None
-    using_prepared_path: Optional[bool] = None
-    # Phase 10E: Uploadrr-EMU contract fields.
-    runtime_type: Optional[str] = None
-    contract_valid: Optional[bool] = None
-    contract_errors: Optional[list[str]] = None
-    contract_warnings: Optional[list[str]] = None
-    can_execute: Optional[bool] = None
-    requires_confirmation: Optional[str] = None
-    safe_to_execute: Optional[bool] = None
-
-
-class UploadJobResponse(BaseModel):
-    id: Optional[int] = None
-    library_item_id: Optional[int] = None
-    request_item_id: Optional[int] = None
-    status: str
-    stage: Optional[str] = None
-    title: Optional[str] = None
-    source_path: Optional[str] = None
-    error_message: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-
-class UploadPreflightResponse(BaseModel):
-    status: str
-    job: Optional[UploadJobResponse] = None
-    preflight: dict = {}
-    command_preview: Optional[CommandPreviewResponse] = None
-    warnings: list[str] = []
-    errors: list[str] = []
 
 
 # ---------------------------------------------------------------------------

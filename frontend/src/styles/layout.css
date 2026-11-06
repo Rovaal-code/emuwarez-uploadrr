@@ -6,6 +6,32 @@
   overflow: hidden;
 }
 
+/* Enlace «Saltar al contenido»: invisible hasta que el teclado le da el foco, y entonces lo primero de la ventana. */
+.saltar-contenido {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 3000;
+  padding: 10px 16px;
+  border-radius: var(--radius-small);
+  background: var(--hud-panel-solid);
+  border: 1px solid var(--color-focus);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+
+.saltar-contenido:focus-visible {
+  transform: none;
+  text-decoration: none;
+}
+
+/* La zona de contenido recibe el foco al saltar, pero no es un control: sin anillo. */
+.page-container:focus {
+  outline: none;
+}
+
 /* Sidebar */
 .sidebar {
   width: var(--sidebar-width);

@@ -159,7 +159,7 @@ export function Sidebar({ active, onNavigate, movil = false, abierta = false, on
         {movil && <span className="sidebar-cerrar"><IconoCerrar size={18} /></span>}
         {logoTooltip}
       </button>
-      <nav className="sidebar-nav" ref={nav}>
+      <nav className="sidebar-nav" ref={nav} aria-label="Secciones">
         {NAV_ITEMS.map((item) => (
           <NavItemRow
             key={item.id}

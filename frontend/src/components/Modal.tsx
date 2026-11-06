@@ -67,8 +67,17 @@ export function Modal({ titulo, onClose, className, style, tituloStyle, children
     }
   }, [antes])
 
+  // Pulsar fuera cierra, pero solo si el gesto entero (pulsar y soltar) fue sobre el velo: arrastrar para seleccionar texto
+  // desde dentro del panel y soltar fuera no debe cerrarlo. Se cierra al soltar (click) y no al pulsar: en el móvil, quitar el
+  // velo al tocar dejaba que el toque cayera en el botón que había debajo.
+  const empezoEnElVelo = useRef(false)
+
   return (
-    <div className="modal-overlay" onMouseDown={e => { if (e.button === 0) onClose() }}>
+    <div
+      className="modal-overlay"
+      onPointerDown={e => { empezoEnElVelo.current = e.button === 0 && e.target === e.currentTarget }}
+      onClick={e => { if (empezoEnElVelo.current && e.target === e.currentTarget) onClose(); empezoEnElVelo.current = false }}
+    >
       <div
         ref={panel}
         className={className ? `modal-panel ${className}` : 'modal-panel'}

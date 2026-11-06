@@ -14,7 +14,7 @@
 
 /* UnsavedChangesModal */
 .menores-sin-guardar-texto { margin: 0; color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; }
-.menores-sin-guardar-acciones { display: flex; justify-content: flex-end; margin-top: 16px; }
+.menores-sin-guardar-acciones { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 
 /* NotificationBell */
 .poster-thumb.menores-notif-poster {

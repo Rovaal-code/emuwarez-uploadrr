@@ -162,6 +162,11 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   const [paletaAbierta, setPaletaAbierta] = useState(false)
   const menu = useMenuMovil()
 
+  // La pestaña del navegador dice dónde estás (historial, pestañas fijadas, lector de pantalla).
+  useEffect(() => {
+    document.title = PAGE_TITLE[activePage] ? `${PAGE_TITLE[activePage]} · eMuwarez Uploadrr` : 'eMuwarez Uploadrr'
+  }, [activePage])
+
   useEffect(() => {
     if (localStorage.getItem(TOUR_SEEN_KEY) !== '1') {
       startTour(pasosDelTour(menu.movil), {
@@ -277,6 +282,14 @@ export function AppShell({ user, onLogout }: AppShellProps) {
 
   return (
     <div className="app-shell hud-app">
+      {/* Primer tabulador de la página: salta la barra lateral y la cabecera. No es un enlace #ancla para no tocar la URL. */}
+      <a
+        className="saltar-contenido"
+        href="/"
+        onClick={e => { e.preventDefault(); contenedor.current?.focus() }}
+      >
+        Saltar al contenido
+      </a>
       <UnsavedChangesModal />
       {menu.abierto && <div className="sidebar-velo" onClick={menu.cerrar} aria-hidden="true" />}
       <Sidebar
@@ -292,7 +305,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
           onBuscar={() => setPaletaAbierta(true)}
           menu={menu}
         />
-        <main className="page-container" ref={contenedor}>
+        <main className="page-container" id="contenido" tabIndex={-1} ref={contenedor}>
           <PageContent page={activePage} onNavigate={navigate} />
         </main>
       </div>

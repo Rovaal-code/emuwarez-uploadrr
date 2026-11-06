@@ -18,73 +18,80 @@ export function SyncProgressBanner() {
     libProgress, catalogProgress, requestsSyncing, requestsProgress,
     message, messageIsError, messageFadingOut,
   } = useSync()
-  if (!libProgress && !catalogProgress && !requestsSyncing && !message) return null
+  const haySincronizacion = Boolean(libProgress || catalogProgress || requestsSyncing || message)
 
+  // La región viva existe siempre (una que aparece ya con texto no la anuncia el lector de pantalla): el aviso de fin
+  // de sincronización, para quien no ve la cabecera. El progreso en curso no se lee, sería un parte continuo.
   return (
-    <div className="topbar-sync-row">
-      {message && (
-        <div className={`sync-toast${messageIsError ? ' sync-toast-error' : ' sync-toast-ok'}${messageFadingOut ? ' sync-toast-fading' : ''}`}>
-          {message}
+    <>
+      <div className="solo-lector" role="status">{message}</div>
+      {haySincronizacion && (
+        <div className="topbar-sync-row">
+          {message && (
+            <div aria-hidden="true" className={`sync-toast${messageIsError ? ' sync-toast-error' : ' sync-toast-ok'}${messageFadingOut ? ' sync-toast-fading' : ''}`}>
+              {message}
+            </div>
+          )}
+
+          {libProgress && (
+            <SyncChip
+              error={libProgress.error}
+              icon={(libProgress.instance_type === 'radarr' || libProgress.instance_type === 'sonarr')
+                ? <ServiceIcon type={libProgress.instance_type} size={13} /> : null}
+              label="Biblioteca"
+              detail={libProgress.error ?? [
+                libProgress.instance,
+                libProgress.total
+                  ? `${libProgress.imported.toLocaleString('es-ES')}/${libProgress.total.toLocaleString('es-ES')}`
+                  : `${libProgress.imported.toLocaleString('es-ES')} elementos`,
+                libProgress.missing ? `${libProgress.missing.toLocaleString('es-ES')} no disponibles` : null,
+              ].filter(Boolean).join('; ')}
+              percent={!libProgress.error && libProgress.total ? Math.min(100, Math.round((libProgress.imported / libProgress.total) * 100)) : null}
+              bar
+            />
+          )}
+
+          {catalogProgress && (
+            <SyncChip
+              error={catalogProgress.error}
+              icon={<ServiceIcon type="emu" size={13} />}
+              label="eMuwarez"
+              detail={catalogProgress.error ?? [
+                catalogProgress.total_pages
+                  ? `pág. ${catalogProgress.page}/${catalogProgress.total_pages}`
+                  // Total pages isn't known yet (still waiting on page 1's own
+                  // response) — the torrent count is real progress too, and
+                  // showing it beats a bar that looks frozen with no text at all.
+                  // Before even that (still on the pre-flight check, or between
+                  // phases), fall back to the phase label itself — so the chip
+                  // never shows literally nothing while something is happening.
+                  : catalogProgress.torrents ? `${catalogProgress.torrents} torrents` : catalogProgress.phase || null,
+                catalogProgress.eta_seconds != null ? `~${fmtEta(catalogProgress.eta_seconds)}` : null,
+              ].filter(Boolean).join('; ')}
+              percent={!catalogProgress.error && catalogProgress.total_pages
+                ? Math.min(100, Math.round((catalogProgress.page / catalogProgress.total_pages) * 100)) : null}
+              bar
+            />
+          )}
+
+          {requestsSyncing && (
+            <SyncChip
+              error={null}
+              icon={<ServiceIcon type="emu" size={13} />}
+              label="Peticiones"
+              // Mientras baja las páginas, la página; después, lo que está haciendo (cruzar, preparar, pósters).
+              detail={requestsProgress
+                ? (requestsProgress.phase.startsWith('Descargando') && requestsProgress.total_pages
+                  ? `pág. ${requestsProgress.page}/${requestsProgress.total_pages}` : requestsProgress.phase)
+                : 'Sincronizando…'}
+              percent={requestsProgress?.total_pages
+                ? Math.min(100, Math.round((requestsProgress.page / requestsProgress.total_pages) * 100)) : 0}
+              bar
+            />
+          )}
         </div>
       )}
-
-      {libProgress && (
-        <SyncChip
-          error={libProgress.error}
-          icon={(libProgress.instance_type === 'radarr' || libProgress.instance_type === 'sonarr')
-            ? <ServiceIcon type={libProgress.instance_type} size={13} /> : null}
-          label="Biblioteca"
-          detail={libProgress.error ?? [
-            libProgress.instance,
-            libProgress.total
-              ? `${libProgress.imported.toLocaleString('es-ES')}/${libProgress.total.toLocaleString('es-ES')}`
-              : `${libProgress.imported.toLocaleString('es-ES')} elementos`,
-            libProgress.missing ? `${libProgress.missing.toLocaleString('es-ES')} no disponibles` : null,
-          ].filter(Boolean).join('; ')}
-          percent={!libProgress.error && libProgress.total ? Math.min(100, Math.round((libProgress.imported / libProgress.total) * 100)) : null}
-          bar
-        />
-      )}
-
-      {catalogProgress && (
-        <SyncChip
-          error={catalogProgress.error}
-          icon={<ServiceIcon type="emu" size={13} />}
-          label="eMuwarez"
-          detail={catalogProgress.error ?? [
-            catalogProgress.total_pages
-              ? `pág. ${catalogProgress.page}/${catalogProgress.total_pages}`
-              // Total pages isn't known yet (still waiting on page 1's own
-              // response) — the torrent count is real progress too, and
-              // showing it beats a bar that looks frozen with no text at all.
-              // Before even that (still on the pre-flight check, or between
-              // phases), fall back to the phase label itself — so the chip
-              // never shows literally nothing while something is happening.
-              : catalogProgress.torrents ? `${catalogProgress.torrents} torrents` : catalogProgress.phase || null,
-            catalogProgress.eta_seconds != null ? `~${fmtEta(catalogProgress.eta_seconds)}` : null,
-          ].filter(Boolean).join('; ')}
-          percent={!catalogProgress.error && catalogProgress.total_pages
-            ? Math.min(100, Math.round((catalogProgress.page / catalogProgress.total_pages) * 100)) : null}
-          bar
-        />
-      )}
-
-      {requestsSyncing && (
-        <SyncChip
-          error={null}
-          icon={<ServiceIcon type="emu" size={13} />}
-          label="Peticiones"
-          // Mientras baja las páginas, la página; después, lo que está haciendo (cruzar, preparar, pósters).
-          detail={requestsProgress
-            ? (requestsProgress.phase.startsWith('Descargando') && requestsProgress.total_pages
-              ? `pág. ${requestsProgress.page}/${requestsProgress.total_pages}` : requestsProgress.phase)
-            : 'Sincronizando…'}
-          percent={requestsProgress?.total_pages
-            ? Math.min(100, Math.round((requestsProgress.page / requestsProgress.total_pages) * 100)) : 0}
-          bar
-        />
-      )}
-    </div>
+    </>
   )
 }
 

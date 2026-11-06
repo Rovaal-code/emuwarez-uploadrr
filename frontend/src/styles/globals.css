@@ -226,6 +226,16 @@ button {
   cursor: pointer;
 }
 
+/* Con el dedo: sin la espera del doble toque ni el zoom al tocar dos veces un control, y un resalte del toque en el cian
+   de la interfaz en vez del gris por defecto. */
+a, button, input, select, textarea, summary, label, [role="button"] {
+  touch-action: manipulation;
+}
+
+html {
+  -webkit-tap-highlight-color: color-mix(in srgb, var(--color-focus) 18%, transparent);
+}
+
 /* Un solo anillo de foco para todo lo que se maneja con el teclado, sin
    transición. Va dentro de :where() para no ganar en especificidad: el
    componente que lo necesite por dentro (campos, esquinas recortadas del HUD)

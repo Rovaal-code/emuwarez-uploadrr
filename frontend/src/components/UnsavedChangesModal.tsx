@@ -23,13 +23,15 @@ export function UnsavedChangesModal() {
   }
 
   return (
-    <Modal titulo="Cambios sin guardar" onClose={cancel} style={{ maxWidth: 420 }}>
+    <Modal titulo="Cambios sin guardar" onClose={cancel} className="modal-estrecho">
       <div className="modal-body">
         <p className="menores-sin-guardar-texto">
           Tienes cambios sin guardar en Configuración. Si sales ahora se perderán.
         </p>
         <div className="menores-sin-guardar-acciones">
-          <button className="btn btn-danger" onClick={confirm}>Salir sin guardar</button>
+          {/* La acción segura lleva el foco: Intro sin mirar no tira el trabajo. */}
+          <button type="button" className="btn btn-secondary" onClick={cancel} autoFocus>Seguir editando</button>
+          <button type="button" className="btn btn-danger" onClick={confirm}>Salir sin guardar</button>
         </div>
       </div>
     </Modal>

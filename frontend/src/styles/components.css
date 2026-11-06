@@ -759,6 +759,8 @@ optgroup {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  /* iOS solo da `click` a una caja que parece pulsable: sin esto, tocar el velo no cerraba el modal. */
+  cursor: pointer;
 }
 
 .modal-header {
@@ -795,6 +797,7 @@ optgroup {
   max-height: calc(var(--vh100) * 0.9);
   overflow-y: auto;
   box-shadow: 0 8px 32px color-mix(in srgb, var(--overlay-dark) 40%, transparent);
+  cursor: auto;
 }
 /* El panel recibe el foco al abrirse para que el lector anuncie el título; el
    anillo es para lo que se maneja con Tab, no para el modal entero. */

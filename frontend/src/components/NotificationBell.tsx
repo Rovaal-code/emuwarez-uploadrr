@@ -263,7 +263,7 @@ export function NotificationBell() {
   // Close on outside click / Escape.
   useEffect(() => {
     if (!open) return
-    const onDown = (e: MouseEvent) => {
+    const onDown = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
     // Escape devuelve el foco a la campana: si no, se queda en un aviso que acaba de desaparecer.
@@ -272,10 +272,10 @@ export function NotificationBell() {
       setOpen(false)
       botonRef.current?.focus()
     }
-    document.addEventListener('mousedown', onDown)
+    document.addEventListener('pointerdown', onDown)
     document.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('pointerdown', onDown)
       document.removeEventListener('keydown', onKey)
     }
   }, [open])

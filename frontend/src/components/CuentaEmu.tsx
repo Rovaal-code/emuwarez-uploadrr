@@ -68,7 +68,11 @@ export function CuentaEmu() {
 
       {enlaces && (
         <nav className="cuenta-emu-enlaces" aria-label="Tus subidas en eMuwarez">
-          <a className="hover-link" href={enlaces.subidas} target="_blank" rel="noreferrer"><IconoSubida /> Mis subidas{OTRA_PESTANA}</a>
+          <Tooltip content="Mis subidas en eMuwarez">
+            <a className="hover-link" href={enlaces.subidas} target="_blank" rel="noreferrer">
+              <IconoSubida /> <span className="cuenta-emu-enlace-texto">Mis subidas</span>{OTRA_PESTANA}
+            </a>
+          </Tooltip>
         </nav>
       )}
 

@@ -18,11 +18,11 @@ export function StatCard({ label, value, children, accentColor, info, icon }: St
   const cifra = typeof value === 'number' ? formatNumero(value) : value
   return (
     <div
-      className="stat-card"
+      className={`stat-card${info != null ? ' stat-card-ayuda' : ''}`}
       // Con explicación, la tarjeta se alcanza con Tab para poder leerla, y es un grupo con nombre «etiqueta: cifra».
       {...(info != null ? { ...triggerProps, tabIndex: 0, role: 'group', 'aria-label': `${label}: ${cifra}` } : {})}
-      style={info != null ? { cursor: 'help' } : undefined}
     >
+      {/* En línea: el color de acento es un valor que llega por props. */}
       {icon && <div className="stat-card-icon" aria-hidden="true" style={accentColor ? { color: accentColor } : undefined}>{icon}</div>}
       <div className="stat-card-text">
         <div className="stat-card-label">{label}</div>

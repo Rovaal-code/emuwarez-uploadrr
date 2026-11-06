@@ -59,6 +59,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const [recommendations, setRecommendations] = useState<DashboardRecommendationItem[]>([])
   const [activeUploads, setActiveUploads] = useState<UploadJob[]>([])
   const [versionNueva, setVersionNueva] = useState<string | null>(null)
+  const [recsError, setRecsError] = useState<string | null>(null)
   const [loadingData, setLoadingData] = useState(true)
   const [dataError, setDataError] = useState<string | null>(null)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
@@ -191,7 +192,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     else {
       setDataError('No se pudieron cargar los datos del dashboard')
     }
-    if (la.status === 'fulfilled') setRecommendations(la.value.items)
+    if (la.status === 'fulfilled') { setRecommendations(la.value.items); setRecsError(null) }
+    else setRecsError('No se pudieron cargar las peticiones y recomendaciones. Se vuelve a intentar sola cada 15 segundos.')
     setLoadingData(false)
 
     if (Date.now() - versionMirada.current > VERSION_CADA_MS) {
@@ -347,7 +349,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       )}
 
       <div className="page-header panel-cabecera">
-        <div className="page-title">Panel</div>
+        <h1 className="page-title">Panel</h1>
         <CuentaEmu />
         <div className="panel-sincronizar">
           <SyncCard />
@@ -363,7 +365,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
 
       {/* Los dos carriles llenan el alto que sobra (la página no se desplaza); cada uno se desplaza por dentro. */}
       <div className="panel-carriles">
-        <CarrilListo recomendaciones={reparto}
+        <CarrilListo recomendaciones={reparto} error={recsError} onReintentar={loadData}
           onSubir={item => abrir(item, 'peticion')} onVerPeticion={abrirPeticion} onVerFicha={abrirFicha}
           onSubirUnico={item => abrir(item, 'unico')} onPedir={item => abrir(item, 'pedir')} seleccion={seleccionCarril} />
         <CarrilEnCurso filas={filasDeSubida} recientes={recientes} onOpen={goToUpload} onVerTodas={() => onNavigate?.('uploads')} />

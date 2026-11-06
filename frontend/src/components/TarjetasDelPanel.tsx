@@ -35,7 +35,8 @@ export const EXPLICACION = {
 export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResponse }) {
   return (
     <>
-      <div className="stat-cards-row">
+      <h2 className="est-grupo-titulo" id="est-grupo-biblioteca">Tu biblioteca</h2>
+      <div className="stat-cards-row" role="group" aria-labelledby="est-grupo-biblioteca">
         <StatCard
           icon={ICON_LIBRARY}
           label="Biblioteca sincronizada"
@@ -88,7 +89,8 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
         />
       </div>
 
-      <div className="stat-cards-row">
+      <h2 className="est-grupo-titulo" id="est-grupo-peticiones">Peticiones de eMuwarez</h2>
+      <div className="stat-cards-row" role="group" aria-labelledby="est-grupo-peticiones">
         <StatCard
           icon={ICON_REQUESTS}
           label="Peticiones eMuwarez"

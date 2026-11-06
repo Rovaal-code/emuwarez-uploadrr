@@ -2,7 +2,9 @@
  * Cálculos de los gráficos de línea de Estadísticas: posiciones, huecos, ticks y el resumen para lectores de pantalla.
  */
 import { describe, expect, it } from 'vitest'
-import { describirSerie, diaAMs, formatDia, trazar, type Medidas, type PuntoSerie } from '../graficos'
+import {
+  describirSerie, diaAMs, diaMasCercano, diasDelTrazado, formatDia, trazar, variacion, type Medidas, type PuntoSerie,
+} from '../graficos'
 
 // Recuadro útil de 100 x 100, a partir de (10, 10).
 const M: Medidas = { ancho: 120, alto: 120, izquierda: 10, derecha: 10, arriba: 10, abajo: 10 }
@@ -93,5 +95,46 @@ describe('describirSerie', () => {
   it('sin datos lo dice', () => {
     expect(describirSerie('H&R', [p('2026-10-01', null)], f)).toBe('H&R: sin datos en este rango.')
     expect(describirSerie('H&R', [], f)).toBe('H&R: sin datos en este rango.')
+  })
+})
+
+describe('marcas del eje X', () => {
+  const dias = Array.from({ length: 31 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`)
+
+  it('un gráfico ancho pide más fechas, repartidas a partes iguales', () => {
+    const t = trazar([dias.map(d => p(d, 1))], M, false, 5)
+    expect(t.ticksX.map(k => k.dia)).toEqual(['2026-10-01', '2026-10-09', '2026-10-16', '2026-10-24', '2026-10-31'])
+  })
+
+  it('con menos días que marcas, una por día y sin repetir', () => {
+    const t = trazar([dias.slice(0, 3).map(d => p(d, 1))], M, false, 8)
+    expect(t.ticksX.map(k => k.dia)).toEqual(['2026-10-01', '2026-10-02', '2026-10-03'])
+  })
+})
+
+describe('recorrer un gráfico', () => {
+  it('diasDelTrazado junta los días de todas las series, sin repetir y en orden', () => {
+    const t = trazar([[p('2026-11-03', 1), p('2026-11-01', 2)], [p('2026-11-02', 5), p('2026-11-03', 6)]], M)
+    expect(diasDelTrazado(t).map(d => d.dia)).toEqual(['2026-11-01', '2026-11-02', '2026-11-03'])
+  })
+
+  it('diaMasCercano elige el día de la X más próxima', () => {
+    const dias = [{ x: 10 }, { x: 60 }, { x: 110 }]
+    expect(diaMasCercano(dias, 0)).toBe(0)
+    expect(diaMasCercano(dias, 40)).toBe(1)
+    expect(diaMasCercano(dias, 500)).toBe(2)
+    expect(diaMasCercano([], 5)).toBe(-1)
+  })
+})
+
+describe('variacion', () => {
+  it('diferencia y porcentaje entre el primer y el último valor con cifra', () => {
+    expect(variacion([p('2026-11-01', 4), p('2026-11-02', null), p('2026-11-03', 5)])).toEqual({ diferencia: 1, porcentaje: 25 })
+    expect(variacion([p('2026-11-01', 5), p('2026-11-03', 4)])).toEqual({ diferencia: -1, porcentaje: -20 })
+  })
+
+  it('sin porcentaje si se parte de cero, y sin nada con menos de dos valores', () => {
+    expect(variacion([p('2026-11-01', 0), p('2026-11-03', 4)])).toEqual({ diferencia: 4, porcentaje: null })
+    expect(variacion([p('2026-11-01', 4), p('2026-11-03', null)])).toBeNull()
   })
 })

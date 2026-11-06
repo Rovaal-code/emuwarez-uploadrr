@@ -59,7 +59,7 @@ export function EstadisticasPage() {
     <div className="est-pagina">
       <div className="page-header">
         <div>
-          <div className="page-title">Estadísticas</div>
+          <h1 className="page-title">Estadísticas</h1>
           <div className="page-subtitle">Tu biblioteca y tus peticiones, y cómo evoluciona tu cuenta de eMuwarez: una instantánea al día, que se guarda sola al leer tu perfil.</div>
         </div>
         <div className="est-rangos" role="group" aria-label="Rango de días">
@@ -85,23 +85,30 @@ export function EstadisticasPage() {
         />
       ) : (
         <>
-          {puntos.length === 1 && (
+          {puntos.length === 1 ? (
             <p className="est-nota" role="status">Solo hay un día guardado: la línea aparecerá a partir de mañana.</p>
+          ) : (
+            <p className="est-nota">
+              {puntos.length} de los últimos {dias} días tienen instantánea. Pasa el ratón por un gráfico, o enfócalo y usa las
+              flechas, para ver cada día.
+            </p>
           )}
           <div className="est-rejilla-graficos">
-            <GraficoLinea titulo="Ratio" formato={ratio}
-              series={[{ nombre: 'Ratio', clase: 'est-serie-ratio', puntos: serie(puntos, 'ratio') }]} />
-            <GraficoLinea titulo="Subido y bajado" formato={bytes}
+            <GraficoLinea titulo="Subido y bajado" formato={bytes} ancho
               series={[
                 { nombre: 'Subido', clase: 'est-serie-subido', puntos: serie(puntos, 'subido_bytes') },
                 { nombre: 'Bajado', clase: 'est-serie-bajado', puntos: serie(puntos, 'bajado_bytes') },
               ]} />
+            <GraficoLinea titulo="Ratio" formato={ratio}
+              series={[{ nombre: 'Ratio', clase: 'est-serie-ratio', puntos: serie(puntos, 'ratio') }]} />
             <GraficoLinea titulo="Bonus" formato={entero}
               series={[{ nombre: 'Bonus', clase: 'est-serie-bonus', puntos: serie(puntos, 'bonus') }]} />
           </div>
 
           <details className="est-tabla">
-            <summary>Ver los datos en una tabla</summary>
+            <summary>Ver los datos en una tabla ({puntos.length} {puntos.length === 1 ? 'día' : 'días'})</summary>
+            {/* Con 365 filas la tabla se desplaza por dentro; con el foco en ella, se recorre con las flechas. */}
+            <div className="est-tabla-marco" tabIndex={0} role="region" aria-label="Tabla de instantáneas diarias">
             <table className="data-table">
               <caption className="solo-lector">Instantáneas diarias de tu cuenta, de la más reciente a la más antigua</caption>
               <thead>
@@ -122,6 +129,7 @@ export function EstadisticasPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </details>
         </>
       )}

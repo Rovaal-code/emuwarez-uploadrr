@@ -47,7 +47,7 @@ const r1 = (n: number) => Math.round(n * 10) / 10
  * bordes; con `desdeCero` (contadores como H&R) parte siempre de 0. Los ticks del eje Y son valores reales
  * de los datos: mínimo, medio y máximo.
  */
-export function trazar(series: PuntoSerie[][], medidas: Medidas, desdeCero = false): Trazado {
+export function trazar(series: PuntoSerie[][], medidas: Medidas, desdeCero = false, marcasX = 3): Trazado {
   const { ancho, alto, izquierda, derecha, arriba, abajo } = medidas
   const valores = series.flatMap(s => s.flatMap(p => (p.valor === null ? [] : [p.valor])))
   const dias = [...new Set(series.flatMap(s => s.map(p => p.dia)))].sort()
@@ -85,8 +85,11 @@ export function trazar(series: PuntoSerie[][], medidas: Medidas, desdeCero = fal
   const mitad = (bajo + alta) / 2
   const niveles = bajo === alta ? [alta] : [bajo, mitad, alta]
   const ticksY = niveles.map(valor => ({ valor, y: r1(posY(valor)) }))
-  const fechas = dias.length >= 3 ? [dias[0], dias[Math.floor(dias.length / 2)], dias[dias.length - 1]]
-    : dias.length === 2 ? [dias[0], dias[1]] : [dias[0]]
+  // `marcasX` fechas a partes iguales del tiempo (con 3: la primera, la de en medio y la última). Los gráficos anchos
+  // piden más; con menos días que marcas, una por día.
+  const n = Math.max(1, Math.min(marcasX, dias.length))
+  const fechas = n === 1 ? [dias[0]] : [...new Set(Array.from({ length: n }, (_, i) =>
+    dias[Math.round((i * (dias.length - 1)) / (n - 1))]))]
   const ticksX = fechas.map(dia => ({ dia, x: r1(posX(dia)) }))
   return { lineas, ticksY, ticksX }
 }
@@ -102,4 +105,32 @@ export function describirSerie(nombre: string, serie: PuntoSerie[], formato: (n:
   if (con.length === 1) return `${nombre}: ${formato(ultimo.valor)} el ${formatDia(ultimo.dia)}; ${dias}.`
   return `${nombre}: de ${formato(primero.valor)} el ${formatDia(primero.dia)} a ${formato(ultimo.valor)} el ${formatDia(ultimo.dia)}; `
     + `mínimo ${formato(Math.min(...valores))}, máximo ${formato(Math.max(...valores))}; ${dias}.`
+}
+
+/** Los días de un trazado (los de todas sus series, sin repetir y en orden) con su posición X: lo que se recorre con el
+ * ratón o con las flechas. */
+export function diasDelTrazado(t: Trazado): { dia: string; x: number }[] {
+  const por = new Map<string, number>()
+  for (const l of t.lineas) for (const p of l.puntos) por.set(p.dia, p.x)
+  return [...por.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([dia, x]) => ({ dia, x }))
+}
+
+/** El índice del día cuya X queda más cerca de `x`; -1 si no hay días. */
+export function diaMasCercano(dias: { x: number }[], x: number): number {
+  let mejor = -1
+  let distancia = Infinity
+  dias.forEach((d, i) => {
+    const dx = Math.abs(d.x - x)
+    if (dx < distancia) { distancia = dx; mejor = i }
+  })
+  return mejor
+}
+
+/** Cuánto cambió una serie entre su primer y su último valor: diferencia y, si el primero no es cero, el porcentaje. */
+export function variacion(serie: PuntoSerie[]): { diferencia: number; porcentaje: number | null } | null {
+  const con = serie.filter((p): p is PuntoSerie & { valor: number } => p.valor !== null)
+  if (con.length < 2) return null
+  const primero = con[0].valor
+  const diferencia = con[con.length - 1].valor - primero
+  return { diferencia, porcentaje: primero === 0 ? null : (diferencia / Math.abs(primero)) * 100 }
 }

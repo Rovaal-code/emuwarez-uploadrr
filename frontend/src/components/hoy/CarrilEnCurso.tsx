@@ -27,6 +27,7 @@ function FilaSubida({ job, yendose = false, onOpen }: {
   const terminada = !ACTIVE_JOB_STATUSES.has(job.status)
   // El global que ya calcula el backend (uploadrr_progress.PHASES
   // pondera cada fase); se acota por si llega algo raro.
+  const motivo = job.error_message?.split('\n')[0].trim()
   const globalPct = Math.min(100, Math.max(0, Math.round(job.progress?.global_pct ?? 0)))
   return (
     // Terminada, se queda quieta ESPERA_MS y luego se va poco a
@@ -62,6 +63,8 @@ function FilaSubida({ job, yendose = false, onOpen }: {
               <span className="panel-fila-duracion">en {formatSecondsHM(job.duration_seconds)}</span>
             )}
           </div>
+          {/* Una fallida dice por qué en su propia fila (la primera línea del motivo), sin abrir el detalle. */}
+          {job.status === 'failed' && motivo && <div className="panel-fila-motivo" title={motivo}>{motivo}</div>}
           {/* Progreso global, en la misma barra fina que usa el resto
               del Panel, con su porcentaje al lado. Solo mientras trabaja: en
               cola no hay nada que medir todavía, y terminada la barra no dice
@@ -146,9 +149,12 @@ export function CarrilEnCurso({ filas, recientes, onOpen, onVerTodas }: {
           </ul>
         </>
       )}
-      <div className="panel-pie">
-        <HoverTitle as="span" className="hover-link" onClick={onVerTodas} tip="Abrir Subidas">Ver todas las subidas</HoverTitle>
-      </div>
+      {/* Con la línea «+N en cola» ya hay un enlace a Subidas: no se repite al pie. */}
+      {ocultas.length === 0 && (
+        <div className="panel-pie">
+          <HoverTitle as="span" className="hover-link" onClick={onVerTodas} tip="Abrir Subidas">Ver todas las subidas</HoverTitle>
+        </div>
+      )}
     </Carril>
   )
 }

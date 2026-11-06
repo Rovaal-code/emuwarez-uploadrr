@@ -3,24 +3,36 @@
    bloque `.upload-panel` llevan el selector tan específico como la regla base o más
    (`.hud-app .upload-panel`...): una clase suelta perdería contra ellas. */
 
-/* Página */
+/* Página: los carriles llenan el alto que sobra, pero no bajan de un mínimo (con una ventana baja, el Panel entero se
+   desplaza en vez de dejar cada lista en dos filas). */
 .panel-pagina {
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
-.page-header.panel-cabecera { flex-shrink: 0; gap: 0; }
-.panel-cabecera .page-title { flex-shrink: 0; white-space: nowrap; }
-/* «Sincronizar todo» y debajo, a su derecha, cuándo fue y cuándo toca; en dos líneas para no quitarle sitio a tu cuenta. */
-.panel-sincronizar {
+/* Cabecera: el título y «Sincronizar todo» arriba; tu cuenta en una franja debajo, a todo el ancho. Se coloca por
+   áreas porque el orden del DOM (título, cuenta, sincronizar) es el de lectura. */
+.page-header.panel-cabecera {
   flex-shrink: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "titulo sincronizar" "cuenta cuenta";
+  align-items: center;
+  gap: 0 16px;
+  margin-bottom: 16px;
+}
+.panel-cabecera .page-title { grid-area: titulo; flex-shrink: 0; white-space: nowrap; margin: 0; }
+.panel-cabecera .cuenta-emu { grid-area: cuenta; margin-top: 12px; }
+/* «Sincronizar todo» y, a su izquierda, cuándo fue y cuándo toca (dos líneas cortas, alineadas a la derecha). */
+.panel-sincronizar {
+  grid-area: sincronizar;
+  justify-self: end;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  max-width: 230px;
-  margin-left: auto;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 14px;
 }
 .panel-sincronizacion {
   font-size: 12px;
@@ -28,6 +40,19 @@
   text-align: right;
 }
 .panel-sincronizacion span { display: block; }
+/* Aviso de que la última carga de recomendaciones falló y lo que se ve es de antes. */
+.panel-aviso-carga {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--color-warning);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+  border-radius: var(--radius-small);
+}
 .panel-error-accion {
   flex-shrink: 0;
   margin-bottom: 12px;
@@ -38,8 +63,8 @@
 /* Los dos carriles llenan el alto que sobra. `minmax(0, …)`: sin el 0, una columna no encoge por debajo de su
    contenido y empuja fuera de la pantalla a la de al lado (el arreglo de #175). */
 .panel-carriles {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 0;
+  min-height: 360px;
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 20px;
@@ -64,8 +89,15 @@
   gap: 12px;
 }
 
-/* Filas de los carriles */
+/* Filas de los carriles. Con 50-100 peticiones, el navegador no pinta las filas fuera de la pantalla (`content-visibility`);
+   88 px es la altura de una fila con grupo e idiomas. El desplazamiento de un carril no arrastra la página (`overscroll`). */
 .panel-lista { list-style: none; margin: 0; padding: 0; }
+.panel-lista > li { content-visibility: auto; contain-intrinsic-size: auto 88px; }
+.panel-carril .upload-panel-body,
+.panel-atencion-lista { overscroll-behavior: contain; }
+.panel-item,
+.upload-row,
+.panel-franja .stat-card { touch-action: manipulation; }
 .panel-item,
 .panel-aviso {
   display: flex;
@@ -90,7 +122,7 @@
 /* «Mejoras posibles»: lo que tu copia aporta frente a lo que ya hay en eMuwarez (el mismo verde que «Aportas»). */
 .panel-item-aportes { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 3px; }
 .panel-aporte {
-  font-size: 11.5px;
+  font-size: 12px;
   padding: 2px 8px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--color-available) 14%, transparent);
@@ -99,6 +131,7 @@
 /* Metadatos de la fila: altura mínima uniforme y «Ver petición» sin recorte. */
 .panel-item-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
   min-height: 22px;
@@ -123,7 +156,18 @@
 }
 .panel-rg-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-item-ver { flex-shrink: 0; white-space: nowrap; color: var(--text-muted); }
+/* Los enlaces sueltos de una fila miden al menos 24 px de alto (WCAG 2.5.8) y 32 con el dedo: un blanco que acertar. */
+.panel-item-ver,
+.panel-aviso-accion { display: inline-flex; align-items: center; min-height: 24px; }
+.hover-link.panel-item-titulo { padding-block: 2px; min-height: 24px; }
+.panel-pie .hover-link { display: inline-flex; align-items: center; min-height: 24px; }
+@media (pointer: coarse) {
+  .panel-item-ver,
+  .panel-aviso-accion { min-height: 32px; }
+  .hover-link.panel-item-titulo { padding-block: 6px; }
+}
 .panel-item-accion {
+  font-variant-numeric: tabular-nums;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -142,32 +186,48 @@
   cursor: pointer;
 }
 
-/* Necesita atención: una banda fina entre los carriles y la franja */
+/* Necesita atención: una banda fina entre los carriles y la franja. El título y «y N más» a la izquierda, los avisos
+   en dos columnas a su derecha: así la banda mide dos filas de avisos y no tres. */
 .panel-atencion {
   flex-shrink: 0;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   padding: 8px 14px;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  column-gap: 14px;
+  align-items: start;
   background: var(--bg-card);
   border: 1px solid var(--color-warning);
   border-radius: var(--radius-card);
 }
 .panel-atencion-vacia {
-  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
   padding: 2px 0;
   font-size: 12px;
   color: var(--text-muted);
   background: none;
   border: 0;
 }
+.panel-atencion-vacia::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-available);
+}
 .panel-atencion-cabecera {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding-top: 3px;
 }
 .panel-atencion-titulo {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -275,14 +335,14 @@
   min-width: 0;
 }
 .panel-fila-nota {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 .panel-fila-fase {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   min-width: 0;
   overflow: hidden;
@@ -303,8 +363,16 @@
   border-width: 2px;
   flex-shrink: 0;
 }
+/* Por qué falló una subida reciente: una línea, recortada (el texto entero, en el detalle y en el title). */
+.panel-fila-motivo {
+  font-size: 12px;
+  color: var(--color-error);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .panel-fila-duracion {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -315,7 +383,7 @@
 }
 .progress-bar.panel-fila-barra { flex: 1; }
 .panel-fila-pct {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -339,14 +407,53 @@
     height: auto;
     overflow: visible;
   }
+  /* El título y «Sincronizar todo» en una fila; la fecha de la última sincronización, bajo el botón y a su ancho. */
+  .page-header.panel-cabecera {
+    grid-template-areas: "titulo sincronizar" "cuenta cuenta";
+  }
+  .panel-sincronizar {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  /* Tu cuenta: las cifras en una rejilla de cuatro (etiqueta sobre cifra), los enlaces en su fila. */
+  .cuenta-emu { padding: 10px 12px; }
+  .cuenta-emu-cifras {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px 6px;
+  }
+  .cuenta-emu-cifra { flex-direction: column; gap: 1px; min-width: 0; }
+  .cuenta-emu-enlaces { margin-left: 0; flex-wrap: wrap; gap: 6px 14px; }
   .panel-carriles {
     flex: none;
+    min-height: 0;
     grid-template-columns: minmax(0, 1fr);
   }
   .upload-panel.panel-bloque {
-    max-height: 360px;
+    max-height: 70vh;
   }
+  /* Con tan poco ancho, «Subir» baja bajo el texto en vez de comérselo (el grupo y los idiomas se cortaban). */
+  .panel-item { flex-wrap: wrap; }
+  .panel-item-texto { flex: 1 1 0; }
+  .panel-item-accion { flex: 0 0 100%; justify-content: flex-end; }
+  /* El título del carril ocupa su fila y la nota y «Seleccionar» pasan a la siguiente, en vez de partir el título. */
+  .panel-carril .section-header { flex-wrap: wrap; }
+  .panel-carril .section-title { flex: 1 1 100%; }
+  .panel-carril-nota { margin: 8px 0 0; white-space: normal; }
+  .panel-carril-fin { margin-top: 8px; width: 100%; justify-content: space-between; }
+  .panel-carril-fin .panel-carril-nota { margin: 0; }
+  .panel-item-meta { flex-wrap: wrap; }
+  .panel-rg { max-width: 100%; }
+  /* La barra de «Subir seleccionadas»: la cuenta en una línea y los botones debajo, en vez de partir «4 seleccionadas». */
+  .panel-carril .lote-barra.lote-barra-carril { flex-wrap: wrap; row-gap: 8px; }
+  .panel-carril .lote-barra-botones { margin-left: auto; }
+  .panel-atencion { grid-template-columns: minmax(0, 1fr); }
+  .panel-atencion-cabecera { flex-direction: row; align-items: center; justify-content: space-between; padding: 0 0 4px; }
+  .panel-atencion-lista { grid-template-columns: minmax(0, 1fr); }
   .panel-franja {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .panel-franja .stat-card:last-child { grid-column: 1 / -1; }
 }

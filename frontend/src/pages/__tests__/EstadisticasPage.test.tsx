@@ -3,7 +3,7 @@
  * Estadísticas con el servidor simulado: lo que pide al entrar y al cambiar de rango, y lo que enseña con datos,
  * sin datos, con un solo día y cuando falla.
  */
-import { useState } from 'react'
+import { act, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/estadisticas', () => ({ getEstadisticasCuenta: vi.fn() }))
@@ -47,8 +47,9 @@ describe('EstadisticasPage', () => {
     expect(pedir).toHaveBeenCalledWith(90)
     const graficos = [...document.querySelectorAll('svg[role="img"]')]
     expect(graficos).toHaveLength(3)
-    expect(graficos[0].getAttribute('aria-label')).toContain('Ratio: de 4,10 el 01/10/2026 a 4,25 el 02/10/2026')
-    expect(graficos[1].getAttribute('aria-label')).toContain('Subido: de 1,0 TB')
+    // «Subido y bajado» va primero (ocupa toda la fila), luego Ratio y Bonus.
+    expect(graficos[0].getAttribute('aria-label')).toContain('Subido: de 1,0 TB')
+    expect(graficos[1].getAttribute('aria-label')).toContain('Ratio: de 4,10 el 01/10/2026 a 4,25 el 02/10/2026')
     expect(graficos.every(g => g.querySelector('title'))).toBe(true)
 
     const filas = [...document.querySelectorAll('details table tbody tr')]
@@ -57,6 +58,38 @@ describe('EstadisticasPage', () => {
     expect(filas[0].textContent).toContain('4,25')
     expect(filas[0].textContent).toContain('12.346')       // miles con punto
     expect(document.querySelectorAll('.est-leyenda li')).toHaveLength(2)
+  })
+
+  it('cada gráfico lee su último valor y lo que cambió; con las flechas se lee el de cada día y Escape lo suelta', async () => {
+    pedir.mockResolvedValue({ dias: 90, puntos: [punto('2026-10-01'), punto('2026-10-02', { ratio: 4.25 }), punto('2026-10-03', { ratio: 5.1 })] })
+    await montar(<EstadisticasPage />)
+    await esperar(() => document.querySelector('.est-plot'))
+    const ratioFig = [...document.querySelectorAll('figure.est-grafico')].find(f => f.textContent?.startsWith('Ratio'))!
+    expect(ratioFig.querySelector('.est-lectura-valor')!.textContent).toBe('5,10')
+    expect(ratioFig.querySelector('.est-lectura-delta')!.textContent).toBe('+1,00 (+24,4 %)')
+    expect(ratioFig.querySelector('.est-grafico-fecha')!.textContent).toBe('Último dato: 03/10/2026')
+
+    const plot = ratioFig.querySelector('.est-plot')!
+    const tecla = async (key: string) => { await act(async () => { plot.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })) }) }
+    await tecla('ArrowLeft')
+    expect(ratioFig.querySelector('.est-lectura-valor')!.textContent).toBe('4,25')
+    expect(ratioFig.querySelector('.est-grafico-fecha')!.textContent).toBe('02/10/2026')
+    expect(ratioFig.querySelector('[aria-live]')!.textContent).toBe('02/10/2026: Ratio 4,25.')
+    expect(ratioFig.querySelectorAll('.est-punto-activo')).toHaveLength(1)
+    await tecla('Home')
+    expect(ratioFig.querySelector('.est-lectura-valor')!.textContent).toBe('4,10')
+    await tecla('Escape')
+    expect(ratioFig.querySelector('.est-lectura-valor')!.textContent).toBe('5,10')
+    expect(ratioFig.querySelector('.est-guia')).toBeNull()
+  })
+
+  it('un día sin cifra de una serie lo dice al recorrerlo', async () => {
+    pedir.mockResolvedValue({ dias: 90, puntos: [punto('2026-10-01'), punto('2026-10-02', { bajado_bytes: null }), punto('2026-10-03')] })
+    await montar(<EstadisticasPage />)
+    await esperar(() => document.querySelector('.est-plot'))
+    const plot = document.querySelector('.est-plot')!
+    await act(async () => { plot.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })) })
+    expect(plot.querySelector('[aria-live]')!.textContent).toBe('02/10/2026: Subido 1,0 TB, Bajado sin dato.')
   })
 
   it('arriba lleva las diez tarjetas que tenía el Panel, con las mismas cifras', async () => {

@@ -1,8 +1,12 @@
 /* Estadísticas (EstadisticasPage y GraficoLinea): estilos de la pantalla. Prefijo est-.
    Se importa el último en main.tsx. */
 
+/* Los dos grupos de tarjetas de arriba. El margen de las filas (20 px) lo traen ellas. */
+.est-grupo-titulo { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.est-pagina .stat-cards-row { margin-bottom: 16px; }
+.stat-card-ayuda { cursor: help; }
 .est-rangos { display: flex; gap: 6px; }
-.est-nota { color: var(--text-secondary); font-size: 13px; margin: 0 0 16px; }
+.est-nota { color: var(--text-secondary); font-size: 13px; margin: 0 0 12px; text-wrap: pretty; }
 
 .est-rejilla-graficos {
   display: grid;
@@ -13,31 +17,95 @@
 
 .est-grafico {
   margin: 0;
-  padding: 14px 16px;
+  padding: 14px 16px 10px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   min-width: 0;
 }
-.est-grafico-titulo { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+/* El de dos series ocupa toda la fila: es el que más datos lleva y el que más agradece el ancho. */
+.est-grafico-ancho { grid-column: 1 / -1; }
+.est-grafico-cab {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.est-grafico-titulo { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.est-grafico-fecha { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .est-sin-datos { color: var(--text-muted); font-size: 13px; margin: 24px 0; }
-.est-svg { display: block; width: 100%; height: auto; }
+
+/* La lectura: el valor de cada serie (el último, o el del día que se recorre) y lo que cambió en el rango. */
+.est-leyenda,
+.est-lectura-unica {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  list-style: none;
+  margin: 6px 0 2px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.est-leyenda li,
+.est-lectura-unica li { display: flex; align-items: baseline; gap: 7px; }
+.est-leyenda li > svg { align-self: center; }
+.est-lectura-valor {
+  white-space: nowrap;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.est-leyenda .est-lectura-valor { font-size: 16px; }
+.est-lectura-delta { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* El recuadro del dibujo: se mide, y el SVG se pinta a su ancho real (ver GraficoLinea). */
+.est-plot { margin-top: 6px; border-radius: var(--radius-small); touch-action: pan-y; }
+.est-plot:focus-visible { outline: 2px solid var(--hud-cyan, var(--color-accent)); outline-offset: 2px; }
+.est-svg { display: block; max-width: 100%; cursor: crosshair; }
 
 .est-rejilla { stroke: var(--border); stroke-width: 1; }
 .est-base { stroke: var(--border-input); stroke-width: 1; }
-.est-eje { fill: var(--text-muted); font-size: 11px; }
+.est-eje { fill: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.est-guia { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
 
 .est-linea { fill: none; stroke: var(--est-color); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .est-punto { fill: var(--est-color); }
+.est-punto-activo { stroke: var(--bg-surface, #0b1424); stroke-width: 2; }
 .est-serie-ratio { --est-color: var(--color-available-soft); }
 .est-serie-subido { --est-color: var(--color-accent-soft); }
 .est-serie-bajado { --est-color: var(--color-warning-soft); }
+/* El trazo discontinuo, además del color: no se distinguen solo por él. */
 .est-serie-bajado .est-linea { stroke-dasharray: 6 4; }
 .est-serie-bonus { --est-color: var(--color-uploading); }
 
-.est-leyenda { display: flex; gap: 16px; list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; color: var(--text-secondary); }
-.est-leyenda li { display: flex; align-items: center; gap: 6px; }
-
 .est-tabla { margin-bottom: 20px; }
-.est-tabla summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
+.est-tabla summary { cursor: pointer; min-height: 24px; font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
 .est-tabla .data-table th[scope="row"] { font-weight: 500; text-align: left; }
+/* La tabla de datos: con un año de días, se desplaza por dentro y la cabecera se queda arriba. */
+.est-tabla-marco {
+  overscroll-behavior: contain;
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.est-tabla-marco:focus-visible { outline: 2px solid var(--hud-cyan, var(--color-accent)); outline-offset: 2px; }
+.est-tabla-marco .data-table th { position: sticky; top: 0; background: var(--bg-surface, #0b1424); z-index: 1; }
+.est-tabla-marco .data-table th[scope="row"] { position: static; background: none; }
+.est-tabla .data-table td,
+.est-tabla .data-table th[scope="row"] { font-variant-numeric: tabular-nums; }
+
+.est-pagina h1.page-title { margin: 0; }
+/* Cabecera: si el título, su frase y los rangos no caben en una fila, los rangos bajan. */
+.est-pagina .page-header { flex-wrap: wrap; gap: 12px 20px; }
+
+/* Ventanas estrechas (≤640 px): las tarjetas de dos en dos (las filas de cinco o de tres se salían de la pantalla). */
+@media (max-width: 640px) {
+  .est-pagina .stat-cards-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .est-rangos { width: 100%; }
+  .est-rangos .btn { flex: 1; }
+  .est-grafico { padding: 12px 12px 8px; }
+}

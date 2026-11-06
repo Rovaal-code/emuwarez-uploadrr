@@ -4,6 +4,7 @@ import { lineaDeEspecificaciones, textoDeAporte, type RecomendacionesRepartidas 
 import { recompensaDeRecomendacion } from '../../utils/recomendaciones'
 import { DetailTitleText, LanguageValueIcon, PlainValue, ReleaseGroupValueIcon, SubtitleValueIcon } from '../DetailCard'
 import { EmptyState } from '../EmptyState'
+import { ErrorState } from '../ErrorState'
 import { IconoEstrella, IconoPuntos } from '../Iconos'
 import { BarraLote } from '../lote/BarraLote'
 import { CasillaLote } from '../lote/CasillaLote'
@@ -84,7 +85,7 @@ function Fila({ item, extra, verPeticion, accion, onVerFicha, seleccion }: {
         )}
       </div>
       <div className="panel-item-accion">
-        {recompensa !== null && <PlainValue icon={<IconoPuntos />}>{recompensa}</PlainValue>}
+        {recompensa !== null && <PlainValue icon={<IconoPuntos />}><span className="solo-lector">Recompensa: </span>{recompensa}</PlainValue>}
         {accion}
       </div>
     </li>
@@ -93,8 +94,11 @@ function Fila({ item, extra, verPeticion, accion, onVerFicha, seleccion }: {
 
 // «Listo para subir»: las peticiones de eMuwarez que tu biblioteca ya cubre, la que más paga primero. Debajo, plegado,
 // lo que no es una petición: contenido único que podrías subir y faltantes que podrías pedir.
-export function CarrilListo({ recomendaciones, onSubir, onVerPeticion, onVerFicha, onSubirUnico, onPedir, seleccion }: {
+export function CarrilListo({ recomendaciones, error, onReintentar, onSubir, onVerPeticion, onVerFicha, onSubirUnico, onPedir, seleccion }: {
   recomendaciones: RecomendacionesRepartidas
+  // Si no se pudieron pedir: se dice, en vez de enseñar «Ninguna petición lista», que sería mentira.
+  error?: string | null
+  onReintentar?: () => void
   onSubir: (item: DashboardRecommendationItem) => void
   onVerPeticion: (item: DashboardRecommendationItem) => void
   onVerFicha: (item: DashboardRecommendationItem) => void
@@ -133,12 +137,25 @@ export function CarrilListo({ recomendaciones, onSubir, onVerPeticion, onVerFich
         />
       )}
     >
+      {/* Un fallo se dice siempre. Sin nada que enseñar ocupa el carril; con recomendaciones de una carga anterior,
+          es un aviso discreto encima y la lista se queda (puede estar desactualizada). */}
+      {error && (peticiones.length === 0 && otros === 0 ? (
+        <ErrorState title="No se pudo cargar" message={error} onRetry={onReintentar} />
+      ) : (
+        <div className="panel-aviso-carga" role="status">
+          <span>{error}</span>
+          {onReintentar && <button type="button" className="btn btn-secondary btn-sm" onClick={onReintentar}>Reintentar</button>}
+        </div>
+      ))}
       {peticiones.length === 0 ? (
-        <EmptyState
-          icon={<IconoEstrella />}
-          title="Ninguna petición lista"
-          body="Cuando una petición de eMuwarez coincida con algo de tu biblioteca, aparecerá aquí con lo que paga."
-        />
+        // Con el fallo, «Ninguna petición lista» sería mentira: no se sabe.
+        !error && (
+          <EmptyState
+            icon={<IconoEstrella />}
+            title="Ninguna petición lista"
+            body="Cuando una petición de eMuwarez coincida con algo de tu biblioteca, aparecerá aquí con lo que paga."
+          />
+        )
       ) : (
         <ul className="panel-lista">
           {peticiones.map(item => (

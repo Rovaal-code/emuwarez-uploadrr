@@ -213,6 +213,62 @@ describe('Panel', () => {
     expect(banda().querySelector('h2, .panel-aviso, button')).toBeNull()
   })
 
+  it('si no se pueden pedir las recomendaciones lo dice, en vez de «Ninguna petición lista», y reintenta', async () => {
+    vi.mocked(getDashboardRecommendations).mockRejectedValueOnce(new Error('503'))
+    await pagina()
+    await esperar(() => carril('Listo para subir').querySelector('.empty-state-body')?.textContent?.includes('No se pudieron cargar'))
+    expect(carril('Listo para subir').textContent).not.toContain('Ninguna petición lista')
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [rec({ id: 5, content_name: 'Drive', rec_request_id: 9, rec_points: 10 })] })
+    await pulsar(botonDe(carril('Listo para subir'), 'Reintentar')!)
+    await esperar(() => filas('Listo para subir').length === 1)
+    expect(carril('Listo para subir').textContent).not.toContain('No se pudieron cargar')
+  })
+
+  // Una recarga que falla (la que lanza «tarea-terminada») no borra lo cargado: avisa encima y deja la lista.
+  const recargar = async () => {
+    await act(async () => {
+      for (const [tipo, cb] of vi.mocked(suscribirse).mock.calls) if (tipo === 'tarea-terminada') (cb as () => void)()
+    })
+  }
+
+  it('una recarga que falla con peticiones ya cargadas avisa encima y deja la lista, con Reintentar', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [rec({ id: 5, content_name: 'Drive', rec_request_id: 9, rec_points: 10 })] })
+    await pagina()
+    await esperar(() => filas('Listo para subir').length === 1)
+
+    vi.mocked(getDashboardRecommendations).mockRejectedValue(new Error('503'))
+    await recargar()
+    await esperar(() => carril('Listo para subir').querySelector('.panel-aviso-carga'))
+    expect(carril('Listo para subir').querySelector('.panel-aviso-carga')!.textContent).toContain('No se pudieron cargar')
+    expect(carril('Listo para subir').querySelector('.empty-state')).toBeNull()
+    expect(filas('Listo para subir')).toHaveLength(1)
+
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [rec({ id: 5, content_name: 'Drive', rec_request_id: 9, rec_points: 10 })] })
+    await pulsar(botonDe(carril('Listo para subir').querySelector('.panel-aviso-carga')!, 'Reintentar')!)
+    await esperar(() => !carril('Listo para subir').querySelector('.panel-aviso-carga'))
+    expect(filas('Listo para subir')).toHaveLength(1)
+  })
+
+  it('si fallan y solo quedan otras ideas, avisa y no dice «Ninguna petición lista»', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [rec({ id: 20, rec_group: 2, content_name: 'Único (2001)' })] })
+    await pagina()
+    await esperar(() => document.querySelector('.panel-mas'))
+    expect(carril('Listo para subir').textContent).toContain('Ninguna petición lista')
+
+    vi.mocked(getDashboardRecommendations).mockRejectedValue(new Error('503'))
+    await recargar()
+    await esperar(() => carril('Listo para subir').querySelector('.panel-aviso-carga'))
+    expect(carril('Listo para subir').textContent).not.toContain('Ninguna petición lista')
+    expect(document.querySelector('.panel-mas')).not.toBeNull()
+  })
+
+  it('la recompensa de una petición lleva su etiqueta para el lector de pantalla', async () => {
+    vi.mocked(getDashboardRecommendations).mockResolvedValue({ items: [rec({ id: 5, content_name: 'Drive', rec_request_id: 9, rec_points: 1200 })] })
+    await pagina()
+    await esperar(() => filas('Listo para subir').length === 1)
+    expect(filas('Listo para subir')[0].querySelector('.panel-item-accion')!.textContent).toContain('Recompensa: 1200')
+  })
+
   it('la cuenta de eMuwarez va en la cabecera, entre el título y «Sincronizar todo»; sin perfil no sale nada', async () => {
     await pagina()
     expect(document.querySelector('[data-testid="cuenta"]')).toBeNull()
@@ -305,6 +361,17 @@ describe('Panel', () => {
       await pulsar(filas[1].querySelector('[role="link"]')!)
       expect(sessionStorage.getItem('emuwarez_open_upload')).toBe('1')
       expect(navegar).toHaveBeenCalledWith('uploads')
+    })
+
+    it('una fallida enseña la primera línea de su motivo en la propia fila; las demás, nada', async () => {
+      vi.mocked(getUploads).mockResolvedValue([
+        terminada(1, 'failed', 1, { error_message: 'Duplicado en eMuwarez\nSegunda línea' }),
+        terminada(2, 'completed', 2),
+      ])
+      await pagina()
+      await esperar(() => recientes())
+      const motivos = [...recientes().querySelectorAll('li')].map(f => f.querySelector('.panel-fila-motivo')?.textContent ?? null)
+      expect(motivos).toEqual(['Duplicado en eMuwarez', null])
     })
 
     it('sin nada en curso, «Sin subidas en curso» es una línea discreta y Recientes ocupa el carril', async () => {
@@ -544,6 +611,8 @@ describe('Panel', () => {
     expect(carril('En curso').textContent).toContain('1 subiendo · 9 en cola')
     const mas = carril('En curso').querySelector('.panel-en-curso-mas')!
     expect(mas.textContent).toBe('+4 en cola · Ver todas las subidas')
+    // El enlace no se repite al pie.
+    expect(carril('En curso').querySelector('.panel-pie')).toBeNull()
     await pulsar(mas.querySelector('[role="link"]')!)
     expect(navegar).toHaveBeenCalledWith('uploads')
   })

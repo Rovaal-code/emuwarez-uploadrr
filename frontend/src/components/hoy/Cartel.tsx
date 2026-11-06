@@ -9,6 +9,8 @@ export function Cartel({ url, serie }: { url: string | null | undefined; serie: 
         <img
           src={posterUrl(url, 'w154')}
           alt=""
+          width={44}
+          height={66}
           loading="lazy"
           className="panel-poster-img"
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}

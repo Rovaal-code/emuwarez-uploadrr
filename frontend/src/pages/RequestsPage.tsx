@@ -365,7 +365,6 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
   // What a link out of this request should open: the season's own row for a
   // season request, the matched row otherwise.
   const libraryTargetId = m?.library_target_id ?? libId
-  const titleLinkTip = useTooltip('Ver en la biblioteca')
   const t = tipoOf(item.category)
   // External IDs: prefer the request's own, fall back to the matched library
   // item. TVDB only ever comes from the library item (Radarr/Sonarr); MAL
@@ -434,18 +433,21 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
             shares the series' tmdb_id), so linking that opened the whole
             series instead of the season you clicked. */}
         <DetailTitle>
-          {libraryTargetId ? (
-            <span
-              className="lib-title-link"
-              onClick={() => onOpenLibraryItem?.(libraryTargetId)}
-              {...titleLinkTip.triggerProps}
-            >
+          <h1 className="detcard-h1">
+            {libraryTargetId && onOpenLibraryItem ? (
+              <HoverTitle
+                as="span"
+                className="lib-title-link"
+                href={`/library/${libraryTargetId}`}
+                onClick={() => onOpenLibraryItem(libraryTargetId)}
+                tip="Ver en la biblioteca"
+              >
+                <DetailTitleText title={item.display_title || requestDisplayTitle(item)} />
+              </HoverTitle>
+            ) : (
               <DetailTitleText title={item.display_title || requestDisplayTitle(item)} />
-              {titleLinkTip.tooltipNode}
-            </span>
-          ) : (
-            <DetailTitleText title={item.display_title || requestDisplayTitle(item)} />
-          )}
+            )}
+          </h1>
         </DetailTitle>
       </div>
 
@@ -1013,6 +1015,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <div className="pet-min-0">
             <HoverTitle
               className="lib-title-link"
+              href={`/requests/${item.id}`}
               onClick={e => { e.stopPropagation(); handleRowClick(item.id) }}
               tip="Abrir ficha"
             >
@@ -1062,7 +1065,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       <>
         <div className="page-header">
           <div>
-            <div className="page-title">Peticiones</div>
+            <h1 className="page-title">Peticiones</h1>
             <div className="page-subtitle">
               {total > 0 ? `${total} peticiones` : 'Peticiones activas cruzadas con tu biblioteca local'}
             </div>

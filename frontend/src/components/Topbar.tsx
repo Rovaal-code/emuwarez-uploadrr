@@ -40,7 +40,9 @@ export function Topbar({ user, pageTitle, onLogout, onBuscar, menu }: TopbarProp
     <header className="topbar">
       <div className="topbar-left">
         <BotonMenu abierto={menu.abierto} onAlternar={menu.alternar} botonRef={menu.botonRef} />
-        <h1 className="topbar-title">{pageTitle}</h1>
+        {/* Miga de pan, no encabezado: el h1 de la pantalla es el título de la página (o el de la ficha abierta), y
+            el lector de pantalla no tiene por qué oír el nombre de la sección dos veces seguidas. */}
+        <p className="topbar-title" aria-hidden="true">{pageTitle}</p>
       </div>
       {/* Center slot for live sync status — same row as the page title, so
           it never changes the topbar's height whether a sync is running or

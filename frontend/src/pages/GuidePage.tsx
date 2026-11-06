@@ -743,7 +743,7 @@ export function GuidePage() {
     <div data-tour="guide-content" className="guia-pagina">
       <div className="page-header guia-cabecera">
         <div>
-          <div className="page-title">Guía</div>
+          <h1 className="page-title">Guía</h1>
           <p className="guia-resumen">
             Nomenclatura oficial de eMuwarez y de dónde obtiene la aplicación cada dato para construirla.
           </p>

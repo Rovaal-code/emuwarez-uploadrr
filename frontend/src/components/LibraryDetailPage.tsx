@@ -125,7 +125,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction,
 
       {/* El nombre y lo que se hace con él, en la misma línea: las acciones estaban en otra fila, lejos de lo que actúan. */}
       <div className="bibdet-titulo">
-        <DetailTitle><DetailTitleText title={item.display_title || item.title} /></DetailTitle>
+        <DetailTitle><h1 className="detcard-h1"><DetailTitleText title={item.display_title || item.title} /></h1></DetailTitle>
         <div className="bibdet-acciones">
           <LibraryActionButtons
             item={item}

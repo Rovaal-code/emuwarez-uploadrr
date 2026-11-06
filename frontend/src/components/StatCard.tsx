@@ -5,6 +5,7 @@ interface StatCardProps {
   label: string
   value: number | string
   children?: React.ReactNode
+  // Color de estado del icono (solo con `icon`).
   accentColor?: string
   // Custom hover explanation (styled popover, not the native title box).
   info?: React.ReactNode
@@ -26,9 +27,9 @@ export function StatCard({ label, value, children, accentColor, info, icon }: St
       {icon && <div className="stat-card-icon" aria-hidden="true" style={accentColor ? { color: accentColor } : undefined}>{icon}</div>}
       <div className="stat-card-text">
         <div className="stat-card-label">{label}</div>
-        <div className="stat-card-value" style={accentColor ? { color: accentColor } : undefined}>
-          {cifra}
-        </div>
+        {/* La cifra va en el color del texto: el estado lo dice el icono, y una cifra de color con el número grande
+            gritaba más que la etiqueta que la explica. */}
+        <div className="stat-card-value">{cifra}</div>
         {children && <div className="stat-card-sub">{children}</div>}
       </div>
       {tooltipNode}

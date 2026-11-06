@@ -304,8 +304,8 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     del `progress_json`; «Pistas» dice «omitida» si el remux se omitió. Una fase sin marcas de tiempo enseña solo su estado.
   - En curso, fallida o cancelada: mismo diseño con el problema primero (estado, motivo y reintento #126 arriba); el motivo
     (`error_message`) por fin se ve en esta pantalla. El tiempo transcurrido va fuera de la región `aria-live`.
-  - No tiene «Abrir en qBittorrent»: la URL que la app conoce es la del servidor (puede ser un nombre de contenedor) y no guarda
-    el info-hash. Haría falta una URL pública de qBittorrent en Configuración.
+  - «Abrir en qBittorrent» no estaba: la URL que la app conoce es la del servidor (puede ser un nombre de contenedor) y no guarda
+    el info-hash. Se añadió después con una URL pública configurable (#234).
   - Sin ver: una subida real de punta a punta, el contraste AA medido con una herramienta y un lector de pantalla.
 - **Oleada 4, rediseño P5: el asistente de subida con Resumen (#200):** un stepper con los pasos reales de cada flujo (película o
   capítulo: «Nombre y pistas → Resumen»; serie, temporada o tanda: «Contenido → Nombre y pistas → Resumen») y un paso final que
@@ -561,6 +561,36 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     **Aplazado:** el `window.confirm` de regenerar o quitar la clave del widget (`WidgetCard.tsx`) → `Modal`; la pestaña Backup sigue
     llamándose «Backup». **Sin ver:** una instancia en «Prueba correcta», subir o restaurar un backup real, «Probar conexión» real,
     Configuración con el tour abierto y touch real.
+- **Oleada 4, «Abrir en qBittorrent» (#234):** ajuste opcional «URL pública del WebUI» (`qbit.public_url`, Configuración → qBittorrent), solo
+  http/https con host y sin usuario ni contraseña; se valida en el PUT con `error_de_url_publica` (no con un validador de pydantic) y no es un
+  secreto, así que viaja en las copias de configuración. `GET /api/uploads/seeding` devuelve `url_publica` (se vuelve a validar al leerla, por si
+  viene de una copia restaurada). En el bloque de seeding del detalle de una subida completada, con la URL puesta: «Abrir en qBittorrent» (pestaña
+  nueva, `noopener noreferrer`) y «Copiar nombre» (el nombre de la carpeta o fichero subido, para el filtro de la WebUI). La WebUI no tiene enlace
+  directo a un torrent y la app no guarda el info-hash, así que se abre la WebUI sin más. No está en la fila de la lista de Subidas. **Sin ver:**
+  el campo y el bloque en el navegador, ni contra un qBittorrent real.
+- **Oleada 4, el error 422 ya no devuelve ni registra lo enviado (#235):** pydantic repite `input` (y `ctx`) en cada error de validación, y aquí
+  ese valor puede ser una URL con clave (el proxy de qui), una API key, un token de Telegram o una contraseña. Un manejador global de
+  `RequestValidationError` (`web/errors.py`) los quita y deja `type`, `loc` y `msg`, que es lo que lee el frontend. `tests/test_422_sin_claves.py`
+  (ajustes, asistente de primera configuración, instancias, notificaciones, login y JSON inválido, con un valor sentinela).
+- **Oleada 4, los errores de integración ya no llevan las claves (#237):** eMuwarez y TMDb llevan la clave en la URL y el texto de una excepción
+  puede repetirla. `integrations/base.py` gana `tapar_claves` y `texto_de_error` (tapan `api_key=`, `token=`, `password=`, `secret=`, `key=`, campos
+  JSON, `usuario:clave@`, cabeceras `X-Api-Key`/`Authorization`, el token de un bot de Telegram y el de un webhook de Discord, y las claves
+  configuradas que el sitio les pase). Se usan en el 500 genérico, en las respuestas de instancias, asistente de primera configuración,
+  peticiones y biblioteca, y en todo lo que se guarda o notifica (`task_runs`, resultados de tareas, `last_test_status`, `error_message` de las
+  subidas, salud de *Arr, pruebas de conexión, seeding, manifiesto de versión). Además, una fábrica de `LogRecord` global
+  (`web/logging_setup.py`) tapa mensaje, traceback y stack de cualquier registro (app.log, consola, `/api/logs`). `tests/test_errores_sin_claves.py`.
+  **Limitaciones:** la fábrica es global al proceso; un secreto sin forma reconocible (ni `clave=valor`, ni cabecera, ni URL) solo se tapa si el
+  sitio le pasa la clave configurada; **no hay un test de arquitectura que obligue a usar `texto_de_error` en sitios nuevos**, el siguiente
+  paso si se quiere cerrar la puerta. Suite completa sobre la rama: 4248 pasan, 69 omitidas.
+- **Oleada 4, limpieza tras el rediseño (#236):** fuera `NomenclatureModal`, `NomenclatureFieldsModal` y `UploadPreflightModal` (nada los abría; los
+  sustituyó el asistente) con `styles/nomenclatura.css`, las funciones y tipos de `api/` que solo ellos usaban y el CSS huérfano (`.settings-tab`,
+  `.fields-grid`, `.preview-*`, fondos de `.login-card`/`.wizard-card` que el HUD pisaba); `test_copias_frontend` ya no exige los tokens de
+  nomenclatura y título MKV en el frontend (siguen en backend y CLI). `theme-color` y `site.webmanifest` pasan a `#0a0d14`. `HeaderFilter` cierra con
+  `pointerdown` (iOS). `formatBytes` usa espacio duro. Tras «Borrar lote» con todo borrado, Subidas dice «Este lote ya no tiene subidas» y ofrece
+  «Quitar filtro del lote». La franja de cuenta del Panel pierde Mensajes y Notificaciones (están en la barra superior y el cajón) y queda «Mis
+  subidas», solo con icono entre 769 y 1400 px para ir en una fila. Los modales ya eran opacos tras #229. **Pendiente:** `--color-tab-active`
+  (globals.css) y los endpoints de nomenclatura y preflight del backend, sin uso desde la interfaz; `pages/ajustes/formatBytes.ts` sigue con espacio
+  normal y otra precisión; `viewport-fit=cover` espera a que el marco trate las safe areas; tablet táctil a 769–1400 px sin probar.
 
 ## Siguiente
 
@@ -595,6 +625,10 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
   una tarjeta por fila en móvil para esas listas; `HoverTitle` es un `div role="link"`; `h1` en el resto de pantallas; `/impeccable init`
   (`PRODUCT.md`/`DESIGN.md`).
 - Recuperar solo el añadido a qBittorrent de una subida que ya estaba en eMuwarez (necesita un cambio en Uploadrr-EMU, otro repo).
+- Una prueba de arquitectura que obligue a pasar por `integrations.base.texto_de_error` el texto de una excepción antes de devolverlo, guardarlo o
+  notificarlo (hoy lo cubren la fábrica de logs y los arreglos de #237, pero un sitio nuevo puede olvidarlo).
+- Probar en el NAS (`:edge`): el límite compartido entre CLI y servidor (`flock` sobre el volumen de `CONFIG_DIR`), el campo y el enlace de
+  qBittorrent, y la subida por lotes (ver «Siguiente»).
 
 ## Datos útiles
 

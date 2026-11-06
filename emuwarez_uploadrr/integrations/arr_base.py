@@ -79,7 +79,7 @@ def arr_request(
         body = json.dumps(data).encode("utf-8")
         headers["Content-Type"] = "application/json"
     # Estos mensajes llegan a la interfaz, al log y a la base: sin usuario:clave@ de la URL ni la API key repetida.
-    url_segura = url_sin_claves(url)
+    url_segura = tapar_claves(url_sin_claves(url), api_key)
     try:
         resp = http_cliente.pedir(method, url, cabeceras=headers, contenido=body, timeout=timeout)
         raw = http_cliente.texto(resp.content)

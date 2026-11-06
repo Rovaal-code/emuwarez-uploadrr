@@ -11,6 +11,7 @@ from .ejecucion import start_upload_job
 from .estado import _update_job_status
 from .procesos import _PROCESOS, _PROCESOS_LOCK, _detener_proceso, _pid_es_de_este_job
 from .registro import append_upload_log
+from ...integrations.base import texto_de_error
 
 
 def retry_upload_job(
@@ -280,7 +281,7 @@ def _cancelar(job_id: int, conn=None) -> dict:
             except (ProcessLookupError, PermissionError) as exc:
                 append_upload_log(
                     job_id, "warning",
-                    f"No se pudo enviar SIGTERM al PID {pid}: {exc}",
+                    f"No se pudo enviar SIGTERM al PID {pid}: {texto_de_error(exc)}",
                     stream="system",
                     conn=conn,
                 )

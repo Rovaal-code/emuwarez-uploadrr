@@ -45,6 +45,7 @@ from .procesos import (
 )
 from .progreso import advance_running_phase, mark_phase_done, mark_phase_failed
 from .registro import _ficha_del_torrent, append_upload_log, create_upload_artifact
+from ...integrations.base import texto_de_error
 
 
 # Margen a las tuberías tras salir Uploadrr (segundos).
@@ -414,7 +415,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
 
     except FileNotFoundError as exc:
         finished_at = _now()
-        msg = f"Ejecutable no encontrado: {exc}"
+        msg = f"Ejecutable no encontrado: {texto_de_error(exc)}"
         _finalize_job_status(
             job_id, "failed",
             stage="failed",
@@ -427,7 +428,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
         _notify_upload_failed(job_id, msg)
     except Exception as exc:
         finished_at = _now()
-        msg = redact_secrets(str(exc), secrets)
+        msg = redact_secrets(texto_de_error(exc), secrets)
         _finalize_job_status(
             job_id, "failed",
             stage="failed",

@@ -22,6 +22,7 @@ import os
 from typing import Optional
 
 from .mkv_title import to_filesystem_name
+from ..integrations.base import texto_de_error
 
 STATUS_UNCHECKED = "No comprobada"
 STATUS_CORRECT = "Correcta"
@@ -171,7 +172,7 @@ def check_item(conn, item_id: int, *, force: bool = False) -> dict:
         try:
             r = check_one(conn, e)
         except Exception as exc:  # MediaInfo unreadable, etc. — leave unchecked
-            r = {"id": e["id"], "status": STATUS_UNCHECKED, "error": str(exc)}
+            r = {"id": e["id"], "status": STATUS_UNCHECKED, "error": texto_de_error(exc)}
         results.append(r)
         if r.get("status") == STATUS_CORRECT:
             correct += 1

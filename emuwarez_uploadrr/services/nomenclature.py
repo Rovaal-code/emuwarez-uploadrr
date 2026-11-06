@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from ..database import connect, row_to_dict, get_state
 from .filesystem_safety import safe_stat
 from .source_assistant import EMU_PROVIDERS, PROVIDER_SOURCES
+from ..integrations.base import texto_de_error
 
 logger = logging.getLogger("emuwarez.nomenclature")
 
@@ -961,7 +962,7 @@ def renombrar_en_subidas(item_id: int, origen: str, destino: str, *, conn,
             logger.exception("Renombrado hecho pero sin anotar en la biblioteca (item %s)", item_id)
             result["status"] = "failed"
             result["errors"] = list(result.get("errors") or []) + [
-                f"El archivo se renombró a {destino}, pero no se pudo anotar en la base de datos: {exc}"]
+                f"El archivo se renombró a {destino}, pero no se pudo anotar en la base de datos: {texto_de_error(exc)}"]
     return result
 
 

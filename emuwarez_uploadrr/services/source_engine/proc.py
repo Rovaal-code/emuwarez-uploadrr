@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from .constants import TOOL_TIMEOUT_S
+from ...integrations.base import texto_de_error
 
 log = logging.getLogger("emuwarez.source_engine")
 
@@ -83,7 +84,7 @@ def run(tool: str, args: list[str], *, timeout: float = TOOL_TIMEOUT_S) -> ToolR
     except OSError as exc:
         duration = time.monotonic() - started
         return ToolResult(tool=tool, ok=False, returncode=None, duration_s=duration,
-                           error=f"{tool} falló al ejecutarse: {exc}")
+                           error=f"{tool} falló al ejecutarse: {texto_de_error(exc)}")
 
     duration = time.monotonic() - started
     stdout, truncated = _cap(proc.stdout or "")

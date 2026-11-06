@@ -580,8 +580,10 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   subidas, salud de *Arr, pruebas de conexión, seeding, manifiesto de versión). Además, una fábrica de `LogRecord` global
   (`web/logging_setup.py`) tapa mensaje, traceback y stack de cualquier registro (app.log, consola, `/api/logs`). `tests/test_errores_sin_claves.py`.
   **Limitaciones:** la fábrica es global al proceso; un secreto sin forma reconocible (ni `clave=valor`, ni cabecera, ni URL) solo se tapa si el
-  sitio le pasa la clave configurada; **no hay un test de arquitectura que obligue a usar `texto_de_error` en sitios nuevos**, el siguiente
-  paso si se quiere cerrar la puerta. Suite completa sobre la rama: 4248 pasan, 69 omitidas.
+  sitio le pasa la clave configurada. Suite completa sobre la rama: 4248 pasan, 69 omitidas. **Después:**
+  `tests/test_errores_por_texto_de_error.py` (ast) cierra la puerta: en web/ y services/ el nombre de un `except … as X` no acaba en
+  `str(X)`, `repr(X)`, f-string, `%`, `.format` ni concatenado sin `texto_de_error` (los argumentos de `logger.*` no cuentan, los tapa la
+  fábrica); quedaron 4 sitios permitidos por fichero y función, con su motivo, y se arreglaron los 33 restantes.
 - **Oleada 4, limpieza tras el rediseño (#236):** fuera `NomenclatureModal`, `NomenclatureFieldsModal` y `UploadPreflightModal` (nada los abría; los
   sustituyó el asistente) con `styles/nomenclatura.css`, las funciones y tipos de `api/` que solo ellos usaban y el CSS huérfano (`.settings-tab`,
   `.fields-grid`, `.preview-*`, fondos de `.login-card`/`.wizard-card` que el HUD pisaba); `test_copias_frontend` ya no exige los tokens de
@@ -625,8 +627,6 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
   una tarjeta por fila en móvil para esas listas; `HoverTitle` es un `div role="link"`; `h1` en el resto de pantallas; `/impeccable init`
   (`PRODUCT.md`/`DESIGN.md`).
 - Recuperar solo el añadido a qBittorrent de una subida que ya estaba en eMuwarez (necesita un cambio en Uploadrr-EMU, otro repo).
-- Una prueba de arquitectura que obligue a pasar por `integrations.base.texto_de_error` el texto de una excepción antes de devolverlo, guardarlo o
-  notificarlo (hoy lo cubren la fábrica de logs y los arreglos de #237, pero un sitio nuevo puede olvidarlo).
 - Probar en el NAS (`:edge`): el límite compartido entre CLI y servidor (`flock` sobre el volumen de `CONFIG_DIR`), el campo y el enlace de
   qBittorrent, y la subida por lotes (ver «Siguiente»).
 

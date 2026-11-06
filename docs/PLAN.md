@@ -536,10 +536,10 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     botón de verdad; su medida sigue fijada solo por `aspect-ratio` (medido con scroll rápido, sin el aviso de `RejillaVirtual`). El título
     de la lista es un enlace real `/library/:id`. La ficha mide 420 px (`DetailPoster` admite `alto`; las otras fichas siguen en 480), pone
     las acciones en la línea del título y pasa las tarjetas a dos columnas por debajo de 1000 px. «Subir por lotes» alinea el paso 1,
-    abre el paso 2 con el recuento (se subirán, se saltarán, por comprobar) y en móvil enseña «Incluir» en cada bloque. **Aplazado, la
-    «petición heredada» en la lista:** el filtro es SQL (`listado._build_library_filter`), una serie pedida entera marcaría todos sus
-    capítulos «Compatible» y mostrarla solo en la celda desajusta columna y filtro; si se quiere, una etiqueta «de la serie» solo en la
-    celda, con una consulta por lote de antepasados reutilizando `_cubre`. **Sin ver:** `EmuComparisonSection` y `SourceComparisonModal`, el
+    abre el paso 2 con el recuento (se subirán, se saltarán, por comprobar) y en móvil enseña «Incluir» en cada bloque. **Después, la
+    «petición heredada» en la lista:** una temporada o capítulo sin petición propia que cubre la de su serie o temporada dice «de la
+    serie» / «de la temporada» en la celda (texto atenuado, sin insignia); el estado guardado y el filtro (SQL,
+    `listado._build_library_filter`) no cambian. `requests.peticiones_heredadas` lo resuelve con una consulta por página y `_cubre`. **Sin ver:** `EmuComparisonSection` y `SourceComparisonModal`, el
     paso 2 del lote con comprobaciones en verde, el contraste AA medido y el lector de pantalla.
   - Asistente de subida, P5 completo (#232): el panel es una columna y solo el cuerpo del paso hace scroll; el pie (Volver, Continuar,
     Subir) queda fijo a 1280×800, 1440×900 y 390×844 (cerrado el detalle del pie cortado de «Siguiente») y el veredicto de las
@@ -624,9 +624,8 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
 
 ## Aplazado / ideas
 
-- Que la columna «Petición» de la lista de Biblioteca (y su filtro) cuente la petición heredada: hoy la temporada de
-  una serie pedida entera dice «Sin petición» en la lista aunque su ficha enseñe la de la serie. `request_id` guarda
-  una petición por fila, la que se escribe donde la petición pide. Propuesta y razones en la entrada de Biblioteca (#230).
+- Que el filtro «Petición» de Biblioteca cuente la petición heredada (la celda ya dice «de la serie», ver la entrada de
+  Biblioteca, #230): `request_id` guarda una petición por fila, la que se escribe donde la petición pide.
 - `window.confirm` del widget de Homepage (`WidgetCard.tsx`) → `Modal`; virtualizar las listas de Peticiones y Subidas de más de 50 filas;
   una tarjeta por fila en móvil para esas listas; `HoverTitle` es un `div role="link"`; `h1` en el resto de pantallas; `/impeccable init`
   (`PRODUCT.md`/`DESIGN.md`).

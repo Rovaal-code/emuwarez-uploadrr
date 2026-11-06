@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from ..services.lotes import MAX_ELEMENTOS_LOTE, PATRON_LOTE_ID
@@ -685,6 +685,9 @@ class LibraryItemResponse(BaseModel):
     size_bytes: Optional[int] = None
     local_status: str
     request_status: str
+    # Solo en la lista: una temporada o capítulo sin petición propia que cubre la de su «serie» o «temporada».
+    # No cambia request_status ni lo que filtra la columna.
+    peticion_heredada: Optional[Literal["serie", "temporada"]] = None
     nomenclature_status: str
     updated_at: Optional[str] = None
     # Phase 8A fields (optional — may not be populated yet)

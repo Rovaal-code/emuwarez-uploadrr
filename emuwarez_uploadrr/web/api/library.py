@@ -404,6 +404,11 @@ def library_list(
             else:
                 rollups = rollups_de(rows)
                 items = [_to_lib_response(r, conn, rollups) for r in rows]
+        # La petición de la serie o temporada que cubre una fila sin la suya: una consulta para la página.
+        from emuwarez_uploadrr.services.requests import peticiones_heredadas
+        heredadas = peticiones_heredadas(conn, [it.id for it in items if it.item_type in ("season", "episode")])
+        for it in items:
+            it.peticion_heredada = heredadas.get(it.id)
     return LibraryListResponse(
         items=items,
         total=total,

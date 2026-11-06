@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import os
 import re
@@ -1072,6 +1073,41 @@ def _cubre(peticion: dict, fila: dict) -> bool:
     if peticion.get("req_scope") == "episode":
         return fila.get("item_type") == "episode" and fila.get("episode_number") == peticion.get("req_episode")
     return True
+
+
+def peticiones_heredadas(conn: sqlite3.Connection, ids: list[int]) -> dict[int, str]:
+    """De qué antepasado heredan la petición, en la lista, las temporadas y capítulos de `ids` sin una propia:
+    {id: «serie» | «temporada»}. Las mismas reglas que la ficha (`peticiones_de_la_ficha`): la `request_id` de su
+    temporada o serie, si la cubre (`_cubre`), y gana la más cercana. Una sola consulta para toda la página; solo
+    lee, y no cambia el estado guardado ni lo que filtra la columna."""
+    if not ids:
+        return {}
+    lista = json.dumps([int(i) for i in ids])
+    # Las filas, sus padres y sus abuelos (capítulo → temporada → serie), con la petición que guarda cada una.
+    filas = {r["id"]: dict(r) for r in conn.execute(
+        """SELECT li.id, li.item_type, li.parent_id, li.season_number, li.episode_number,
+                  ri.id AS peticion, ri.req_scope, ri.req_season, ri.req_episode
+           FROM library_items li LEFT JOIN request_items ri ON ri.id = li.request_id
+           WHERE li.id IN (SELECT value FROM json_each(?1))
+              OR li.id IN (SELECT parent_id FROM library_items WHERE id IN (SELECT value FROM json_each(?1)))
+              OR li.id IN (SELECT p.parent_id FROM library_items p JOIN library_items h ON h.parent_id = p.id
+                           WHERE h.id IN (SELECT value FROM json_each(?1)))""",
+        (lista,),
+    )}
+    heredadas: dict[int, str] = {}
+    for item_id in ids:
+        fila = filas.get(item_id)
+        if not fila or fila["peticion"] is not None or fila["item_type"] not in ("season", "episode"):
+            continue
+        padre, vistos = fila["parent_id"], set()
+        while padre in filas and padre not in vistos:
+            vistos.add(padre)
+            p = filas[padre]
+            if p["peticion"] is not None and _cubre(p, fila):
+                heredadas[item_id] = "serie" if p["item_type"] == "series" else "temporada"
+                break
+            padre = p["parent_id"]
+    return heredadas
 
 
 def peticion_que_enlazar(conn: sqlite3.Connection, item_id: int) -> Optional[int]:

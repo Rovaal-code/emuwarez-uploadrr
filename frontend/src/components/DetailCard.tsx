@@ -198,10 +198,14 @@ export function CheckStatusIcon({ status }: { status: 'ok' | 'fail' | 'skip' }) 
 
 // Fixed-size poster (300px, 2:3) used at the top of every dedicated detail
 // page, next to the title/action-buttons header.
-export function DetailPoster({ url, alt, fallbackIcon }: { url?: string | null; alt: string; fallbackIcon: React.ReactNode }) {
-  // La altura sale de DETAIL_CARD_HEIGHT (constante del módulo): en línea.
+export function DetailPoster({ url, alt, fallbackIcon, alto = DETAIL_CARD_HEIGHT }: {
+  url?: string | null; alt: string; fallbackIcon: React.ReactNode
+  /** Alto en px; por defecto el estándar de las fichas (DETAIL_CARD_HEIGHT). */
+  alto?: number
+}) {
+  // La altura sale de DETAIL_CARD_HEIGHT (constante del módulo) o de `alto`: en línea.
   return (
-    <div className="detail-poster detcard-poster" style={{ height: DETAIL_CARD_HEIGHT }}>
+    <div className="detail-poster detcard-poster" style={{ height: alto }}>
       {url ? (
         <img
           src={url}

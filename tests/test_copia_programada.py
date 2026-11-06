@@ -49,6 +49,18 @@ def test_la_tarea_programada_crea_la_copia_y_aplica_la_retencion(isolated_db):
         conn.close()
 
 
+@pytest.mark.parametrize(("n_bytes", "esperado"), [
+    (0, "0,0\u00a0B"),
+    (1023, "1023,0\u00a0B"),
+    (1024, "1,0\u00a0KB"),
+    (38_092, "37,2\u00a0KB"),
+    (5 * 1024 * 1024, "5,0\u00a0MB"),
+])
+def test_el_tamano_del_resumen_lleva_la_unidad_que_le_toca(n_bytes, esperado):
+    from emuwarez_uploadrr.services.scheduler import _tamano_legible
+    assert _tamano_legible(n_bytes) == esperado
+
+
 def test_la_tarea_programada_respeta_cuantas_copias_se_guardan(isolated_db):
     from emuwarez_uploadrr.services.maintenance_service import guardar_opciones
     carpeta = isolated_db / "backups"

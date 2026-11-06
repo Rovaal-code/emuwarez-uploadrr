@@ -57,6 +57,8 @@ const RESUMEN: LoteResumen = {
 const accion = (extra: Partial<LoteAccionResult>): LoteAccionResult =>
   ({ canceladas: 0, intactas: 0, reintentadas: 0, saltadas: [], resumen: null, ...extra })
 const banner = () => document.querySelector('.sub-lote-banner')
+// Los botones del banner se apagan con aria-disabled (siguen enfocables y con su tooltip), no con disabled.
+const apagado = (nombre: string) => boton(nombre)!.getAttribute('aria-disabled') === 'true'
 const contadores = () => [...document.querySelectorAll('.sub-lote-contador')].map(li => li.textContent)
 
 const ultimaPeticion = () => vi.mocked(getUploads).mock.lastCall?.[0]
@@ -116,7 +118,7 @@ describe('el chip del lote', () => {
     expect(texto()).not.toContain('Sin resultados')
     expect(banner()!.querySelector('.sub-lote-banner-titulo')!.textContent).toBe('Lote sin subidas')
     expect(contadores()).toEqual([])
-    expect(boton('Cancelar pendientes')!.disabled).toBe(true)
+    expect(apagado('Cancelar pendientes')).toBe(true)
 
     await pulsar(boton('Quitar filtro del lote'))
     await esperar(() => document.querySelectorAll('tbody tr').length === 3)
@@ -137,9 +139,9 @@ describe('el banner del lote', () => {
   it('enseña los contadores que no son cero y habilita solo lo que se puede hacer', async () => {
     await filtrarPorLote()
     expect(contadores()).toEqual(['1 en cola', '1 en marcha', '1 completada'])
-    expect(boton('Cancelar pendientes')!.disabled).toBe(false)
-    expect(boton('Reintentar fallidas')!.disabled).toBe(true)
-    expect(boton('Borrar lote')!.disabled).toBe(false)
+    expect(apagado('Cancelar pendientes')).toBe(false)
+    expect(apagado('Reintentar fallidas')).toBe(true)
+    expect(apagado('Borrar lote')).toBe(false)
   })
 
   it('«Cancelar pendientes» pregunta antes y, sin la casilla, cancela solo las de la cola', async () => {
@@ -184,7 +186,7 @@ describe('el banner del lote', () => {
     }))
     await filtrarPorLote()
     expect(contadores()).toEqual(['1 completada', '2 fallidas'])
-    expect(boton('Cancelar pendientes')!.disabled).toBe(true)
+    expect(apagado('Cancelar pendientes')).toBe(true)
     const peticiones = vi.mocked(getUploads).mock.calls.length
     await pulsar(boton('Reintentar fallidas'))
     expect(reintentarLote).toHaveBeenCalledWith(LOTE)
@@ -203,7 +205,7 @@ describe('el banner del lote', () => {
     await filtrarPorLote()
     expect(document.querySelector('.sub-lote-parado')!.textContent).toBe(
       `${parado}. 3 subidas no llegaron a empezar; «Reintentar fallidas» las relanza.`)
-    expect(boton('Reintentar fallidas')!.disabled).toBe(false)
+    expect(apagado('Reintentar fallidas')).toBe(false)
   })
 
   it('sin freno, no dice nada de él', async () => {
@@ -262,7 +264,17 @@ describe('el banner del lote', () => {
     await desmontar()
     vi.mocked(getLote).mockResolvedValue({ ...RESUMEN, completadas: 0, en_cola: 2 })
     await filtrarPorLote()
-    expect(boton('Borrar lote')!.disabled).toBe(true)
+    expect(apagado('Borrar lote')).toBe(true)
+    // Apagado, pulsarlo no abre la confirmación; y sigue sin disabled, para que el ratón y el foco lleguen al tooltip.
+    expect(boton('Borrar lote')!.disabled).toBe(false)
+    await pulsar(boton('Borrar lote'))
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('con la lista filtrada por el lote, las filas no repiten su chapa', async () => {
+    await filtrarPorLote()
+    expect(document.querySelectorAll('tbody tr').length).toBe(1)
+    expect(chips()).toEqual([])
   })
 
   it('un fallo de la acción se enseña, no se traga', async () => {

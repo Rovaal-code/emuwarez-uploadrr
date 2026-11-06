@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/uploads', () => ({ getUploadJobLogs: vi.fn(async () => ({ job_id: 1, logs: [], total: 0, limit: 0, offset: 0 })) }))
+import { getUploadJobLogs } from '../../api/uploads'
 vi.mock('../../api/eventos', () => ({
   suscribirse: vi.fn(() => () => {}), canalVivo: vi.fn(() => true), observarCanal: vi.fn(() => () => {}),
 }))
@@ -14,7 +15,7 @@ import type { SeedingResponse } from '../../api/seeding'
 import type { SeedingEstado } from '../../hooks/useSeeding'
 import type { UploadJob, UploadProgressPhase } from '../../types/api'
 import { UploadJobDetailPage } from '../UploadJobDetailPage'
-import { boton, desmontar, montar, pulsar, texto } from './dom'
+import { boton, desmontar, esperar, montar, pulsar, texto } from './dom'
 
 const T0 = Date.parse('2026-11-02T10:00:00+00:00')
 const hora = (s: number) => new Date(T0 + s * 1000).toISOString()
@@ -105,6 +106,8 @@ describe('detalle de una subida completada', () => {
     expect(consultas.textContent).not.toContain('Pendiente')
     expect([...consultas.querySelectorAll('dd')].map(dd => dd.textContent)).toEqual(['Sin datos', 'Sin datos', 'Sin datos'])
     expect(consultas.querySelector('dd button')).toBeNull()
+    // Texto suelto, sin el chip con borde de los que sí abren algo.
+    expect(consultas.querySelector('.value-chip')).toBeNull()
     await desmontar()
     await montar(pagina({ ...fallida, remux_snapshot: null, nomenclature_snapshot: null, checks_snapshot: null }))
     expect([...document.querySelectorAll('.dsub-consultas dd')].map(dd => dd.textContent)).toEqual(['Sin datos', 'Sin datos', 'Sin datos'])
@@ -142,6 +145,51 @@ describe('detalle de una subida que no terminó bien', () => {
     expect(document.querySelector('[aria-label="Pasos de la subida"]')!.textContent).toContain('Subir con Uploadrr')
     expect(document.querySelector('table')!.textContent).toContain('Progreso global')
     expect(texto()).not.toContain('Dónde se fue el tiempo')
+  })
+
+  it('las fases que nunca empezaron no enseñan una hora de fin: solo la que iba en curso toma la del trabajo', async () => {
+    const pendiente: UploadProgressPhase = { key: 'qbittorrent_add', label: 'qBittorrent', status: 'pending', pct: 0 }
+    await montar(pagina({ ...fallida, progress: { global_pct: 62, phases: [...fallida.progress!.phases!, pendiente] } }))
+    const fila = (fase: string) => [...document.querySelectorAll('tbody tr')].find(tr => tr.children[1]?.textContent === fase)!
+    const celdas = (fase: string) => [...fila(fase).children].map(td => td.textContent)
+    // # · Fase · Estado · Progreso · Creado · Finalizado · Duración
+    expect(celdas('qBittorrent').slice(4)).toEqual(['—', '—', '—'])
+    expect(celdas('hash_torrent')[2]).toBe('Fallida')
+    expect(celdas('hash_torrent')[5]).not.toBe('—')
+  })
+
+  it('parada sin que conste en qué paso, lo dice en vez de enseñar cuatro pasos «Pendiente»', async () => {
+    const pasos = ['Comprobar y poner el nombre', 'Preparar los ficheros', 'Verificar antes de subir', 'Subir con Uploadrr']
+      .map((nombre, i) => ({ clave: `p${i}`, nombre, estado: 'pendiente' }))
+    await montar(pagina({ ...fallida, pasos }))
+    expect(document.querySelector('[aria-label="Pasos de la subida"]')).toBeNull()
+    expect(texto()).toContain('No consta en qué paso se paró.')
+    await desmontar()
+    // En marcha, todos pendientes es lo normal: el recorrido se enseña.
+    await montar(pagina({ ...fallida, status: 'running', error_message: undefined, finished_at: undefined, pasos }))
+    expect(document.querySelector('[aria-label="Pasos de la subida"]')).not.toBeNull()
+  })
+
+  it('los subpasos bajan solo la primera letra: «subida a eMuwarez», no «subida a emuwarez»', async () => {
+    await montar(pagina({ ...fallida, pasos: [{ clave: 'subida', nombre: 'Subir con Uploadrr', estado: 'fallido', subpasos: [
+      { clave: 'tracker', nombre: 'Subida a eMuwarez', hecho: false },
+    ] }] }))
+    expect(document.querySelector('.dsub-subpasos')!.textContent).toContain('subida a eMuwarez')
+  })
+
+  it('«Ver registro» abre «Registro», con las líneas de error marcadas', async () => {
+    vi.mocked(getUploadJobLogs).mockResolvedValueOnce({ job_id: 9, total: 2, limit: 0, offset: 0, logs: [
+      { upload_job_id: 9, level: 'info', message: 'Empezando', stream: 'system', created_at: hora(0), sequence: 1 },
+      { upload_job_id: 9, level: 'error', message: 'Uploadrr-EMU salió con código 1', stream: 'stderr', created_at: hora(5), sequence: 2 },
+    ] })
+    await montar(pagina(fallida))
+    await pulsar(boton('Ver registro'))
+    const dialogo = await esperar(() => document.querySelector('[role="dialog"]'))
+    expect(dialogo!.textContent).toContain('Registro')
+    expect(dialogo!.textContent).not.toContain('Actividad')
+    const error = await esperar(() => document.querySelector('pre.dsub-log .dsub-log-error'))
+    expect(error!.textContent).toContain('Uploadrr-EMU salió con código 1')
+    expect(document.querySelector('pre.dsub-log')!.textContent).toContain('Empezando')
   })
 
   it('una en curso dice la fase y se puede cancelar; no ofrece reintento', async () => {

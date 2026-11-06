@@ -43,6 +43,16 @@ describe('HoverTitle', () => {
     expect(enlace.classList.contains('titulo-bloque')).toBe(true)
   })
 
+  it('Ctrl+clic no sube a la fila que lo contiene (no abre el detalle también aquí)', async () => {
+    const abrir = vi.fn()
+    const fila = vi.fn()
+    await montar(<div onClick={fila}><HoverTitle href="/requests/3" onClick={abrir} tip="Abrir">Título</HoverTitle></div>)
+    const evento = await clic(document.querySelector('a')!, { ctrlKey: true })
+    expect(evento.defaultPrevented).toBe(false)
+    expect(fila).not.toHaveBeenCalled()
+    expect(abrir).not.toHaveBeenCalled()
+  })
+
   it('con onClick y sin href es un <button type="button">; sin onClick, el elemento de siempre', async () => {
     const accion = vi.fn()
     await montar(<>

@@ -266,9 +266,14 @@ export function HoverTitle({ as = 'div', href, className, style, onClick, onMous
   // Con as="div" el enlace ocupa su línea, como el div de antes.
   const bloque = as === 'div' ? ' titulo-bloque' : ''
   if (onClick && href) {
-    // Clic con modificador o con otro botón: lo hace el navegador (otra pestaña o ventana).
+    // Clic con modificador o con otro botón: lo hace el navegador (otra pestaña o ventana), y no sube a la fila,
+    // que si no abriría el detalle también en esta pestaña.
     const alPulsar = (e: React.MouseEvent<HTMLAnchorElement>) => {
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      if (e.defaultPrevented) return
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        e.stopPropagation()
+        return
+      }
       e.preventDefault()
       onClick(e)
     }

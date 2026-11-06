@@ -122,6 +122,24 @@ describe('TourOverlay: dónde va la burbuja', () => {
     expect(top + 250).toBeLessThanOrEqual(680)
   })
 
+  it('si la ventana cambia de tamaño sin cambiar de paso, la burbuja se vuelve a medir y no tapa el objetivo', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const mide = this.dataset?.tour === 'uno'
+      return { top: 680, left: 100, right: 300, bottom: 740, width: mide ? 200 : 0, height: mide ? 60 : 0, x: 100, y: 680, toJSON: () => ({}) }
+    })
+    let altoBurbuja = 200
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('tour-bubble') ? altoBurbuja : 0
+    })
+    await abrir()
+    await esperar(() => document.querySelector('.tour-cutout'))
+    // Más estrecha: el texto ocupa más líneas y la burbuja crece.
+    altoBurbuja = 300
+    await act(async () => { window.dispatchEvent(new Event('resize')) })
+    const top = parseFloat(burbuja()!.style.top)
+    expect(top + 300).toBeLessThanOrEqual(680)
+  })
+
   it('los botones: «Cerrar» fantasma (no destruye nada), «Atrás» secundario y solo «Siguiente» principal', async () => {
     await abrir()
     await pulsarBoton('Siguiente')

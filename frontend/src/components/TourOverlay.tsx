@@ -112,6 +112,9 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
     const onResize = () => {
       const el = document.querySelector<HTMLElement>(step.selector)
       if (el) setRect(medir(el))
+      // Con otro ancho el texto puede ocupar más líneas: la burbuja se vuelve a medir.
+      const h = burbuja.current?.offsetHeight
+      if (h) setAlto(h)
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)

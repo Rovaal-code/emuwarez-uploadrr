@@ -8,13 +8,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api.router import api_router
 from .cabeceras import CabecerasDeSeguridad
-from .errors import AppError, app_error_handler, generic_error_handler
+from .errors import AppError, app_error_handler, generic_error_handler, validation_error_handler
 from .runtime import get_app_version
 
 # Phase 11D — automatic tasks scheduler tick interval (seconds). Checking
@@ -232,6 +233,7 @@ def create_app() -> FastAPI:
         return response
 
     app.add_exception_handler(AppError, app_error_handler)
+    app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(Exception, generic_error_handler)
 
     app.include_router(api_router)

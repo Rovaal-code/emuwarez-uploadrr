@@ -173,6 +173,25 @@ def test_sin_cerrojo_de_fichero_vale_el_limite_del_proceso(monkeypatch, caplog):
     assert "No se pudo usar el cerrojo" in caplog.text
 
 
+def test_un_fallo_a_medio_recorrido_no_deja_la_plaza_libre_bloqueada(monkeypatch):
+    """Con la plaza 0 ya libre y tomada para sí, el fallo al abrir la 1 no la deja con el cerrojo sin dueño."""
+    abrir = plazas_compartidas._abrir
+
+    def abrir_con_fallo(ruta):
+        if Path(ruta).name == "plaza-1":
+            raise OSError(24, "Too many open files")
+        return abrir(ruta)
+
+    monkeypatch.setattr(plazas_compartidas, "_abrir", abrir_con_fallo)
+    plaza, _ = plazas_compartidas.tomar(2)
+    assert plaza is not None and not plaza.compartida  # el cerrojo en fichero no sirvió: vale el límite del proceso
+    monkeypatch.setattr(plazas_compartidas, "_abrir", abrir)
+    # La plaza 0 quedó libre: con límite 1 entra una compartida.
+    siguiente, vistas = plazas_compartidas.tomar(1)
+    assert siguiente is not None and siguiente.compartida and vistas == 0
+    siguiente.soltar()
+
+
 def test_sin_fcntl_no_hay_cerrojo(monkeypatch):
     monkeypatch.setattr(plazas_compartidas, "fcntl", None)
     plaza, _ = plazas_compartidas.tomar(1)

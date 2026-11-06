@@ -96,25 +96,31 @@ def _tomar_mutex(ruta) -> int | None:
 def _recorrer(directorio, limite: int) -> tuple[Plaza | None, int]:
     libre: int | None = None
     ocupadas = 0
-    for i in range(MAX_PLAZAS):
-        fd = _abrir(directorio / f"plaza-{i}")
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            os.close(fd)
-            ocupadas += 1
-            if limite and ocupadas >= limite:
-                break  # llena: no hace falta seguir contando
-            continue
-        except OSError:
-            os.close(fd)
-            raise
-        if libre is None:
-            libre = fd
-            if not limite:
-                break  # sin límite basta la primera libre
-        else:
-            _cerrar(fd)
+    try:
+        for i in range(MAX_PLAZAS):
+            fd = _abrir(directorio / f"plaza-{i}")
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(fd)
+                ocupadas += 1
+                if limite and ocupadas >= limite:
+                    break  # llena: no hace falta seguir contando
+                continue
+            except OSError:
+                os.close(fd)
+                raise
+            if libre is None:
+                libre = fd
+                if not limite:
+                    break  # sin límite basta la primera libre
+            else:
+                _cerrar(fd)
+    except BaseException:
+        # Un fallo a medio recorrido (permisos, EMFILE, ENOSPC) no deja la plaza ya tomada con el cerrojo sin dueño.
+        if libre is not None:
+            _cerrar(libre)
+        raise
     if libre is not None and (not limite or ocupadas < limite):
         return Plaza(libre), ocupadas
     if libre is not None:

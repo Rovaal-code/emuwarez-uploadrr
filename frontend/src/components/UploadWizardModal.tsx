@@ -33,6 +33,8 @@ export function UploadWizardModal(props: PropsAsistente) {
   const { item, step, needsSelection, targetIsSeason, batchQueue, seasonQueue, episodeQueue } = a
   const { cerrarModal, confirmandoCierre, setConfirmandoCierre, onClose } = a
   const pasos = pasosDelAsistente(needsSelection)
+  // El alto fijo del paso 1 es para que no salte al cambiar de pestaña; con solo un error dejaba ~430 px de vacío.
+  const altoFijo = step === 1 && !(a.error && !a.loading)
   // Al cambiar de paso el foco pasa al paso nuevo, para que el lector lo anuncie y Tab siga desde arriba.
   const pasoActual = useRef<HTMLLIElement>(null)
   const primerPintado = useRef(true)
@@ -41,7 +43,7 @@ export function UploadWizardModal(props: PropsAsistente) {
     pasoActual.current?.focus()
   }, [step])
   return (
-    <Modal titulo={item.title} onClose={cerrarModal} className={`modal-wide asist-modal-ancho asist-marco${step === 1 ? ' asist-alto-fijo' : ''}`}>
+    <Modal titulo={item.title} onClose={cerrarModal} className={`modal-wide asist-modal-ancho asist-marco${altoFijo ? ' asist-alto-fijo' : ''}`}>
 
       <nav aria-label="Pasos de la subida" className="asist-pasos">
         <ol>

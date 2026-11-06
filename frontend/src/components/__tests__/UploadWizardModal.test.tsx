@@ -161,6 +161,18 @@ beforeEach(() => {
 afterEach(desmontar)
 
 describe('película', () => {
+  it('si el archivo no es accesible, el error se anuncia, dice qué comprobar y el modal no se queda con su alto fijo', async () => {
+    m(nom.getNomenclatureFields).mockRejectedValueOnce(new Error('Archivo no accesible desde la app: /data/peli.mkv'))
+    await abrir(PELICULA)
+    const alerta = await esperar(() => document.querySelector('.modal-panel [role="alert"]'))
+    expect(alerta!.textContent).toContain('/data/peli.mkv')
+    expect(alerta!.textContent).toContain('misma ruta que en Radarr/Sonarr')
+    expect(document.querySelector('.modal-panel.asist-marco')!.classList.contains('asist-alto-fijo')).toBe(false)
+    await pulsar(boton('↻ Reintentar'))
+    await esperar(() => texto().includes('Dune WEB-DL AMZN [GRP]'))
+    expect(document.querySelector('.modal-panel.asist-marco')!.classList.contains('asist-alto-fijo')).toBe(true)
+  })
+
   it('carga la nomenclatura, comprueba y encola con lo elegido', async () => {
     await abrir(PELICULA)
     await esperar(() => texto().includes('Dune WEB-DL AMZN [GRP]'))
@@ -399,8 +411,8 @@ describe('varios capítulos de una temporada', () => {
   it('genera la nomenclatura de todos, comprueba el entorno una vez y los sube uno a uno', async () => {
     await abrir(TEMPORADA)
     await pulsar(await esperar(() => tarjeta('Selección de capítulos')))
-    await pulsar(boton('Continuar'))
-    expect(texto()).toContain('Selecciona al menos un capítulo')
+    // Sin capítulos marcados no hay a dónde continuar.
+    expect(boton('Continuar')!.disabled).toBe(true)
     await pulsar(boton('E01'))
     await pulsar(boton('E02'))
     expect(texto()).toContain('2 seleccionado(s)')
@@ -531,11 +543,25 @@ describe('varias temporadas de una serie', () => {
     expect(texto()).not.toContain('Respuesta vieja')
   })
 
-  it('sin marcar ninguna no avanza', async () => {
+  it('sin marcar ninguna, «Continuar» está deshabilitado', async () => {
     await abrir(SERIE)
     await esperar(() => boton('Temporada 1'))
-    await pulsar(boton('Continuar'))
-    expect(texto()).toContain('Selecciona al menos una temporada')
+    expect(boton('Continuar')!.disabled).toBe(true)
+    await pulsar(boton('Temporada 1'))
+    expect(boton('Continuar')!.disabled).toBe(false)
+  })
+
+  it('una temporada que no se puede subir dice por qué a la vista, no solo en un tooltip', async () => {
+    const parcial = { local_status: 'Parcial' }
+    m(biblioteca.getLibrary).mockResolvedValue({ items: [{ ...T1, ...parcial }, { ...T2, ...parcial }], total: 2 } as never)
+    await abrir(SERIE)
+    const t1 = await esperar(() => boton('Temporada 1'))
+    expect(t1!.disabled).toBe(true)
+    const motivo = document.getElementById(t1!.getAttribute('aria-describedby')!)
+    expect(motivo?.textContent).toContain('Temporada incompleta')
+    // Nada que subir entero: dice qué hacer en vez de dejar «Continuar» como única salida.
+    expect(texto()).toContain('Para subir capítulos sueltos, abre la ficha de la temporada')
+    expect(boton('Continuar')!.disabled).toBe(true)
   })
 })
 
@@ -1087,7 +1113,8 @@ describe('las pestañas del paso «Nombre y pistas»', () => {
     m(biblioteca.getMediaInfoReport).mockReset()
     m(biblioteca.getMediaInfoReport).mockRejectedValueOnce(new Error('Sin lectura')).mockResolvedValue(INFORME as never)
     await abrirPestana('MediaInfo')
-    await esperar(() => texto().includes('✗ Sin lectura'))
+    // El error se anuncia (role="alert"), no solo se pinta en rojo.
+    await esperar(() => [...document.querySelectorAll('[role="alert"]')].some(e => e.textContent?.includes('Sin lectura')))
     await abrirPestana('Nomenclatura')
     await abrirPestana('MediaInfo')
     await esperar(() => texto().includes('Matroska'))

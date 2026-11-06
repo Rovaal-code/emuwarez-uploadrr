@@ -185,7 +185,15 @@ export function PasoArchivo({ a }: { a: Asistente }) {
       )}
       {error && !loading && !episodePrepping && (
         <div className="asist-bloque-error">
-          <p className="text-error asist-mt-0 asist-mb-10"><IconoAviso /> {error}</p>
+          <div className="alert alert-error asist-alerta" role="alert">
+            <IconoAviso /> {error}
+            {/* La causa de casi siempre: el contenedor no ve los medios en la ruta que da Radarr/Sonarr. */}
+            {/no accesible/i.test(error) && (
+              <p className="asist-alerta-pista">
+                Comprueba que la carpeta de medios está montada en el contenedor en la misma ruta que en Radarr/Sonarr.
+              </p>
+            )}
+          </div>
           <button className="btn btn-secondary btn-sm" type="button" onClick={reintentarNomenclatura}>↻ Reintentar</button>
         </div>
       )}
@@ -216,7 +224,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
                 {remuxLoading && !remuxPreview && <TableLoadingSpinner label="Cargando pistas del archivo…" />}
                 {remuxError && !remuxLoading && (
                   <>
-                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10">✗ {remuxError}</p>
+                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10" role="alert"><IconoAviso /> {remuxError}</p>
                     <button className="btn btn-secondary btn-sm" type="button" onClick={runTrackRemux}>↻ Reintentar</button>
                   </>
                 )}
@@ -253,7 +261,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
                 {miLoading && !miReport && <TableLoadingSpinner label="Cargando MediaInfo…" />}
                 {miError && !miLoading && (
                   <>
-                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10">✗ {miError}</p>
+                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10" role="alert"><IconoAviso /> {miError}</p>
                     <button className="btn btn-secondary btn-sm" type="button" onClick={runMediaInfo}>↻ Reintentar</button>
                   </>
                 )}

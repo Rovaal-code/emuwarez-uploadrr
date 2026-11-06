@@ -701,6 +701,12 @@
     transition: transform 0.2s ease;
   }
 
+  /* El cajón flota sobre la página: fondo opaco bajo el degradado de vidrio, como los modales, para que no se lea la
+     página a través del menú. */
+  .hud-app .sidebar.abierta {
+    background-color: var(--hud-panel-solid);
+  }
+
   .sidebar-velo {
     display: block;
     position: fixed;

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { useTour } from '../context/TourContext'
 import { medir, anchoVentana, altoVentana, type RectoSinEscalar } from '../utils/uiScale'
 import { siguienteFoco } from '../utils/foco'
@@ -12,6 +12,8 @@ interface TourOverlayProps {
 
 const BUBBLE_WIDTH = 340
 const BUBBLE_MARGIN = 14
+// Alto supuesto de la burbuja hasta medirla tras el primer pintado (mide entre 190 y 260 px según el texto).
+const BUBBLE_HEIGHT_GUESS = 180
 const WAIT_TIMEOUT_MS = 4000
 
 // Finds `selector`'s bounding rect, polling (it may not be mounted yet — a
@@ -51,21 +53,26 @@ function waitForRect(selector: string, onFound: (rect: RectoSinEscalar) => void)
   return () => { cancelled = true }
 }
 
-function placeBubble(rect: RectoSinEscalar | null, placement?: 'top-center'): { top: number; left: number } {
+function placeBubble(rect: RectoSinEscalar | null, placement?: 'top-center', alto = BUBBLE_HEIGHT_GUESS): { top: number; left: number } {
   if (placement === 'top-center') {
     return { top: BUBBLE_MARGIN + 56, left: anchoVentana() / 2 - BUBBLE_WIDTH / 2 }
   }
   if (!rect) {
-    return { top: altoVentana() / 2 - 90, left: anchoVentana() / 2 - BUBBLE_WIDTH / 2 }
+    return { top: altoVentana() / 2 - alto / 2, left: anchoVentana() / 2 - BUBBLE_WIDTH / 2 }
   }
+  // Con el alto real de la burbuja: encima del objetivo acaba justo antes de él, y no lo tapa.
   const spaceBelow = altoVentana() - rect.bottom
   const spaceAbove = rect.top
+  const cabeDebajo = spaceBelow >= alto + 2 * BUBBLE_MARGIN
+  const cabeEncima = spaceAbove >= alto + 2 * BUBBLE_MARGIN
   let top: number
-  if (spaceBelow >= 200 || spaceBelow >= spaceAbove) {
+  if (cabeDebajo || (!cabeEncima && spaceBelow >= spaceAbove)) {
     top = rect.bottom + BUBBLE_MARGIN
   } else {
-    top = Math.max(BUBBLE_MARGIN, rect.top - BUBBLE_MARGIN - 180)
+    top = rect.top - BUBBLE_MARGIN - alto
   }
+  // Si no cabe ni encima ni debajo (un objetivo muy alto), al menos entera dentro de la ventana.
+  top = Math.max(BUBBLE_MARGIN, Math.min(top, altoVentana() - alto - BUBBLE_MARGIN))
   let left = rect.left
   if (left + BUBBLE_WIDTH > anchoVentana() - BUBBLE_MARGIN) {
     left = anchoVentana() - BUBBLE_WIDTH - BUBBLE_MARGIN
@@ -80,6 +87,14 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
   const step = steps[stepIndex]
   const burbuja = useRef<HTMLDivElement>(null)
   const idTitulo = useId()
+  const [alto, setAlto] = useState(BUBBLE_HEIGHT_GUESS)
+
+  // La burbuja se mide tras pintarla (el texto de cada paso le da otro alto) y se vuelve a colocar antes de que se vea.
+  // offsetHeight va sin la escala de la interfaz, como los números de medir().
+  useLayoutEffect(() => {
+    const h = burbuja.current?.offsetHeight
+    if (h && h !== alto) setAlto(h)
+  }, [active, stepIndex, alto])
 
   useEffect(() => {
     if (!active || !step) return
@@ -143,7 +158,7 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
 
   if (!active || !step) return null
 
-  const { top, left } = placeBubble(rect, step.placement)
+  const { top, left } = placeBubble(rect, step.placement, alto)
   const isLast = stepIndex === steps.length - 1
 
   return (
@@ -171,9 +186,10 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
         <div className="tour-bubble-footer">
           <span className="tour-bubble-counter">Paso {stepIndex + 1} de {steps.length}</span>
           <div className="tour-bubble-actions">
-            <button className="btn btn-danger btn-sm" onClick={close}>Cerrar</button>
+            {/* Cerrar no destruye nada: fantasma, no rojo. Atrás, secundario. Solo Siguiente es principal. */}
+            <button className="btn btn-ghost btn-sm" onClick={close}>Cerrar</button>
             {stepIndex > 0 && (
-              <button className="btn btn-sm" onClick={prev}>Atrás</button>
+              <button className="btn btn-secondary btn-sm" onClick={prev}>Atrás</button>
             )}
             <button className="btn btn-primary btn-sm" onClick={next}>
               {isLast ? 'Finalizar' : 'Siguiente'}

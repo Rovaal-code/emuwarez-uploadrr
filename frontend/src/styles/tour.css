@@ -33,6 +33,11 @@
   padding: 18px;
 }
 
+/* La burbuja recibe el foco al abrirse para que el lector anuncie el paso; el anillo es para sus botones. */
+.tour-bubble:focus-visible {
+  outline: none;
+}
+
 .tour-bubble-title {
   font-size: 14.5px;
   font-weight: 700;
@@ -65,4 +70,12 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* Con el dedo, los botones de la burbuja son objetivos de 44 px y no se montan unos sobre otros. */
+@media (pointer: coarse) {
+  .tour-bubble-actions .btn {
+    min-height: var(--tap-min);
+    padding-inline: 16px;
+  }
 }

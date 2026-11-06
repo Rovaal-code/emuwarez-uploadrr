@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTour } from '../context/TourContext'
 import { medir, anchoVentana, altoVentana, type RectoSinEscalar } from '../utils/uiScale'
+import { siguienteFoco } from '../utils/foco'
+
+const ENFOCABLES = 'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
 
 interface TourOverlayProps {
   activePage: string
@@ -28,7 +31,15 @@ function waitForRect(selector: string, onFound: (rect: RectoSinEscalar) => void)
       // posicionan con estos números dentro del body escalado. Ver uiScale.
       const rect = medir(el)
       if (rect.width > 0 && rect.height > 0) {
-        onFound(rect)
+        // Un objetivo que cabe en la ventana pero está fuera de la parte visible (en el móvil, una tarjeta más abajo)
+        // se trae a la vista antes de medirlo; uno más alto que la ventana (una página entera) se deja donde está.
+        const caja = el.getBoundingClientRect()
+        if (caja.height < window.innerHeight && (caja.top < 0 || caja.bottom > window.innerHeight)) {
+          el.scrollIntoView({ block: 'center' })
+          requestAnimationFrame(() => { if (!cancelled) onFound(medir(el)) })
+        } else {
+          onFound(rect)
+        }
         return
       }
     }
@@ -67,6 +78,8 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
   const { active, stepIndex, steps, next, prev, close } = useTour()
   const [rect, setRect] = useState<RectoSinEscalar | null>(null)
   const step = steps[stepIndex]
+  const burbuja = useRef<HTMLDivElement>(null)
+  const idTitulo = useId()
 
   useEffect(() => {
     if (!active || !step) return
@@ -98,6 +111,36 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [active, close])
 
+  // Es un diálogo: al abrirse el foco entra en la burbuja y al cerrarse vuelve a quien lo abrió; Tab no sale a la página
+  // de detrás (el velo ya bloquea el ratón, pero no el teclado).
+  useEffect(() => {
+    if (!active) return
+    const antes = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    burbuja.current?.focus()
+    return () => { if (antes?.isConnected) antes.focus() }
+  }, [active])
+
+  // Al cambiar de paso, si el botón que tenía el foco ya no existe (Atrás en el primer paso), el foco vuelve a la burbuja.
+  useEffect(() => {
+    const el = burbuja.current
+    if (active && el && !el.contains(document.activeElement)) el.focus()
+  }, [active, stepIndex])
+
+  useEffect(() => {
+    if (!active) return
+    const onTab = (e: KeyboardEvent) => {
+      const el = burbuja.current
+      if (e.key !== 'Tab' || !el) return
+      const lista = [...el.querySelectorAll<HTMLElement>(ENFOCABLES)]
+      const actual = document.activeElement as HTMLElement | null
+      // El panel mismo (tabindex -1) cuenta como "fuera de la lista": entra por el borde que toca.
+      const destino = siguienteFoco(lista, actual && lista.includes(actual) ? actual : null, e.shiftKey)
+      if (destino) { e.preventDefault(); destino.focus() }
+    }
+    document.addEventListener('keydown', onTab)
+    return () => document.removeEventListener('keydown', onTab)
+  }, [active])
+
   if (!active || !step) return null
 
   const { top, left } = placeBubble(rect, step.placement)
@@ -111,9 +154,20 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
           style={{ top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12 }}
         />
       )}
-      <div className="tour-bubble" style={{ top, left }}>
-        <div className="tour-bubble-title">{step.title}</div>
-        <div className="tour-bubble-desc">{step.description}</div>
+      <div
+        ref={burbuja}
+        className="tour-bubble"
+        style={{ top, left }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={idTitulo}
+        tabIndex={-1}
+      >
+        {/* Región viva: al pasar de paso con el foco en «Siguiente», el lector de pantalla lee el paso nuevo */}
+        <div aria-live="polite" aria-atomic="true">
+          <div className="tour-bubble-title" id={idTitulo}>{step.title}</div>
+          <div className="tour-bubble-desc">{step.description}</div>
+        </div>
         <div className="tour-bubble-footer">
           <span className="tour-bubble-counter">Paso {stepIndex + 1} de {steps.length}</span>
           <div className="tour-bubble-actions">

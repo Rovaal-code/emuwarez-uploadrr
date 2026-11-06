@@ -1,3 +1,9 @@
 /* Estilos de páginas sueltas que antes iban en línea (pages/LoginPage.tsx). Se importa el último en main.tsx. */
 .login-title.login-titulo-mt { margin-top: 10px; }
 .spinner.login-spinner { width: 14px; height: 14px; border-width: 2px; }
+
+/* Inicio de sesión en pantallas estrechas: la tarjeta aprovecha el ancho y el botón es una barra de 44 px que se alcanza con el pulgar. */
+@media (max-width: 480px) {
+  .login-card { padding: 24px 20px; }
+  .login-fields .login-submit { align-self: stretch; justify-content: center; min-height: var(--tap-min); }
+}

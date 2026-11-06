@@ -65,8 +65,10 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
               id="username"
               className="form-input"
               type="text"
-              placeholder="admin"
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -79,7 +81,6 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
               id="password"
               className="form-input"
               type="password"
-              placeholder="••••••••••••"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -90,11 +91,12 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
           <label className="checkbox-label">
             <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} disabled={loading} /> Recordarme
           </label>
-          {error && <div className="alert alert-error">{error}</div>}
+          {error && <div className="alert alert-error" role="alert">{error}</div>}
           <button
             type="submit"
             className="btn btn-primary login-submit"
             disabled={loading || !username.trim() || !password}
+            aria-busy={loading}
           >
             {loading ? <><span className="spinner login-spinner" /> Iniciando…</> : 'Iniciar sesión'}
           </button>

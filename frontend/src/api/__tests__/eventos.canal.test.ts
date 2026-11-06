@@ -145,3 +145,19 @@ describe('un 401 en el canal', () => {
     baja()
   })
 })
+
+describe('primera conexión o vuelta', () => {
+  it('quien observa el canal sabe si es la primera vez que se conecta o si vuelve tras caerse', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init?: RequestInit) => canalAbierto(init?.signal)))
+    const eventos = await import('../eventos')
+    const visto: [boolean, boolean][] = []
+    const dejar = eventos.observarCanal((vivo, primeraVez) => visto.push([vivo, primeraVez]))
+    const baja = eventos.suscribirse('prueba', () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(eventos.VIGILANCIA_MS)      // se da por muerto
+    await vi.advanceTimersByTimeAsync(eventos.ESPERAS_MS[0])      // y vuelve
+    expect(visto).toEqual([[true, true], [false, false], [true, false]])
+    baja()
+    dejar()
+  })
+})

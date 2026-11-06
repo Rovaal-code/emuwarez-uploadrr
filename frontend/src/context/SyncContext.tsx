@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   startLibrarySync as apiStartLibrarySync,
   getLibrarySyncProgress,
@@ -23,20 +23,21 @@ import { pasosDeSincronizarTodo, type PasoSincronizacion } from '../utils/sincro
 // you launch it again. Hosting it here keeps one source of truth: the same
 // progress card and the same disabled buttons show up on every tab, and the
 // backend throttle is never bypassed.
+//
+// El progreso va aparte (`SyncProgressContext`): cambia en cada lectura, cada 800 ms mientras dura una sincronización,
+// y lo pinta solo la barra de arriba. Junto con lo demás repintaba en cada lectura todas las secciones montadas,
+// también las ocultas, que solo miran si hay algo sincronizándose y `lastInvalidatedAt`.
 interface SyncContextValue {
   // Library (Radarr/Sonarr) sync
   libSyncing: boolean
-  libProgress: LibrarySyncProgress | null
   startLibrarySync: () => void
   // eMuwarez catalog sync
   catalogSyncing: boolean
-  catalogProgress: EmuSyncProgress | null
   catalogStatus: EmuSyncStatus | null
   startCatalogSync: (mode?: EmuSyncMode) => void
   refreshCatalogStatus: () => void
   // eMuwarez requests sync
   requestsSyncing: boolean
-  requestsProgress: RequestsSyncProgress | null
   requestsStatus: RequestSyncStatusResponse | null
   startRequestsSync: (force: boolean) => void
   refreshRequestsStatus: () => void
@@ -48,6 +49,19 @@ interface SyncContextValue {
   // arranques de arriba (misma barra, mismos avisos). `todoPendiente` es que aún queda algún paso por lanzar.
   startAllSync: () => void
   todoPendiente: boolean
+  // Marca creciente: "lo que tengas cargado ya no vale, vuelve a pedirlo".
+  // La sección que se esté viendo recarga al momento; las demás están
+  // montadas pero ocultas y lo hacen al volver a ellas (ver SeccionVisible).
+  // Sube por dos hechos, no por el paso del tiempo: termina una
+  // sincronización, o vuelves a la pestaña del navegador.
+  lastInvalidatedAt: number
+}
+
+// Lo que cambia mientras corre una sincronización: lo que lleva cada una y el aviso de cómo terminó.
+interface SyncProgressValue {
+  libProgress: LibrarySyncProgress | null
+  catalogProgress: EmuSyncProgress | null
+  requestsProgress: RequestsSyncProgress | null
   // Last completion message, shown as a toast in the topbar's sync row (see
   // SyncProgressBanner) — green on success, red on error, auto-dismissed
   // after 5s. Shared by Biblioteca/eMuwarez/Peticiones syncs alike, so it's
@@ -55,12 +69,6 @@ interface SyncContextValue {
   message: string | null
   messageIsError: boolean
   messageFadingOut: boolean
-  // Marca creciente: "lo que tengas cargado ya no vale, vuelve a pedirlo".
-  // La sección que se esté viendo recarga al momento; las demás están
-  // montadas pero ocultas y lo hacen al volver a ellas (ver SeccionVisible).
-  // Sube por dos hechos, no por el paso del tiempo: termina una
-  // sincronización, o vuelves a la pestaña del navegador.
-  lastInvalidatedAt: number
 }
 
 // Dos invalidaciones más juntas que esto se cuentan como una. No es un plazo
@@ -76,6 +84,14 @@ export const SyncContext = createContext<SyncContextValue | null>(null)
 export function useSync(): SyncContextValue {
   const ctx = useContext(SyncContext)
   if (!ctx) throw new Error('useSync must be used within <SyncProvider>')
+  return ctx
+}
+
+export const SyncProgressContext = createContext<SyncProgressValue | null>(null)
+
+export function useSyncProgress(): SyncProgressValue {
+  const ctx = useContext(SyncProgressContext)
+  if (!ctx) throw new Error('useSyncProgress must be used within <SyncProvider>')
   return ctx
 }
 
@@ -406,12 +422,22 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   // ahí. Si el canal no levanta, se reintenta solo y no se rompe nada.
   useEffect(() => suscribirse('sync-terminada', () => invalidarTodo()), [invalidarTodo])
 
-  const value: SyncContextValue = {
-    libSyncing, libProgress, startLibrarySync,
-    catalogSyncing, catalogProgress, catalogStatus, startCatalogSync, refreshCatalogStatus,
-    requestsSyncing, requestsProgress, requestsStatus, startRequestsSync, refreshRequestsStatus,
-    isAnySyncing, startAllSync, todoPendiente: pasosPendientes.length > 0,
-    message, messageIsError, messageFadingOut, lastInvalidatedAt,
-  }
-  return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>
+  // Memorizados: un objeto nuevo en cada pintado del proveedor repintaría a todos los que lo leen.
+  const todoPendiente = pasosPendientes.length > 0
+  const value = useMemo<SyncContextValue>(() => ({
+    libSyncing, startLibrarySync,
+    catalogSyncing, catalogStatus, startCatalogSync, refreshCatalogStatus,
+    requestsSyncing, requestsStatus, startRequestsSync, refreshRequestsStatus,
+    isAnySyncing, startAllSync, todoPendiente, lastInvalidatedAt,
+  }), [libSyncing, startLibrarySync, catalogSyncing, catalogStatus, startCatalogSync, refreshCatalogStatus,
+    requestsSyncing, requestsStatus, startRequestsSync, refreshRequestsStatus, isAnySyncing, startAllSync,
+    todoPendiente, lastInvalidatedAt])
+  const progreso = useMemo<SyncProgressValue>(() => ({
+    libProgress, catalogProgress, requestsProgress, message, messageIsError, messageFadingOut,
+  }), [libProgress, catalogProgress, requestsProgress, message, messageIsError, messageFadingOut])
+  return (
+    <SyncContext.Provider value={value}>
+      <SyncProgressContext.Provider value={progreso}>{children}</SyncProgressContext.Provider>
+    </SyncContext.Provider>
+  )
 }

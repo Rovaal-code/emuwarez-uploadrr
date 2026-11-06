@@ -22,7 +22,7 @@ import { hayMasPorCargar } from '../utils/paginarSubidas'
 import { CLAVE_ABRIR_LOTE, EVENTO_ABRIR_LOTE, PATRON_LOTE_ID } from '../utils/lote'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
-  progressCounter, queuedWaitText, formatSecondsHM,
+  progressCounter, queuedWaitText, formatSecondsHM, ACTIVE_JOB_STATUSES, fundirPorId,
 } from '../utils/uploadStatus'
 import { useSeeding, type SeedingEstado } from '../hooks/useSeeding'
 import { SeedingCelda } from '../components/SaludSeeding'
@@ -244,9 +244,10 @@ function JobRow({ job, instances, seeding, onOpen, indent, retryToggle, onCancel
           <div className="poster-thumb sub-poster">
             {job.poster_url ? (
               <img
-                src={posterUrl(job.poster_url, 'w154')}
+                src={posterUrl(job.poster_url, 'w92')}
                 alt=""
                 loading="lazy"
+                decoding="async"
                 className="sub-poster-img"
                 onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
               />
@@ -413,9 +414,13 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // stale pre-delete data — the deleted job "comes back" until the next
   // refresh. Only ever apply the response from the most recently ISSUED call.
   const loadSeqRef = useRef(0)
+  // Cargas completas sin acabar: mientras haya una, la de progreso no se lanza (llegaría antes y la completa, con
+  // datos de antes, haría ir la barra hacia atrás).
+  const cargasEnVuelo = useRef(0)
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) { setLoading(true); setError(null) }
     const seq = ++loadSeqRef.current
+    cargasEnVuelo.current++
     try {
       // The "Subiendo" filter option (value 'running') must also catch
       // 'preparing' jobs — they display identically as "Subiendo" now (see
@@ -447,8 +452,28 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     } catch {
       if (!opts?.silent) setError('Error al cargar los trabajos de subida.')
     }
-    finally { if (!opts?.silent) setLoading(false) }
+    finally {
+      cargasEnVuelo.current--
+      if (!opts?.silent) setLoading(false)
+    }
   }, [statusFilter, limite, loteFiltro])
+
+  // El aviso de progreso solo cambia cuánto llevan las vivas: se piden ellas (unos 1,5 kB cada una) y se funden en la
+  // lista que hay, en vez de la lista entera y su recuento dos veces por segundo. Qué subidas hay lo trae la recarga
+  // completa de `subida-estado`. Sin ninguna viva en la tabla no se pide nada.
+  const jobsRef = useRef(jobs)
+  jobsRef.current = jobs
+  const cargarProgreso = useCallback(async () => {
+    if (cargasEnVuelo.current || !jobsRef.current.some(j => ACTIVE_JOB_STATUSES.has(j.status))) return
+    const seq = loadSeqRef.current
+    try {
+      const vivas = await getUploads({
+        status: [...ACTIVE_JOB_STATUSES].join(','), hide_preparatory: true, lote_id: loteFiltro ?? undefined, limit: 500,
+      })
+      // Una carga completa lanzada mientras tanto manda.
+      if (seq === loadSeqRef.current) setJobs(prev => fundirPorId(prev, vivas))
+    } catch { /* el siguiente aviso lo vuelve a intentar */ }
+  }, [loteFiltro])
 
   useEffect(() => { load() }, [load])
 
@@ -571,7 +596,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // hasta recargar la página. Mirando y sin nada vivo, preguntar una vez cada
   // 30 s no se nota.
   useRefrescoPorAvisos(AVISOS_SUBIDA, () => load({ silent: true }),
-    { cadaSinCanal: hasLiveJob ? 2500 : 30_000, soloVisible: AVISOS_SUBIDA_PROGRESO })
+    { cadaSinCanal: hasLiveJob ? 2500 : 30_000, soloVisible: AVISOS_SUBIDA_PROGRESO, recargarProgreso: cargarProgreso })
 
   // Cancelar mientras se preparan ficheros no interrumpe nada a media faena,
   // así que se avisa antes: lo que pasa de verdad no es obvio desde el botón.

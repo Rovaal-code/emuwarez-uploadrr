@@ -32,6 +32,22 @@ export function mismasLineas(a: readonly LogEntry[], b: readonly LogEntry[]): bo
   })
 }
 
+/**
+ * La lectura nueva, con el objeto de la anterior en cada línea que ya estaba. Con una línea nueva arriba, el servidor
+ * manda las mil otra vez y cada una llega como un objeto recién parseado: sin esto, `memo` no sirve de nada y se
+ * repintan las mil por una. Devuelve la anterior tal cual si no ha cambiado nada.
+ */
+export function reutilizarLineas(previas: readonly LogEntry[], nuevas: LogEntry[]): LogEntry[] {
+  if (mismasLineas(previas, nuevas)) return previas as LogEntry[]
+  const porClave = new Map<string, LogEntry>()
+  clavesDeLineas(previas).forEach((clave, i) => porClave.set(clave, previas[i]))
+  const claves = clavesDeLineas(nuevas)
+  return nuevas.map((l, i) => {
+    const vieja = porClave.get(claves[i])
+    return vieja && mismasLineas([vieja], [l]) ? vieja : l
+  })
+}
+
 /** La línea como texto plano, lista para pegar en un mensaje o un informe. */
 export function textoDeLinea(l: LogEntry): string {
   return `${l.time} ${l.level} ${l.logger} ${l.message}`

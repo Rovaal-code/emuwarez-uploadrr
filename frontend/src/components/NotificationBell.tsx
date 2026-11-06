@@ -103,9 +103,10 @@ function NotifPoster({ url }: { url: string | null }) {
     <PosterBox>
       {url ? (
         <img
-          src={posterUrl(url, 'w154')}
+          src={posterUrl(url, 'w92')}
           alt=""
           loading="lazy"
+          decoding="async"
           className="menores-notif-poster-img"
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
         />

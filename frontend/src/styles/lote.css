@@ -22,6 +22,22 @@
   background: color-mix(in srgb, var(--bg-surface) 80%, transparent);
 }
 .poster-grande-marco > .checkbox-label.lote-casilla-poster { top: 10px; left: 10px; }
+/* Con el dedo, la casilla (15×15 en la lista, 23×23 en los pósters) es la acción principal del modo y se quedaba
+   corta. En la lista crece a --tap-min a lo ancho, con un margen negativo a lo alto para que la fila no crezca; en
+   los pósters la zona se agranda por fuera (::before), sin cambiar el recuadro. */
+@media (pointer: coarse) {
+  .checkbox-label.lote-casilla:not(.lote-casilla-poster) {
+    justify-content: center;
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+    margin-block: calc((15px - var(--tap-min)) / 2);
+  }
+  .checkbox-label.lote-casilla-poster::before {
+    content: "";
+    position: absolute;
+    inset: calc((23px - var(--tap-min)) / 2);
+  }
+}
 /* Marcada: un contorno hacia dentro, que no cambia el tamaño de la tarjeta. */
 .bib-tarjeta.lote-marcada,
 .clickable.poster-grande-tarjeta.lote-marcada {
@@ -77,6 +93,20 @@
 .lote-fila:last-child { border-bottom: none; }
 .lote-fila-casilla { min-width: 0; }
 .lote-fila-casilla .lote-fila-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* En un móvil, cortado en una línea, las temporadas de una serie se leían igual («Serie (2019) - …»): el nombre va
+   en hasta dos líneas y lo que distingue a la temporada («Temporada 1»), en la suya, siempre a la vista. */
+@media (max-width: 640px) {
+  .lote-fila-casilla .lote-fila-titulo { display: block; white-space: normal; }
+  .lote-fila-nombre {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  .lote-fila-separador { display: none; }
+  .lote-fila-parte { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
 .lote-fila-titulo { color: var(--text-primary); }
 .lote-fila-apagada .lote-fila-titulo { color: var(--text-muted); }
 .lote-fila-tipo { font-size: 12px; color: var(--text-secondary); }
@@ -163,4 +193,8 @@
   .data-table.lote-tabla td.lote-celda-incluir { grid-column: 2; grid-row: 1; text-align: right; }
   .data-table.lote-tabla td:nth-child(2),
   .data-table.lote-tabla td:nth-child(3) { grid-column: 1 / -1; overflow-wrap: anywhere; }
+  /* Sin la cabecera, un «—» suelto no dice de qué es: el nombre que aún no hay se quita y lo de eMuwarez lleva su
+     etiqueta. */
+  .data-table.lote-tabla .lote-nombre-vacio { display: none; }
+  .data-table.lote-tabla td.lote-celda-emu::before { content: "En eMuwarez: "; color: var(--text-muted); }
 }

@@ -233,7 +233,7 @@
 .asist-aviso-existente {
   margin-bottom: 14px;
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   font-size: 12.5px;
   display: flex;
   align-items: center;
@@ -256,7 +256,7 @@
   color: var(--tono);
   background: color-mix(in srgb, var(--tono) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--tono) 35%, transparent);
-  border-radius: 4px;
+  border-radius: var(--radius-badge);
   padding: 2px 8px;
 }
 .asist-tono-info { --tono: var(--color-info); }
@@ -349,7 +349,7 @@
 }
 .asist-opcion {
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   font-size: 13px;
   text-align: center;
   cursor: pointer;
@@ -526,4 +526,9 @@
   .asist-pie { padding: 10px 16px; }
   .asist-cuerpo.modal-body { padding: 14px 16px; }
   .asist-pasos { padding: 0 16px; }
+}
+/* A 390 px los tres pasos no cabían en una línea y «3 · Resumen» caía sola debajo. */
+@media (max-width: 480px) {
+  .asist-pasos ol { gap: 4px; }
+  .asist-paso { padding: 4px 8px; }
 }

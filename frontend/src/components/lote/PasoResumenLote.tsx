@@ -85,7 +85,9 @@ export function PasoResumenLote({
                 <tr key={f.item.id} data-item={f.item.id}>
                   <td className="lote-celda-titulo">
                     <div className="lote-titulo">{titulo}</div>
-                    <div className="lote-nombre">{f.nombre === undefined ? 'Calculando el nombre…' : f.nombre ?? '—'}</div>
+                    <div className={f.nombre === null ? 'lote-nombre lote-nombre-vacio' : 'lote-nombre'}>
+                      {f.nombre === undefined ? 'Calculando el nombre…' : f.nombre ?? '—'}
+                    </div>
                     {a?.avisos.map(aviso => <div key={aviso} className="lote-aviso">⚠ {aviso}</div>)}
                     {f.salto && f.contenido?.ready !== false && <div className="lote-error">✗ {f.salto}</div>}
                   </td>
@@ -96,7 +98,7 @@ export function PasoResumenLote({
                         ? <span className="asist-ok">✓ Lista</span>
                         : <span className="asist-error">✗ {f.salto ?? primerFallo(f.contenido)}</span>}
                   </td>
-                  <td className={a?.nivel ? CLASE_NIVEL[a.nivel] : undefined}>{a ? a.enEmu : '…'}</td>
+                  <td className={['lote-celda-emu', a?.nivel && CLASE_NIVEL[a.nivel]].filter(Boolean).join(' ')}>{a ? a.enEmu : '…'}</td>
                   <td className="lote-celda-incluir">
                     <label className="checkbox-label">
                       <input
@@ -152,13 +154,13 @@ export function PasoResumenLote({
 
       {paralelo === 0 ? (
         <p className="lote-paralelo lote-paralelo-aviso">
-          ⚠ Sin límite: se lanzarán las {incluidas} a la vez contra eMuwarez. Puedes ponerle un tope en Ajustes, «Subidas en paralelo».
+          ⚠ Sin límite: se lanzarán las {incluidas} a la vez contra eMuwarez. Puedes ponerle un tope en Configuración → Otros, «Máximo de subidas en paralelo».
         </p>
       ) : (
         <p className="lote-paralelo">
           {paralelo != null
-            ? `Se subirán de ${paralelo} en ${paralelo} según “Subidas en paralelo” (ahora: ${paralelo}), en el orden de la lista.`
-            : 'Se subirán en el orden de la lista, según “Subidas en paralelo”.'}
+            ? `Se subirán de ${paralelo} en ${paralelo} según «Máximo de subidas en paralelo» (ahora: ${paralelo}), en el orden de la lista.`
+            : 'Se subirán en el orden de la lista, según «Máximo de subidas en paralelo».'}
         </p>
       )}
 
@@ -173,7 +175,7 @@ export function PasoResumenLote({
       <div className="asist-pie">
         <button className="btn btn-secondary" onClick={onVolver} type="button" disabled={enviando}>← Volver</button>
         <button className="btn btn-primary" onClick={onSubir} type="button" disabled={!puedeSubir}>
-          {enviando ? 'Encolando…' : `Subir ${incluidas}`}
+          {enviando ? 'Encolando…' : `Subir (${incluidas})`}
         </button>
       </div>
     </div>

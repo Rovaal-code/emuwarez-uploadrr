@@ -138,7 +138,9 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction,
       {/* Lo que se pliega con la flecha del título de Temporadas/Capítulos: el
           póster y las tres tarjetas. Fuera se quedan el título del elemento y
           sus botones, que son lo que sigue haciendo falta con la tabla grande. */}
-      <div className={`bibdet-ficha${fichaPlegada && tieneTabla ? ' bibdet-ficha-plegada' : ''}`}>
+      {/* El alto de la ficha va en una variable: la usan el póster y la rejilla, y el CSS la quita en una pantalla estrecha. */}
+      <div className={`bibdet-ficha${fichaPlegada && tieneTabla ? ' bibdet-ficha-plegada' : ''}`}
+        style={{ '--alto-ficha': `${ALTO_FICHA}px` } as React.CSSProperties}>
         <DetailPoster
           url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null}
           alt={item.title}
@@ -147,9 +149,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction,
         />
 
         <div className="bibdet-tarjetas">
-          {/* minHeight sale de DETAIL_CARD_HEIGHT (constante compartida): en línea. */}
-          {/* El alto mínimo va en una variable para que el CSS lo quite en una pantalla estrecha. */}
-          <div className="bibdet-rejilla" style={{ '--alto-ficha': `${ALTO_FICHA}px` } as React.CSSProperties}>
+          <div className="bibdet-rejilla">
             <Card title="Estado de la biblioteca" icon={<StatusCardIcon />} {...TARJETA}>
               <FieldRow label="Tipo">
                 <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{formatItemType(item.item_type)}</span></ValueChip>
@@ -235,7 +235,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction,
                   titulo={item.rollup_all?.subtitle_languages || item.subtitle_languages || undefined} />
               </FieldRow>
               <FieldRow label="Tamaño">
-                <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
+                <DatoTecnico icono={<SizeValueIcon />} valor={item.size_bytes ? formatBytes(item.size_bytes) : null} />
               </FieldRow>
             </Card>
 

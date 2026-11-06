@@ -608,6 +608,12 @@ optgroup {
   height: 15px;
   accent-color: var(--text-accent);
 }
+/* Deshabilitada, la etiqueta entera al 45 %: con el texto en su color normal parecía que se podía marcar. */
+.checkbox-label:has(input:disabled),
+.asist-casilla:has(input:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 /* Phase 5B — Requests page */
 .row-selected {
@@ -1063,6 +1069,8 @@ optgroup {
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
+  /* Para que el anillo de foco siga una esquina redonda, como el resto de controles. */
+  border-radius: var(--radius-badge);
 }
 .hf-trigger:hover {
   background: var(--bg-card-hover);
@@ -1182,6 +1190,12 @@ optgroup {
 .hf-option.selected:hover {
   background: color-mix(in srgb, var(--text-accent) 26%, transparent);
 }
+/* Con el dedo, cada opción del filtro (31 px), «Desmarcar todo» (27) y el botón de ocultar se quedaban cortos. */
+@media (pointer: coarse) {
+  .menores-filtro-panel .hf-option,
+  .menores-filtro-panel .hf-ocultar { min-height: var(--tap-min); }
+  .menores-filtro-panel .hf-ocultar { min-width: var(--tap-min); }
+}
 
 /* Clickable text (dashboard recent-activity title, radarr/sonarr origin link):
    lights up on hover so it's clearly interactive. */
@@ -1190,6 +1204,7 @@ optgroup {
   color: inherit;
   text-decoration: none;
   transition: color 0.12s;
+  border-radius: var(--radius-badge);
 }
 .hover-link:hover {
   color: var(--text-accent);
@@ -1228,6 +1243,7 @@ optgroup {
   white-space: nowrap;
 }
 .value-chip.linkable {
+  position: relative;
   cursor: pointer;
   /* Subtle blue border even before hovering, so a field with a link is
      recognizable at a glance. */
@@ -1262,6 +1278,21 @@ optgroup {
    link's own snug hitbox (no chip padding) would react. */
 .value-chip.linkable:hover .hover-link {
   color: var(--text-accent);
+}
+/* Y el enlace ocupa toda la ficha: con el borde de un botón, un clic en su relleno no hacía nada (el enlace era
+   solo el icono). Con el dedo, la zona llega a --tap-min sin que la ficha crezca. */
+.value-chip.linkable > a.hover-link:only-of-type::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+@media (pointer: coarse) {
+  .value-chip.linkable > a.hover-link:only-of-type::after {
+    /* En las filas de una tarjeta de ficha, sin pasar de la mitad del espacio hasta la fila de al lado
+       (--row-gap, más medio píxel del separador): con la interfaz reducida invadía la ficha de arriba o de abajo. */
+    inset-block: max(calc(-0.5px - var(--row-gap, 999px)), min(0px, calc((100% - var(--tap-min)) / 2)));
+    inset-inline: min(0px, calc((100% - var(--tap-min)) / 2));
+  }
 }
 
 /* Plain muted placeholder ("—") for a field with no value — not a chip,
@@ -1424,6 +1455,7 @@ optgroup {
   font-size: 10px;
   background: none;
   border: none;
+  border-radius: var(--radius-badge);
   cursor: pointer;
   color: var(--text-muted);
   transition: color 0.12s ease;

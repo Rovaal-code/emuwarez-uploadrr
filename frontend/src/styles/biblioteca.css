@@ -19,12 +19,30 @@
   align-items: center;
   flex-wrap: wrap;
 }
+/* En un móvil el título y los dos botones no cabían en una fila (se tocaban): los botones van debajo. Solo aquí: en
+   otras pantallas la cabecera sí cabe (Peticiones) o no tiene botones (Subidas). */
+@media (max-width: 520px) {
+  .bib-pagina > .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
 .spinner.bib-spinner {
   width: 12px;
   height: 12px;
   border-width: 2px;
 }
 .filters-bar .form-input.bib-buscar { width: 220px; max-width: 100%; }
+/* Toda la barra a 36 px (el alto del buscador): botones, vistas guardadas, el selector de vista y el de orden
+   tenían cuatro alturas distintas. Solo aquí: el .btn-sm de las demás pantallas no cambia. */
+.bib-pagina .filters-bar .btn,
+.bib-pagina .filters-bar .bib-vista { min-height: 36px; }
+/* Con el dedo los campos ya son más altos (16 px de letra): ahí no se tocan. */
+@media not (pointer: coarse) {
+  .filters-bar .form-input.bib-buscar,
+  .filters-bar .form-select.bib-orden { height: 36px; }
+}
 .filters-bar .form-select.bib-orden {
   width: max-content;
   padding-right: 26px;
@@ -51,7 +69,7 @@
   align-items: center;
   justify-content: center;
   width: 34px;
-  height: 30px;
+  height: 34px;
   border: none;
   border-left: 1px solid var(--border-input);
   background: transparent;
@@ -301,7 +319,7 @@
 .poster-thumb.skeleton-bar.bib-esq-poster {
   width: 44px;
   height: 66px;
-  border-radius: 4px;
+  border-radius: var(--radius-badge);
   flex-shrink: 0;
 }
 .bib-esq-rejilla {
@@ -351,6 +369,8 @@
 .data-table.bib-tabla th.col-actions,
 .data-table.bib-tabla tr:hover td.col-actions { background: var(--bib-fijo); }
 .data-table.bib-tabla thead th.bib-col-titulo { z-index: 3; }
+/* Toda la cabecera con el fondo de las columnas fijas: con el de la tabla, las celdas de en medio salían más claras. */
+.data-table.bib-tabla thead th { background: var(--bib-fijo); }
 .data-table.bib-tabla tr:hover > td.bib-celda-titulo { background: color-mix(in srgb, var(--overlay-light) 3%, var(--bib-fijo)); }
 /* Filas hijas (temporadas y capítulos de una serie abierta): un nivel más adentro y con un tinte de acento. */
 .data-table tr.bib-fila-hija > td { background: color-mix(in srgb, var(--text-accent) 3%, transparent); }
@@ -386,7 +406,7 @@
   flex-shrink: 0;
   width: 44px;
   height: 66px;
-  border-radius: 4px;
+  border-radius: var(--radius-badge);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -490,11 +510,34 @@
   .data-table.bib-tabla th:not(:has(> .hf-trigger)) { padding-left: 5px; padding-right: 5px; }
 }
 
-/* Con el dedo, el selector de vista (34×30) y los filtros de cabecera (28 de alto) se quedaban cortos. */
+/* Con el dedo, el selector de vista (34×30), los filtros de cabecera (28 de alto, también «Tipo», que va dentro de
+   la celda Título) y el desplegable de fila (22×22) se quedaban cortos. El desplegable crece a lo ancho, y con él el
+   hueco que lo sustituye en las filas sin él, para que los títulos sigan alineados; a lo alto, un margen negativo
+   evita que la fila crezca. */
 @media (pointer: coarse) {
   .bib-vista-boton,
-  .data-table.bib-tabla th > .hf-trigger { min-height: var(--tap-min); }
+  .data-table.bib-tabla th .hf-trigger { min-height: var(--tap-min); }
   .bib-vista-boton { min-width: var(--tap-min); }
+  .tree-expander {
+    width: var(--tap-min);
+    height: var(--tap-min);
+    margin-block: calc((22px - var(--tap-min)) / 2);
+  }
+  .bib-hueco-triangulo,
+  .bib-num-episodio { width: var(--tap-min); }
+  /* Su zona ya deja aire alrededor del triángulo (y de la casilla del lote): sin el hueco de la fila detrás, y con
+     la columna 44 px más ancha, el título se queda con el sitio que tenía. */
+  .bib-titulo-fila > :is(.lote-casilla, .tree-expander, .bib-hueco-triangulo, .bib-num-episodio) { margin-right: -8px; }
+  /* Y la fila mide al menos eso (el contenido, menos los 5 + 5 px de relleno de la celda): con la interfaz reducida
+     (--tap-min crece en px de CSS) la casilla, el desplegable y la zona de la chapa de Origen invadían la fila de al
+     lado. A tamaño normal las filas ya medían 50 y no cambian. */
+  .data-table.bib-tabla .bib-titulo-fila { min-height: calc(var(--tap-min) - 10px); }
+  /* El nombre completo solo estaba en un tooltip, que el dedo no abre: mejor en dos líneas que cortado. */
+  .lib-title-link.bib-titulo-enlace { white-space: normal; overflow-wrap: anywhere; }
+}
+
+@media (pointer: coarse) and (max-width: 1500px) {
+  .data-table th.bib-col-titulo { min-width: 200px; }
 }
 
 /* Con el ancho de un móvil caben tres columnas: título, estado y acciones. El resto de datos sigue en la ficha. */

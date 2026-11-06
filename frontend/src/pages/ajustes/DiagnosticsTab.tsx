@@ -27,8 +27,10 @@ export function DiagnosticsTab({ status, onRefresh }: { status: MaintenanceStatu
                 ['Fragmentación', `${db.fragmentation_pct ?? 0} %`],
               ].map(([k, v]) => (
                 <tr key={String(k)} className="aj-fila-borde">
-                  <td className="aj-td-etq-130">{k}</td>
-                  <td className="aj-td-6">{String(v ?? '—')}</td>
+                  {/* El mismo ancho de etiqueta que la tabla de Versión, para que los valores casen en columna. */}
+                  <td className="aj-td-etq-150">{k}</td>
+                  {/* La ruta es un dato que se copia: en mono, y partida donde haga falta en vez de salirse. */}
+                  <td className="aj-td-6">{k === 'Ruta' ? <span className="aj-ruta">{String(v ?? '—')}</span> : String(v ?? '—')}</td>
                 </tr>
               ))}
             </tbody>

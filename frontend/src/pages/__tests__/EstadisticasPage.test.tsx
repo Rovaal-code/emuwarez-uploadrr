@@ -125,7 +125,10 @@ describe('EstadisticasPage', () => {
     pedir.mockResolvedValue({ dias: 90, puntos: [punto('2026-10-01')] })
     await montar(<EstadisticasPage />)
     await esperar(() => document.querySelector('svg[role="img"]'))
-    expect(document.querySelectorAll('.stat-card')).toHaveLength(0)
+    // Las tarjetas se quedan con «—»: el mismo hueco que mientras cargaban.
+    const cifras = [...document.querySelectorAll('.stat-card-value')].map(c => c.textContent)
+    expect(cifras).toHaveLength(10)
+    expect(cifras.every(c => c === '—')).toBe(true)
   })
 
   it('un día sin cifra sale como raya en la tabla y no rompe la línea del resto', async () => {
@@ -208,5 +211,36 @@ describe('EstadisticasPage', () => {
     await pulsar(boton('ver'))   // se oculta: no repide
     expect(pedir).toHaveBeenCalledTimes(1)
     expect(pedirResumen).toHaveBeenCalledTimes(1)
+  })
+
+  it('las diez tarjetas están desde el principio, con «—» hasta que llegan las cifras (la página no salta)', async () => {
+    let entregar: (r: DashboardSummaryResponse) => void = () => {}
+    pedirResumen.mockReturnValue(new Promise(r => { entregar = r }))
+    pedir.mockReturnValue(new Promise(() => {}))
+    await montar(<EstadisticasPage />)
+    const cifras = () => [...document.querySelectorAll('.stat-card-value')].map(c => c.textContent)
+    expect(cifras()).toHaveLength(10)
+    expect(cifras().every(c => c === '—')).toBe(true)
+    await act(async () => { entregar(resumen()) })
+    expect(cifras()[0]).toBe('51.372')
+    // El desglose de «Únicos sin subir»: cada cifra con su palabra.
+    expect([...document.querySelectorAll('.stat-card-sub-cifra')].map(c => c.textContent))
+      .toEqual(['142 temporadas,', '900 capítulos'])
+  })
+
+  it('en una pantalla táctil la nota dice que se toca el gráfico, no que se pasa el ratón', async () => {
+    const antes = window.matchMedia
+    window.matchMedia = vi.fn((q: string) => ({
+      matches: q.includes('hover: none'), addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia
+    try {
+      pedir.mockResolvedValue({ dias: 90, puntos: [punto('2026-10-01'), punto('2026-10-02')] })
+      await montar(<EstadisticasPage />)
+      await esperar(() => document.querySelector('.est-nota'))
+      expect(texto()).toContain('Toca o desliza el dedo por un gráfico')
+      expect(texto()).not.toContain('Pasa el ratón')
+    } finally {
+      window.matchMedia = antes
+    }
   })
 })

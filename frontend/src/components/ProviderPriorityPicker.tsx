@@ -3,7 +3,7 @@ import { getEmuProviders } from '../api/nomenclature'
 import { Favicon } from './Favicon'
 import { SortableList, DragHandleIcon } from './SortableList'
 import { useTooltip, HoverTitle } from './Tooltip'
-import { IconoPelicula } from './Iconos'
+import { IconoCerrar, IconoPelicula } from './Iconos'
 import { Modal } from './Modal'
 
 export interface ProviderOption {
@@ -48,7 +48,7 @@ function RemoveProviderButton({ onClick, nombre }: { onClick: () => void; nombre
       className="provprio-quitar"
       {...triggerProps}
     >
-      <span aria-hidden>✕</span>
+      <IconoCerrar size={14} />
       {tooltipNode}
     </button>
   )
@@ -107,7 +107,7 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
       )}
       {order.length > 0 && (
         <div className="provider-card__list">
-          <SortableList etiqueta={code => options.find(p => p.code === code)?.label ?? code} ids={order} onChange={onChange} renderRow={(code, idx, { dragging, handleProps }) => {
+          <SortableList etiqueta={code => options.find(p => p.code === code)?.label ?? code} ids={order} onChange={onChange} renderRow={(code, idx, { dragging, handleProps, botones }) => {
             const opt = options.find(p => p.code === code)
             return (
               <div className={`provprio-fila${dragging ? ' provprio-fila-arrastrando' : ''}`}>
@@ -119,6 +119,7 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
                   className="drag-handle provprio-asa"
                   style={handleProps.style}
                 ><DragHandleIcon /></HoverTitle>
+                {botones}
                 <ProviderIcon domain={opt?.domain} size={16} link={linkIcons} />
                 {/* minWidth: 0 para que el flex:1 pueda encogerse por debajo
                     del ancho natural del texto; sin esto, un nombre largo

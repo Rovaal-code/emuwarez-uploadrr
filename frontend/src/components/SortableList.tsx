@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { medir, type RectoSinEscalar } from '../utils/uiScale'
 import { moverConTecla } from '../utils/reordenar'
+import { IconoDesplegar } from './Iconos'
 
 // 1×1 transparent GIF used to hide the browser's default (shrunk/translucent)
 // drag ghost — the feedback is the in-list illumination + slide instead.
@@ -40,13 +41,29 @@ export function DragHandleIcon({ size = 14 }: { size?: number }) {
   )
 }
 
+// La indicación de cómo reordenar, según haya ratón o solo dedo: cada texto se
+// ve (y se lee) solo con su puntero, por el CSS de `.sortable-pista-*`.
+export function PistaReordenar({ raton, dedo }: { raton: string; dedo: string }) {
+  return (
+    <>
+      <span className="sortable-pista-raton">{raton}</span>
+      <span className="sortable-pista-dedo">{dedo}</span>
+    </>
+  )
+}
+
 // A drag-to-reorder list where rows are only grabbable from a handle, the
 // grabbed row lights up, the native ghost is hidden, and rows slide to their
 // new positions (FLIP animation) as the order changes live under the cursor.
+//
+// Con el dedo no hay arrastre: el mousedown de compatibilidad llega después
+// del touchend, así que la fila nunca llega a ser arrastrable. Por eso cada
+// fila trae también `botones`, subir y bajar, que quien la pinta pone junto a
+// la asa: con `(pointer: coarse)` el CSS los enseña y esconde la asa.
 export function SortableList({ ids, onChange, renderRow, gap = 6, etiqueta = id => id }: {
   ids: string[]
   onChange: (ids: string[]) => void
-  renderRow: (id: string, index: number, ctx: { dragging: boolean; handleProps: DragHandleProps }) => React.ReactNode
+  renderRow: (id: string, index: number, ctx: { dragging: boolean; handleProps: DragHandleProps; botones: React.ReactNode }) => React.ReactNode
   gap?: number
   // El nombre de cada fila para el lector de pantalla ("Reordenar ImgBB").
   etiqueta?: (id: string) => string
@@ -56,7 +73,9 @@ export function SortableList({ ids, onChange, renderRow, gap = 6, etiqueta = id 
   const [anuncio, setAnuncio] = useState('')
   // La fila que se acaba de mover con el teclado: al recolocarla, React mueve
   // su nodo y el navegador le quita el foco, así que se le devuelve.
-  const enfocar = useRef<string | null>(null)
+  // El botón de subir o bajar que se pulsó: se le devuelve el foco igual, o al
+  // otro si la fila ha llegado al borde y el pulsado se ha desactivado.
+  const enfocar = useRef<{ id: string; selector: string; otro?: string } | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const nodeRefs = useRef<Map<string, HTMLElement>>(new Map())
   const prevRects = useRef<Map<string, RectoSinEscalar>>(new Map())
@@ -101,7 +120,11 @@ export function SortableList({ ids, onChange, renderRow, gap = 6, etiqueta = id 
     prevRects.current = map
     prevIds.current = ids
     if (enfocar.current) {
-      nodeRefs.current.get(enfocar.current)?.querySelector<HTMLElement>('[data-asa]')?.focus()
+      const { id, selector, otro } = enfocar.current
+      const fila = nodeRefs.current.get(id)
+      const destino = fila?.querySelector<HTMLButtonElement>(selector)
+      if (destino && !destino.disabled) destino.focus()
+      else if (otro) fila?.querySelector<HTMLElement>(otro)?.focus()
       enfocar.current = null
     }
   }, [ids])
@@ -136,16 +159,21 @@ export function SortableList({ ids, onChange, renderRow, gap = 6, etiqueta = id 
     <div style={{ display: 'flex', flexDirection: 'column', gap }}>
       <div className="solo-lector" role="status" aria-live="polite">{anuncio}</div>
       {ids.map((id, index) => {
+        // Teclado y botones mueven igual y anuncian lo mismo.
+        const mover = (tecla: string) => {
+          const nueva = moverConTecla(ids, id, tecla)
+          if (!nueva) return
+          setAnuncio(`${etiqueta(id)}: posición ${nueva.indexOf(id) + 1} de ${nueva.length}`)
+          onChange(nueva)
+        }
         const handleProps: DragHandleProps = {
           onMouseDown: () => setGrabbedId(id),
           onMouseUp: () => setGrabbedId(null),
           onKeyDown: e => {
-            const nueva = moverConTecla(ids, id, e.key)
-            if (!nueva) return
+            if (!moverConTecla(ids, id, e.key)) return
             e.preventDefault()
-            enfocar.current = id
-            setAnuncio(`${etiqueta(id)}: posición ${nueva.indexOf(id) + 1} de ${nueva.length}`)
-            onChange(nueva)
+            enfocar.current = { id, selector: '[data-asa]' }
+            mover(e.key)
           },
           tabIndex: 0,
           role: 'button',
@@ -153,6 +181,18 @@ export function SortableList({ ids, onChange, renderRow, gap = 6, etiqueta = id 
           'data-asa': id,
           style: { cursor: 'grab', userSelect: 'none' },
         }
+        const botones = (
+          <span className="sortable-mover">
+            <button type="button" className="sortable-mover__btn" data-mover="subir"
+              aria-label={`Subir ${etiqueta(id)}`} disabled={index === 0}
+              onClick={() => { enfocar.current = { id, selector: '[data-mover="subir"]', otro: '[data-mover="bajar"]' }; mover('ArrowUp') }}
+            ><IconoDesplegar abierto={false} size={16} style={{ transform: 'rotate(-90deg)' }} /></button>
+            <button type="button" className="sortable-mover__btn" data-mover="bajar"
+              aria-label={`Bajar ${etiqueta(id)}`} disabled={index === ids.length - 1}
+              onClick={() => { enfocar.current = { id, selector: '[data-mover="bajar"]', otro: '[data-mover="subir"]' }; mover('ArrowDown') }}
+            ><IconoDesplegar abierto size={16} /></button>
+          </span>
+        )
         return (
           <div
             key={id}
@@ -166,7 +206,7 @@ export function SortableList({ ids, onChange, renderRow, gap = 6, etiqueta = id 
             onDragOver={e => handleDragOver(e, id)}
             onDragEnd={() => { setDraggingId(null); setGrabbedId(null) }}
           >
-            {renderRow(id, index, { dragging: grabbedId === id || draggingId === id, handleProps })}
+            {renderRow(id, index, { dragging: grabbedId === id || draggingId === id, handleProps, botones })}
           </div>
         )
       })}

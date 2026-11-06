@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { estadoDePaso, opcionesDeReintento } from '../pasosSubida'
+import { estadoDePaso, minusculaInicial, opcionesDeReintento, pasoDondeSeParo } from '../pasosSubida'
 
 describe('estadoDePaso', () => {
   it('cada estado del servidor tiene su texto', () => {
@@ -36,5 +36,25 @@ describe('opcionesDeReintento', () => {
       { etiqueta: 'Reintentar desde «Verificar antes de subir»', desdeElPrincipio: false },
       { etiqueta: 'Reintentar desde el principio', desdeElPrincipio: true },
     ])
+  })
+})
+
+describe('pasoDondeSeParo', () => {
+  const p = (...estados: string[]) => estados.map(estado => ({ estado }))
+  it('el último paso con algo que contar', () => {
+    expect(pasoDondeSeParo(p('hecho', 'fallido', 'pendiente'))).toBe(1)
+    expect(pasoDondeSeParo(p('hecho', 'pendiente'))).toBe(0)
+    expect(pasoDondeSeParo(p('hecho', 'en_curso'))).toBe(1)
+  })
+  it('null si todos siguen pendientes (no consta dónde se paró)', () => {
+    expect(pasoDondeSeParo(p('pendiente', 'pendiente'))).toBeNull()
+    expect(pasoDondeSeParo([])).toBeNull()
+  })
+})
+
+describe('minusculaInicial', () => {
+  it('baja solo la primera letra', () => {
+    expect(minusculaInicial('Subida a eMuwarez')).toBe('subida a eMuwarez')
+    expect(minusculaInicial('')).toBe('')
   })
 })

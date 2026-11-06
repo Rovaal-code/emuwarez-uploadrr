@@ -848,7 +848,7 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
     try:
         api_key = get_setting_canonical(conn, "emu.api_key")
         if not api_key:
-            raise IntegrationError("No hay API Key de eMuwarez configurada")
+            raise IntegrationError("No hay API key de eMuwarez configurada")
 
         # Fail fast (and clearly) if eMuwarez itself is unreachable, instead of only
         # discovering it mid-download — this is a single cheap request (perPage=1)

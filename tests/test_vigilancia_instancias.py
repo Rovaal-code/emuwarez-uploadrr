@@ -78,6 +78,7 @@ def test_cae_vuelve_y_se_sincroniza_una_vez(conn, arr, instancias, reloj, sincro
     estado, resumen = vig.vigilar_instancias(conn)
     assert (estado, sincronizaciones) == ("completed", [])
     assert "1 sin responder" in resumen
+    assert "(s)" not in resumen  # plural de verdad: «2 instancias comprobadas»
 
     instancias["radarr"] = True
     _, resumen = vig.vigilar_instancias(conn)

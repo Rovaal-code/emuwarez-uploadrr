@@ -44,7 +44,7 @@ export function DatabaseActions({ onRefresh }: { onRefresh: () => void }) {
         aria-label="Confirmación de VACUUM"
         value={vacuumConfirm}
         onChange={e => setVacuumConfirm(e.target.value)}
-        className="aj-campo-ancho"
+        className="form-input aj-campo-ancho"
       />
       <div className="aj-flex-8 aj-wrap">
         <button className="btn btn-secondary" onClick={handleIntegrity} disabled={busy}>Verificar integridad</button>

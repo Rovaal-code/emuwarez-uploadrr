@@ -470,12 +470,16 @@
 .lg-barra {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  /* Campo, nivel y botones a la misma altura (la del select, el más alto); las casillas y el contador, centrados. */
+  align-items: stretch;
   gap: 8px 10px;
   margin-bottom: 12px;
   flex-shrink: 0;
 }
+.lg-barra > .checkbox-label,
+.lg-contador { align-self: center; }
 .lg-buscar {
+  display: flex;
   flex: 1 1 260px;
   max-width: 520px;
   min-width: 0;
@@ -489,7 +493,7 @@
 }
 .lg-barra__fin {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 12px;
   margin-left: auto;
 }
@@ -634,6 +638,20 @@
 .lg-copiar:hover { color: var(--text-primary); }
 @media (hover: none) {
   .lg-copiar { opacity: 0.6; }
+}
+
+/* Con el dedo, la línea y su botón de copiar son dos objetivos distintos: la línea algo más alta y el botón, del
+   ancho mínimo de toque y separado del texto por un filete. */
+@media (pointer: coarse) {
+  .lg-linea { contain-intrinsic-size: auto 37px; }
+  .lg-linea__cuerpo {
+    min-height: 36px;
+    align-content: center;
+  }
+  .lg-copiar {
+    width: var(--tap-min);
+    border-left: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  }
 }
 
 @media (max-width: 900px) {

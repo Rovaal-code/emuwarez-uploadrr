@@ -15,6 +15,7 @@
   font-weight: 700;
   font-size: 25px;
   letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 .detcard-anio { color: var(--text-muted); font-weight: 500; }
 .detail-card.detcard-tarjeta { border-radius: var(--radius-card); }
@@ -293,6 +294,7 @@
 .poster-grande-estado { position: absolute; top: 10px; right: 10px; }
 /* El botón que abre la ficha cubre el póster (fuera del layout, como la imagen). */
 .poster-grande-abrir {
+  touch-action: manipulation;
   position: absolute;
   inset: 0;
   padding: 0;
@@ -371,6 +373,7 @@
 }
 .hijos-nombre { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
 .hijos-cuenta {
+  font-variant-numeric: tabular-nums;
   padding: 0 8px;
   border-radius: 999px;
   font-size: 12px;
@@ -380,7 +383,7 @@
 }
 .hijos-aviso { font-size: 12px; color: var(--text-muted); }
 .activity-section.hijos-caja { margin-bottom: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.hijos-scroll { overflow: auto; flex: 1; min-height: 0; }
+.hijos-scroll { overscroll-behavior: contain; overflow: auto; flex: 1; min-height: 0; }
 .data-table th.hijos-col-titulo { width: 100%; }
 
 /* La moneda de los puntos: dorada y en línea con el texto, como el resto de iconos de las columnas. */

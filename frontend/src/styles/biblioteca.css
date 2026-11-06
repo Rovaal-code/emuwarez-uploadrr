@@ -46,6 +46,7 @@
   overflow: hidden;
 }
 .bib-vista-boton {
+  touch-action: manipulation;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -127,6 +128,7 @@
   margin-bottom: 0;
 }
 .activity-section.bib-bloque-rejilla {
+  overscroll-behavior: contain;
   padding: 20px;
   flex: 1;
   min-height: 0;
@@ -140,6 +142,7 @@
   transition: opacity 120ms;
 }
 .bib-scroll {
+  overscroll-behavior: contain;
   overflow: auto;
   flex: 1;
   min-height: 0;
@@ -236,6 +239,7 @@
 }
 /* El botón que abre la ficha cubre la tarjeta; fuera del layout, como la imagen (el alto lo fija solo aspect-ratio). */
 .bib-tarjeta-abrir {
+  touch-action: manipulation;
   position: absolute;
   inset: 0;
   display: flex;
@@ -348,17 +352,15 @@
 .data-table.bib-tabla tr:hover td.col-actions { background: var(--bib-fijo); }
 .data-table.bib-tabla thead th.bib-col-titulo { z-index: 3; }
 .data-table.bib-tabla tr:hover > td.bib-celda-titulo { background: color-mix(in srgb, var(--overlay-light) 3%, var(--bib-fijo)); }
-/* Filas hijas (temporadas y capítulos de una serie abierta): un nivel más adentro, con una línea de acento. */
+/* Filas hijas (temporadas y capítulos de una serie abierta): un nivel más adentro y con un tinte de acento. */
 .data-table tr.bib-fila-hija > td { background: color-mix(in srgb, var(--text-accent) 3%, transparent); }
 .data-table tr.bib-fila-hija > td.bib-celda-titulo { background: color-mix(in srgb, var(--text-accent) 3%, var(--bib-fijo)); }
-.data-table tr.bib-fila-hija > td:first-child { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--text-accent) 40%, transparent); }
 .data-table tr.bib-fila-hija > td.col-actions { background: color-mix(in srgb, var(--text-accent) 3%, var(--bib-fijo)); }
 .data-table tr.bib-fila-abierta > td { background: color-mix(in srgb, var(--text-accent) 5%, transparent); }
 .data-table tr.bib-fila-abierta > td.bib-celda-titulo { background: color-mix(in srgb, var(--text-accent) 5%, var(--bib-fijo)); }
 .data-table tr.bib-fila-abierta > td.col-actions { background: color-mix(in srgb, var(--text-accent) 5%, var(--bib-fijo)); }
-/* Marcada para el lote: más fuerte que la abierta, con la barra de acento a la izquierda. */
+/* Marcada para el lote: un tinte más fuerte que el de la abierta (y su casilla marcada). */
 .data-table tr.bib-fila-marcada > td { background: color-mix(in srgb, var(--text-accent) 11%, transparent); }
-.data-table tr.bib-fila-marcada > td:first-child { box-shadow: inset 3px 0 0 var(--text-accent); }
 .data-table tr.bib-fila-marcada > td.bib-celda-titulo { background: color-mix(in srgb, var(--text-accent) 11%, var(--bib-fijo)); }
 .data-table tr.bib-fila-marcada > td.col-actions { background: color-mix(in srgb, var(--text-accent) 11%, var(--bib-fijo)); }
 .data-table td.bib-nowrap { white-space: nowrap; }
@@ -402,12 +404,15 @@
   flex: 1;
 }
 .lib-title-link.bib-titulo-enlace {
+  color: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
   max-width: 100%;
 }
+.lib-title-link.bib-titulo-enlace:hover { color: var(--text-accent); }
+.lib-title-link.bib-titulo-enlace:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .bib-rg-ninguno {
   font-size: 12px;
   color: var(--text-muted);

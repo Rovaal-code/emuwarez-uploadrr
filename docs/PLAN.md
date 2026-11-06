@@ -658,6 +658,10 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   - Desenfoque (#254, salió al revisar #249): **no escribir `-webkit-backdrop-filter` a mano**. lightningcss (el minificador de Vite) ya lo
     añade, y si lo escribimos descarta la propiedad sin prefijo: Chrome y Firefox se quedaban sin desenfoque (y la cabecera sin ser el
     bloque contenedor de la campana). Lo vigila `tests/test_frontend_backdrop_sin_prefijo.py`.
+  - Decidido por Gabriel tras la revisión (#257): entre 769 y 1099 px la barra lateral arranca plegada mientras no haya preferencia
+    guardada (a 820 el contenido pasa de 580 a 756 px), con un chevrón en el logo plegado; con el dedo, `.btn` a 44 px y `.btn-sm` a 40
+    (antes 40 y 36), y la barra de herramientas de Biblioteca entera a 40. `DESIGN.md` al día: Login y el asistente van en el HUD, la
+    barra plegada en tableta, los altos táctiles, `@container` y no escribir `-webkit-backdrop-filter`.
   - Verificado en local: suite completa del backend (4229 pasan) sobre #253 y la del frontend en cada PR; cada arreglo de comportamiento
     lleva su test de vitest. **Sin ver:** iOS/Safari, Android y tablet reales (todo es Chromium emulado con `hasTouch`), teclado virtual,
     lector de pantalla, contraste AA medido con herramienta, el detector de `impeccable`, los pasos del asistente con eMuwarez y TMDb
@@ -699,11 +703,6 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
 - Objetivos táctiles con `(any-pointer: coarse)` en vez de `(pointer: coarse)` para portátiles táctiles con ratón como puntero principal: es
   un cambio de toda la app (`--tap-min` en `globals.css` y sus usos), no de una pantalla (#242).
 - De polish + adapt + optimize (#249-#254), dudosos, los decide Gabriel:
-  - **Barra lateral plegada por defecto entre 769 y ~1100 px** (la señalaron cuatro de los cinco revisores): a 820 se lleva el 29 % del
-    ancho y la tabla de Biblioteca (988 px) vive en 530 con scroll. Plegada sin preferencia guardada (`emuwarez_uploadrr_sidebar_collapsed`
-    ya existe), con un chevrón visible en el logo. Cambia el marco de toda la app y lo que el usuario espera de su preferencia.
-  - `btn-sm` (36 px) y `btn` (40) con el dedo: subirlos a 44 de 769 px para arriba, o solo donde sobra sitio (Panel, Estadísticas,
-    acciones de fila de Biblioteca); hoy es una decisión para que las barras densas quepan a 390 px (`components.css`).
   - Ritmo de espacios fuera de la escala de 4/8: 14 px en `.panel-atencion`, 22 en la leyenda de Estadísticas, 20 entre tarjetas de
     Configuración frente a 16 en Tareas, 12 frente a 16 entre el Panel y Estadísticas.
   - Panel: «Listo para subir» con una o dos peticiones deja ~400 px de carril vacío (encoger al contenido o una línea «Nada más listo»);
@@ -712,9 +711,8 @@ probarla, si guardar los `campos` y crear el trabajo van en una sola transacció
     página fija; en la ficha de una serie en móvil, «Temporadas» empieza tras ~1200 px de tarjetas; en pósters sin imagen, el título sale
     dos veces con `hover: none`.
   - Configuración: casillas nativas de 15 px frente a los interruptores; el orden de la rejilla cambia con el ancho y no coincide con el
-    índice; a 390 px «Backup» queda fuera de las pestañas; Diagnóstico y Backup sin icono en su cabecera; `DESIGN.md` dice que Login y el
-    asistente usan el azul plano y van con el degradado y el halo (se arregla en el documento); el asistente recargado en el paso 8 vuelve
-    al 7 (`handleProviders` no apunta `wizard_step`).
+    índice; a 390 px «Backup» queda fuera de las pestañas; Diagnóstico y Backup sin icono en su cabecera; el asistente recargado en el
+    paso 8 vuelve al 7 (`handleProviders` no apunta `wizard_step`).
   - Peticiones y Subidas: iconos rellenos de votos y comentarios frente a los de trazo; dos «Duración» distintas en una subida
     interrumpida (la de la tabla va de `created_at` a `finished_at`); un error con el filtro de lote puesto no ofrece «Quitar filtro»; chips
     de grupo en píldora (DESIGN dice 6 px); «Origen» con borde de botón en Subidas y enlace plano en Peticiones; «en cola» y «cancelada»

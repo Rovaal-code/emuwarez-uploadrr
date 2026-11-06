@@ -44,7 +44,7 @@ afterEach(async () => {
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', prototipo)
 })
 
-function Lista({ items, dobles = [] }: { items: number[]; dobles?: number[] }) {
+function Lista({ items, dobles = [], fijas }: { items: number[]; dobles?: number[]; fijas?: ReadonlySet<number> }) {
   const contenedor = useRef<HTMLDivElement>(null)
   const cabecera = useRef<HTMLTableSectionElement>(null)
   const medidas = (el: HTMLDivElement | null) => {
@@ -58,7 +58,7 @@ function Lista({ items, dobles = [] }: { items: number[]; dobles?: number[] }) {
       <table>
         <thead ref={cabecera}><tr><th>Título</th></tr></thead>
         <FilasVirtuales
-          items={items} clave={k => k} alturaEstimada={50} columnas={1} contenedor={contenedor} cabecera={cabecera}
+          items={items} clave={k => k} alturaEstimada={50} columnas={1} contenedor={contenedor} cabecera={cabecera} fijas={fijas}
           pintar={k => dobles.includes(k)
             ? [<tr key="a"><td>{k}</td></tr>, <tr key="b"><td>intento anterior</td></tr>]
             : <tr><td>{k}</td></tr>}
@@ -87,6 +87,16 @@ describe('FilasVirtuales: la estimación de alto', () => {
     alto = k => (k === 0 ? 300 : 60)
     await montar(<Lista items={claves(200)} dobles={[0]} />)
     await disparar(deFilas())
+    expect(huecoFinal()).toBe((200 - pintadas()) * 60)
+  })
+
+  it('una fila que pasa a fija sin cambiar de alto deja de contar para la media', async () => {
+    // Una serie de Biblioteca que se abre sin capítulos aún: sigue siendo una sola <tr> y mide lo mismo.
+    alto = k => (k === 0 ? 300 : 60)
+    const { rerender } = await montarConRerender(<Lista items={claves(200)} />)
+    await disparar(deFilas())
+    expect(huecoFinal()).toBeGreaterThan((200 - pintadas()) * 60)
+    await rerender(<Lista items={claves(200)} fijas={new Set([0])} />)
     expect(huecoFinal()).toBe((200 - pintadas()) * 60)
   })
 

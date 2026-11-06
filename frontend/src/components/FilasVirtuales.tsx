@@ -77,7 +77,10 @@ export function FilasVirtuales<T>({ items, clave, alturaEstimada, columnas, cont
 
   const tramos = useMemo(() => {
     // Las que no se han medido, con la media de las ordinarias que siguen en la lista (ver alturasDeLaLista).
-    const alturas = alturasDeLaLista(items.map(clave), medidas.current, ordinarias.current, alturaEstimada)
+    // Las `fijas` se descartan aquí y no al medir: una serie que se abre sin capítulos aún mide lo mismo (el
+    // ResizeObserver no avisa), pero ya no es ordinaria. Este memo depende de `fijas`, así que se recalcula al cambiar.
+    const delaMedia = fijas?.size ? new Set([...ordinarias.current].filter(k => !fijas.has(k))) : ordinarias.current
+    const alturas = alturasDeLaLista(items.map(clave), medidas.current, delaMedia, alturaEstimada)
     const indicesFijos = new Set<number>()
     if (fijas?.size) items.forEach((it, i) => { if (fijas.has(clave(it))) indicesFijos.add(i) })
     return planVentana({ alturas, desde: vista.desde, alto: vista.alto, margen: MARGEN_PX, fijas: indicesFijos })

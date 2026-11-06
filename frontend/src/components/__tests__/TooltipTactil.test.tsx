@@ -24,7 +24,15 @@ async function evento(el: EventTarget, tipo: string, init: EventInit & { key?: s
     : new MouseEvent(tipo, { bubbles: true, cancelable: true, ...init })
   await act(async () => { el.dispatchEvent(e) })
 }
-const tocar = async (el: Element) => { await evento(el, 'pointerdown'); await evento(el, 'pointerup') }
+// jsdom no trae PointerEvent: un MouseEvent con `pointerType` puesto a mano hace de toque (o de clic de ratón).
+async function puntero(el: Element, tipo: string, pointerType: 'touch' | 'mouse') {
+  const e = new MouseEvent(tipo, { bubbles: true, cancelable: true })
+  Object.defineProperty(e, 'pointerType', { value: pointerType })
+  await act(async () => { el.dispatchEvent(e) })
+}
+const tocar = async (el: Element, pointerType: 'touch' | 'mouse' = 'touch') => {
+  await puntero(el, 'pointerdown', pointerType); await puntero(el, 'pointerup', pointerType)
+}
 
 // jsdom no mide el texto: el tooltip ajusta su ancho a la línea más larga con Range.getClientRects.
 if (!Range.prototype.getClientRects) {
@@ -73,7 +81,7 @@ describe('Tooltip con el dedo', () => {
   it('con ratón, el toque no abre nada (el tooltip sigue siendo del hover)', async () => {
     sinHover(false)
     await montar(<InfoIcon text="Explicación" />)
-    await tocar(document.querySelector('.menores-info')!)
+    await tocar(document.querySelector('.menores-info')!, 'mouse')
     expect(globo()).toBeNull()
   })
 

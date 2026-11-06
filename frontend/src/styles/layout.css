@@ -157,6 +157,8 @@
   justify-content: space-between;
   padding: 0 24px;
   backdrop-filter: blur(8px);
+  /* Safari < 18 solo entiende el prefijo; sin él la cabecera no ancla el panel fijo de la campana. */
+  -webkit-backdrop-filter: blur(8px);
   flex-shrink: 0;
   /* backdrop-filter alone creates a new stacking context for .topbar — so
      without an explicit z-index here, the notif-dropdown's own z-index

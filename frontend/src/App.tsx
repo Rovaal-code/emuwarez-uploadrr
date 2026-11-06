@@ -1,13 +1,16 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { getSetupStatus } from './api/setup'
 import { getMe } from './api/auth'
 import { getToken, clearToken, esSesionCaducada, setUnauthorizedHandler } from './api/client'
 import { esperaDelIntento } from './api/eventos'
 import type { SetupStatusResponse, CurrentUserResponse } from './types/api'
-import { LoginPage } from './pages/LoginPage'
-import { SetupWizard } from './pages/SetupWizard'
 import { AppShell } from './components/AppShell'
 import { LoadingState } from './components/LoadingState'
+
+// El acceso y el asistente de configuración solo se ven sin sesión o la primera vez: van en su propio chunk, fuera del
+// que se carga en cada arranque.
+const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })))
+const SetupWizard = lazy(() => import('./pages/SetupWizard').then(m => ({ default: m.SetupWizard })))
 import { SyncProvider } from './context/SyncContext'
 import { PerfilEmuProvider } from './context/PerfilEmuContext'
 import { TourProvider } from './context/TourContext'
@@ -162,11 +165,11 @@ export function App() {
   }
 
   if (state === 'setup' && setupStatus) {
-    return <SetupWizard setupStatus={setupStatus} onComplete={handleSetupComplete} />
+    return <Suspense fallback={<LoadingState />}><SetupWizard setupStatus={setupStatus} onComplete={handleSetupComplete} /></Suspense>
   }
 
   if (state === 'login') {
-    return <LoginPage onSuccess={handleLoginSuccess} />
+    return <Suspense fallback={<LoadingState />}><LoginPage onSuccess={handleLoginSuccess} /></Suspense>
   }
 
   return (

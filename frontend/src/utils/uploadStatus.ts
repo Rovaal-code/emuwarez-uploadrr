@@ -61,6 +61,24 @@ export function statusLabel(status: string): string {
 // in flight (mirrors ACTIVE_JOB_STATUSES in services/upload_queue.py).
 export const ACTIVE_JOB_STATUSES = new Set(['queued', 'staging', 'preparing', 'running'])
 
+/**
+ * Mete en la lista que ya hay en pantalla las subidas recién pedidas, cada una en el sitio de la suya (por `id`). No
+ * añade ni quita filas: es para el aviso de progreso, que solo cambia cuánto llevan las vivas; qué subidas hay lo
+ * trae la recarga completa. Si ninguna estaba en la lista o ninguna ha cambiado, devuelve la misma (React no repinta).
+ */
+export function fundirPorId(lista: UploadJob[], nuevas: readonly UploadJob[]): UploadJob[] {
+  const porId = new Map(nuevas.map(j => [j.id, j]))
+  let cambia = false
+  const fundida = lista.map(j => {
+    const nueva = j.id != null ? porId.get(j.id) : undefined
+    // La misma subida sin nada nuevo (el aviso llega aunque la barra no se haya movido) conserva su objeto.
+    if (!nueva || JSON.stringify(nueva) === JSON.stringify(j)) return j
+    cambia = true
+    return nueva
+  })
+  return cambia ? fundida : lista
+}
+
 // The tip of a retry chain: the job nobody else's retry_of_job_id points at.
 // Given ALL jobs for one library item (any order), returns the one that
 // represents "the current state of this item's upload" — used both by the

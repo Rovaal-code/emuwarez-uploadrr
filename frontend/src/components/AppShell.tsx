@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useCallback, useRef, useLayoutEffect, lazy, Suspense } from 'react'
 import { Sidebar } from './Sidebar'
 import { SeccionVisible } from '../context/SeccionVisible'
 import { Topbar } from './Topbar'
@@ -21,16 +21,33 @@ const TOUR_SEEN_KEY = 'emuwarez_uploadrr_tour_seen'
 
 // Pages
 import { DashboardPage } from '../pages/DashboardPage'
-import { LibraryPage } from '../pages/LibraryPage'
 import { LimiteDeErrores } from './LimiteDeErrores'
-import { RequestsPage } from '../pages/RequestsPage'
-import { UploadsPage } from '../pages/UploadsPage'
-import { EstadisticasPage } from '../pages/EstadisticasPage'
-import { GuidePage } from '../pages/GuidePage'
-import { TasksPage } from '../pages/TasksPage'
-import { InstancesPage } from '../pages/InstancesPage'
-import { LogsPage } from '../pages/LogsPage'
-import { SettingsPage } from '../pages/SettingsPage'
+import { LoadingState } from './LoadingState'
+
+// El Panel va en el chunk principal (es donde se entra); las demás secciones, cada una en el suyo. Con todas juntas
+// eran 613 kB de JS que parsear antes de pintar nada, y de ellos la primera pantalla usa un tercio. No se nota al
+// abrirlas: el premontaje de abajo las monta a los 2 s, así que su chunk baja en ese hueco y la primera visita sigue
+// siendo instantánea.
+const CARGAR_PAGINA = {
+  library:   () => import('../pages/LibraryPage').then(m => ({ default: m.LibraryPage })),
+  requests:  () => import('../pages/RequestsPage').then(m => ({ default: m.RequestsPage })),
+  uploads:   () => import('../pages/UploadsPage').then(m => ({ default: m.UploadsPage })),
+  stats:     () => import('../pages/EstadisticasPage').then(m => ({ default: m.EstadisticasPage })),
+  guide:     () => import('../pages/GuidePage').then(m => ({ default: m.GuidePage })),
+  tasks:     () => import('../pages/TasksPage').then(m => ({ default: m.TasksPage })),
+  instances: () => import('../pages/InstancesPage').then(m => ({ default: m.InstancesPage })),
+  logs:      () => import('../pages/LogsPage').then(m => ({ default: m.LogsPage })),
+  settings:  () => import('../pages/SettingsPage').then(m => ({ default: m.SettingsPage })),
+}
+const LibraryPage = lazy(CARGAR_PAGINA.library)
+const RequestsPage = lazy(CARGAR_PAGINA.requests)
+const UploadsPage = lazy(CARGAR_PAGINA.uploads)
+const EstadisticasPage = lazy(CARGAR_PAGINA.stats)
+const GuidePage = lazy(CARGAR_PAGINA.guide)
+const TasksPage = lazy(CARGAR_PAGINA.tasks)
+const InstancesPage = lazy(CARGAR_PAGINA.instances)
+const LogsPage = lazy(CARGAR_PAGINA.logs)
+const SettingsPage = lazy(CARGAR_PAGINA.settings)
 
 interface AppShellProps {
   user: CurrentUserResponse | null
@@ -139,7 +156,11 @@ function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: strin
     <>
       {visitadas.current.map(p => (
         <div key={p} style={{ display: p === page ? 'contents' : 'none' }}>
-          <LimiteDeErrores><SeccionVisible visible={p === page}>{unaPagina(p, onNavigate)}</SeccionVisible></LimiteDeErrores>
+          <LimiteDeErrores>
+            <SeccionVisible visible={p === page}>
+              <Suspense fallback={<LoadingState />}>{unaPagina(p, onNavigate)}</Suspense>
+            </SeccionVisible>
+          </LimiteDeErrores>
         </div>
       ))}
     </>
@@ -155,6 +176,11 @@ function pageFromPath(): string {
   const seg = window.location.pathname.replace(/^\/+/, '').split('/')[0]
   return VALID_PAGES.includes(seg) ? seg : 'dashboard'
 }
+
+// La sección de la URL (/library al recargar) se empieza a pedir ya, al cargar este módulo, y no al pintarla: así su
+// chunk baja a la vez que el resto del arranque en vez de después.
+const inicial = pageFromPath()
+if (inicial in CARGAR_PAGINA) void CARGAR_PAGINA[inicial as keyof typeof CARGAR_PAGINA]().catch(() => { /* lo reintenta lazy */ })
 
 export function AppShell({ user, onLogout }: AppShellProps) {
   const [activePage, setActivePage] = useState<string>(pageFromPath)

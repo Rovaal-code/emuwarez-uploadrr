@@ -76,12 +76,20 @@ interface Opciones {
   soloVisible?: string[]
   /** Para descartar avisos de otra cosa (otra subida, otra temporada). */
   filtro?: (aviso: Aviso) => boolean
+  /**
+   * La recarga para los avisos de `soloVisible`, si es más barata que la de
+   * siempre. `subida-progreso` llega cada medio segundo y solo cambia cuánto
+   * llevan las vivas: volver a pedir la lista entera (cien subidas, unos 140 kB)
+   * dos veces por segundo era tirar CPU en el servidor y en el navegador. Si a
+   * la vez llega uno de "qué hay", gana la recarga completa.
+   */
+  recargarProgreso?: () => void
 }
 
 export function useRefrescoPorAvisos(
   tipos: string[],
   recargar: () => void,
-  { cadaSinCanal, cadaConCanal = CADA_CON_CANAL_MS, activo = true, filtro, soloVisible = [] }: Opciones,
+  { cadaSinCanal, cadaConCanal = CADA_CON_CANAL_MS, activo = true, filtro, soloVisible = [], recargarProgreso }: Opciones,
 ): { canalVivo: boolean } {
   const [vivo, setVivo] = useState(canalVivo)
   const seVe = useSeccionVisible()
@@ -91,11 +99,20 @@ export function useRefrescoPorAvisos(
   recargarRef.current = recargar
   const filtroRef = useRef(filtro)
   filtroRef.current = filtro
+  const recargarProgresoRef = useRef(recargarProgreso)
+  recargarProgresoRef.current = recargarProgreso
+  const soloVisibleRef = useRef(soloVisible)
+  soloVisibleRef.current = soloVisible
   // Los que se escuchan ahora mismo: siempre los de "qué hay", y los de
   // "cuánto lleva" solo si la sección está a la vista.
   const clave = [...tipos, ...(seVe ? soloVisible : [])].join(',')
 
-  useEffect(() => observarCanal(setVivo), [])
+  // Si el último cambio a vivo fue la primera conexión de la aplicación (ver el efecto del final).
+  const primeraConexion = useRef(false)
+  useEffect(() => observarCanal((v, primeraVez) => {
+    primeraConexion.current = primeraVez
+    setVivo(v)
+  }), [])
 
   // La recarga pendiente vive FUERA del efecto, y esto es el arreglo de un
   // fallo real, no una preferencia de estilo. Estaba dentro, y su limpieza la
@@ -111,6 +128,8 @@ export function useRefrescoPorAvisos(
   // visibilidad no cambia), y de ahí el síntoma que lo delató: el Panel veía
   // la subida nueva y Subidas no.
   const pendiente = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Si la recarga pendiente tiene que ser la completa (algún aviso de "qué hay"), o le basta la de progreso.
+  const pendienteCompleta = useRef(false)
   useEffect(() => () => { if (pendiente.current) clearTimeout(pendiente.current) }, [])
 
   // Siempre escuchando: ver `activo`.
@@ -118,10 +137,15 @@ export function useRefrescoPorAvisos(
     if (!clave) return
     const pedirRecarga = (aviso: Aviso) => {
       if (filtroRef.current && !filtroRef.current(aviso)) return
+      const completa = !recargarProgresoRef.current || !soloVisibleRef.current.includes(aviso?.tipo)
+      if (completa) pendienteCompleta.current = true
       if (pendiente.current) return
       pendiente.current = setTimeout(() => {
         pendiente.current = null
-        recargarRef.current()
+        const laCompleta = pendienteCompleta.current || !recargarProgresoRef.current
+        pendienteCompleta.current = false
+        if (laCompleta) recargarRef.current()
+        else recargarProgresoRef.current?.()
       }, AGLUTINAR_MS)
     }
     const cortes = clave.split(',').map(tipo => suscribirse(tipo, pedirRecarga))
@@ -146,10 +170,19 @@ export function useRefrescoPorAvisos(
   // No se recarga al entrar con el canal vivo, y eso es a propósito: es lo que
   // hace que cambiar de sección sea instantáneo de verdad y no "instantáneo y
   // luego un parpadeo".
+  //
+  // Tampoco al arrancar, que es cuando los dos casos se confundían: la página
+  // ya carga sola al montarse, el canal aún no está en pie (no es que esté
+  // caído) y 250 ms después se conecta por primera vez (no es que vuelva). Cada
+  // sección pedía sus datos tres veces en el primer segundo.
   const teniaCanal = useRef(vivo)
+  const primeraPasada = useRef(true)
   useEffect(() => {
-    const volvio = vivo && !teniaCanal.current
+    const volvio = vivo && !teniaCanal.current && !primeraConexion.current
     teniaCanal.current = vivo
+    const alMontar = primeraPasada.current
+    primeraPasada.current = false
+    if (alMontar) return
     if (seVe && (volvio || !vivo)) recargarRef.current()
   }, [vivo, seVe])
 

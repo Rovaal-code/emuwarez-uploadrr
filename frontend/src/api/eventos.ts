@@ -192,13 +192,18 @@ let cortarConexion: (() => void) | null = null
 // seguridad lenta; sin él hay que volver al sondeo rápido de siempre, porque es
 // lo único que queda.
 let vivo = false
-const oyentesDeEstado = new Set<(vivo: boolean) => void>()
+// Si llegó a estar vivo alguna vez. La primera conexión no es una vuelta: no se
+// perdió nada mientras «estaba caído», porque nunca había estado en pie.
+let estuvoVivo = false
+const oyentesDeEstado = new Set<(vivo: boolean, primeraVez: boolean) => void>()
 
 function marcarVivo(nuevo: boolean): void {
   if (vivo === nuevo) return
   vivo = nuevo
+  const primeraVez = nuevo && !estuvoVivo
+  if (nuevo) estuvoVivo = true
   for (const cb of oyentesDeEstado) {
-    try { cb(vivo) } catch { /* un oyente roto no tumba a los demás */ }
+    try { cb(vivo, primeraVez) } catch { /* un oyente roto no tumba a los demás */ }
   }
 }
 
@@ -206,8 +211,9 @@ export function canalVivo(): boolean {
   return vivo
 }
 
-/** Avisa cuando el canal se cae o vuelve. Devuelve cómo dejar de escuchar. */
-export function observarCanal(cb: (vivo: boolean) => void): () => void {
+/** Avisa cuando el canal se cae o vuelve. `primeraVez` es que se acaba de conectar por primera vez desde que se
+ *  cargó la aplicación (no es una vuelta). Devuelve cómo dejar de escuchar. */
+export function observarCanal(cb: (vivo: boolean, primeraVez: boolean) => void): () => void {
   oyentesDeEstado.add(cb)
   return () => { oyentesDeEstado.delete(cb) }
 }

@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   latestInChain, phaseLabel, formatSecondsHM, currentPhaseInfo,
-  ACTIVE_JOB_STATUSES, statusLabel, queuedWaitText,
+  ACTIVE_JOB_STATUSES, statusLabel, queuedWaitText, fundirPorId,
 } from '../uploadStatus'
 import type { UploadJob, UploadProgressPhase } from '../../types/api'
 
@@ -149,5 +149,25 @@ describe('el texto de una subida en cola', () => {
     const plazo = new Date(Date.now() + 60_000).toISOString()
     const conPlazo = { status: 'queued', queued_until: plazo } as unknown as Partial<UploadJob>
     expect(queuedWaitText(job(conPlazo))).toBe('Esperando turno')
+  })
+})
+
+describe('fundir el progreso de las vivas', () => {
+  it('cambia cada fila por la suya, sin añadir ni quitar ninguna', () => {
+    const lista = [job({ id: 3, status: 'running', title: 'A' }), job({ id: 2 }), job({ id: 1, status: 'queued' })]
+    const vivas = [job({ id: 3, status: 'running', title: 'A al 60 %' }), job({ id: 9, status: 'running' })]
+    const fundida = fundirPorId(lista, vivas)
+    expect(fundida.map(j => j.id)).toEqual([3, 2, 1])
+    expect(fundida[0].title).toBe('A al 60 %')
+    expect(fundida[1]).toBe(lista[1])
+    expect(fundida[2]).toBe(lista[2])
+  })
+
+  it('si no toca ninguna, devuelve la misma lista', () => {
+    const lista = [job({ id: 2 })]
+    expect(fundirPorId(lista, [job({ id: 5 })])).toBe(lista)
+    expect(fundirPorId(lista, [])).toBe(lista)
+    // La misma subida, recién parseada pero sin cambios: tampoco.
+    expect(fundirPorId(lista, [job({ id: 2 })])).toBe(lista)
   })
 })

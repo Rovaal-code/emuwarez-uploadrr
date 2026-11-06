@@ -93,9 +93,10 @@ function RequestPoster({ url, category, size = 'sm' }: { url: string | null; cat
     <div className="poster-thumb pet-poster" style={{ width: dims.width, height: dims.height, borderRadius: dims.radius }}>
       {url ? (
         <img
-          src={posterUrl(url, size === 'lg' ? 'w342' : 'w154')}
+          src={posterUrl(url, size === 'lg' ? 'w342' : 'w92')}
           alt=""
           loading="lazy"
+          decoding="async"
           className="pet-poster-img"
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
         />

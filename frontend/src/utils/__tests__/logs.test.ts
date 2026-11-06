@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LogEntry } from '../../api/logs'
 import {
-  clavesDeLineas, diaDeLinea, horaDeLinea, mismasLineas, textoDeLinea, trocearPorBusqueda,
+  clavesDeLineas, diaDeLinea, horaDeLinea, mismasLineas, reutilizarLineas, textoDeLinea, trocearPorBusqueda,
 } from '../logs'
 
 function linea(extra: Partial<LogEntry> = {}): LogEntry {
@@ -48,6 +48,32 @@ describe('Logs: lecturas iguales', () => {
       const b = a.map((l, i) => (i === 5 ? { ...l, ...cambio } : l))
       expect(mismasLineas(a, b)).toBe(false)
     }
+  })
+})
+
+describe('Logs: reutilizar las líneas de la lectura anterior', () => {
+  it('con una línea nueva arriba, las que ya estaban conservan su objeto (memo solo pinta la nueva)', () => {
+    const previas = [linea({ ts: 2, message: 'b' }), linea({ ts: 1, message: 'a' })]
+    // El servidor las manda todas otra vez, parseadas de nuevo: mismos datos, objetos distintos.
+    const nuevas = [linea({ ts: 3, message: 'c' }), linea({ ts: 2, message: 'b' }), linea({ ts: 1, message: 'a' })]
+    const r = reutilizarLineas(previas, nuevas)
+    expect(r).toHaveLength(3)
+    expect(r[0]).toBe(nuevas[0])
+    expect(r[1]).toBe(previas[0])
+    expect(r[2]).toBe(previas[1])
+  })
+
+  it('sin nada nuevo devuelve la lectura anterior entera', () => {
+    const previas = [linea({ ts: 1 })]
+    expect(reutilizarLineas(previas, [linea({ ts: 1 })])).toBe(previas)
+  })
+
+  it('las repetidas (misma hora y mensaje) se reutilizan una a una, sin mezclar', () => {
+    const previas = [linea({ ts: 1, message: 'x' }), linea({ ts: 1, message: 'x' })]
+    const nuevas = [linea({ ts: 2, message: 'y' }), linea({ ts: 1, message: 'x' }), linea({ ts: 1, message: 'x' })]
+    const r = reutilizarLineas(previas, nuevas)
+    expect(r[1]).toBe(previas[0])
+    expect(r[2]).toBe(previas[1])
   })
 })
 

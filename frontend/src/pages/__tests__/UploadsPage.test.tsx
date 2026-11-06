@@ -19,6 +19,7 @@ vi.mock('../../api/eventos', () => ({
   suscribirse: vi.fn(() => () => {}), canalVivo: vi.fn(() => true), observarCanal: vi.fn(() => () => {}),
 }))
 
+import { suscribirse } from '../../api/eventos'
 import {
   borrarLote, cancelarLote, cancelUploadJob, countUploads, deleteUploadJob, getLote, getUploadJob, getUploads, reintentarLote,
   retryUploadJobQueued,
@@ -383,7 +384,51 @@ describe('las acciones de la lista que fallan', () => {
   })
 })
 
+describe('el aviso de progreso', () => {
+  const avisar = async (tipo: string) => {
+    vi.useFakeTimers()
+    try {
+      await act(async () => {
+        for (const [t, cb] of vi.mocked(suscribirse).mock.calls) if (t === tipo) (cb as (a: unknown) => void)({ tipo })
+        await vi.advanceTimersByTimeAsync(500)
+      })
+    } finally { vi.useRealTimers() }
+  }
+
+  it('pide solo las vivas y las funde en la tabla, sin la lista entera ni el recuento', async () => {
+    let titulo = 'Viva al 10 %'
+    const viva = () => trabajo({ id: 4, status: 'running', title: titulo, media_type: 'movie' })
+    vi.mocked(getUploads).mockImplementation(async q => (q?.status ? [viva()] : [viva(), SUELTA]))
+    await pagina()
+    await esperar(() => filaDe('Viva al 10 %'))
+    vi.mocked(getUploads).mockClear()
+    vi.mocked(countUploads).mockClear()
+
+    titulo = 'Viva al 60 %'
+    await avisar('subida-progreso')
+    expect(vi.mocked(getUploads).mock.calls.map(([q]) => q?.status)).toEqual(['queued,staging,preparing,running'])
+    expect(countUploads).not.toHaveBeenCalled()
+    await esperar(() => filaDe('Viva al 60 %'))
+    expect(filaDe('Película suelta')).toBeTruthy()
+  })
+
+  it('sin ninguna viva en la tabla no pide nada', async () => {
+    await pagina()
+    vi.mocked(getUploads).mockClear()
+    await avisar('subida-progreso')
+    expect(getUploads).not.toHaveBeenCalled()
+  })
+})
+
 describe('las columnas', () => {
+  it('la miniatura de 28×42 pide w92 de TMDb (basta con DPR 2) y se decodifica aparte', async () => {
+    vi.mocked(getUploads).mockResolvedValue([trabajo({ id: 5, title: 'Con póster', poster_url: 'https://image.tmdb.org/t/p/original/a.jpg' })])
+    await pagina()
+    const img = filaDe('Con póster').querySelector('img')!
+    expect(img.getAttribute('src')).toBe('https://image.tmdb.org/t/p/w92/a.jpg')
+    expect(img.getAttribute('decoding')).toBe('async')
+  })
+
   it('una sola columna Fecha, relativa, con las dos fechas exactas aparte', async () => {
     await pagina()
     const cab = [...document.querySelectorAll('thead th')].map(th => th.textContent?.trim())

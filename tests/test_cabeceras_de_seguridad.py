@@ -63,6 +63,28 @@ def test_la_interfaz_y_sus_iconos_las_llevan_y_el_cors_del_icono_sigue(isolated_
     _seguras(cliente.get("/assets/app.js"))
 
 
+def test_los_assets_con_hash_se_cachean_un_anio_y_la_interfaz_no(isolated_db, monkeypatch):
+    dist = isolated_db / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><title>x</title>")
+    (dist / "assets" / "index-DQ59stnM.js").write_text("console.log(1)")
+    monkeypatch.setattr(app_modulo, "_FRONTEND_DIST", dist)
+    cliente = TestClient(app_modulo.create_app())
+
+    js = cliente.get("/assets/index-DQ59stnM.js")
+    assert js.status_code == 200
+    assert js.headers["cache-control"] == "public, max-age=31536000, immutable"
+    # Una revalidación (304) dice lo mismo; lo que no existe no se cachea.
+    otra = cliente.get("/assets/index-DQ59stnM.js", headers={"if-none-match": js.headers["etag"]})
+    assert otra.status_code == 304
+    assert otra.headers["cache-control"] == "public, max-age=31536000, immutable"
+    falta = cliente.get("/assets/no-existe.js")
+    assert falta.status_code == 404
+    assert "immutable" not in falta.headers.get("cache-control", "")
+    # index.html, que apunta a los nombres con hash, se revalida siempre.
+    assert "no-store" in cliente.get("/").headers["cache-control"]
+
+
 def _correr(app, scope):
     mensajes = []
 

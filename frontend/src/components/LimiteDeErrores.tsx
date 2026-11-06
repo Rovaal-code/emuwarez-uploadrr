@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { ErrorState } from './ErrorState'
+import { esErrorDeCarga, pagina } from '../utils/lazyConReintento'
 
 interface Props {
   children: ReactNode
@@ -31,7 +32,12 @@ export class LimiteDeErrores extends Component<Props, Estado> {
     console.error('Error de render:', error, info.componentStack)
   }
 
-  private reintentar = () => this.setState({ fallo: false, error: null })
+  // Un chunk que no se pudo bajar no vuelve a pedirse pintando otra vez (`lazy` guarda el fallo): hace falta recargar,
+  // que además trae el index.html de la versión publicada.
+  private reintentar = () => {
+    if (esErrorDeCarga(this.state.error)) pagina.recargar()
+    else this.setState({ fallo: false, error: null })
+  }
 
   render() {
     if (!this.state.fallo) return this.props.children

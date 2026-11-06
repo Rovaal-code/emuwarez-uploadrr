@@ -24,8 +24,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    // El bundle de la app ronda los 500 kB; sin esto Vite 8 avisa por unos pocos kB.
-    chunkSizeWarningLimit: 600,
+    // Las secciones van cada una en su chunk (AppShell): el mayor ronda los 220 kB (React). Que vuelva a avisar si
+    // alguno crece mucho, o si una importación estática vuelve a meter una sección en el principal.
+    chunkSizeWarningLimit: 300,
     rolldownOptions: {
       output: {
         codeSplitting: {

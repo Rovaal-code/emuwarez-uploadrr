@@ -1,4 +1,4 @@
-import { useSync } from '../context/SyncContext'
+import { useSync, useSyncProgress } from '../context/SyncContext'
 import { ServiceIcon } from './ServiceIcon'
 import { useTooltip } from './Tooltip'
 
@@ -14,10 +14,8 @@ function fmtEta(s: number): string {
 // pushing the page content down — the topbar's height never changes whether
 // this is empty or full.
 export function SyncProgressBanner() {
-  const {
-    libProgress, catalogProgress, requestsSyncing, requestsProgress,
-    message, messageIsError, messageFadingOut,
-  } = useSync()
+  const { requestsSyncing } = useSync()
+  const { libProgress, catalogProgress, requestsProgress, message, messageIsError, messageFadingOut } = useSyncProgress()
   const haySincronizacion = Boolean(libProgress || catalogProgress || requestsSyncing || message)
 
   // La región viva existe siempre (una que aparece ya con texto no la anuncia el lector de pantalla): el aviso de fin

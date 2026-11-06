@@ -4,7 +4,7 @@ import { EmptyState } from '../components/EmptyState'
 import { useSeccionVisible } from '../context/SeccionVisible'
 import { IconoDocumento } from '../components/Iconos'
 import {
-  clavesDeLineas, mismasLineas, textoDeLinea, trocearPorBusqueda, diaDeLinea, horaDeLinea,
+  clavesDeLineas, reutilizarLineas, textoDeLinea, trocearPorBusqueda, diaDeLinea, horaDeLinea,
 } from '../utils/logs'
 
 const LEVELS = ['', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
@@ -90,9 +90,10 @@ export function LogsPage() {
     try {
       const r = await getLogs({ limit: 1000, level: level || undefined, search: searchRef.current.trim() || undefined })
       if (esta !== ultimaCarga.current) return
-      // Si no ha entrado nada, se deja la lista como está: no se repintan mil filas para nada.
+      // Si no ha entrado nada, se deja la lista como está: no se repintan mil filas para nada. Si ha entrado algo, las
+      // que ya estaban conservan su objeto y solo se pintan las nuevas.
       focoEnLista.current = !!listaRef.current?.contains(document.activeElement)
-      setItems(previas => (mismasLineas(previas, r.items) ? previas : r.items))
+      setItems(previas => reutilizarLineas(previas, r.items))
       setError(null)
     } catch {
       if (esta === ultimaCarga.current) setError('No se pudieron cargar los logs')

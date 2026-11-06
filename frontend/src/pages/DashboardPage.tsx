@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { lazyConReintento } from '../utils/lazyConReintento'
 import { getDashboardSummary, getDashboardRecommendations, type DashboardRecommendationItem } from '../api/dashboard'
 import { getUploadJob, getUploads } from '../api/uploads'
-import { ACTIVE_JOB_STATUSES } from '../utils/uploadStatus'
+import { ACTIVE_JOB_STATUSES, fundirPorId } from '../utils/uploadStatus'
 import { fetchSettings } from '../api/settings'
 import { getVersionInfo } from '../api/maintenance'
 import { getLibraryItem } from '../api/library'
@@ -12,10 +13,12 @@ import { CuentaEmu } from '../components/CuentaEmu'
 import { useSync } from '../context/SyncContext'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
-import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
+// El asistente y «Subir por lotes» solo se abren al pulsar: en su chunk, fuera del arranque. Biblioteca y Peticiones,
+// que también los usan, se premontan a los 2 s, así que al abrirlos desde el Panel ya suelen estar descargados.
+const UploadWizardModal = lazyConReintento(() => import('../components/UploadWizardModal').then(m => ({ default: m.UploadWizardModal })))
+const SubidaPorLotesModal = lazyConReintento(() => import('../components/lote/SubidaPorLotesModal').then(m => ({ default: m.SubidaPorLotesModal })))
 import { CarrilListo, type SeleccionCarril } from '../components/hoy/CarrilListo'
-import { SubidaPorLotesModal } from '../components/lote/SubidaPorLotesModal'
 import { useSeleccionLote } from '../hooks/useSeleccionLote'
 import { MAX_ELEMENTOS_LOTE, claveDelPanel, entradaDelPanel, type EntradaLote } from '../utils/lote'
 import { CarrilEnCurso } from '../components/hoy/CarrilEnCurso'
@@ -106,7 +109,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // completa o el refresco propio de "En curso". Si cada una lo
   // hiciera por su cuenta, según por dónde llegara la noticia la fila se
   // despediría o no.
+  const ultimasTodas = useRef<UploadJob[]>([])
   const registrarSubidas = useCallback((todas: UploadJob[]): UploadJob[] => {
+    ultimasTodas.current = todas
     const vivas = soloVivas(todas)
     const idsVivas = idsDe(vivas)
     const salieron = queSalieron(todas, vivasAntes.current)
@@ -142,8 +147,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // que llegara tarde repondría el estado de antes (la barra iba hacia atrás y una subida acabada reaparecía viva).
   // Sin las preparatorias, que no ocupan sitio, y con 100.
   const subidasSeq = useRef(0)
+  const cargasEnVuelo = useRef(0)
   const loadActiveUploads = useCallback(async () => {
     const seq = ++subidasSeq.current
+    cargasEnVuelo.current++
     try {
       // Las 100 más nuevas no bastan con lotes grandes: con más de 100 vivas, la que sube (la más vieja) se caía de
       // «En curso», y al fallar no salía en «Necesita atención». Las vivas y las fallidas se piden aparte y se juntan
@@ -164,7 +171,20 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       const finales = await Promise.allSettled(perdidas.map(id => getUploadJob(id)))
       for (const r of finales) if (r.status === 'fulfilled') todas.push(r.value)
       if (seq === subidasSeq.current) registrarSubidas(todas)
-    } catch { /* ignore — next tick retries */ }
+    } catch { /* ignore — next tick retries */ } finally { cargasEnVuelo.current-- }
+  }, [registrarSubidas])
+
+  // El aviso de progreso (cada medio segundo por subida) solo cambia cuánto llevan las vivas: se piden ellas y se
+  // funden en lo que hay, sin repetir «recientes» y «fallidas». Qué subidas hay, y cuáles se despiden, lo trae la carga
+  // completa de `subida-estado`. Sin vivas, o con una completa en vuelo (llegaría después con datos de antes), nada.
+  const cargarProgresoSubidas = useCallback(async () => {
+    if (cargasEnVuelo.current || vivasAntes.current.size === 0) return
+    const seq = subidasSeq.current
+    try {
+      const vivas = await getUploads({ status: [...ACTIVE_JOB_STATUSES].join(','), limit: 500 })
+      const fundidas = fundirPorId(ultimasTodas.current, vivas)
+      if (seq === subidasSeq.current && fundidas !== ultimasTodas.current) registrarSubidas(fundidas)
+    } catch { /* el siguiente aviso lo vuelve a intentar */ }
   }, [registrarSubidas])
 
   // Las subidas se piden aquí solo la primera vez: de ahí en adelante las
@@ -236,7 +256,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // Ver UploadsPage: la cadencia depende de si hay algo vivo, pero el sondeo
   // no se apaga — es la red de seguridad por si se pierde un aviso.
   useRefrescoPorAvisos(AVISOS_SUBIDA, loadActiveUploads,
-    { cadaSinCanal: hasLiveUpload ? 2500 : 30_000, soloVisible: AVISOS_SUBIDA_PROGRESO })
+    { cadaSinCanal: hasLiveUpload ? 2500 : 30_000, soloVisible: AVISOS_SUBIDA_PROGRESO, recargarProgreso: cargarProgresoSubidas })
   // Cuando termina una tarea programada (la vigilancia de instancias cada 5 min, una sincronización) cambia lo que
   // dice «Necesita atención» y la hora de la última sincronización. Solo escucha: el sondeo de arriba ya es la red.
   useEffect(() => suscribirse('tarea-terminada', () => { void loadData() }), [loadData])
@@ -335,19 +355,23 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   return (
     <>
       {wizardItem && (
-        <UploadWizardModal item={wizardItem} preselect={wizardPreselect} requestId={wizardRequestId}
-          onClose={() => setWizardItem(null)} onDone={() => { loadData(); loadActiveUploads() }} onNavigate={onNavigate} />
+        <Suspense fallback={null}>
+          <UploadWizardModal item={wizardItem} preselect={wizardPreselect} requestId={wizardRequestId}
+            onClose={() => setWizardItem(null)} onDone={() => { loadData(); loadActiveUploads() }} onNavigate={onNavigate} />
+        </Suspense>
       )}
       {requestItem && (
         <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
       )}
       {loteAbierto && (
-        <SubidaPorLotesModal
-          entradas={loteAbierto}
-          onClose={() => setLoteAbierto(null)}
-          onDone={() => { limpiarLote(); setModoSeleccion(false); loadData(); loadActiveUploads() }}
-          onNavigate={onNavigate}
-        />
+        <Suspense fallback={null}>
+          <SubidaPorLotesModal
+            entradas={loteAbierto}
+            onClose={() => setLoteAbierto(null)}
+            onDone={() => { limpiarLote(); setModoSeleccion(false); loadData(); loadActiveUploads() }}
+            onNavigate={onNavigate}
+          />
+        </Suspense>
       )}
 
     <div className="panel-pagina">

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import { SyncContext, useSync } from './SyncContext'
 
 /**
@@ -31,7 +31,10 @@ export function SeccionVisible({ visible, children }: { visible: boolean; childr
   const sync = useSync()
   const marca = useRef(sync.lastInvalidatedAt)
   if (visible) marca.current = sync.lastInvalidatedAt
-  const valor = marca.current === sync.lastInvalidatedAt ? sync : { ...sync, lastInvalidatedAt: marca.current }
+  // Memorizado: una copia nueva en cada pintado de la sección oculta repintaría todo lo que lee el contexto.
+  const congelada = marca.current
+  const valor = useMemo(
+    () => (congelada === sync.lastInvalidatedAt ? sync : { ...sync, lastInvalidatedAt: congelada }), [sync, congelada])
   return (
     <SeccionVisibleContext.Provider value={visible}>
       <SyncContext.Provider value={valor}>

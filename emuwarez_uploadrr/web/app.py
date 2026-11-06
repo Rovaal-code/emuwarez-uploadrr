@@ -160,6 +160,18 @@ _REPO_ROOT = Path(__file__).parent.parent.parent
 _FRONTEND_DIST = _REPO_ROOT / "frontend" / "dist"
 
 
+# /assets lleva el hash del contenido en el nombre: se cachea un año sin revalidar (index.html va con no-cache).
+CACHE_DE_ASSETS = "public, max-age=31536000, immutable"
+
+
+class _AssetsInmutables(StaticFiles):
+    async def get_response(self, path, scope):
+        respuesta = await super().get_response(path, scope)
+        if respuesta.status_code in (200, 304):
+            respuesta.headers["Cache-Control"] = CACHE_DE_ASSETS
+        return respuesta
+
+
 def create_app() -> FastAPI:
     import logging
     import time
@@ -249,7 +261,7 @@ def create_app() -> FastAPI:
     if _FRONTEND_DIST.exists() and (_FRONTEND_DIST / "index.html").exists():
         _assets = _FRONTEND_DIST / "assets"
         if _assets.exists():
-            app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
+            app.mount("/assets", _AssetsInmutables(directory=str(_assets)), name="assets")
 
         _dist_resolved = _FRONTEND_DIST.resolve()
 

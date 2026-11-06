@@ -24,9 +24,10 @@
 .paleta-vacio { padding: 8px 12px; color: var(--text-muted); }
 .paleta-ayuda { margin: 12px 20px 0; font-size: 12px; color: var(--text-muted); }
 
-/* En el móvil la paleta se ancla arriba: con el teclado en pantalla, un diálogo centrado quedaba debajo de él. Las filas son
-   objetivos de 44 px, y la ayuda de teclas (flechas, Intro) sobra sin teclado. */
-@media (max-width: 768px) {
+/* En el móvil y en cualquier pantalla táctil (una tablet) la paleta se ancla arriba: con el teclado en pantalla, un
+   diálogo centrado quedaba debajo de él. Las filas son objetivos de 44 px, y la ayuda de teclas (flechas, Intro) sobra
+   sin teclado. */
+@media (max-width: 768px), (pointer: coarse) {
   .modal-overlay:has(.paleta-modal) {
     align-items: flex-start;
     padding-top: 8px;

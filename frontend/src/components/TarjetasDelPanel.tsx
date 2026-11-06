@@ -2,7 +2,7 @@ import type { DashboardSummaryResponse } from '../types/api'
 import { StatCard } from './StatCard'
 import { ServiceLabel } from './ServiceIcon'
 import { IconoPelicula, IconoSerie } from './Iconos'
-import { formatNumero } from '../utils/format'
+import { formatNumero, SIN_DATO } from '../utils/format'
 
 // Iconos grandes de las tarjetas, uno por cifra (el `icon` de StatCard solo se pinta dentro del HUD).
 function svgIcon(d: React.ReactNode) {
@@ -32,7 +32,11 @@ export const EXPLICACION = {
 
 // Las diez tarjetas que antes llenaban el pie del Panel. Las que también salen en la franja del Panel llevan su mismo
 // nombre. El color de estado (disponible, faltante, compatible, parcial) va en el icono, no en la cifra.
-export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResponse }) {
+// Sin resumen (aún no ha llegado, o falló) se pintan igual, con «—»: así el hueco ya está reservado y la página no salta
+// cuando llegan las cifras.
+export function TarjetasDelPanel({ resumen }: { resumen: DashboardSummaryResponse | null }) {
+  const s: Partial<DashboardSummaryResponse> = resumen ?? {}
+  const n = (v: number | null | undefined) => (resumen ? formatNumero(v ?? 0) : SIN_DATO)
   return (
     <>
       <h2 className="est-grupo-titulo" id="est-grupo-biblioteca">Tu biblioteca</h2>
@@ -40,15 +44,15 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
         <StatCard
           icon={ICON_LIBRARY}
           label="En biblioteca"
-          value={s.library_total}
+          value={n(s.library_total)}
           info="Total de películas y episodios importados desde tus instancias de Radarr y Sonarr."
         >
           <div className="panel-sub-lista panel-sub-scroll">
             <div className="stat-card-sub-row">
-              <ServiceLabel type="radarr" label={`Radarr: ${formatNumero(s.radarr_items)}`} size={13} />
+              <ServiceLabel type="radarr" label={`Radarr: ${n(s.radarr_items)}`} size={13} />
             </div>
             <div className="stat-card-sub-row">
-              <ServiceLabel type="sonarr" label={`Sonarr: ${formatNumero(s.sonarr_items)}`} size={13} />
+              <ServiceLabel type="sonarr" label={`Sonarr: ${n(s.sonarr_items)}`} size={13} />
             </div>
           </div>
         </StatCard>
@@ -56,7 +60,7 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
         <StatCard
           icon={ICON_AVAILABLE}
           label="En disco"
-          value={s.available}
+          value={n(s.available)}
           accentColor="var(--color-available)"
           info={EXPLICACION.available}
         />
@@ -64,7 +68,7 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
         <StatCard
           icon={ICON_MISSING}
           label="Faltantes"
-          value={s.missing}
+          value={n(s.missing)}
           accentColor="var(--color-missing)"
           info="Contenido que Radarr/Sonarr conocen pero cuyo archivo aún no está en disco (falta, en cola o con error)."
         />
@@ -72,19 +76,26 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
         <StatCard
           icon={ICON_UNIQUE}
           label="Únicos sin subir"
-          value={s.unique_content ?? 0}
+          value={n(s.unique_content)}
           info={EXPLICACION.unique}
         >
           <div className="panel-sub-lista">
-            <div className="stat-card-sub-row"><IconoPelicula /> {formatNumero(s.unique_movies ?? 0)} películas</div>
-            <div className="stat-card-sub-row"><IconoSerie /> {formatNumero(s.unique_seasons ?? 0)} temporadas, {formatNumero(s.unique_episodes ?? 0)} capítulos</div>
+            <div className="stat-card-sub-row"><IconoPelicula /> <span>{n(s.unique_movies)} películas</span></div>
+            {/* Cada cifra con su palabra: si no cabe, salta la línea entre las dos y no entre el número y «temporadas». */}
+            <div className="stat-card-sub-row">
+              <IconoSerie />
+              <span>
+                <span className="stat-card-sub-cifra">{n(s.unique_seasons)} temporadas,</span>{' '}
+                <span className="stat-card-sub-cifra">{n(s.unique_episodes)} capítulos</span>
+              </span>
+            </div>
           </div>
         </StatCard>
 
         <StatCard
           icon={ICON_UPLOADS}
           label="Tus subidas"
-          value={s.uploads_completed ?? 0}
+          value={n(s.uploads_completed)}
           info={EXPLICACION.uploads}
         />
       </div>
@@ -94,33 +105,33 @@ export function TarjetasDelPanel({ resumen: s }: { resumen: DashboardSummaryResp
         <StatCard
           icon={ICON_REQUESTS}
           label="Peticiones abiertas"
-          value={s.requests_total ?? 0}
+          value={n(s.requests_total)}
           info={EXPLICACION.requests}
         />
         <StatCard
           icon={ICON_COMPATIBLE}
           label="Peticiones compatibles"
-          value={s.requests_compatible ?? 0}
+          value={n(s.requests_compatible)}
           accentColor="var(--color-available)"
           info="Peticiones cuya mejor coincidencia en tu biblioteca cumple resolución y source: quizás puedas cubrirlas."
         />
         <StatCard
           icon={ICON_PARTIAL}
           label="Peticiones parciales"
-          value={s.requests_partial ?? 0}
+          value={n(s.requests_partial)}
           accentColor="var(--color-warning)"
           info="Peticiones cuya mejor coincidencia cumple solo parte de lo pedido (resolución o source, pero no ambos)."
         />
         <StatCard
           icon={ICON_RECLAIMED}
           label="Peticiones reclamadas"
-          value={s.requests_reclaimed ?? 0}
+          value={n(s.requests_reclaimed)}
           info="Peticiones ya Reclamadas en eMuwarez, tuyas y de otros: es el total. En Peticiones, cada una dice si la reclamaste tú, la reclamó otro usuario o eMuwarez no indica quién."
         />
         <StatCard
           icon={ICON_MINE}
           label="Mis peticiones"
-          value={s.requests_mine ?? 0}
+          value={n(s.requests_mine)}
           info="Peticiones creadas por tu propio usuario de eMuwarez (según el nombre configurado en Ajustes)."
         />
       </div>

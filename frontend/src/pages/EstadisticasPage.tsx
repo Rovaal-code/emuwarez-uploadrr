@@ -54,6 +54,8 @@ export function EstadisticasPage() {
   }, [seVe, dias, intento])
 
   const puntos = resultado?.puntos ?? []
+  // Sin hover (una pantalla táctil) el gráfico se lee con el dedo, no con el ratón.
+  const [tactil] = useState(() => window.matchMedia?.('(hover: none)').matches ?? false)
 
   return (
     <div className="est-pagina">
@@ -72,7 +74,9 @@ export function EstadisticasPage() {
         </div>
       </div>
 
-      {resumen && <TarjetasDelPanel resumen={resumen} />}
+      {/* Las tarjetas están desde el principio (con «—» hasta que llegan las cifras): si entraran después, empujarían
+          hacia abajo lo que ya se ve. */}
+      <TarjetasDelPanel resumen={resumen} />
 
       {resultado === null || resultado.dias !== dias ? (
         <LoadingState label="Cargando estadísticas…" />
@@ -89,8 +93,9 @@ export function EstadisticasPage() {
             <p className="est-nota" role="status">Solo hay un día guardado: la línea aparecerá a partir de mañana.</p>
           ) : (
             <p className="est-nota">
-              {puntos.length} de los últimos {dias} días tienen instantánea. Pasa el ratón por un gráfico, o enfócalo y usa las
-              flechas, para ver cada día.
+              {puntos.length} de los últimos {dias} días tienen instantánea. {tactil
+                ? 'Toca o desliza el dedo por un gráfico para ver cada día.'
+                : 'Pasa el ratón por un gráfico, o enfócalo y usa las flechas, para ver cada día.'}
             </p>
           )}
           <div className="est-rejilla-graficos">

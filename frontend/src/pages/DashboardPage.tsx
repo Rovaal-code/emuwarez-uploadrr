@@ -330,8 +330,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     onSubir: subirSeleccionadas, onLimpiar: limpiarLote,
   }
 
+  // Los modales van fuera de .panel-pagina: es un contenedor de @container, y eso lo haría el bloque de referencia de
+  // su `position: fixed` (se pintarían dentro del Panel y no sobre la ventana).
   return (
-    <div className="panel-pagina">
+    <>
       {wizardItem && (
         <UploadWizardModal item={wizardItem} preselect={wizardPreselect} requestId={wizardRequestId}
           onClose={() => setWizardItem(null)} onDone={() => { loadData(); loadActiveUploads() }} onNavigate={onNavigate} />
@@ -348,6 +350,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         />
       )}
 
+    <div className="panel-pagina">
       <div className="page-header panel-cabecera">
         <h1 className="page-title">Panel</h1>
         <CuentaEmu />
@@ -375,5 +378,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
 
       <Franja resumen={s} />
     </div>
+    </>
   )
 }

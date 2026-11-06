@@ -95,6 +95,10 @@
   gap: 6px;
   margin-top: 6px;
 }
+/* Con el dedo, la zona táctil del «?» (InfoIcon) sobresale 16 px: el hueco crece hasta ella para que no tape el enlace. */
+@media (pointer: coarse) {
+  .setup-enlace-fila { gap: 16px; }
+}
 
 /* Fila "Probar conexión" + resultado */
 .setup-fila-prueba {
